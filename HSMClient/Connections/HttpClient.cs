@@ -3,9 +3,8 @@ using System.IO;
 using System.Net;
 using System.Text;
 using HSMClient.Configuration;
-using MAMSClient.Configuration;
 
-namespace HSMClient
+namespace HSMClient.Connections
 {
     public class HttpClient
     {

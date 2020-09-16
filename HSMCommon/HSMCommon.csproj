@@ -4,4 +4,9 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="DataObjects\**" />
+    <EmbeddedResource Remove="DataObjects\**" />
+    <None Remove="DataObjects\**" />
+  </ItemGroup>
 </Project>

@@ -7,7 +7,7 @@ using HSMServer.Model;
 using LightningDB;
 using MAMSServer.Configuration;
 using Microsoft.EntityFrameworkCore.Internal;
-using ShortSensorData = SensorsService.ShortSensorData;
+using HSMCommon.DataObjects;
 
 namespace HSMgRPC.DataLayer
 {
@@ -121,7 +121,7 @@ namespace HSMgRPC.DataLayer
             return await ReadSensorsDataAsync(keyString, n);
         }
 
-        public async Task<ShortSensorData> GetSensorDataAsync(string machineName, string sensorName)
+        public async Task<string> GetSensorDataAsync(string machineName, string sensorName)
         {
             string keyString = GenerateSearchKey(machineName, sensorName);
             if (string.IsNullOrEmpty(keyString))
@@ -187,9 +187,9 @@ namespace HSMgRPC.DataLayer
         /// </summary>
         /// <param name="keyString"></param>
         /// <returns></returns>
-        private async Task<ShortSensorData> ReadSingleSensorDataAsync(string keyString)
+        private async Task<string> ReadSingleSensorDataAsync(string keyString)
         {
-            ShortSensorData result = null;
+            string resultStr = string.Empty;
             byte[] bytesKey = Encoding.ASCII.GetBytes(keyString);
             
             await Task.Run(() =>
@@ -210,7 +210,7 @@ namespace HSMgRPC.DataLayer
                             try
                             {
                                 ShortSensorData shortData = JsonSerializer.Deserialize<ShortSensorData>(stringValue);
-                                result = shortData;
+                                resultStr = stringValue;
                                 break;
                             }
                             catch (Exception ex)
@@ -223,7 +223,7 @@ namespace HSMgRPC.DataLayer
                 }
             });
 
-            return result;
+            return resultStr;
         }
 
         private  string GenerateSearchKey(string machineName, string sensorName)
@@ -238,7 +238,7 @@ namespace HSMgRPC.DataLayer
                 return false;
             }
 
-            ShortSensorData resultObject = new ShortSensorData { Comment = sensorData.Comment, Success = sensorData.Success, Time = sensorData.Time.Ticks };
+            ShortSensorData resultObject = new ShortSensorData { Comment = sensorData.Comment, Success = sensorData.Success, Time = sensorData.Time };
             string keyString = Config.GenerateDataStorageKey(sensorData.Key);
             return await PutSensorDataAsync(resultObject, keyString);
         }

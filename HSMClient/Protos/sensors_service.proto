@@ -6,9 +6,9 @@ package sensors;
 
 service Sensors {
 	// Sends a greeting
-	rpc GetSingleSensorInfo (SensorRequest) returns (SensorResponse);
+	rpc GetSingleSensorInfo (SensorRequest) returns (ShortSensorData);
 	
-	rpc GetSensorsInfo (SensorsRequest) returns (SensorsResponse);
+	rpc GetSensorsInfo (SensorsRequest) returns (SensorsList);
 }
 
 message SensorsRequest{
@@ -23,10 +23,12 @@ message SensorRequest {
 }
 
 // The response message containing the greetings.
-message SensorResponse {
-	string json = 1;
+message ShortSensorData {
+	bool success = 1;
+	string comment = 2;
+	int64 Time = 3;
 }
 
-message SensorsResponse{
-	repeated SensorResponse sensors = 1;
+message SensorsList{
+	repeated ShortSensorData sensors = 1;
 }

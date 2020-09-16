@@ -16,12 +16,12 @@ namespace HSMgRPC.Services
             _logger = logger;
             _dataStorage = dataStorage;
         }
-        public override Task<ShortSensorData.ShortSensorData> GetSingleSensorInfo(SensorRequest request, ServerCallContext context)
+        public override Task<SensorResponse> GetSingleSensorInfo(SensorRequest request, ServerCallContext context)
         {
             //var httpContext = context.GetHttpContext();
             //var certificate = httpContext.Connection.ClientCertificate;
 
-            return _dataStorage.GetSensorDataAsync(request.MachineName, request.SensorName);
+            
         }
 
         public override Task<SensorsList> GetSensorsInfo(SensorsRequest request, ServerCallContext context)

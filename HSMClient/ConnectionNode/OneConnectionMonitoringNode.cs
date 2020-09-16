@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Windows;
+using HSMClient.Connections;
 using HSMClientWPFControls;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.UpdateObjects;
@@ -63,15 +64,15 @@ namespace HSMClient.ConnectionNode
         }
 
         Connection _connection;
-        private HttpClient _client;
+        private ConnectorBase _client;
         private object _lockObject;
         private int _updateTimeout;
         private Thread _nodeThread;
         private bool _continue;
-        private string _currentInput;
+        private object _currentInput;
         private string _address;
         protected IMonitoringCounterStatusHandler Handler;
-        public HttpClient Client
+        public ConnectorBase Client
         {
             get { return _client; }
             set { _client = value; }
@@ -105,7 +106,7 @@ namespace HSMClient.ConnectionNode
             _lockObject = new object();
             _address = address;
 
-            Client = new HttpClient(address);
+            //Client = new HttpClient(address);
 
             _nodeThread = new Thread(NodeLoopStep);
             _nodeThread.Name = $"Thread_{name}";
@@ -116,7 +117,7 @@ namespace HSMClient.ConnectionNode
         {
             try
             {
-                var response = Client.Get("");
+                var response = Client.Get();
 
                 lock (_lockObject)
                 {
@@ -159,9 +160,8 @@ namespace HSMClient.ConnectionNode
         {
             try
             {
-                var response = Client.Get("");
+                var response = Client.Get();
                 MonitoringNodeUpdate updateObj = ConvertResponse(response);
-
                 Update(updateObj, Handler);
 
                 lock (_lockObject)
@@ -184,6 +184,6 @@ namespace HSMClient.ConnectionNode
             }
         }
 
-        public abstract MonitoringNodeUpdate ConvertResponse(string response);
+        public abstract MonitoringNodeUpdate ConvertResponse(object responseObj);
     }
 }
