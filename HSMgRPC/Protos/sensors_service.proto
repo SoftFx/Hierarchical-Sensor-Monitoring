@@ -24,7 +24,9 @@ message SensorRequest {
 
 // The response message containing the greetings.
 message SensorResponse {
-	string json = 1;
+	bool success = 1;
+	string comment = 2;
+	int64 ticks = 3;
 }
 
 message SensorsResponse{

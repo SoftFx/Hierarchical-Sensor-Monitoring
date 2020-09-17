@@ -48,6 +48,7 @@ namespace MAMSServer.Configuration
             }
         }
 
+        public const string JOB_SENSOR_PREFIX = "JobSensorValue";
         public static List<User> Users
         {
             get
@@ -340,7 +341,7 @@ namespace MAMSServer.Configuration
             if (string.IsNullOrEmpty(machineSensor.Item1) || string.IsNullOrEmpty(machineSensor.Item2))
                 return string.Empty;
 
-            return $"{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
+            return $"{JOB_SENSOR_PREFIX}_{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
         }
 
         public static string GenerateSearchKey(string machineName)
