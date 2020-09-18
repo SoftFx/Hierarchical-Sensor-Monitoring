@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+﻿using HSMgRPC.Model;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMgRPC.Controllers
@@ -12,11 +8,11 @@ namespace HSMgRPC.Controllers
     public class ValuesController : ControllerBase
     {
         [HttpPost]
-        public ActionResult<string> Post([FromBody] string stringData)
+        public ActionResult<string> Post([FromBody] SampleData data)
         {
-            var copy = (string)stringData.Clone();
+            SampleData data2COpy = data;
 
-            return Ok(stringData);
+            return Ok(data);
         }
 
         [HttpGet]

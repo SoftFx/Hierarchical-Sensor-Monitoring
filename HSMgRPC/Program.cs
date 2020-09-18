@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
-using System.Threading.Tasks;
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Hosting;
@@ -25,15 +21,19 @@ namespace HSMgRPC
                 {
                     webBuilder.ConfigureKestrel(options =>
                     {
-                        //options.Listen(IPAddress.Loopback, 5001, listenOptions =>
-                        //{
-                        //    listenOptions.Protocols = HttpProtocols.Http2;
-                        //});
-                        //options.Listen(IPAddress.Loopback, 44313, listenOptions =>
-                        //{
-                        //    listenOptions.Protocols = HttpProtocols.Http1;
-                        //});
-                        //options.ListenLocalhost(5001, options => options.Protocols = HttpProtocols.Http2);
+                        options.Listen(IPAddress.Loopback, 5015, listenOptions =>
+                        {
+                            listenOptions.Protocols = HttpProtocols.Http2;
+                        });
+                        options.Listen(IPAddress.Loopback, 44313, listenOptions =>
+                        {
+                            listenOptions.UseHttps();
+                            listenOptions.Protocols = HttpProtocols.Http1;
+                            listenOptions.KestrelServerOptions.ConfigureHttpsDefaults(httpsOptions =>
+                            {
+                                httpsOptions.SslProtocols = SslProtocols.Tls13;
+                            });
+                        });
                     });
                     webBuilder.UseStartup<Startup>();
                 });

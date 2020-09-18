@@ -3,7 +3,7 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iis": {
-      "applicationUrl": "http://localhost/MAMSServer",
+      "applicationUrl": "http://localhost/HSMServer",
       "sslPort": 0
     },
     "iisExpress": {
@@ -15,7 +15,7 @@
     "HSMgRPC": {
       "commandName": "Project",
       "launchBrowser": false,
-      "applicationUrl": "https://localhost:5001",
+      "applicationUrl": "https://localhost:5015",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

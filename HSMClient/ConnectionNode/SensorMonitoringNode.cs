@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using HSMClient.Common;
 using HSMClient.Configuration;
+using HSMClient.Connections.gRPC;
 using HSMClient.StatusHandlers;
 using HSMClientWPFControls;
 using HSMClientWPFControls.Objects;
@@ -16,12 +17,13 @@ namespace HSMClient.ConnectionNode
         public SensorMonitoringNode(string name, string address, SensorMonitoringInfo sensorInfo, MonitoringNodeBase parent = null) : base(name, address, parent)
         {
             Handler = new JobSensorsStatusHandler(sensorInfo);
+            Client = new SensorsClient(address, sensorInfo.Name, sensorInfo.MachineName);
         }
 
         public override MonitoringNodeUpdate ConvertResponse(object responseObj)
         {
             MonitoringNodeUpdate result = new MonitoringNodeUpdate();
-            ShortSensorData typedResponse = (ShortSensorData) responseObj;
+            SensorResponse typedResponse = (SensorResponse) responseObj;
             MonitoringCounterUpdate update = new MonitoringCounterUpdate
             {
                 DataObject =  typedResponse,
@@ -53,9 +55,9 @@ namespace HSMClient.ConnectionNode
         //    return result;
         //}
 
-        private string GetShortValue(ShortSensorData data)
+        private string GetShortValue(SensorResponse data)
         {
-            DateTime convertedTime = new DateTime(data.Time);
+            DateTime convertedTime = new DateTime(data.Ticks);
             if (string.IsNullOrEmpty(data.Comment))
             {
                 return $"The task has been {ConvertStatus(data.Success)} at {convertedTime:s}";

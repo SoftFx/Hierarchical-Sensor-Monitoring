@@ -21,8 +21,4 @@
     <PackageReference Include="NLog" Version="4.7.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\HSMServer\HSMServer.csproj" />
-  </ItemGroup>
-
 </Project>

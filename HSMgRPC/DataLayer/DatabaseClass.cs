@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Google.Protobuf.WellKnownTypes;
 using HSMgRPC.DataLayer.Model;
 using HSMServer.Model;
 using LightningDB;
@@ -99,7 +98,7 @@ namespace HSMgRPC.DataLayer
         private static LightningEnvironment environment;
         private object _accessLock;
 
-        private DatabaseClass()
+        public DatabaseClass()
         {
             environment = new LightningEnvironment(ENVIRONMENT_PATH);
             environment.MaxDatabases = 1;

@@ -1,17 +1,12 @@
 using System;
-using System.Diagnostics;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Rewrite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

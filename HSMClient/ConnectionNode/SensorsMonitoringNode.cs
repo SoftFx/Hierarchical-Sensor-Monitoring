@@ -18,7 +18,8 @@ namespace HSMClient.ConnectionNode
             _sensorsInfo.AddRange(info.Sensors);
             foreach (var sensorInfo in SensorsInfo)
             {
-                string address = ConfigProvider.Instance.GetSensorAddress(info.Name, sensorInfo.Name, 1);
+                string address =
+                    $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}";
                 SubNodes.Add(new SensorMonitoringNode(sensorInfo.Name, address, sensorInfo, this));
             }
         }

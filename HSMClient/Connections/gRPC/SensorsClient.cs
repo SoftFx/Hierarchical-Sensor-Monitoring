@@ -22,7 +22,8 @@ namespace HSMClient.Connections.gRPC
 
         public override object Get()
         {
-            ShortSensorData result = _sensorsClient.GetSingleSensorInfo(new SensorRequest() { MachineName = _machineName, SensorName = _sensorName });
+            SensorRequest request = new SensorRequest() { MachineName = _machineName, SensorName = _sensorName };
+            SensorResponse result = _sensorsClient.GetSingleSensorInfo(request);
             return result;
         }
     }

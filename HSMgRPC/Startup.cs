@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMgRPC.DataLayer;
-using HSMgRPC.Services;
+﻿using HSMgRPC.DataLayer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -35,23 +30,27 @@ namespace HSMgRPC
             }
 
             app.UseRouting();
-            
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllers();
-
-                endpoints.MapGrpcService<GreeterService>();
+                //endpoints.MapGrpcService<GreeterService>();
                 endpoints.MapGrpcService<Services.SensorsService>();
 
-                endpoints.MapGet("/", async context =>
-                {
-                    await context.Response.WriteAsync("Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
-                });
+                //endpoints.MapGet("/", async context =>
+                //{
+                //    await context.Response.WriteAsync("Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+                //});
                 endpoints.MapGet("/protos/greet.proto", async context =>
                 {
                     await context.Response.WriteAsync(await System.IO.File.ReadAllTextAsync("Protos/greet.proto"));
                 });
+                endpoints.MapGet("/protos/sensors_service.proto", async context =>
+                {
+                    await context.Response.WriteAsync(
+                        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
+                });
+
+                endpoints.MapControllers();
             });
 
             

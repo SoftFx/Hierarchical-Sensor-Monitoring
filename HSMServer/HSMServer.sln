@@ -3,15 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29519.87
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMServer", "HSMServer.csproj", "{E7CB3358-9A71-4551-B866-4F78E89EF969}"
-	ProjectSection(ProjectDependencies) = postProject
-		{72BC57D1-2582-4AA4-B078-AC1B7648CFCE} = {72BC57D1-2582-4AA4-B078-AC1B7648CFCE}
-	EndProjectSection
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMgRPC", "..\HSMgRPC\HSMgRPC.csproj", "{EF1E815D-3EBC-40E2-956C-6BC05BDA482E}"
-	ProjectSection(ProjectDependencies) = postProject
-		{E7CB3358-9A71-4551-B866-4F78E89EF969} = {E7CB3358-9A71-4551-B866-4F78E89EF969}
-	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMCore", "..\HSMConfiguration\HSMCore.csproj", "{FA1E5D4D-C990-46F1-A3D7-E8E157AF4A5B}"
 EndProject
@@ -25,10 +17,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{E7CB3358-9A71-4551-B866-4F78E89EF969}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E7CB3358-9A71-4551-B866-4F78E89EF969}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E7CB3358-9A71-4551-B866-4F78E89EF969}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E7CB3358-9A71-4551-B866-4F78E89EF969}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EF1E815D-3EBC-40E2-956C-6BC05BDA482E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{EF1E815D-3EBC-40E2-956C-6BC05BDA482E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EF1E815D-3EBC-40E2-956C-6BC05BDA482E}.Release|Any CPU.ActiveCfg = Release|Any CPU

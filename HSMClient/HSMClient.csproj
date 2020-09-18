@@ -38,4 +38,8 @@
       <Name>MAMSCommon</Name>-->
     </ProjectReference>
   </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Client"/>
+  </ItemGroup>
 </Project>
