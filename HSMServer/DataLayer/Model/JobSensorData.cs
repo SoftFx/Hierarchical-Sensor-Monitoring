@@ -1,13 +1,13 @@
 ﻿using System;
 
-namespace HSMServer.Model
+namespace HSMServer.DataLayer.Model
 {
-    //[Serializable]
-    public class SensorData
+    public class JobSensorData
     {
         public bool Success { get; set; }
         public string Comment { get; set; }
         public DateTime Time { get; set; }
-        public string Key { get; set; }
+        public long Timestamp { get; set; }
+        public DateTime TimeCollected { get; set; }
     }
 }

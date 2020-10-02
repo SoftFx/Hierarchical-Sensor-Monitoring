@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
-using HSMServer.Authentication;
 using HSMCommon;
 using NLog;
 
@@ -12,50 +12,44 @@ namespace HSMServer.Configuration
 {
     public static class Config
     {
-        //#region Singleton
-
-        //private static volatile Config _instance;
-        //private static readonly object _syncRoot = new object();
-
-        ////Multithread singleton
-        //public static Config Instance
-        //{
-        //    get
-        //    {
-        //        if (_instance == null)
-        //        {
-        //            lock (_syncRoot)
-        //            {
-        //                if(_instance == null)
-        //                    _instance = new Config();
-        //            }
-        //        }
-
-        //        return _instance;
-        //    }
-        //}
-
-
-        //#endregion
+        #region Sync objects
 
         private static object _sensorsDictionarySync = new object();
         private static object _usersSync = new object();
+        private static object _certificateSync = new object();
+
+        #endregion
+
+        #region Private fields
+
         private static Dictionary<string, ValueTuple<string, string>> _sensorsDictionary;
-        private static List<User> _users;
+        //private static List<User> _users;
         public const string ConfigFolderName = "Config";
+        public const string CertificatesFolderName = "Certificates";
         private const string _monitoringConfigFileName = "monitoringConfig.xml";
         private const string _usersFileName = "users.xml";
+        private const string _serverCertName = "hsm.server.pfx";
         private static Logger _logger;
         private static int _usersCount = 10;
         private static string _configFilePath;
         private static string _usersFilePath;
+        public static string CertificatesFolderPath;
+
+        private static X509Certificate2 _serverCertificate;
         //private static Encryptor _encryptor;
+
+        #endregion
+
+
+
         static Config()
         {
             _logger = LogManager.GetCurrentClassLogger();
             //_encryptor = new Encryptor(Environment.MachineName);
 
             string configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName);
+            CertificatesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName,
+                CertificatesFolderName);
             if (!Directory.Exists(configFolderPath))
             {
                 FileManager.SafeCreateDirectory(configFolderPath);
@@ -74,21 +68,24 @@ namespace HSMServer.Configuration
             }
         }
 
-        public static List<User> Users
-        {
-            get
-            {
-                lock (_usersSync)
-                {
-                    if (_users == null)
-                    {
-                        InitializeUsers();
-                    }
+        public const string JOB_SENSOR_PREFIX = "JobSensorValue";
+        private static string ServerCertificatePath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+            ConfigFolderName,  CertificatesFolderName, _serverCertName);
+        //public static List<User> Users
+        //{
+        //    get
+        //    {
+        //        lock (_usersSync)
+        //        {
+        //            if (_users == null)
+        //            {
+        //                InitializeUsers();
+        //            }
 
-                    return _users;
-                }
-            }
-        }
+        //            return _users;
+        //        }
+        //    }
+        //}
 
         public static Dictionary<string, (string, string)> SensorsDictionary
         {
@@ -105,21 +102,45 @@ namespace HSMServer.Configuration
                 }
             }
         }
-        private static void InitializeUsers()
+
+        public static X509Certificate2 ServerCertificate
         {
-            try
+            get
             {
-                lock (_usersSync)
+                lock (_certificateSync)
                 {
-                    _users = new List<User>();
+                    _serverCertificate ??= ReadServerCertificate();
                 }
-                LoadUsers(_usersFilePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Failed to load users!");
+
+                return _serverCertificate;
             }
         }
+
+        private static X509Certificate2 ReadServerCertificate()
+        {
+            //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
+            X509Certificate2 certificate =  new X509Certificate2(ServerCertificatePath);
+
+            
+
+            return certificate;
+        }
+
+        //private static void InitializeUsers()
+        //{
+        //    try
+        //    {
+        //        lock (_usersSync)
+        //        {
+        //            _users = new List<User>();
+        //        }
+        //        LoadUsers(_usersFilePath);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.Error("Failed to load users!");
+        //    }
+        //}
 
         private static void LoadUsers(string usersFilePath)
         {
@@ -366,7 +387,7 @@ namespace HSMServer.Configuration
             if (string.IsNullOrEmpty(machineSensor.Item1) || string.IsNullOrEmpty(machineSensor.Item2))
                 return string.Empty;
 
-            return $"{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
+            return $"{JOB_SENSOR_PREFIX}_{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
         }
 
         public static string GenerateSearchKey(string machineName)

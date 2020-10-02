@@ -1,12 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
-using HSMCommon.DataObjects;
-using HSMServer.Authentication;
+﻿using System;
+using HSMServer.DataLayer;
 using HSMServer.Model;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -14,75 +9,37 @@ namespace HSMServer.Controllers
     [ApiController]
     public class SensorsController : ControllerBase
     {
-        private readonly ILogger<SensorsController> _logger;
-        public SensorsController(ILogger<SensorsController> logger)
+        private readonly DatabaseClass _dataStorage;
+        public SensorsController(DatabaseClass dataStorage)
         {
-            _logger = logger;
+            _dataStorage = dataStorage;
+        }
+        
+        [HttpPost("")]
+        public ActionResult<JobResult> Post([FromBody] JobResult jobResult)
+        {
+            try
+            {
+                bool res = _dataStorage.PutSingleSensorData(jobResult);
+                if (res)
+                {
+                    return Ok(jobResult);
+                }
+
+                return UnprocessableEntity(jobResult);
+            }
+            catch (Exception e)
+            {
+                BadRequest(jobResult);
+            }
+
+            return BadRequest(jobResult);
         }
 
-        //[Authorize]
-        [HttpGet("{machineName}")]
-        public ActionResult<string> Get(string machineName)
+        [HttpPost("string")]
+        public ActionResult<string> Post([FromBody] string serialized)
         {
-            var code = Database.DataStorage.GetSensorsData(machineName, out List<ShortSensorData> results);
-            if (code == ReturnCodes.Success)
-            {
-                string json = JsonSerializer.Serialize(results);
-                return json;
-            }
-
-            return $"Error: {code.ToString()}";
-        }
-
-        [HttpGet("{machineName}/{sensorName}")]
-        //[BasicAuth]
-        [ServiceFilter(typeof(BasicAuthFilter))]
-        public ActionResult<string> Get(string machineName, string sensorName)
-        {
-            var code = Database.DataStorage.GetSensorsData(machineName, sensorName, out List<ShortSensorData> results);
-            if (code == ReturnCodes.Success)
-            {
-                string json = JsonSerializer.Serialize(results);
-                return json;
-            }
-
-            return $"Error: {code.ToString()}";
-        }
-
-        [HttpGet("{machineName}/{sensorName}/{n}")]
-        //[BasicAuth]
-        [ServiceFilter(typeof(BasicAuthFilter))]
-        public ActionResult<string> Get(string machineName, string sensorName, int n)
-        {
-            X509Certificate2 cer = Request.HttpContext.Connection.ClientCertificate;
-
-            var code = Database.DataStorage.GetSensorsData(machineName, sensorName, out List<ShortSensorData> results);
-            results.Sort((s1, s2) => s2.Time.CompareTo(s1.Time));
-            results = results.Take(n).ToList();
-            if (code == ReturnCodes.Success)
-            {
-                string json = JsonSerializer.Serialize(results);
-                return json;
-            }
-
-            return $"Error: {code.ToString()}";
-        }
-
-        [HttpPost]
-        public ActionResult<string> Post([FromBody]SensorData sensorData)
-        {
-            if (sensorData == null)
-            {
-                return BadRequest();
-            }
-
-            //await Task.Factory.StartNew(() => Database.Database.PutData(sensorData));
-            if (Database.DataStorage.PutData(sensorData) != ReturnCodes.Success)
-            {
-                return "Failed to put data!";
-            }
-            
-            return Ok(sensorData);
+            return Ok(serialized);
         }
     }
 }

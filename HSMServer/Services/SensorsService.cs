@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Grpc.Core;
-using HSMgRPC.DataLayer;
-using HSMgRPC.DataLayer.Model;
+using HSMServer.DataLayer;
+using HSMServer.DataLayer.Model;
 using SensorsService;
 using Microsoft.Extensions.Logging;
 
-namespace HSMgRPC.Services
+namespace HSMServer.Services
 {
     public class SensorsService : Sensors.SensorsBase
     {

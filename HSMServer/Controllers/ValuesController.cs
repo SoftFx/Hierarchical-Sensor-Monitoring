@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMgRPC.Model;
-using Microsoft.AspNetCore.Http;
+using HSMServer.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace HSMgRPC.Controllers
+namespace HSMServer.Controllers
 {
     /// <summary>
     /// Simple test controller for checking endpoint settings & accessibility

@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using HSMgRPC.DataLayer.Model;
-using HSMgRPC.Model;
 using LightningDB;
-//using MAMSServer.Configuration;
 using HSMCommon.Extensions;
 using HSMServer.Configuration;
+using HSMServer.DataLayer.Model;
+using HSMServer.Model;
 
-namespace HSMgRPC.DataLayer
+namespace HSMServer.DataLayer
 {
     public class DatabaseClass : IDisposable
     {

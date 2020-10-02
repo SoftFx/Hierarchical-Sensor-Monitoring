@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace HSMgRPC.Model
+namespace HSMServer.Model
 {
     public class JobResult
     {
