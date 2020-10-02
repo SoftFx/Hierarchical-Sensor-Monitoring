@@ -20,7 +20,7 @@ namespace HSMClient.StatusHandlers
         }
         public void UpdateStatus(MonitoringCounterBaseViewModel counter)
         {
-            ShortSensorData data = (ShortSensorData) counter.DataObject;
+            SensorsService.SensorResponse data = (SensorsService.SensorResponse) counter.DataObject;
             if (!data.Success)
             {
                 counter.Status = TextConstants.Error;
@@ -28,7 +28,7 @@ namespace HSMClient.StatusHandlers
                 return;
             }
 
-            long diffTicks = (DateTime.Now - data.Time).Ticks;
+            long diffTicks = DateTime.Now.Ticks - data.Ticks;
 
             if (diffTicks > long.Parse(_validationParams["error"]))
             {

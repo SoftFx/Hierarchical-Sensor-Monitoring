@@ -70,14 +70,14 @@ namespace HSMClientWPFControls.Objects
         private MonitoringNodeBase _parent;
         private string _name;
         private string _status;
-        private string _internalStatus = TextConstants.Unknown;
+        private string _internalStatus = TextConstants.Ok;
         private DateTime _lastStatusUpdate;
         private Dictionary<string, MonitoringCounterBaseViewModel> _nameToCounter;
         private Dictionary<string, MonitoringNodeBase> _nameToNode;
         public MonitoringNodeBase(MonitoringNodeBase parent = null)
         {
             _parent = parent;
-            _status = TextConstants.Unknown;
+            _status = TextConstants.Ok;
             _lastStatusUpdate = DateTime.Now;
             SubNodes = new ObservableCollection<MonitoringNodeBase>();
             Counters = new ObservableCollection<MonitoringCounterBaseViewModel>();
@@ -138,12 +138,7 @@ namespace HSMClientWPFControls.Objects
 
         public string InternalStatus
         {
-            get
-            {
-                if (_internalStatus == null)
-                    _internalStatus = TextConstants.Unknown;
-                return _internalStatus;
-            }
+            get => _internalStatus ??= TextConstants.Error;
             set
             {
                 _internalStatus = value;
@@ -153,12 +148,7 @@ namespace HSMClientWPFControls.Objects
 
         public string Status
         {
-            get
-            {
-                if (_status == null)
-                    _status = TextConstants.Unknown;
-                return _status;
-            }
+            get => _status ??= TextConstants.Error;
             set
             {
                 if (_status != value)

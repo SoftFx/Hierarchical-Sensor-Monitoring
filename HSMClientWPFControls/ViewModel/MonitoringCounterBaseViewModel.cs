@@ -23,7 +23,7 @@ namespace HSMClientWPFControls.ViewModel
             _lastStatusUpdate = DateTime.Now;
             Name = name;
             _parent = parent;
-            _status = TextConstants.Unknown;
+            _status = TextConstants.Error;
         }
 
         public MonitoringCounterBaseViewModel(MonitoringCounterUpdate counterUpdate, MonitoringNodeBase parent = null)

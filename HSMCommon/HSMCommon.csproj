@@ -9,4 +9,7 @@
     <EmbeddedResource Remove="DataObjects\**" />
     <None Remove="DataObjects\**" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle" Version="1.8.6.1" />
+  </ItemGroup>
 </Project>

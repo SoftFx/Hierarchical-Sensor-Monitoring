@@ -8,7 +8,7 @@ namespace HSMClient.Connections
     {
         protected string _address;
 
-        public ConnectorBase(string address)
+        protected ConnectorBase(string address)
         {
             _address = address;
         }

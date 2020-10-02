@@ -8,6 +8,5 @@ namespace HSMgRPC.Model
     public class SampleData
     {
         public string Data { get; set; }
-
     }
 }

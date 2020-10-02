@@ -2,34 +2,57 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
+using Grpc.Core;
 using HSMCommon;
-using HSMServer.Authentication;
+//using HSMServer.Authentication;
 using NLog;
 
-namespace MAMSServer.Configuration
+namespace HSMServer.Configuration
 {
     public static class Config
     {
+        #region Sync objects
+
         private static object _sensorsDictionarySync = new object();
         private static object _usersSync = new object();
+        private static object _certificateSync = new object();
+
+        #endregion
+
+        #region Private fields
+
         private static Dictionary<string, ValueTuple<string, string>> _sensorsDictionary;
-        private static List<User> _users;
+        //private static List<User> _users;
         public const string ConfigFolderName = "Config";
+        public const string CertificatesFolderName = "Certificates";
         private const string _monitoringConfigFileName = "monitoringConfig.xml";
         private const string _usersFileName = "users.xml";
+        private const string _serverCertName = "hsm.server.pfx";
         private static Logger _logger;
         private static int _usersCount = 10;
         private static string _configFilePath;
         private static string _usersFilePath;
+        public static string CertificatesFolderPath;
+
+        private static X509Certificate2 _serverCertificate;
         //private static Encryptor _encryptor;
+
+        #endregion
+
+
+
         static Config()
         {
             _logger = LogManager.GetCurrentClassLogger();
             //_encryptor = new Encryptor(Environment.MachineName);
 
             string configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName);
+            CertificatesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName,
+                CertificatesFolderName);
             if (!Directory.Exists(configFolderPath))
             {
                 FileManager.SafeCreateDirectory(configFolderPath);
@@ -49,21 +72,23 @@ namespace MAMSServer.Configuration
         }
 
         public const string JOB_SENSOR_PREFIX = "JobSensorValue";
-        public static List<User> Users
-        {
-            get
-            {
-                lock (_usersSync)
-                {
-                    if (_users == null)
-                    {
-                        InitializeUsers();
-                    }
+        private static string ServerCertificatePath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+            ConfigFolderName,  CertificatesFolderName, _serverCertName);
+        //public static List<User> Users
+        //{
+        //    get
+        //    {
+        //        lock (_usersSync)
+        //        {
+        //            if (_users == null)
+        //            {
+        //                InitializeUsers();
+        //            }
 
-                    return _users;
-                }
-            }
-        }
+        //            return _users;
+        //        }
+        //    }
+        //}
 
         public static Dictionary<string, (string, string)> SensorsDictionary
         {
@@ -80,21 +105,45 @@ namespace MAMSServer.Configuration
                 }
             }
         }
-        private static void InitializeUsers()
+
+        public static X509Certificate2 ServerCertificate
         {
-            try
+            get
             {
-                lock (_usersSync)
+                lock (_certificateSync)
                 {
-                    _users = new List<User>();
+                    _serverCertificate ??= ReadServerCertificate();
                 }
-                LoadUsers(_usersFilePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Failed to load users!");
+
+                return _serverCertificate;
             }
         }
+
+        private static X509Certificate2 ReadServerCertificate()
+        {
+            //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
+            X509Certificate2 certificate =  new X509Certificate2(ServerCertificatePath);
+
+            
+
+            return certificate;
+        }
+
+        //private static void InitializeUsers()
+        //{
+        //    try
+        //    {
+        //        lock (_usersSync)
+        //        {
+        //            _users = new List<User>();
+        //        }
+        //        LoadUsers(_usersFilePath);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.Error("Failed to load users!");
+        //    }
+        //}
 
         private static void LoadUsers(string usersFilePath)
         {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using HSMClient.Common;
 using HSMClient.Configuration;
+using HSMClient.Connections;
 using HSMClient.Connections.gRPC;
 using HSMClient.StatusHandlers;
 using HSMClientWPFControls;
@@ -14,21 +15,29 @@ namespace HSMClient.ConnectionNode
 {
     class SensorMonitoringNode : OneConnectionMonitoringNode
     {
-        public SensorMonitoringNode(string name, string address, SensorMonitoringInfo sensorInfo, MonitoringNodeBase parent = null) : base(name, address, parent)
+        private string _sensorName;
+        private string _machineName;
+        public SensorMonitoringNode(string name, string address, SensorMonitoringInfo sensorInfo, MonitoringNodeBase parent = null) : base(sensorInfo.UpdatePeriod, name, address, parent)
         {
             Handler = new JobSensorsStatusHandler(sensorInfo);
-            Client = new SensorsClient(address, sensorInfo.Name, sensorInfo.MachineName);
+            _sensorName = sensorInfo.Name;
+            _machineName = sensorInfo.MachineName;
         }
 
+        public override ConnectorBase InitializeClient()
+        {
+            return new SensorsClient(_address, _sensorName, _machineName);
+        }
         public override MonitoringNodeUpdate ConvertResponse(object responseObj)
         {
             MonitoringNodeUpdate result = new MonitoringNodeUpdate();
             SensorResponse typedResponse = (SensorResponse) responseObj;
             MonitoringCounterUpdate update = new MonitoringCounterUpdate
             {
-                DataObject =  typedResponse,
+                DataObject =  typedResponse, 
                 ShortValue = GetShortValue(typedResponse),
                 CounterType = CounterTypes.JobSensor,
+                Name = _sensorName
             };
 
             result.Counters = new List<MonitoringCounterUpdate> { update };

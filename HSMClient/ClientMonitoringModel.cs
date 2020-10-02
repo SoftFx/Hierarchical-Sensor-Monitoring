@@ -18,6 +18,8 @@ namespace HSMClient
         {
             Nodes = new ObservableCollection<MonitoringNodeBase>();
 
+            //AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+
             _connectionsList = new List<MachineInfo>();
             _connectionsList.AddRange(ConfigProvider.Instance.MachineInfos);
 

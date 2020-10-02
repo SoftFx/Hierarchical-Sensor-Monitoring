@@ -7,10 +7,6 @@ using System.Text;
 using System.Xml;
 using HSMCommon;
 using MAMSClient.Configuration;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Pkcs;
-using Org.BouncyCastle.Security;
 
 namespace HSMClient.Configuration
 {
@@ -41,12 +37,23 @@ namespace HSMClient.Configuration
 
         #endregion
 
+        #region Private fields
+
         private List<MachineInfo> _machineInfos;
         private ConnectionInfo _connectionInfo;
+        private CertificateInfo _certificateInfo;
         private const string _configFolderName = "Config";
+        private const string _certificatesFolderName = "Certificates";
         private const string _configFileName = "config.xml";
         private readonly string _configFilePath;
+        private readonly string _configFolderPath;
         private readonly object _configLock = new object();
+
+        public string CertificatesFolderPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName,
+            _certificatesFolderName);
+
+        #endregion
+
         public List<MachineInfo> MachineInfos 
         {
             get
@@ -69,18 +76,19 @@ namespace HSMClient.Configuration
         }
         public ConfigProvider()
         {
-            string configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
-            if (!Directory.Exists(configFolderPath))
+            _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
+            if (!Directory.Exists(_configFolderPath))
             {
-                FileManager.SafeCreateDirectory(configFolderPath);
+                FileManager.SafeCreateDirectory(_configFolderPath);
             }
 
-            _configFilePath = Path.Combine(configFolderPath, _configFileName);
+            _configFilePath = Path.Combine(_configFolderPath, _configFileName);
             if (!File.Exists(_configFilePath))
             {
                 FileManager.SafeCreateFile(_configFilePath);
             }
 
+            _certificateInfo = new CertificateInfo();
             ReadConnectionInfo();
         }
 
@@ -110,10 +118,42 @@ namespace HSMClient.Configuration
 
                 XmlAttribute portAttr = connectionNode?.Attributes?["port"];
                 _connectionInfo.Port = portAttr?.Value;
+
+                //_connectionInfo.ClientCertificate =
+                //    CertificateReader.ReadCertificateFromPEMCertAndKey(CertFilePath, KeyFilePath);
+
+                _connectionInfo.ClientCertificate = ReadClientCertificate();
             }
             catch (Exception e)
             {
                 
+            }
+        }
+
+        private X509Certificate2 ReadClientCertificate()
+        {
+            string certFolder = Path.Combine(_configFolderPath, _certificatesFolderName);
+
+            if (!Directory.Exists(certFolder))
+            {
+                throw new Exception("Client certificate folder does not exist!");
+            }
+
+            string[] files = Directory.GetFiles(certFolder, "*.crt");
+            if (files.Length < 1)
+            {
+                throw new Exception("No client certificate provided!");
+            }
+
+            try
+            {
+                X509Certificate2 certificate = new X509Certificate2(files[0]);
+                return certificate;
+            }
+            catch (Exception e)
+            {
+                return new X509Certificate2();
+                //throw;
             }
         }
 

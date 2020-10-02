@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Grpc.Core;
@@ -6,7 +7,6 @@ using HSMgRPC.DataLayer;
 using HSMgRPC.DataLayer.Model;
 using SensorsService;
 using Microsoft.Extensions.Logging;
-using ShortSensorData = SensorsService;
 
 namespace HSMgRPC.Services
 {
@@ -21,8 +21,10 @@ namespace HSMgRPC.Services
         }
         public override async Task<SensorResponse> GetSingleSensorInfo(SensorRequest request, ServerCallContext context)
         {
-            //var httpContext = context.GetHttpContext();
-            //var certificate = httpContext.Connection.ClientCertificate;
+            var httpContext = context.GetHttpContext();
+
+            var certificate = httpContext.Connection.ClientCertificate;
+
 
             JobSensorData data = await _dataStorage.GetSensorDataAsync(request.MachineName, request.SensorName);
             SensorResponse response = Convert(data);
@@ -41,7 +43,7 @@ namespace HSMgRPC.Services
         {
             SensorResponse result = new SensorResponse
             {
-                Comment = data.Comment, Success = data.Success, Ticks = data.Time.Ticks
+                Comment = data?.Comment ?? string.Empty, Success = data?.Success ?? false, Ticks = data?.Time.Ticks ?? -1
             };
             return result;
         }

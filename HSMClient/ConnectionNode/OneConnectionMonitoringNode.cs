@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Windows;
+using HSMClient.Common;
 using HSMClient.Connections;
 using HSMClientWPFControls;
 using HSMClientWPFControls.Objects;
@@ -70,7 +71,7 @@ namespace HSMClient.ConnectionNode
         private Thread _nodeThread;
         private bool _continue;
         private object _currentInput;
-        private string _address;
+        protected string _address;
         protected IMonitoringCounterStatusHandler Handler;
         public ConnectorBase Client
         {
@@ -87,26 +88,25 @@ namespace HSMClient.ConnectionNode
                 {
                     Connect();
                     if (_connection.Status == Connection.ConnectionsStatus.Init || _connection.Status == Connection.ConnectionsStatus.Error)
-                        if ((DateTime.Now - stepStart).TotalMilliseconds < _updateTimeout)
+                        if ((DateTime.Now - stepStart).Ticks < _updateTimeout)
                             Thread.Sleep(Math.Max(0, _updateTimeout - (int)(DateTime.Now - stepStart).TotalMilliseconds));
                 }
                 else
                 {
                     Update();
-                    if ((DateTime.Now - stepStart).TotalMilliseconds < _updateTimeout)
+                    if ((DateTime.Now - stepStart).Ticks < _updateTimeout)
                         Thread.Sleep(Math.Max(0, _updateTimeout - (int)(DateTime.Now - stepStart).TotalMilliseconds));
                 }
             }
         }
 
-        protected OneConnectionMonitoringNode(string name, string address, MonitoringNodeBase parent = null) : base(name, parent)
+        protected OneConnectionMonitoringNode(TimeSpan updatePeriod, string name, string address, MonitoringNodeBase parent = null) : base(name, parent)
         {
             _continue = true;
             _connection = new Connection();
             _lockObject = new object();
             _address = address;
-
-            //Client = new HttpClient(address);
+            _updateTimeout = (int)updatePeriod.TotalMilliseconds;
 
             _nodeThread = new Thread(NodeLoopStep);
             _nodeThread.Name = $"Thread_{name}";
@@ -117,6 +117,8 @@ namespace HSMClient.ConnectionNode
         {
             try
             {
+                Client ??= InitializeClient();
+
                 var response = Client.Get();
 
                 lock (_lockObject)
@@ -144,6 +146,7 @@ namespace HSMClient.ConnectionNode
                     if (_connection.Status != Connection.ConnectionsStatus.Error)
                     {
                         _connection.Status = Connection.ConnectionsStatus.Error;
+                        InternalStatus = TextConstants.Error;
                     }
 
                     Application.Current?.Dispatcher.Invoke(() =>
@@ -179,11 +182,13 @@ namespace HSMClient.ConnectionNode
                     if (_connection.Status != Connection.ConnectionsStatus.Error)
                     {
                         _connection.Status = Connection.ConnectionsStatus.Error;
+                        InternalStatus = TextConstants.Warning;
                     }
                 }
             }
         }
 
         public abstract MonitoringNodeUpdate ConvertResponse(object responseObj);
+        public abstract ConnectorBase InitializeClient();
     }
 }

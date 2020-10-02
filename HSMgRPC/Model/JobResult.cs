@@ -1,9 +1,8 @@
 ﻿using System;
 
-namespace HSMCore.Model
+namespace HSMgRPC.Model
 {
-    //[Serializable]
-    public class SensorData
+    public class JobResult
     {
         public bool Success { get; set; }
         public string Comment { get; set; }

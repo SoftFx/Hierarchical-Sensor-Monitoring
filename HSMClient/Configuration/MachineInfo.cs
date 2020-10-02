@@ -12,6 +12,7 @@ namespace MAMSClient.Configuration
         public List<SensorMonitoringInfo> Sensors { get; set; }
         public AggrMonitoringInfo AggrMonitoringInfo { get; set; }
         public TTSMonitoringInfo TTSMonitoringInfo { get; set; }
+        public CertificateInfo CertificateInfo { get; set; }
 
         public MachineInfo()
         {

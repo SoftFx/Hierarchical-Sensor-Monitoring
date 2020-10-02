@@ -5,11 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Protos\greet.proto" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Protobuf Include="Protos\greet.proto" GrpcServices="Server" />
     <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Server" />
   </ItemGroup>
 
@@ -18,7 +13,14 @@
     <PackageReference Include="Google.Protobuf.Tools" Version="3.13.0" />
     <PackageReference Include="Grpc" Version="2.31.0" />
     <PackageReference Include="Grpc.AspNetCore" Version="2.27.0" />
+    <PackageReference Include="LightningDB" Version="0.13.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" Version="3.1.8" />
     <PackageReference Include="NLog" Version="4.7.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
   </ItemGroup>
 
 </Project>

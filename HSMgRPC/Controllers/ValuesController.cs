@@ -1,24 +1,38 @@
-﻿using HSMgRPC.Model;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMgRPC.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace HSMgRPC.Controllers
 {
+    /// <summary>
+    /// Simple test controller for checking endpoint settings & accessibility
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class ValuesController : ControllerBase
     {
-        [HttpPost]
-        public ActionResult<string> Post([FromBody] SampleData data)
+        private readonly ILogger<ValuesController> _logger;
+        public ValuesController(ILogger<ValuesController> logger)
         {
-            SampleData data2COpy = data;
-
-            return Ok(data);
+            _logger = logger;
         }
 
         [HttpGet]
         public ActionResult<string> Get()
         {
-            return Ok("pswdhflasndf';lsdj;fdjas;fajsd;afj;dasjf");
+            return $"string {DateTime.Now.ToShortDateString()} : {DateTime.Now.ToShortTimeString()}";
+        }
+
+        [HttpPost]
+        public ActionResult<string> Post([FromBody]SampleData input)
+        {
+            _logger.LogInformation($"Received string {input.Data}");
+            return Ok(input);
         }
     }
 }

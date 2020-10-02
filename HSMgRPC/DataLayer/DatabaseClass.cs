@@ -4,11 +4,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HSMgRPC.DataLayer.Model;
-using HSMServer.Model;
+using HSMgRPC.Model;
 using LightningDB;
-using MAMSServer.Configuration;
-using Microsoft.EntityFrameworkCore.Internal;
-
+//using MAMSServer.Configuration;
+using HSMCommon.Extensions;
+using HSMServer.Configuration;
 
 namespace HSMgRPC.DataLayer
 {
@@ -237,7 +237,7 @@ namespace HSMgRPC.DataLayer
             return result;
         }
 
-        public async Task<bool> PutSingleSensorDataAsync(SensorData sensorData)
+        public async Task<bool> PutSingleSensorDataAsync(JobResult sensorData)
         {
             if (!Config.IsKeyRegistered(sensorData.Key))
             {
@@ -408,7 +408,7 @@ namespace HSMgRPC.DataLayer
             return result;
         }
 
-        public bool PutSingleSensorData(SensorData sensorData)
+        public bool PutSingleSensorData(JobResult sensorData)
         {
             if (!Config.IsKeyRegistered(sensorData.Key))
             {
