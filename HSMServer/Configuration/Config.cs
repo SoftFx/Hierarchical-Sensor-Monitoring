@@ -33,7 +33,8 @@ namespace HSMServer.Configuration
         private static int _usersCount = 10;
         private static string _configFilePath;
         private static string _usersFilePath;
-        public static string CertificatesFolderPath;
+        public static string CertificatesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName,
+            CertificatesFolderName);
 
         private static X509Certificate2 _serverCertificate;
         //private static Encryptor _encryptor;
@@ -48,8 +49,6 @@ namespace HSMServer.Configuration
             //_encryptor = new Encryptor(Environment.MachineName);
 
             string configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName);
-            CertificatesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName,
-                CertificatesFolderName);
             if (!Directory.Exists(configFolderPath))
             {
                 FileManager.SafeCreateDirectory(configFolderPath);

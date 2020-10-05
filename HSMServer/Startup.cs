@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -27,6 +28,8 @@ namespace HSMServer
             services.AddCors();
 
             services.AddSingleton<DatabaseClass>();
+            services.AddSingleton<CertificateManager>();
+            services.AddSingleton<ClientCertificateValidator>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
