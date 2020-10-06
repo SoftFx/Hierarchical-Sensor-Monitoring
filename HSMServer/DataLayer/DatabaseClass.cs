@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -407,6 +408,75 @@ namespace HSMServer.DataLayer
             return result;
         }
 
+        public bool AddSensor(SensorInfo info)
+        {
+            lock (_accessLock)
+            {
+                try
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    string stringVal = JsonSerializer.Serialize(info);
+                    var code = tx.Put(db, Encoding.ASCII.GetBytes(GenerateSensorInfoKey(info)),
+                        Encoding.ASCII.GetBytes(stringVal));
+
+                }
+                catch (Exception e)
+                {
+                    //TODO: add logging
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        public bool AddServer(string serverName)
+        {
+            lock (_accessLock)
+            {
+                try
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    var code = tx.Put(db, Encoding.ASCII.GetBytes(PrefixConstants.SERVERS_LIST_PREFIX),
+                        Encoding.ASCII.GetBytes($"{serverName};"), PutOptions.AppendData);
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new Exception($"Failed to add server: code = {code}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    //TODO: add logging                    
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public List<string> GetServersList()
+        {
+            List<string> result = new List<string>();
+            lock (_accessLock)
+            {
+                try
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                    var (code, key, value) = tx.Get(db, Encoding.ASCII.GetBytes(PrefixConstants.SERVERS_LIST_PREFIX));
+                    result.AddRange(ParseServers(Encoding.ASCII.GetString(value.CopyToNewArray())));
+                }
+                catch (Exception ex)
+                {
+                    //TODO: add logging
+                }
+            }
+
+            return result;
+        }
         public bool PutSingleSensorData(JobResult sensorData)
         {
             if (!Config.IsKeyRegistered(sensorData.Key))
@@ -461,15 +531,26 @@ namespace HSMServer.DataLayer
 
         private string GenerateSearchKey(string machineName, string sensorName)
         {
-            return $"{Config.JOB_SENSOR_PREFIX}_{machineName}_{sensorName}";
+            return $"{PrefixConstants.JOB_SENSOR_PREFIX}_{machineName}_{sensorName}";
         }
 
+        private string GenerateSensorInfoKey(SensorInfo info)
+        {
+            return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ServerName}_{info.SensorName}";
+        }
         private long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = (dateTime - DateTime.UnixEpoch);
             return (long) timeSpan.TotalSeconds;
         }
-        
+
+        private IEnumerable<string> ParseServers(string serversListString)
+        {
+            List<string> result = new List<string>();
+            string[] splitRes = serversListString.Split(";".ToCharArray());
+            result.AddRange(splitRes.Select(srv => srv.Trim()));
+            return result;
+        }
         //private static string 
     }
 }

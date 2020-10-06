@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
 using HSMCommon;
+using HSMServer.DataLayer;
 using NLog;
 
 namespace HSMServer.Configuration
@@ -67,7 +68,7 @@ namespace HSMServer.Configuration
             }
         }
 
-        public const string JOB_SENSOR_PREFIX = "JobSensorValue";
+        
         private static string ServerCertificatePath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
             ConfigFolderName,  CertificatesFolderName, _serverCertName);
         //public static List<User> Users
@@ -386,7 +387,7 @@ namespace HSMServer.Configuration
             if (string.IsNullOrEmpty(machineSensor.Item1) || string.IsNullOrEmpty(machineSensor.Item2))
                 return string.Empty;
 
-            return $"{JOB_SENSOR_PREFIX}_{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
+            return $"{PrefixConstants.JOB_SENSOR_PREFIX}_{machineSensor.Item1}_{machineSensor.Item2}_{DateTime.Now.Ticks.ToString()}";
         }
 
         public static string GenerateSearchKey(string machineName)
