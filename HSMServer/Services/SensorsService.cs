@@ -2,24 +2,24 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Grpc.Core;
-using HSMServer.Configuration;
-using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
+using HSMServer.MonitoringServerCore;
 using SensorsService;
-using Microsoft.Extensions.Logging;
+using NLog;
 
 namespace HSMServer.Services
 {
     public class SensorsService : Sensors.SensorsBase
     {
-        private readonly ILogger<SensorsService> _logger;
-        private readonly DatabaseClass _dataStorage;
-        private readonly ClientCertificateValidator _validator;
-        public SensorsService(ILogger<SensorsService> logger, DatabaseClass dataStorage, ClientCertificateValidator validator)
+        private readonly Logger _logger;
+        private readonly IMonitoringCore _monitoringCore;
+
+        public SensorsService(IMonitoringCore monitoringCore)
         {
-            _logger = logger;
-            _dataStorage = dataStorage;
-            _validator = validator;
+            _logger = LogManager.GetCurrentClassLogger();
+            _monitoringCore = monitoringCore;
+
+            _logger.Info("Sensors service started");
         }
         public override async Task<SensorResponse> GetSingleSensorInfo(SensorRequest request, ServerCallContext context)
         {
@@ -45,7 +45,7 @@ namespace HSMServer.Services
             var httpContext = context.GetHttpContext();
 
             var certificate = httpContext.Connection.ClientCertificate;
-            _validator.Validate(certificate);
+            //_validator.Validate(certificate);
         }
         private SensorResponse Convert(JobSensorData data)
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
+using HSMServer.MonitoringServerCore;
 //using HSMServer.MonitoringCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,7 +15,6 @@ namespace HSMServer
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            
             services.AddHsts(options =>
             {
                 options.Preload = true;
@@ -29,9 +29,10 @@ namespace HSMServer
             services.AddCors();
 
             services.AddSingleton<DatabaseClass>();
+            services.AddSingleton<MonitoringCore>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<ClientCertificateValidator>();
-           //services.AddSingleton<MonitoringQueueManager>();
+            services.AddSingleton<MonitoringQueueManager>();
 
             services.AddHttpsRedirection(configureOptions =>
             {

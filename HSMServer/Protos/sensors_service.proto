@@ -55,18 +55,19 @@ message SensorsUpdateMessage {
 message SensorUpdateMessage {
 	string Name = 1;
 	string Path = 2;
+	string Server = 3;
 	enum TransactionType {
 		TRANS_NONE = 0;
 		TRANS_ADD = 1;
 		TRANS_REMOVE = 2;
 		TRANS_UPDATE = 3;
 	}
-	TransactionType ActionType = 3;
+	TransactionType ActionType = 4;
 	enum SensorObjectType {
 		OBJECT_TYPE_NONE = 0;
 		OBJECT_TYPE_JOB_SENSOR = 1;
 		OBJECT_TYPE_PERFORMANCE_SENSOR = 2;
 	}
-	SensorObjectType ObjectType = 4;
-	bytes dataObject = 5;
+	SensorObjectType ObjectType = 5;
+	bytes dataObject = 6;
 }

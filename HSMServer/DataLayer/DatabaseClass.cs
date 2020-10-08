@@ -9,6 +9,7 @@ using HSMCommon.Extensions;
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
+using NLog;
 
 namespace HSMServer.DataLayer
 {
@@ -97,22 +98,33 @@ namespace HSMServer.DataLayer
         private const string DATABASE_NAME = "monitoring";
         private static LightningEnvironment environment;
         private object _accessLock;
+        private readonly Logger _logger;
 
         public DatabaseClass()
         {
+            _logger = LogManager.GetCurrentClassLogger();
             environment = new LightningEnvironment(ENVIRONMENT_PATH);
             environment.MaxDatabases = 1;
             //environment.MaxReaders = Config.UsersCount;
             environment.MaxReaders = 10;
             environment.Open();
             _accessLock = new object();
-            lock (_accessLock)
+            try
             {
-                using var tx = environment.BeginTransaction();
-                using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.Create });
-                tx.Commit();
-                db.Dispose();
-                tx.Dispose();
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.Create });
+                    tx.Commit();
+                    db.Dispose();
+                    tx.Dispose();
+                }
+                _logger.Info($"DatabaseClass initialized, monitoring database exists");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"DatabaseClass: failed to create/check database existance in constructor!");
+                throw;
             }
         }
 
