@@ -263,18 +263,22 @@ namespace HSMServer.DataLayer
             {
                 await Task.Run(() =>
                 {
-                    using var tx = environment.BeginTransaction();
-                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-
-                    string json = JsonSerializer.Serialize(sensorData);
-
-                    using (var cursor = tx.CreateCursor(db))
+                    lock (_accessLock)
                     {
-                        cursor.Put(Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json), CursorPutOptions.NoOverwrite);
-                    }
+                        using var tx = environment.BeginTransaction();
+                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
-                    var count = tx.GetEntriesCount(db);
-                    tx.Commit();
+                        string json = JsonSerializer.Serialize(sensorData);
+
+                        using (var cursor = tx.CreateCursor(db))
+                        {
+                            cursor.Put(Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json), CursorPutOptions.NoOverwrite);
+                        }
+
+                        var count = tx.GetEntriesCount(db);
+                        tx.Commit();
+                    }
+                    
                 });
             }
             catch (Exception e)
@@ -284,6 +288,85 @@ namespace HSMServer.DataLayer
             }
 
             return true;
+        }
+
+        public async Task<bool> AddSensorAsync(SensorInfo info)
+        {
+            try
+            {
+                await Task.Run(() =>
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME,
+                        new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    string stringVal = JsonSerializer.Serialize(info);
+                    var code = tx.Put(db, Encoding.ASCII.GetBytes(GenerateSensorInfoKey(info)),
+                        Encoding.ASCII.GetBytes(stringVal));
+                    tx.Commit();
+                });
+            }
+            catch (Exception e)
+            {
+                //TODO: add logging
+                return false;
+            }
+            return true;
+        }
+        public async Task<bool> AddServerAsync(string serverName)
+        {
+            try
+            {
+                await Task.Run(() =>
+                {
+                    lock (_accessLock)
+                    {
+                        using var tx = environment.BeginTransaction();
+                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                        var code = tx.Put(db, Encoding.ASCII.GetBytes(PrefixConstants.SERVERS_LIST_PREFIX),
+                            Encoding.ASCII.GetBytes($"{serverName};"), PutOptions.AppendData);
+                        tx.Commit();
+                        if (code != MDBResultCode.Success)
+                        {
+                            throw new Exception($"Failed to add server: code = {code}");
+                        }
+                    }
+                });
+
+            }
+            catch (Exception ex)
+            {
+                //TODO: add logging                    
+                return false;
+            }
+
+            return true;
+        }
+
+        public async Task<List<string>> GetServersListAsync()
+        {
+            List<string> result = new List<string>();
+            try
+            {
+                await Task.Run(() =>
+                {
+                    lock (_accessLock)
+                    {
+                        using var tx = environment.BeginTransaction();
+                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                        var (code, key, value) = tx.Get(db, Encoding.ASCII.GetBytes(PrefixConstants.SERVERS_LIST_PREFIX));
+                        tx.Commit();
+                        result.AddRange(ParseServers(Encoding.ASCII.GetString(value.CopyToNewArray())));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                //TODO: add logging
+            }
+
+            return result;
         }
         #endregion
 
