@@ -15,7 +15,16 @@ namespace HSMServer.MonitoringServerCore
         public event EventHandler QueueOverflow;
         public event EventHandler QueueOverflowWarning;
 
-        private bool HasData => _monitoringQueue.Count > 0;
+        private bool HasData
+        {
+            get
+            {
+                lock (_lockObj)
+                {
+                    return _monitoringQueue.Count > 0;
+                }
+            }
+        } 
 
         public ClientMonitoringQueue()
         {

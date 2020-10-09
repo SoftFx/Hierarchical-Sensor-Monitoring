@@ -2,6 +2,8 @@ syntax = "proto3";
 
 option csharp_namespace = "SensorsService";
 
+import "Protos/empty.proto";
+import "Protos/any.proto";
 package sensors;
 
 service Sensors {
@@ -9,6 +11,9 @@ service Sensors {
 	rpc GetSingleSensorInfo (SensorRequest) returns (SensorResponse);
 	
 	rpc GetSensorsInfo (SensorsRequest) returns (SensorsResponse);
+
+	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsTreeMessage);
+	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
 }
 
 message SensorsRequest{
@@ -29,6 +34,40 @@ message SensorResponse {
 	int64 ticks = 3;
 }
 
-message SensorsResponse{
+message SensorsResponse {
 	repeated SensorResponse sensors = 1;
+}
+
+message SensorsTreeMessage {
+	repeated SensorsTreeLeafMessage sensors = 1;
+}
+
+message SensorsTreeLeafMessage {
+	string Name = 1;
+	string Path = 2;
+	string Server = 3;
+}
+
+message SensorsUpdateMessage {
+	repeated SensorUpdateMessage sensors = 1;
+}
+
+message SensorUpdateMessage {
+	string Name = 1;
+	string Path = 2;
+	string Server = 3;
+	enum TransactionType {
+		TRANS_NONE = 0;
+		TRANS_ADD = 1;
+		TRANS_REMOVE = 2;
+		TRANS_UPDATE = 3;
+	}
+	TransactionType ActionType = 4;
+	enum SensorObjectType {
+		OBJECT_TYPE_NONE = 0;
+		OBJECT_TYPE_JOB_SENSOR = 1;
+		OBJECT_TYPE_PERFORMANCE_SENSOR = 2;
+	}
+	SensorObjectType ObjectType = 5;
+	bytes dataObject = 6;
 }

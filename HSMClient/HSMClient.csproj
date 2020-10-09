@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Client"/>
     <PackageReference Include="BouncyCastle" Version="1.8.6.1" />
     <PackageReference Include="Google.Protobuf">
       <Version>3.13.0</Version>
@@ -39,7 +40,4 @@
     </ProjectReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Client"/>
-  </ItemGroup>
 </Project>

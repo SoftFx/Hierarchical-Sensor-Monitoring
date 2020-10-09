@@ -1,14 +1,13 @@
 using System;
 using System.Net;
-using System.Net.Security;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using HSMServer.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NLog.Web;
 
 namespace HSMServer
 {
@@ -58,15 +57,15 @@ namespace HSMServer
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
                             });
                         });
-                        options.Listen(IPAddress.Loopback, 5020, listenOptions =>
-                        {
-                            listenOptions.UseHttps();
-                            listenOptions.Protocols = HttpProtocols.Http2;
-                            listenOptions.KestrelServerOptions.ConfigureHttpsDefaults(kestrelOptions =>
-                            {
-                                kestrelOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
-                            });
-                        });
+                        //options.Listen(IPAddress.Loopback, 5020, listenOptions =>
+                        //{
+                        //    listenOptions.UseHttps();
+                        //    listenOptions.Protocols = HttpProtocols.Http2;
+                        //    listenOptions.KestrelServerOptions.ConfigureHttpsDefaults(kestrelOptions =>
+                        //    {
+                        //        kestrelOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+                        //    });
+                        //});
                     });
                     webBuilder.UseStartup<Startup>();
                 })
@@ -74,7 +73,7 @@ namespace HSMServer
                 {
                     logging.ClearProviders();
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-                });
+                }).UseNLog();
 
         //public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
         //    SslPolicyErrors policyErrors)

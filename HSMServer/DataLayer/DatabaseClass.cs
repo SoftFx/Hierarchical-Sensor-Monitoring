@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -8,6 +9,8 @@ using LightningDB;
 using HSMCommon.Extensions;
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
+using HSMServer.Exceptions;
+using HSMServer.Extensions;
 using HSMServer.Model;
 using NLog;
 
@@ -119,157 +122,47 @@ namespace HSMServer.DataLayer
                     db.Dispose();
                     tx.Dispose();
                 }
-                _logger.Info($"DatabaseClass initialized, monitoring database exists");
+                _logger.Info("DatabaseClass initialized, monitoring database exists");
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"DatabaseClass: failed to create/check database existance in constructor!");
+                _logger.Error(ex, "DatabaseClass: failed to create/check database existance in constructor!");
                 throw;
             }
         }
 
         #region Async code
 
-        public async Task<List<JobSensorData>> GetSensorsDataAsync(string machineName, string sensorName, int n)
+        private async Task AddSensorDataAsync(SensorDataObject dataObject)
         {
-            string keyString = GenerateSearchKey(machineName, sensorName);
-            if (string.IsNullOrEmpty(keyString))
-            {
-                return null;
-            }
-
-            return await ReadSensorsDataAsync(keyString, n);
-        }
-
-        public async Task<JobSensorData> GetSensorDataAsync(string machineName, string sensorName)
-        {
-            string keyString = GenerateSearchKey(machineName, sensorName);
-            if (string.IsNullOrEmpty(keyString))
-            {
-                return null;
-            }
-
-            return await ReadSingleSensorDataAsync(keyString);
-        }
-
-        /// <summary>
-        /// Returns n last records, pass n less or equal 0 to get all records, corresponding to the given key
-        /// </summary>
-        /// <param name="keyString"></param>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        private async Task<List<JobSensorData>> ReadSensorsDataAsync(string keyString, int n)
-        {
-            List<JobSensorData> result = new List<JobSensorData>();
-            byte[] bytesKey = Encoding.ASCII.GetBytes(keyString);
-
             await Task.Run(() =>
             {
-                using var tx = environment.BeginTransaction(TransactionBeginFlags.ReadOnly);
-                using var db = tx.OpenDatabase(DATABASE_NAME);
-
-                int count = 0;
-
-                using var cursor = tx.CreateCursor(db);
-                var resultCode = cursor.Last();
-                if (resultCode == MDBResultCode.Success)
+                try
                 {
-                    do
+                    lock (_accessLock)
                     {
-                        var (code, key, value) = cursor.GetCurrent();
-                        if (key.CopyToNewArray().StartsWith(bytesKey))
-                        {
-                            byte[] bytesValue = value.CopyToNewArray();
-                            string stringValue = Encoding.ASCII.GetString(bytesValue);
-                            try
-                            {
-                                JobSensorData shortData = JsonSerializer.Deserialize<JobSensorData>(stringValue);
-                                result.Add(shortData);
-                                ++count;
-                                if (count == n)
-                                {
-                                    break;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
+                        using var tx = environment.BeginTransaction();
+                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                        dataObject.TimeCollected = DateTime.Now;
 
-                            }
+                        string json = JsonSerializer.Serialize(dataObject);
+
+                        var code = tx.Put(db, Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json));
+                        tx.Commit();
+
+                        if (code != MDBResultCode.Success)
+                        {
+                            throw new ServerDatabaseException($"Failed to put data, code = {code}");
                         }
-                    } while (cursor.Previous() == MDBResultCode.Success);
+                    }
                 }
-
-                cursor.Dispose();
-            });
-
-            return result;
-        }
-
-        /// <summary>
-        /// Returns last record, corresponding to the given key
-        /// </summary>
-        /// <param name="keyString"></param>
-        /// <returns></returns>
-        private async Task<JobSensorData> ReadSingleSensorDataAsync(string keyString)
-        {
-            JobSensorData result = null;
-            byte[] bytesKey = Encoding.ASCII.GetBytes(keyString);
-
-            await Task.Run(() =>
-            {
-                using var tx = environment.BeginTransaction(TransactionBeginFlags.ReadOnly);
-                using var db = tx.OpenDatabase(DATABASE_NAME);
-                using var cursor = tx.CreateCursor(db);
-                var resultCode = cursor.Last();
-                if (resultCode == MDBResultCode.Success)
+                catch (Exception ex)
                 {
-                    do
-                    {
-                        var (code, key, value) = cursor.GetCurrent();
-                        if (key.CopyToNewArray().StartsWith(bytesKey))
-                        {
-                            byte[] bytesValue = value.CopyToNewArray();
-                            string stringValue = Encoding.ASCII.GetString(bytesValue);
-                            try
-                            {
-                                JobSensorData shortData = JsonSerializer.Deserialize<JobSensorData>(stringValue);
-                                result = shortData;
-                                break;
-                            }
-                            catch (Exception ex)
-                            {
-
-                            }
-                        }
-
-                    } while (cursor.Previous() == MDBResultCode.Success);
+                    _logger.Error(ex, $"Failed to add object {dataObject.ToShortString()}");
                 }
             });
-
-            return result;
         }
-
-        public async Task<bool> PutSingleSensorDataAsync(JobResult sensorData)
-        {
-            if (!Config.IsKeyRegistered(sensorData.Key))
-            {
-                return false;
-            }
-
-            JobSensorData sensorObj = new JobSensorData()
-            {
-                Success = sensorData.Success,
-                Comment = sensorData.Comment,
-                Time = sensorData.Time,
-                Timestamp = GetTimestamp(sensorData.Time),
-                TimeCollected = DateTime.Now,
-            };
-
-            string keyString = Config.GenerateDataStorageKey(sensorData.Key);
-            return await PutSensorDataAsync(sensorObj, keyString);
-        }
-
-        private async Task<bool> PutSensorDataAsync(JobSensorData sensorData, string keyString)
+        public async Task<bool> AddSensorAsync(SensorInfo info)
         {
             try
             {
@@ -278,44 +171,14 @@ namespace HSMServer.DataLayer
                     lock (_accessLock)
                     {
                         using var tx = environment.BeginTransaction();
-                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                        using var db = tx.OpenDatabase(DATABASE_NAME,
+                            new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
-                        string json = JsonSerializer.Serialize(sensorData);
-
-                        using (var cursor = tx.CreateCursor(db))
-                        {
-                            cursor.Put(Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json), CursorPutOptions.NoOverwrite);
-                        }
-
-                        var count = tx.GetEntriesCount(db);
+                        string stringVal = JsonSerializer.Serialize(info);
+                        var code = tx.Put(db, Encoding.ASCII.GetBytes(GetSensorInfoKey(info)),
+                            Encoding.ASCII.GetBytes(stringVal));
                         tx.Commit();
                     }
-                    
-                });
-            }
-            catch (Exception e)
-            {
-                //TODO: add logging
-                return false;
-            }
-
-            return true;
-        }
-
-        public async Task<bool> AddSensorAsync(SensorInfo info)
-        {
-            try
-            {
-                await Task.Run(() =>
-                {
-                    using var tx = environment.BeginTransaction();
-                    using var db = tx.OpenDatabase(DATABASE_NAME,
-                        new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-
-                    string stringVal = JsonSerializer.Serialize(info);
-                    var code = tx.Put(db, Encoding.ASCII.GetBytes(GenerateSensorInfoKey(info)),
-                        Encoding.ASCII.GetBytes(stringVal));
-                    tx.Commit();
                 });
             }
             catch (Exception e)
@@ -380,128 +243,35 @@ namespace HSMServer.DataLayer
 
             return result;
         }
+
+        public async Task<string> GetSensorKeyAsync(string serverName, string sensorName)
+        {
+            string result = string.Empty;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    lock (_accessLock)
+                    {
+                        using var tx = environment.BeginTransaction();
+                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                        var (code, key, value) = tx.Get(db, Encoding.ASCII.GetBytes($"{PrefixConstants.SENSOR_KEY_PREFIX}_{serverName}_{sensorName}"));
+                        tx.Commit();
+                        result = Encoding.ASCII.GetString(value.CopyToNewArray());
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.Error($"GetSensorKey: failed to get key for {serverName}:{sensorName}");
+                }
+            });
+            return result;
+        }
+
+
         #endregion
 
         #region Sync code
-
-        public List<JobSensorData> GetSensorsData(string machineName, string sensorName, int n)
-        {
-            string keyString = GenerateSearchKey(machineName, sensorName);
-            if (string.IsNullOrEmpty(keyString))
-            {
-                return null;
-            }
-
-            return ReadSensorsData(keyString, n);
-        }
-
-        public JobSensorData GetSensorData(string machineName, string sensorName)
-        {
-            string keyString = GenerateSearchKey(machineName, sensorName);
-            if (string.IsNullOrEmpty(keyString))
-            {
-                return null;
-            }
-
-            return ReadSingleSensorData(keyString);
-        }
-
-        /// <summary>
-        /// Returns n last records, pass n less or equal 0 to get all records, corresponding to the given key
-        /// </summary>
-        /// <param name="keyString"></param>
-        /// <param name="n"></param>
-        /// <returns></returns>
-        private List<JobSensorData> ReadSensorsData(string keyString, int n)
-        {
-            List<JobSensorData> result = new List<JobSensorData>();
-            byte[] bytesKey = Encoding.ASCII.GetBytes(keyString);
-
-            lock (_accessLock)
-            {
-                using var tx = environment.BeginTransaction(TransactionBeginFlags.ReadOnly);
-                using var db = tx.OpenDatabase(DATABASE_NAME);
-
-                int count = 0;
-
-                using var cursor = tx.CreateCursor(db);
-                var resultCode = cursor.Last();
-                if (resultCode == MDBResultCode.Success)
-                {
-                    do
-                    {
-                        var (code, key, value) = cursor.GetCurrent();
-                        if (key.CopyToNewArray().StartsWith(bytesKey))
-                        {
-                            byte[] bytesValue = value.CopyToNewArray();
-                            string stringValue = Encoding.ASCII.GetString(bytesValue);
-                            try
-                            {
-                                JobSensorData shortData = JsonSerializer.Deserialize<JobSensorData>(stringValue);
-                                result.Add(shortData);
-                                ++count;
-                                if (count == n)
-                                {
-                                    break;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-
-                            }
-                        }
-                    } while (cursor.Previous() == MDBResultCode.Success);
-                }
-
-                cursor.Dispose();
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Returns last record, corresponding to the given key
-        /// </summary>
-        /// <param name="keyString"></param>
-        /// <returns></returns>
-        private JobSensorData ReadSingleSensorData(string keyString)
-        {
-            JobSensorData result = null;
-            byte[] bytesKey = Encoding.ASCII.GetBytes(keyString);
-
-            lock (_accessLock)
-            {
-                using var tx = environment.BeginTransaction(TransactionBeginFlags.ReadOnly);
-                using var db = tx.OpenDatabase(DATABASE_NAME);
-                using var cursor = tx.CreateCursor(db);
-                var resultCode = cursor.Last();
-                if (resultCode == MDBResultCode.Success)
-                {
-                    do
-                    {
-                        var (code, key, value) = cursor.GetCurrent();
-                        if (key.CopyToNewArray().StartsWith(bytesKey))
-                        {
-                            byte[] bytesValue = value.CopyToNewArray();
-                            string stringValue = Encoding.ASCII.GetString(bytesValue);
-                            try
-                            {
-                                JobSensorData shortData = JsonSerializer.Deserialize<JobSensorData>(stringValue);
-                                result = shortData;
-                                break;
-                            }
-                            catch (Exception ex)
-                            {
-
-                            }
-                        }
-
-                    } while (cursor.Previous() == MDBResultCode.Success);
-                }
-            }
-
-            return result;
-        }
 
         public bool AddSensor(SensorInfo info)
         {
@@ -513,7 +283,7 @@ namespace HSMServer.DataLayer
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
                     string stringVal = JsonSerializer.Serialize(info);
-                    var code = tx.Put(db, Encoding.ASCII.GetBytes(GenerateSensorInfoKey(info)),
+                    var code = tx.Put(db, Encoding.ASCII.GetBytes(GetSensorInfoKey(info)),
                         Encoding.ASCII.GetBytes(stringVal));
 
                 }
@@ -572,64 +342,39 @@ namespace HSMServer.DataLayer
 
             return result;
         }
-        public bool PutSingleSensorData(JobResult sensorData)
+
+        public string GetSensorKey(string serverName, string sensorName)
         {
-            if (!Config.IsKeyRegistered(sensorData.Key))
-            {
-                return false;
-            }
+            string result = string.Empty;
 
-            JobSensorData sensorObj = new JobSensorData()
-            {
-                Success = sensorData.Success,
-                Comment = sensorData.Comment,
-                Time = sensorData.Time,
-                Timestamp = GetTimestamp(sensorData.Time),
-                TimeCollected = DateTime.Now,
-            };
-
-            string keyString = Config.GenerateDataStorageKey(sensorData.Key);
-            return PutSensorData(sensorObj, keyString);
-        }
-
-        private bool PutSensorData(JobSensorData sensorData, string keyString)
-        {
             try
             {
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-
-                    string json = JsonSerializer.Serialize(sensorData);
-
-                    using (var cursor = tx.CreateCursor(db))
-                    {
-                        cursor.Put(Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json), CursorPutOptions.NoOverwrite);
-                    }
-
-                    var count = tx.GetEntriesCount(db);
+                    var (code, key, value) = tx.Get(db, Encoding.ASCII.GetBytes($"{PrefixConstants.SENSOR_KEY_PREFIX}_{serverName}_{sensorName}"));
                     tx.Commit();
+                    result = Encoding.ASCII.GetString(value.CopyToNewArray());
                 }
             }
             catch (Exception e)
             {
-                //TODO: add logging
-                return false;
+                _logger.Error($"GetSensorKey: failed to get key for {serverName}:{sensorName}");
             }
 
-            return true;
+            return result;
         }
 
         #endregion
 
 
-        private string GenerateSearchKey(string machineName, string sensorName)
+        private string GetSearchKey(string machineName, string sensorName)
         {
             return $"{PrefixConstants.JOB_SENSOR_PREFIX}_{machineName}_{sensorName}";
         }
 
-        private string GenerateSensorInfoKey(SensorInfo info)
+        private string GetSensorInfoKey(SensorInfo info)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ServerName}_{info.SensorName}";
         }

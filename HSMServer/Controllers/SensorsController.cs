@@ -1,7 +1,9 @@
 ﻿using System;
 using HSMServer.DataLayer;
 using HSMServer.Model;
+using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 
 namespace HSMServer.Controllers
 {
@@ -9,10 +11,13 @@ namespace HSMServer.Controllers
     [ApiController]
     public class SensorsController : ControllerBase
     {
-        private readonly DatabaseClass _dataStorage;
-        public SensorsController(DatabaseClass dataStorage)
+        private readonly Logger _logger;
+        private readonly IMonitoringCore _monitoringCore;
+        public SensorsController(MonitoringCore monitoringCore)
         {
-            _dataStorage = dataStorage;
+            _logger = LogManager.GetCurrentClassLogger();
+            _monitoringCore = monitoringCore;
+            _logger.Info("Sensors controller started");
         }
         
         [HttpPost("")]
@@ -20,20 +25,28 @@ namespace HSMServer.Controllers
         {
             try
             {
-                bool res = _dataStorage.PutSingleSensorData(jobResult);
-                if (res)
-                {
-                    return Ok(jobResult);
-                }
-
-                return UnprocessableEntity(jobResult);
+                _monitoringCore.AddSensorInfo(jobResult);
+                return Ok(jobResult);
             }
             catch (Exception e)
             {
-                BadRequest(jobResult);
+                _logger.Error(e, $"Failed to put data!");
+                return BadRequest(jobResult);
             }
+        }
 
-            return BadRequest(jobResult);
+        [HttpPost("nokey")]
+        public ActionResult<string> Post([FromBody] NewJobResult newJobResult)
+        {
+            try
+            {
+                return _monitoringCore.AddSensorInfo(newJobResult);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add new sensor!");
+                return e.Message.ToString();
+            }
         }
 
         [HttpPost("string")]

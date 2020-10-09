@@ -1,18 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.Logging;
 using NLog;
 
 namespace HSMServer.Configuration
 {
     public class CertificateManager
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger(typeof(CertificateManager));
+        private readonly Logger _logger;
 
         public CertificateManager()
         {
+            _logger = LogManager.GetCurrentClassLogger();
             _logger.Info("Certificate manager initialized");
         }
 

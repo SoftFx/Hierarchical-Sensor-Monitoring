@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Grpc.Core;
+using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.MonitoringServerCore;
 using SensorsService;
@@ -14,7 +15,7 @@ namespace HSMServer.Services
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
 
-        public SensorsService(IMonitoringCore monitoringCore)
+        public SensorsService(MonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
@@ -25,7 +26,7 @@ namespace HSMServer.Services
         {
             ValidateUser(context);
 
-            JobSensorData data = await _dataStorage.GetSensorDataAsync(request.MachineName, request.SensorName);
+            JobSensorData data = await DatabaseClass.Instance.GetSensorDataAsync(request.MachineName, request.SensorName);
             SensorResponse response = Convert(data);
             return response;
         }
@@ -35,7 +36,7 @@ namespace HSMServer.Services
             ValidateUser(context);
 
             List<JobSensorData> dataList =
-                _dataStorage.GetSensorsData(request.MachineName, request.SensorName, request.N);
+                DatabaseClass.Instance.GetSensorsData(request.MachineName, request.SensorName, request.N);
             SensorsResponse response = Convert(dataList);
             return Task.FromResult(response);
         }
