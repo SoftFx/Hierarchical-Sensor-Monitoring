@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Xml;
 using HSMServer.Configuration;
 using NLog;
 
@@ -16,6 +18,7 @@ namespace HSMServer.Authentication
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
+        private readonly string _usersFileName = "users.xml";
 
         #endregion
 
@@ -30,7 +33,62 @@ namespace HSMServer.Authentication
 
         private List<User> ParseUsersFile()
         {
-            return new List<User>();
+            string usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
+
+            XmlDocument document = new XmlDocument();
+            document.Load(usersFilePath);
+            
+            XmlNodeList nodes = document.SelectNodes("//users/user");
+
+            if (nodes == null)
+                return new List<User>();
+
+            List<User> users = new List<User>();
+            foreach (XmlNode node in nodes)
+            {
+                var user = ParseUserNode(node);
+                if (user != null)
+                {
+                    users.Add(user);
+                }
+            }
+
+            return users;
+        }
+
+        private User ParseUserNode(XmlNode node)
+        {
+            User user = new User();
+            var nameAttr = node.Attributes?["Name"];
+            if (nameAttr != null)
+            {
+                user.UserName = nameAttr.Value;
+            }
+
+            XmlNodeList servers = node.SelectNodes("//servers/server");
+            foreach (XmlNode serverNode in servers)
+            {
+                PermissionItem permissionItem = new PermissionItem();
+                var serverNodeAttr = serverNode.Attributes?["Name"];
+                if (serverNodeAttr != null)
+                {
+                    permissionItem.ServerName = serverNodeAttr.Value;
+                }
+
+                var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
+                if (ignoredSensorsAttr != null)
+                {
+                    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
+                }
+
+                if (!string.IsNullOrEmpty(permissionItem.ServerName))
+                {
+                    user.UserPermissions.Add(permissionItem);
+                }
+            }
+
+            user.CertificateThumbprint = _certificateManager.GetCertificateBySubject(user.UserName)?.Thumbprint;
+            return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
         }
 
         private void CheckUsersUpToDate()
@@ -51,6 +109,7 @@ namespace HSMServer.Authentication
 
         public List<PermissionItem> GetUserPermissions(string userName)
         {
+            CheckUsersUpToDate();
             User correspondingUser = null;
             lock (_accessLock)
             {
@@ -62,6 +121,7 @@ namespace HSMServer.Authentication
 
         public User GetUserByCertificateThumbprint(string thumbprint)
         {
+            CheckUsersUpToDate();
             User user = null;
             lock (_accessLock)
             {

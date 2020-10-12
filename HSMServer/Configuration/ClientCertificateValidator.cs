@@ -11,7 +11,7 @@ namespace HSMServer.Configuration
     {
         private readonly Logger _logger;
         private readonly CertificateManager _certificateManager;
-        private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(20);
         private readonly List<string> _certificateThumbprints = new List<string>();
         private DateTime _lastUpdate;
         public ClientCertificateValidator(CertificateManager certificateManager)

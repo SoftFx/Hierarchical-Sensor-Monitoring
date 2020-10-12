@@ -10,7 +10,7 @@ namespace HSMServer.Extensions
     {
         public static string ToShortString(this SensorDataObject sensorDataObject)
         {
-            return $"Name: {sensorDataObject.Name}, Path = {sensorDataObject.Path}, Time = {sensorDataObject.Time}";
+            return $"Path = {sensorDataObject.Path}, Time = {sensorDataObject.Time}";
         }
     }
 }

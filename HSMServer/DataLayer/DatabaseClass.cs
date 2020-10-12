@@ -1,18 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using LightningDB;
-using HSMCommon.Extensions;
-using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
 using HSMServer.Extensions;
-using HSMServer.Model;
+using HSMServer.MonitoringServerCore;
 using NLog;
+using Org.BouncyCastle.Asn1;
 
 namespace HSMServer.DataLayer
 {
@@ -100,7 +98,7 @@ namespace HSMServer.DataLayer
         private const string ENVIRONMENT_PATH = @"Database";
         private const string DATABASE_NAME = "monitoring";
         private static LightningEnvironment environment;
-        private object _accessLock;
+        private readonly object _accessLock;
         private readonly Logger _logger;
 
         public DatabaseClass()
@@ -147,6 +145,8 @@ namespace HSMServer.DataLayer
 
                         string json = JsonSerializer.Serialize(dataObject);
 
+                        string key = GetSensorKey(dataObject.Path);
+                        var keyString = GetSensorWriteSearchKey(key, dataObject.TimeCollected);
                         var code = tx.Put(db, Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json));
                         tx.Commit();
 
@@ -262,7 +262,7 @@ namespace HSMServer.DataLayer
                 }
                 catch (Exception e)
                 {
-                    _logger.Error($"GetSensorKey: failed to get key for {serverName}:{sensorName}");
+                    _logger.Error(e,$"GetSensorKey: failed to get key for {serverName}:{sensorName}");
                 }
             });
             return result;
@@ -289,7 +289,7 @@ namespace HSMServer.DataLayer
                 }
                 catch (Exception e)
                 {
-                    //TODO: add logging
+                    _logger.Error(e, $"Adding sensor sensor = {info.SensorName}, server = {info.ServerName} error");
                     return false;
                 }
             }
@@ -345,6 +345,18 @@ namespace HSMServer.DataLayer
 
         public string GetSensorKey(string serverName, string sensorName)
         {
+            return GetSensorKeyInternal(serverName, sensorName);
+        }
+
+        private string GetSensorKey(string path)
+        {
+            string server;
+            string sensor;
+            Converter.ExtractServerAndSensor(path, out server, out sensor);
+            return GetSensorKeyInternal(server, sensor);
+        }
+        private string GetSensorKeyInternal(string serverName, string sensorName)
+        {
             string result = string.Empty;
 
             try
@@ -360,20 +372,48 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error($"GetSensorKey: failed to get key for {serverName}:{sensorName}");
+                _logger.Error(e, "GetSensorKey: failed to get key for {serverName}:{sensorName}");
             }
 
             return result;
         }
 
+        public void WriteSensorData(SensorDataObject dataObject)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                    dataObject.TimeCollected = DateTime.Now;
+
+                    string json = JsonSerializer.Serialize(dataObject);
+
+                    string key = GetSensorKey(dataObject.Path);
+                    var keyString = GetSensorWriteSearchKey(key, dataObject.TimeCollected);
+                    var code = tx.Put(db, Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json));
+                    tx.Commit();
+
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException($"Failed to put data, code = {code}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Failed to add object {dataObject.ToShortString()}");
+            }
+        }
         #endregion
 
 
-        private string GetSearchKey(string machineName, string sensorName)
+        private string GetSensorWriteSearchKey(string key, DateTime putTime)
         {
-            return $"{PrefixConstants.JOB_SENSOR_PREFIX}_{machineName}_{sensorName}";
+            return
+                $"{PrefixConstants.SENSOR_KEY_PREFIX}_{key}_{putTime.ToShortDateString()}:{putTime.ToShortTimeString()}";
         }
-
         private string GetSensorInfoKey(SensorInfo info)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ServerName}_{info.SensorName}";

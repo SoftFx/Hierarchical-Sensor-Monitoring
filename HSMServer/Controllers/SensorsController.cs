@@ -30,7 +30,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to put data!");
+                _logger.Error(e, "Failed to put data!");
                 return BadRequest(jobResult);
             }
         }

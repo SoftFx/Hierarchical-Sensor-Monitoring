@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace HSMServer.DataLayer.TypedDataObjects
+namespace HSMServer.DataLayer.Model.TypedDataObjects
 {
     public class TypedJobSensorData
     {

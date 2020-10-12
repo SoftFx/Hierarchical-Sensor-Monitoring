@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
@@ -22,47 +23,19 @@ namespace HSMServer.Services
 
             _logger.Info("Sensors service started");
         }
-        public override async Task<SensorResponse> GetSingleSensorInfo(SensorRequest request, ServerCallContext context)
-        {
-            ValidateUser(context);
 
-            JobSensorData data = await DatabaseClass.Instance.GetSensorDataAsync(request.MachineName, request.SensorName);
-            SensorResponse response = Convert(data);
-            return response;
-        }
-
-        public override Task<SensorsResponse> GetSensorsInfo(SensorsRequest request, ServerCallContext context)
-        {
-            ValidateUser(context);
-
-            List<JobSensorData> dataList =
-                DatabaseClass.Instance.GetSensorsData(request.MachineName, request.SensorName, request.N);
-            SensorsResponse response = Convert(dataList);
-            return Task.FromResult(response);
-        }
-
-        private void ValidateUser(ServerCallContext context)
+        public override Task<SensorsUpdateMessage> GetMonitoringUpdates(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            var certificate = httpContext.Connection.ClientCertificate;
-            //_validator.Validate(certificate);
-        }
-        private SensorResponse Convert(JobSensorData data)
-        {
-            SensorResponse result = new SensorResponse
-            {
-                Comment = data?.Comment ?? string.Empty, Success = data?.Success ?? false, Ticks = data?.Time.Ticks ?? -1
-            };
-            return result;
+            return Task.FromResult(_monitoringCore.GetSensorUpdates(httpContext.Connection.ClientCertificate));
         }
 
-        private SensorsResponse Convert(List<JobSensorData> dataList)
+        public override Task<SensorsTreeMessage> GetMonitoringTree(Empty request, ServerCallContext context)
         {
-            SensorsResponse result = new SensorsResponse();
-            var converted = dataList.Select(Convert);
-            result.Sensors.AddRange(converted);
-            return result;
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(_monitoringCore.GetSensorsTree(httpContext.Connection.ClientCertificate));
         }
     }
 }

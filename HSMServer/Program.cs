@@ -16,6 +16,7 @@ namespace HSMServer
         public static void Main(string[] args)
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
+            Config.InitializeConfig();
             try
             {
                 logger.Debug("init main");
@@ -42,12 +43,12 @@ namespace HSMServer
                         {
                             httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                         });
-                        options.Listen(IPAddress.Loopback, 5015, listenOptions =>
+                        options.Listen(IPAddress.Loopback, Config.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
                             listenOptions.UseHttps(Config.ServerCertificate);
                         });
-                        options.Listen(IPAddress.Any, 44330, listenOptions =>
+                        options.Listen(IPAddress.Any, Config.SensorsPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                             listenOptions.UseHttps(portOptions =>
@@ -57,15 +58,6 @@ namespace HSMServer
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
                             });
                         });
-                        //options.Listen(IPAddress.Loopback, 5020, listenOptions =>
-                        //{
-                        //    listenOptions.UseHttps();
-                        //    listenOptions.Protocols = HttpProtocols.Http2;
-                        //    listenOptions.KestrelServerOptions.ConfigureHttpsDefaults(kestrelOptions =>
-                        //    {
-                        //        kestrelOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
-                        //    });
-                        //});
                     });
                     webBuilder.UseStartup<Startup>();
                 })

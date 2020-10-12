@@ -1,16 +1,64 @@
-﻿using System.Security.Cryptography.X509Certificates;
+﻿using System;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using HSMCommon.Keys;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
+using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using NLog;
 using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore
+    public class MonitoringCore : IMonitoringCore, IDisposable
     {
+        #region IDisposable implementation
+
+        private bool _disposed;
+
+        // Implement IDisposable.
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposingManagedResources)
+        {
+            // The idea here is that Dispose(Boolean) knows whether it is 
+            // being called to do explicit cleanup (the Boolean is true) 
+            // versus being called due to a garbage collection (the Boolean 
+            // is false). This distinction is useful because, when being 
+            // disposed explicitly, the Dispose(Boolean) method can safely 
+            // execute code using reference type fields that refer to other 
+            // objects knowing for sure that these other objects have not been 
+            // finalized or disposed of yet. When the Boolean is false, 
+            // the Dispose(Boolean) method should not execute code that 
+            // refer to reference type fields because those objects may 
+            // have already been finalized."
+
+            if (!_disposed)
+            {
+                if (disposingManagedResources)
+                {
+
+                }
+
+                _disposed = true;
+            }
+        }
+
+        // Use C# destructor syntax for finalization code.
+        ~MonitoringCore()
+        {
+            // Simply call Dispose(false).
+            Dispose(false);
+        }
+
+        #endregion
+
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
@@ -31,12 +79,17 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorInfo(JobResult info)
         {
+            SensorUpdateMessage updateMessage = Converter.Convert(info);
+            _queueManager.AddSensorData(updateMessage);
 
+            SensorDataObject obj = Converter.ConvertToDatabase(info);
+
+            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj));
         }
 
         public string AddSensorInfo(NewJobResult info)
         {
-            SensorUpdateMessage updateMessage = Converter.ConvertToSend(info);
+            SensorUpdateMessage updateMessage = Converter.Convert(info);
             _queueManager.AddSensorData(updateMessage);
 
             var convertedInfo = Converter.ConvertToInfo(info);
@@ -47,7 +100,8 @@ namespace HSMServer.MonitoringServerCore
             }
 
             convertedInfo.Key = key;
-            DatabaseClass.Instance.AddSensor(convertedInfo);
+            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
+            //DatabaseClass.Instance.AddSensor(convertedInfo);
             return key;
         }
 
@@ -55,7 +109,7 @@ namespace HSMServer.MonitoringServerCore
 
         #region SensorRequests
 
-        public SensorsService.SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate)
+        public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate)
         {
             _validator.Validate(clientCertificate);
 

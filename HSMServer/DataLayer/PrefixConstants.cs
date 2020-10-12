@@ -4,6 +4,7 @@
     {
         public const string JOB_SENSOR_PREFIX = "JobSensorValue";
         public const string SENSOR_KEY_PREFIX = "SensorKey";
+        public const string SENSOR_VALUE_PREFIX = "SensorValue";
         public const string SERVERS_LIST_PREFIX = "ServersNames";
     }
 }

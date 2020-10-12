@@ -14,6 +14,7 @@ namespace HSMServer.MonitoringServerCore
         private const int UpdateListCapacity = 1000;
         public event EventHandler QueueOverflow;
         public event EventHandler QueueOverflowWarning;
+        public event EventHandler UserDisconnected;
 
         private bool HasData
         {
@@ -33,10 +34,22 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddUpdate(SensorUpdateMessage message)
         {
+            int count = -1;
             lock (_lockObj)
             {
                 _monitoringQueue.Enqueue(message);
-            }            
+                count = _monitoringQueue.Count;
+            }
+
+            if (count >= ErrorCapacity)
+            {
+                OnQueueOverflow();
+            }
+
+            if (count >= WarningCapacity)
+            {
+                OnQueueOverflowWarning();
+            }
         }
 
         public List<SensorUpdateMessage> GetSensorUpdateMessages()
@@ -77,5 +90,12 @@ namespace HSMServer.MonitoringServerCore
         {
             QueueOverflowWarning?.Invoke(this, EventArgs.Empty);
         }
+
+        private void OnUserDisconnected()
+        {
+            UserDisconnected?.Invoke(this, EventArgs.Empty);
+        }
+
+
     }
 }

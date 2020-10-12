@@ -8,44 +8,48 @@ package sensors;
 
 service Sensors {
 	// Sends a greeting
-	rpc GetSingleSensorInfo (SensorRequest) returns (SensorResponse);
+	//rpc GetSingleSensorInfo (SensorRequest) returns (SensorResponse);
 	
-	rpc GetSensorsInfo (SensorsRequest) returns (SensorsResponse);
+	//rpc GetSensorsInfo (SensorsRequest) returns (SensorsResponse);
 
 	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsTreeMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
 }
 
-message SensorsRequest{
-	string machineName = 1;
-	string sensorName = 2;
-	int32 n = 3;
-}
+//message SensorsRequest{
+//	string machineName = 1;
+//	string sensorName = 2;
+//	int32 n = 3;
+//}
 
-message SensorRequest {
-	string machineName = 1;
-	string sensorName = 2;
-}
+//message SensorRequest {
+//	string machineName = 1;
+//	string sensorName = 2;
+//}
 
-// The response message containing the greetings.
-message SensorResponse {
-	bool success = 1;
-	string comment = 2;
-	int64 ticks = 3;
-}
+// The response message containing the greetings. 
+//message SensorResponse {
+//	bool success = 1;
+//	string comment = 2;
+//	int64 ticks = 3;
+//}
 
-message SensorsResponse {
-	repeated SensorResponse sensors = 1;
-}
+//message SensorsResponse {
+//	repeated SensorResponse sensors = 1;
+//}
 
 message SensorsTreeMessage {
-	repeated SensorsTreeLeafMessage sensors = 1;
+	repeated SensorTreeMessage trees = 1;
+}
+
+message SensorTreeMessage {
+	string Name = 1;
+	repeated SensorsTreeLeafMessage sensors = 2;
 }
 
 message SensorsTreeLeafMessage {
 	string Name = 1;
 	string Path = 2;
-	string Server = 3;
 }
 
 message SensorsUpdateMessage {
