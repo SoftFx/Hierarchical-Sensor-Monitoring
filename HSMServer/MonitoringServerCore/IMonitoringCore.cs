@@ -8,6 +8,6 @@ namespace HSMServer.MonitoringServerCore
         public void AddSensorInfo(JobResult info);
         public string AddSensorInfo(NewJobResult info);
         public SensorsService.SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate);
-        public SensorsService.SensorsTreeMessage GetSensorsTree(X509Certificate2 clientCertificate);
+        public SensorsService.SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate);
     }
 }

@@ -7,7 +7,7 @@ namespace HSMServer.Authentication
 {
     public class PermissionItem
     {
-        public string ServerName { get; set; }
+        public string ProductName { get; set; }
         public List<string> IgnoredSensors { get; set; }
     }
 }

@@ -65,23 +65,23 @@ namespace HSMServer.Authentication
                 user.UserName = nameAttr.Value;
             }
 
-            XmlNodeList servers = node.SelectNodes("//servers/server");
+            XmlNodeList servers = node.SelectNodes("//products/product");
             foreach (XmlNode serverNode in servers)
             {
                 PermissionItem permissionItem = new PermissionItem();
                 var serverNodeAttr = serverNode.Attributes?["Name"];
                 if (serverNodeAttr != null)
                 {
-                    permissionItem.ServerName = serverNodeAttr.Value;
+                    permissionItem.ProductName = serverNodeAttr.Value;
                 }
 
-                var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
-                if (ignoredSensorsAttr != null)
-                {
-                    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
-                }
+                //var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
+                //if (ignoredSensorsAttr != null)
+                //{
+                //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
+                //}
 
-                if (!string.IsNullOrEmpty(permissionItem.ServerName))
+                if (!string.IsNullOrEmpty(permissionItem.ProductName))
                 {
                     user.UserPermissions.Add(permissionItem);
                 }

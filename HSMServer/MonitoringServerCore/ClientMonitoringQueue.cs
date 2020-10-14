@@ -7,7 +7,7 @@ namespace HSMServer.MonitoringServerCore
     public class ClientMonitoringQueue
     {
         private readonly object _lockObj = new object();
-        private string _userName;
+        private readonly string _userName;
         private readonly Queue<SensorUpdateMessage> _monitoringQueue;
         private readonly List<SensorUpdateMessage> _emptyQueue = new List<SensorUpdateMessage>();
         private const int ErrorCapacity = 10000;

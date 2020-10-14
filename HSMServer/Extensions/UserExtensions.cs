@@ -10,18 +10,18 @@ namespace HSMServer.Extensions
     {
         public static bool IsSensorAvailable(this User user, string server, string sensor)
         {
-            var permissionItem = user.UserPermissions.FirstOrDefault(p => p.ServerName == server);
+            var permissionItem = user.UserPermissions.FirstOrDefault(p => p.ProductName == server);
             return permissionItem != null && permissionItem.IgnoredSensors.Contains(sensor);
         }
 
         public static bool IsServerAvailable(this User user, string server)
         {
-            return user.UserPermissions.FirstOrDefault(p => p.ServerName == server) != null;
+            return user.UserPermissions.FirstOrDefault(p => p.ProductName == server) != null;
         }
 
         public static IEnumerable<string> GetAvailableServers(this User user)
         {
-            return user.UserPermissions.Select(p => p.ServerName);
+            return user.UserPermissions.Select(p => p.ProductName);
         }
     }
 }

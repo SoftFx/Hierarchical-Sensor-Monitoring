@@ -12,7 +12,7 @@ service Sensors {
 	
 	//rpc GetSensorsInfo (SensorsRequest) returns (SensorsResponse);
 
-	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsTreeMessage);
+	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
 }
 
@@ -38,20 +38,6 @@ service Sensors {
 //	repeated SensorResponse sensors = 1;
 //}
 
-message SensorsTreeMessage {
-	repeated SensorTreeMessage trees = 1;
-}
-
-message SensorTreeMessage {
-	string Name = 1;
-	repeated SensorsTreeLeafMessage sensors = 2;
-}
-
-message SensorsTreeLeafMessage {
-	string Name = 1;
-	string Path = 2;
-}
-
 message SensorsUpdateMessage {
 	repeated SensorUpdateMessage sensors = 1;
 }
@@ -59,7 +45,7 @@ message SensorsUpdateMessage {
 message SensorUpdateMessage {
 	string Name = 1;
 	string Path = 2;
-	string Server = 3;
+	string Product = 3;
 	enum TransactionType {
 		TRANS_NONE = 0;
 		TRANS_ADD = 1;

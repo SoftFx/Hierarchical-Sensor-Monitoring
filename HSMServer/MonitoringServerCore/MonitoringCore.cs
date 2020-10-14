@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using HSMCommon.Keys;
@@ -119,13 +120,15 @@ namespace HSMServer.MonitoringServerCore
             return sensorsUpdateMessage;
         }
 
-        public SensorsTreeMessage GetSensorsTree(X509Certificate2 clientCertificate)
+        public SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate)
         {
             _validator.Validate(clientCertificate);
 
             User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-
-            return new SensorsTreeMessage();
+            SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
+            //TODO: Read updates for ALL available sensors for the current user
+            sensorsUpdateMessage.Sensors.AddRange(new List<SensorUpdateMessage>());
+            return sensorsUpdateMessage;
         }
 
         #endregion
