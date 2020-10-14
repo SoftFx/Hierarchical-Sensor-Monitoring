@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using HSMServer.Authentication;
 using HSMServer.Extensions;
 using NLog;
@@ -89,7 +90,22 @@ namespace HSMServer.MonitoringServerCore
 
                 if (!_currentSessions.ContainsKey(user))
                 {
-                    _currentSessions[user] = new ClientMonitoringQueue();
+                    ClientMonitoringQueue queue = new ClientMonitoringQueue(user.UserName);
+                    queue.QueueOverflow += QueueOverflow;
+                    _currentSessions[user] = queue;
+                }
+            }
+        }
+
+        private void QueueOverflow(object sender, ClientMonitoringQueue e)
+        {
+            lock (_accessLock)
+            {
+                var correspondingUser = _currentSessions.Keys.FirstOrDefault(u => u.UserName.Equals(e.GetUserName()));
+                if (correspondingUser != null)
+                {
+                    _currentSessions[correspondingUser].Clear();
+                    _currentSessions.Remove(correspondingUser);
                 }
             }
         }

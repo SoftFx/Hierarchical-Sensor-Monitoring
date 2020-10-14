@@ -21,7 +21,6 @@ namespace HSMServer.Configuration
 
         #region Private fields
 
-        private static Dictionary<string, ValueTuple<string, string>> _sensorsDictionary;
         public const string ConfigFolderName = "Config";
         public const string CertificatesFolderName = "Certificates";
         private static Logger _logger;

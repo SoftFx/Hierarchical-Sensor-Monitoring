@@ -7,12 +7,13 @@ namespace HSMServer.MonitoringServerCore
     public class ClientMonitoringQueue
     {
         private readonly object _lockObj = new object();
+        private string _userName;
         private readonly Queue<SensorUpdateMessage> _monitoringQueue;
         private readonly List<SensorUpdateMessage> _emptyQueue = new List<SensorUpdateMessage>();
         private const int ErrorCapacity = 10000;
         private const int WarningCapacity = 5000;
         private const int UpdateListCapacity = 1000;
-        public event EventHandler QueueOverflow;
+        public event EventHandler<ClientMonitoringQueue> QueueOverflow;
         public event EventHandler QueueOverflowWarning;
         public event EventHandler UserDisconnected;
 
@@ -27,8 +28,9 @@ namespace HSMServer.MonitoringServerCore
             }
         } 
 
-        public ClientMonitoringQueue()
+        public ClientMonitoringQueue(string userName)
         {
+            _userName = userName;
             _monitoringQueue = new Queue<SensorUpdateMessage>();
         }
 
@@ -83,7 +85,7 @@ namespace HSMServer.MonitoringServerCore
         }
         private void OnQueueOverflow()
         {
-            QueueOverflow?.Invoke(this, EventArgs.Empty);
+            QueueOverflow?.Invoke(this, this);
         }
 
         private void OnQueueOverflowWarning()
@@ -96,6 +98,9 @@ namespace HSMServer.MonitoringServerCore
             UserDisconnected?.Invoke(this, EventArgs.Empty);
         }
 
-
+        public string GetUserName()
+        {
+            return _userName;
+        }
     }
 }
