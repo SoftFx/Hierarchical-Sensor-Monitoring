@@ -1,11 +1,8 @@
 ﻿using System;
-using System.DirectoryServices;
 using System.IO;
-using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using Grpc.Core;
 using Grpc.Net.Client;
 using HSMClient.Configuration;
 using SensorsService;
@@ -39,9 +36,7 @@ namespace HSMClient.Connections.gRPC
 
         public override object Get()
         {
-            SensorRequest request = new SensorRequest() { MachineName = _machineName, SensorName = _sensorName };
-            SensorResponse result = _sensorsClient.GetSingleSensorInfo(request);
-            return result;
+            return new object();
         }
 
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)

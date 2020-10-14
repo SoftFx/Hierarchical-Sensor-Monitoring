@@ -14,9 +14,6 @@ namespace HSMClient.Connections
         public HttpClient(string address)
         {
             _address = address;
-            string login = ConfigProvider.Instance.ConnectionInfo.UserInfo.Login;
-            string password = ConfigProvider.Instance.ConnectionInfo.UserInfo.Password;
-            _basicAuthToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{login}:{password}"));
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
         }
 
