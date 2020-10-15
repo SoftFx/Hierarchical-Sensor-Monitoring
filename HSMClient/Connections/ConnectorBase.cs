@@ -13,6 +13,7 @@ namespace HSMClient.Connections
             _address = address;
         }
 
-        public abstract object Get();
+        public abstract object GetTree();
+        public abstract object GetUpdates();
     }
 }

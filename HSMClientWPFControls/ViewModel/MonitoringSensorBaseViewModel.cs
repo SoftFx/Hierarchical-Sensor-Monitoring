@@ -3,45 +3,26 @@ using System.Collections.Generic;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
-using HSMClientWPFControls.UpdateObjects;
 
 namespace HSMClientWPFControls.ViewModel
 {
-    public class MonitoringCounterBaseViewModel : NotifyingBase
+    public class MonitoringSensorBaseViewModel : NotifyingBase
     {
         public DateTime _lastStatusUpdate;
         private MonitoringNodeBase _parent;
         private string _status;
         private string _shortValue;
-        private CounterTypes _counterType;
+        private SensorTypes _sensorType;
         private object _dataObject;
         private string _message;
         private Dictionary<string, string> _validationParams;
 
-        public MonitoringCounterBaseViewModel(string name, MonitoringNodeBase parent = null)
+        public MonitoringSensorBaseViewModel(string name, MonitoringNodeBase parent = null)
         {
             _lastStatusUpdate = DateTime.Now;
             Name = name;
             _parent = parent;
             _status = TextConstants.Error;
-        }
-
-        public MonitoringCounterBaseViewModel(MonitoringCounterUpdate counterUpdate, MonitoringNodeBase parent = null)
-        {
-            Name = counterUpdate.Name;
-            _lastStatusUpdate = DateTime.Now;
-            _parent = parent;
-            _counterType = counterUpdate.CounterType;
-            _dataObject = counterUpdate.DataObject;
-        }
-
-        public void Update(MonitoringCounterUpdate counterUpdate, IMonitoringCounterStatusHandler handler = null)
-        {
-            ShortValue = counterUpdate.ShortValue;
-
-            handler?.UpdateStatus(this);
-
-            OnPropertyChanged(nameof(StatusDuration));
         }
         public string Name { get; set; }
 
@@ -117,7 +98,7 @@ namespace HSMClientWPFControls.ViewModel
                 return duration.ToString(@"hh\:mm\:ss");
             }
         }
-        public CounterTypes CounterType => _counterType;
+        public SensorTypes SensorType => _sensorType;
         public object DataObject => _dataObject;
     }
 }

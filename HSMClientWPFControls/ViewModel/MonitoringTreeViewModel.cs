@@ -76,9 +76,9 @@ namespace HSMClientWPFControls.ViewModel
         }
 
         private IMonitoringModel _model;
-        private ObservableCollection<MonitoringCounterBaseViewModel> _currentCounters;
+        private ObservableCollection<MonitoringSensorBaseViewModel> _currentCounters;
         private MonitoringNodeBase _selectedNode;
-        private MonitoringCounterBaseViewModel _selectedCounter;
+        private MonitoringSensorBaseViewModel _selectedSensor;
 
         public MonitoringNodeBase SelectedNode
         {
@@ -90,13 +90,13 @@ namespace HSMClientWPFControls.ViewModel
             }
         }
 
-        public MonitoringCounterBaseViewModel SelectedCounter
+        public MonitoringSensorBaseViewModel SelectedSensor
         {
-            get => _selectedCounter;
-            set { _selectedCounter = value; }
+            get => _selectedSensor;
+            set { _selectedSensor = value; }
         }
 
-        public ObservableCollection<MonitoringCounterBaseViewModel> CurrentCounters
+        public ObservableCollection<MonitoringSensorBaseViewModel> CurrentCounters
         {
             get => _currentCounters;
             set
@@ -122,6 +122,6 @@ namespace HSMClientWPFControls.ViewModel
             get { return _model?.Nodes; }
         }
 
-        public ObservableCollection<MonitoringCounterBaseViewModel> Counters { get; set; }
+        public ObservableCollection<MonitoringSensorBaseViewModel> Counters { get; set; }
     }
 }

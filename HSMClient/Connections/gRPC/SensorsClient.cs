@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Net.Client;
 using HSMClient.Configuration;
 using SensorsService;
@@ -34,9 +35,15 @@ namespace HSMClient.Connections.gRPC
             _sensorName = sensorName;
         }
 
-        public override object Get()
+        public override object GetTree()
         {
-            return new object();
+            SensorsUpdateMessage updatesList = _sensorsClient.GetMonitoringTree(new Empty());
+            return updatesList;
+        }
+        public override object GetUpdates()
+        {
+            SensorsUpdateMessage updatesList = _sensorsClient.GetMonitoringUpdates(new Empty());
+            return updatesList;
         }
 
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)

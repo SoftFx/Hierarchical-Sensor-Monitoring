@@ -5,7 +5,6 @@ using System.Collections.Specialized;
 using System.Windows;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
-using HSMClientWPFControls.UpdateObjects;
 using HSMClientWPFControls.ViewModel;
 
 namespace HSMClientWPFControls.Objects
@@ -43,8 +42,8 @@ namespace HSMClientWPFControls.Objects
                 if (disposingManagedResources)
                 {
                     // Dispose managed resources here...
-                    //foreach (var counter in Counters)
-                    //  counter.Dispose();
+                    //foreach (var sensor in Counters)
+                    //  sensor.Dispose();
                     foreach (var subNode in SubNodes)
                         subNode.Dispose();
                 }
@@ -72,7 +71,7 @@ namespace HSMClientWPFControls.Objects
         private string _status;
         private string _internalStatus = TextConstants.Ok;
         private DateTime _lastStatusUpdate;
-        private Dictionary<string, MonitoringCounterBaseViewModel> _nameToCounter;
+        private Dictionary<string, MonitoringSensorBaseViewModel> _nameToCounter;
         private Dictionary<string, MonitoringNodeBase> _nameToNode;
         public MonitoringNodeBase(MonitoringNodeBase parent = null)
         {
@@ -80,8 +79,8 @@ namespace HSMClientWPFControls.Objects
             _status = TextConstants.Ok;
             _lastStatusUpdate = DateTime.Now;
             SubNodes = new ObservableCollection<MonitoringNodeBase>();
-            Counters = new ObservableCollection<MonitoringCounterBaseViewModel>();
-            _nameToCounter = new Dictionary<string, MonitoringCounterBaseViewModel>();
+            Counters = new ObservableCollection<MonitoringSensorBaseViewModel>();
+            _nameToCounter = new Dictionary<string, MonitoringSensorBaseViewModel>();
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             SubNodes.CollectionChanged += Content_CollectionChanged;
             Counters.CollectionChanged += Content_CollectionChanged;
@@ -97,25 +96,6 @@ namespace HSMClientWPFControls.Objects
             _name = name;
         }
 
-        public MonitoringNodeBase(MonitoringNodeUpdate update, MonitoringNodeBase parent = null) : this(parent)
-        {
-            foreach (var counter in update.Counters)
-            {
-                if (_nameToCounter.ContainsKey(counter.Name))
-                {
-                    var counterViewModel = new MonitoringCounterBaseViewModel(counter, this);
-                    Counters.Add(counterViewModel);
-                    _nameToCounter[counter.Name] = counterViewModel;
-                }
-            }
-
-            foreach (var subNodeUpdate in update.SubNodes)
-            {
-                var subNode = new MonitoringNodeBase(subNodeUpdate, this);
-                SubNodes.Add(subNode);
-                _nameToNode[subNode.Name] = subNode;
-            }
-        }
         //protected MonitoringNodeBase()
         //{
 
@@ -215,9 +195,9 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
-        private ObservableCollection<MonitoringCounterBaseViewModel> _counters;
+        private ObservableCollection<MonitoringSensorBaseViewModel> _counters;
 
-        public ObservableCollection<MonitoringCounterBaseViewModel> Counters
+        public ObservableCollection<MonitoringSensorBaseViewModel> Counters
         {
             get { return _counters; }
             set
@@ -230,41 +210,6 @@ namespace HSMClientWPFControls.Objects
                 _counters = value;
                 OnPropertyChanged(nameof(Counters));
             }
-        }
-
-        public void Update(MonitoringNodeUpdate updateNode, IMonitoringCounterStatusHandler handler)
-        {
-            if(_nameToCounter == null)
-                _nameToCounter = new Dictionary<string, MonitoringCounterBaseViewModel>();
-
-            foreach (var updateCounter in updateNode.Counters)
-            {
-                if (!_nameToCounter.ContainsKey(updateCounter.Name))
-                {
-                    var counter = new MonitoringCounterBaseViewModel(updateCounter, this);
-                    Counters.Add(counter);
-                    _nameToCounter[updateCounter.Name] = counter;
-                }
-                _nameToCounter[updateCounter.Name].Update(updateCounter, handler);
-            }
-
-            if (_nameToNode == null)
-                _nameToNode = new Dictionary<string, MonitoringNodeBase>();
-
-            foreach (var subNodeUpdate in updateNode.SubNodes)
-            {
-                if (!_nameToNode.ContainsKey(subNodeUpdate.Name))
-                {
-                    var subNode = new MonitoringNodeBase(subNodeUpdate, this);
-                    Application.Current.Dispatcher.Invoke(delegate { SubNodes.Add(subNode); });
-
-                    _nameToNode[subNode.Name] = subNode;
-                }
-
-                _nameToNode[subNodeUpdate.Name].Update(subNodeUpdate, handler);
-            }
-
-            OnPropertyChanged(nameof(StatusDuration));
         }
     }
 }

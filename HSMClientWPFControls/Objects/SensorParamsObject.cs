@@ -2,7 +2,7 @@
 
 namespace HSMClientWPFControls.Objects
 {
-    public class CounterParamsObject
+    public class SensorParamsObject
     {
         public Dictionary<string, string> ValidationParams { get; set; }
     }

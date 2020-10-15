@@ -8,14 +8,14 @@ using HSMCommon.DataObjects;
 
 namespace HSMClient.StatusHandlers
 {
-    class JobSensorsStatusHandler : IMonitoringCounterStatusHandler
+    class JobSensorsStatusHandler : IMonitoringSensorStatusHandler
     {
         private Dictionary<string, string> _validationParams;
 
 
-        public void UpdateStatus(MonitoringCounterBaseViewModel counter)
+        public void UpdateStatus(MonitoringSensorBaseViewModel sensor)
         {
-            counter.Status = TextConstants.Ok;
+            sensor.Status = TextConstants.Ok;
         }
     }
 }

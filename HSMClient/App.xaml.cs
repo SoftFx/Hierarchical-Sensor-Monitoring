@@ -1,6 +1,6 @@
 ﻿using System.Windows;
 
-namespace MAMSClient
+namespace HSMClient
 {
     /// <summary>
     /// Interaction logic for App.xaml

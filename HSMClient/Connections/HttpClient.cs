@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Text;
 using HSMClient.Configuration;
 
 namespace HSMClient.Connections
@@ -14,7 +13,7 @@ namespace HSMClient.Connections
         public HttpClient(string address)
         {
             _address = address;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         }
 
         public string Get(string url)
