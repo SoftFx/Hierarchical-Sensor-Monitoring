@@ -7,9 +7,8 @@ namespace HSMServer.DataLayer.Model
 {
     public class SensorInfo
     {
-        public string Key { get; set; }
         public string Path { get; set; }
-        public string ServerName { get; set; }
+        public string ProductName { get; set; }
         public string SensorName { get; set; }
     }
 }

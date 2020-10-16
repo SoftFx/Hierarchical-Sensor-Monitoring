@@ -94,10 +94,10 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             var convertedInfo = Converter.ConvertToInfo(info);
-            string key = DatabaseClass.Instance.GetSensorKey(info.ServerName, info.SensorName);
+            string key = DatabaseClass.Instance.GetSensorKey(info.ProductName, info.SensorName);
             if (string.IsNullOrEmpty(key))
             {
-                key = SensorKeyGenerator.GenerateKey(info.ServerName, info.SensorName);
+                key = KeyGenerator.GenerateKey(info.ProductName, info.SensorName);
             }
 
             convertedInfo.Key = key;

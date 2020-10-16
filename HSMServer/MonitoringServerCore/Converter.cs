@@ -43,7 +43,7 @@ namespace HSMServer.MonitoringServerCore
         {
             SensorInfo result = new SensorInfo();
             result.Path = newJobResult.Path;
-            result.ServerName = newJobResult.ServerName;
+            result.ProductName = newJobResult.ProductName;
             result.SensorName = newJobResult.SensorName;
             return result;
         }
@@ -56,7 +56,7 @@ namespace HSMServer.MonitoringServerCore
         public static SensorUpdateMessage Convert(NewJobResult newJobResult)
         {
             SensorUpdateMessage result = new SensorUpdateMessage();
-            result.Server = newJobResult.ServerName;
+            result.Server = newJobResult.ProductName;
             result.Name = newJobResult.SensorName;
             result.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
             result.Path = newJobResult.Path;

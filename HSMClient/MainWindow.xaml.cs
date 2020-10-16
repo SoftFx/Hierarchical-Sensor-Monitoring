@@ -25,7 +25,7 @@ namespace HSMClient
             try
             {
                 _model = new MainWindowViewModel();
-                Logger.Info("Mainviewmodel created");
+                Logger.Info("MainViewModel created");
             }
             catch (Exception e)
             {

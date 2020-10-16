@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using LightningDB;
 
 namespace HSMServer.Exceptions
 {
@@ -11,6 +9,12 @@ namespace HSMServer.Exceptions
         { }
 
         public ServerDatabaseException(string message) : base(message)
+        { }
+
+        public ServerDatabaseException(string message, MDBResultCode code) : base($"{message}, code = {code}")
+        { }
+
+        public ServerDatabaseException(MDBResultCode code) : base($"MDBResultCode = {code}")
         { }
     }
 }
