@@ -10,12 +10,10 @@ using SensorsService;
 
 namespace HSMClient.Connections.gRPC
 {
-    public class SensorsClient : ConnectorBase
+    public class GrpcClient : ConnectorBase
     {
         private readonly Sensors.SensorsClient _sensorsClient;
-        private readonly string _sensorName;
-        private readonly string _machineName;
-        public SensorsClient(string sensorsUrl, string sensorName, string machineName) : base(sensorsUrl)
+        public GrpcClient(string sensorsUrl) : base(sensorsUrl)
         {
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
@@ -30,9 +28,6 @@ namespace HSMClient.Connections.gRPC
             });
 
             _sensorsClient = new Sensors.SensorsClient(channel);
-
-            _machineName = machineName;
-            _sensorName = sensorName;
         }
 
         public override object GetTree()

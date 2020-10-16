@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Windows;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ViewModel;
@@ -42,7 +41,7 @@ namespace HSMClientWPFControls.Objects
                 if (disposingManagedResources)
                 {
                     // Dispose managed resources here...
-                    //foreach (var sensor in Counters)
+                    //foreach (var sensor in Sensors)
                     //  sensor.Dispose();
                     foreach (var subNode in SubNodes)
                         subNode.Dispose();
@@ -71,19 +70,19 @@ namespace HSMClientWPFControls.Objects
         private string _status;
         private string _internalStatus = TextConstants.Ok;
         private DateTime _lastStatusUpdate;
-        private Dictionary<string, MonitoringSensorBaseViewModel> _nameToCounter;
-        private Dictionary<string, MonitoringNodeBase> _nameToNode;
+        private readonly Dictionary<string, MonitoringSensorBaseViewModel> _nameToSensor;
+        private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
         public MonitoringNodeBase(MonitoringNodeBase parent = null)
         {
             _parent = parent;
             _status = TextConstants.Ok;
             _lastStatusUpdate = DateTime.Now;
             SubNodes = new ObservableCollection<MonitoringNodeBase>();
-            Counters = new ObservableCollection<MonitoringSensorBaseViewModel>();
-            _nameToCounter = new Dictionary<string, MonitoringSensorBaseViewModel>();
+            Sensors = new ObservableCollection<MonitoringSensorBaseViewModel>();
+            _nameToSensor = new Dictionary<string, MonitoringSensorBaseViewModel>();
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             SubNodes.CollectionChanged += Content_CollectionChanged;
-            Counters.CollectionChanged += Content_CollectionChanged;
+            Sensors.CollectionChanged += Content_CollectionChanged;
         }
 
         private void Content_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -145,7 +144,7 @@ namespace HSMClientWPFControls.Objects
         public virtual void UpdateStatus()
         {
             string status = TextConstants.Ok;
-            foreach (var counter in Counters)
+            foreach (var counter in Sensors)
             {
                 if (counter.Status == TextConstants.Warning && status == TextConstants.Ok)
                     status = TextConstants.Warning;
@@ -195,21 +194,65 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
-        private ObservableCollection<MonitoringSensorBaseViewModel> _counters;
+        private ObservableCollection<MonitoringSensorBaseViewModel> _sensors;
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> Counters
+        public ObservableCollection<MonitoringSensorBaseViewModel> Sensors
         {
-            get { return _counters; }
+            get { return _sensors; }
             set
             {
-                foreach (var counter in value)
+                foreach (var sensor in value)
                 {
-                    counter.Parent = this;
+                    sensor.Parent = this;
                 }
 
-                _counters = value;
-                OnPropertyChanged(nameof(Counters));
+                _sensors = value;
+                OnPropertyChanged(nameof(Sensors));
             }
+        }
+
+        //Pass the node number, 0 for the root
+        public void Update(MonitoringSensorUpdate sensorUpdate, int level)
+        {
+            if (level < sensorUpdate.Path.Count - 1)
+            {
+                AddSubNode(sensorUpdate.Path[level]);
+                _nameToNode[sensorUpdate.Path[level]].Update(sensorUpdate, level + 1);
+                return;
+            }
+
+            if (level == sensorUpdate.Path.Count - 1)
+            {
+                UpdateSensor(sensorUpdate);
+                return;
+            }
+
+            //TODO: throw an exception
+        }
+
+        public void AddSubNode(string subNodeName)
+        {
+            if (!_nameToNode.ContainsKey(subNodeName))
+            {
+                MonitoringNodeBase node = new MonitoringNodeBase(subNodeName, this);
+                _nameToNode[subNodeName] = node;
+                SubNodes.Add(node);
+            }
+        }
+
+        public void UpdateSensor(MonitoringSensorUpdate sensorUpdate)
+        {
+            if (sensorUpdate.ActionType == ActionTypes.Remove)
+            {
+                _nameToSensor.Remove(sensorUpdate.Name);
+                return;
+            }
+
+            if (!_nameToSensor.ContainsKey(sensorUpdate.Name))
+            {
+                _nameToSensor[sensorUpdate.Name] = new MonitoringSensorBaseViewModel(sensorUpdate, this);
+            }
+            _nameToSensor[sensorUpdate.Name].Update(sensorUpdate);
         }
     }
 }

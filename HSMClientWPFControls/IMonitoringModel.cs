@@ -7,5 +7,6 @@ namespace HSMClientWPFControls
     public interface IMonitoringModel
     {
         ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
+        void Dispose();
     }
 }

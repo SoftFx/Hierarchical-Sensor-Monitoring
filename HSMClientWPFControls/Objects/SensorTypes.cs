@@ -1,7 +1,8 @@
-﻿namespace HSMClientWPFControls
+﻿namespace HSMClientWPFControls.Objects
 {
     public enum SensorTypes
     {
         JobSensor,
+
     }
 }

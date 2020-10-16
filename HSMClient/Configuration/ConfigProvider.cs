@@ -38,8 +38,7 @@ namespace HSMClient.Configuration
 
         #region Private fields
 
-        private ConnectionInfo _connectionInfo;
-        private CertificateInfo _certificateInfo;
+        private readonly ConnectionInfo _connectionInfo;
         private const string _configFolderName = "Config";
         private const string _certificatesFolderName = "Certificates";
         private const string _configFileName = "config.xml";
@@ -59,6 +58,7 @@ namespace HSMClient.Configuration
         }
         public ConfigProvider()
         {
+            _connectionInfo = new ConnectionInfo();
             _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
             if (!Directory.Exists(_configFolderPath))
             {
@@ -71,7 +71,6 @@ namespace HSMClient.Configuration
                 FileManager.SafeCreateFile(_configFilePath);
             }
 
-            _certificateInfo = new CertificateInfo();
             ReadConnectionInfo();
         }
 

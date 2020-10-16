@@ -51,7 +51,7 @@ namespace HSMClientWPFControls.ViewModel
                         node.Dispose();
                     }
                 }
-
+                _model.Dispose();
                 // Dispose unmanaged resources here...
 
                 // Set large fields to null here...
@@ -86,7 +86,7 @@ namespace HSMClientWPFControls.ViewModel
             set
             {
                 _selectedNode = value;
-                CurrentCounters = _selectedNode.Counters;
+                CurrentCounters = _selectedNode.Sensors;
             }
         }
 

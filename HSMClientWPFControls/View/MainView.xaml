@@ -163,7 +163,7 @@
 
             <GroupBox>
                 <GroupBox.Header>
-                    <TextBlock FontWeight="Medium">Counters</TextBlock>
+                    <TextBlock FontWeight="Medium">Sensors</TextBlock>
                 </GroupBox.Header>
 
                 <DockPanel>

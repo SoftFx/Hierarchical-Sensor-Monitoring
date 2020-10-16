@@ -15,6 +15,7 @@ namespace MAMSClient
         private MainWindowViewModel _model;
         public MainWindow()
         {
+            Title = TextConstants.AppName;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
 
