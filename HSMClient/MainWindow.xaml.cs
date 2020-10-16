@@ -4,8 +4,9 @@ using System.Windows;
 using System.Windows.Threading;
 using HSMClient;
 using HSMClient.Common;
+using HSMClient.Common.Logging;
 
-namespace MAMSClient
+namespace HSMClient
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -16,27 +17,30 @@ namespace MAMSClient
         public MainWindow()
         {
             Title = TextConstants.AppName;
+            Logger.InitializeLogger();
+            Logger.Info("Logger initialized");
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
 
             try
             {
                 _model = new MainWindowViewModel();
+                Logger.Info("Mainviewmodel created");
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
-                throw;
+                Logger.Fatal($"Failed to create _model: {e}");
             }
             
             this.DataContext = _model;
             try
             {
                 InitializeComponent();
+                Logger.Info("InitializeComponent was successful");
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
+                Logger.Fatal($"Failed to initialize component: {e}");
                 throw;
             }
 
