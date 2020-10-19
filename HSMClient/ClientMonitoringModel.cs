@@ -4,7 +4,9 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using HSMClient.Common;
+using HSMClient.Common.Logging;
 using HSMClient.Configuration;
 using HSMClient.Connections;
 using HSMClient.Connections.gRPC;
@@ -75,10 +77,12 @@ namespace HSMClient
             try
             {
                 var responseObj = _sensorsClient.GetTree();
-
+                _connectionsStatus = ConnectionsStatus.Ok;
+                Update((SensorsUpdateMessage)responseObj);
             }
             catch (Exception e)
             {
+                Logger.Error($"ClientMonitoringModel: Connect error: {e}");
                 _connectionsStatus = ConnectionsStatus.Error;
                 foreach (var node in Nodes)
                 {
@@ -91,10 +95,13 @@ namespace HSMClient
         {
             try
             {
-
+                var responseObj = _sensorsClient.GetUpdates();
+                _connectionsStatus = ConnectionsStatus.Ok;
+                Update((SensorsUpdateMessage)responseObj);
             }
             catch (Exception e)
             {
+                Logger.Error($"ClientMonitoringModel: Update error: {e}");
                 _connectionsStatus = ConnectionsStatus.Error;
                 foreach (var node in Nodes)
                 {
@@ -111,7 +118,7 @@ namespace HSMClient
                 {
                     MonitoringNodeBase node = new MonitoringNodeBase(sensorUpd.Product);
                     _nameToNode[sensorUpd.Product] = node;
-                    Nodes.Add(node);
+                    Dispatcher.CurrentDispatcher.Invoke(delegate { Nodes.Add(node); });
                 }
                 _nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 1);
             }
