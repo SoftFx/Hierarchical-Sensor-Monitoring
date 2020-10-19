@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using HSMServer.Authentication;
 
 namespace HSMServer.Extensions
@@ -14,7 +12,7 @@ namespace HSMServer.Extensions
             return permissionItem != null && permissionItem.IgnoredSensors.Contains(sensor);
         }
 
-        public static bool IsServerAvailable(this User user, string server)
+        public static bool IsProductAvailable(this User user, string server)
         {
             return user.UserPermissions.FirstOrDefault(p => p.ProductName == server) != null;
         }

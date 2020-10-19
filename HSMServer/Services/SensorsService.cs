@@ -1,10 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
-using HSMServer.DataLayer;
-using HSMServer.DataLayer.Model;
 using HSMServer.MonitoringServerCore;
 using SensorsService;
 using NLog;
@@ -31,11 +27,11 @@ namespace HSMServer.Services
             return Task.FromResult(_monitoringCore.GetSensorUpdates(httpContext.Connection.ClientCertificate));
         }
 
-        public override Task<SensorsTreeMessage> GetMonitoringTree(Empty request, ServerCallContext context)
+        public override Task<SensorsUpdateMessage> GetMonitoringTree(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.GetSensorsTree(httpContext.Connection.ClientCertificate));
+            return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection.ClientCertificate));
         }
     }
 }

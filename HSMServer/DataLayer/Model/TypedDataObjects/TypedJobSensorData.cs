@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace HSMServer.DataLayer.Model.TypedDataObjects
+﻿namespace HSMServer.DataLayer.Model.TypedDataObjects
 {
     public class TypedJobSensorData
     {

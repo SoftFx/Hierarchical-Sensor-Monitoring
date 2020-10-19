@@ -53,10 +53,23 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to update messages
 
+        public static SensorUpdateMessage Convert(SensorDataObject dataObject)
+        {
+            SensorUpdateMessage result = new SensorUpdateMessage();
+            result.Path = dataObject.Path;
+            result.ObjectType = Convert(dataObject.DataType);
+            result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(dataObject.TypedData));
+            string product;
+            string sensor;
+            ExtractServerAndSensor(dataObject.Path, out product, out sensor);
+            result.Name = sensor;
+            result.Product = product;
+            return result;
+        }
         public static SensorUpdateMessage Convert(NewJobResult newJobResult)
         {
             SensorUpdateMessage result = new SensorUpdateMessage();
-            result.Server = newJobResult.ProductName;
+            result.Product = newJobResult.ProductName;
             result.Name = newJobResult.SensorName;
             result.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
             result.Path = newJobResult.Path;
@@ -69,10 +82,10 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage update = new SensorUpdateMessage();
             update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
             update.Path = jobResult.Path;
-            string server;
+            string product;
             string sensor;
-            ExtractServerAndSensor(update.Path, out server, out sensor);
-            update.Server = server;
+            ExtractServerAndSensor(update.Path, out product, out sensor);
+            update.Product = product;
             update.Name = sensor;
             TypedJobSensorData data = new TypedJobSensorData
             {
@@ -85,9 +98,23 @@ namespace HSMServer.MonitoringServerCore
 
         #endregion
 
+        #region Typed data objects
+
+        
+
+        #endregion
 
         #region Sub-methods
 
+        private static SensorUpdateMessage.Types.SensorObjectType Convert(SensorDataTypes type)
+        {
+            switch (type)
+            {
+                case SensorDataTypes.JobSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
+            }
+            throw new Exception($"Unknown SensorDataType = {type}!");
+        }
         private static long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = (dateTime - DateTime.UnixEpoch);

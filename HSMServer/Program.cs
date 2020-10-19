@@ -24,7 +24,7 @@ namespace HSMServer
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Program stopped because of an exception");
+                logger.Fatal(ex, "Program stopped because of an exception");
                 throw;
             }
             finally

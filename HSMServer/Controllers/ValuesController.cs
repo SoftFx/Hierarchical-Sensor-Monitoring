@@ -1,5 +1,6 @@
 ﻿using System;
 using HSMServer.Model;
+using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 
@@ -13,9 +14,11 @@ namespace HSMServer.Controllers
     public class ValuesController : ControllerBase
     {
         private readonly Logger _logger;
-        public ValuesController()
+        private readonly IMonitoringCore _monitoringCore;
+        public ValuesController(MonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
+            _monitoringCore = monitoringCore;
         }
 
         [HttpGet]

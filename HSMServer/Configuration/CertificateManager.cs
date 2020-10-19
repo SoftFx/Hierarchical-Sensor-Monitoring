@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using NLog;
-using Org.BouncyCastle.Security;
 
 namespace HSMServer.Configuration
 {
@@ -12,7 +11,7 @@ namespace HSMServer.Configuration
     {
         private readonly Logger _logger;
         private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(10);
-        private readonly List<X509Certificate2> _certificates = new List<X509Certificate2>();
+        private readonly List<CertificateDescriptor> _certificates = new List<CertificateDescriptor>();
         private readonly DateTime _lastUpdate = DateTime.MinValue;
 
         public CertificateManager()
@@ -21,7 +20,7 @@ namespace HSMServer.Configuration
             _logger.Info("Certificate manager initialized");
         }
 
-        private IEnumerable<X509Certificate2> ReadUserCertificates()
+        private IEnumerable<CertificateDescriptor> ReadUserCertificates()
         {
             string certFolderPath = Config.CertificatesFolderPath;
 
@@ -32,16 +31,18 @@ namespace HSMServer.Configuration
             foreach (var file in files)
             {
                 X509Certificate2 cert = null;
+                CertificateDescriptor descriptor = null;
                 try
                 {
                     cert = new X509Certificate2(file);
+                    descriptor = new CertificateDescriptor {Certificate = cert, FileName = Path.GetFileName(file)};
                 }
                 catch
                 {
                     continue;
                 }
 
-                yield return cert;
+                yield return descriptor;
             }
         }
 
@@ -53,18 +54,18 @@ namespace HSMServer.Configuration
                 _certificates.AddRange(ReadUserCertificates());
             }
         }
-        public List<X509Certificate2> GetUserCertificates()
+        public List<CertificateDescriptor> GetUserCertificates()
         {
             UpdateCertificates();
 
             return _certificates;
         }
 
-        public X509Certificate2 GetCertificateBySubject(string subject)
+        public X509Certificate2 GetCertificateByFileName(string fileName)
         {
             UpdateCertificates();
 
-            return _certificates.FirstOrDefault(cert => cert.SubjectName.Name.Equals(subject));
+            return _certificates.FirstOrDefault(d => d.FileName.Equals(fileName))?.Certificate;
         }
     }
 }

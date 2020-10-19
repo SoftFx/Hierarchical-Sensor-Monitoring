@@ -26,7 +26,7 @@ namespace HSMServer.Configuration
         {
             _certificateThumbprints.Clear();
 
-            _certificateThumbprints.AddRange(_certificateManager.GetUserCertificates().Select(s => s.Thumbprint));
+            _certificateThumbprints.AddRange(_certificateManager.GetUserCertificates().Select(d => d.Certificate.Thumbprint));
         }
 
         public void Validate(X509Certificate2 certificate)

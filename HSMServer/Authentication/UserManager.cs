@@ -65,29 +65,40 @@ namespace HSMServer.Authentication
                 user.UserName = nameAttr.Value;
             }
 
-            XmlNodeList servers = node.SelectNodes("//products/product");
-            foreach (XmlNode serverNode in servers)
+            string certFile = string.Empty;
+            var certAttr = node.Attributes?["Certificate"];
+            if (certAttr != null)
             {
-                PermissionItem permissionItem = new PermissionItem();
-                var serverNodeAttr = serverNode.Attributes?["Name"];
-                if (serverNodeAttr != null)
-                {
-                    permissionItem.ProductName = serverNodeAttr.Value;
-                }
+                certFile = certAttr.Value;
+            }
 
-                //var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
-                //if (ignoredSensorsAttr != null)
-                //{
-                //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
-                //}
-
-                if (!string.IsNullOrEmpty(permissionItem.ProductName))
+            XmlNodeList products = node.SelectNodes("//products/product");
+            if (products != null)
+            {
+                foreach (XmlNode serverNode in products)
                 {
-                    user.UserPermissions.Add(permissionItem);
+                    PermissionItem permissionItem = new PermissionItem();
+                    var serverNodeAttr = serverNode.Attributes?["Name"];
+                    if (serverNodeAttr != null)
+                    {
+                        permissionItem.ProductName = serverNodeAttr.Value;
+                    }
+
+                    //temporarily disable ignore 
+                    //var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
+                    //if (ignoredSensorsAttr != null)
+                    //{
+                    //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
+                    //}
+
+                    if (!string.IsNullOrEmpty(permissionItem.ProductName))
+                    {
+                        user.UserPermissions.Add(permissionItem);
+                    }
                 }
             }
 
-            user.CertificateThumbprint = _certificateManager.GetCertificateBySubject(user.UserName)?.Thumbprint;
+            user.CertificateThumbprint = _certificateManager.GetCertificateByFileName(certFile)?.Thumbprint;
             return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
         }
 

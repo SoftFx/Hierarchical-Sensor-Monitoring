@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using HSMCommon.Keys;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -67,6 +65,7 @@ namespace HSMServer.MonitoringServerCore
         private readonly ClientCertificateValidator _validator;
         private readonly ProductManager _productManager;
         private readonly Logger _logger;
+        public readonly char[] _pathSeparator = new[] { '/' };
 
         public MonitoringCore()
         {
@@ -87,21 +86,27 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject obj = Converter.ConvertToDatabase(info);
+            string productName = _productManager.GetProductNameByKey(info.Key);
+            string sensorName = ExtractSensorName(info.Path);
+            if (!_productManager.IsSensorRegistered(productName, sensorName))
+            {
+                _productManager.AddSensor(new SensorInfo(){ Path = info.Path, ProductName = productName, SensorName = sensorName });
+            }
 
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, ));
+            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
         }
 
-        public string AddSensorInfo(NewJobResult info)
-        {
-            SensorUpdateMessage updateMessage = Converter.Convert(info);
-            _queueManager.AddSensorData(updateMessage);
+        //public string AddSensorInfo(NewJobResult info)
+        //{
+        //    SensorUpdateMessage updateMessage = Converter.Convert(info);
+        //    _queueManager.AddSensorData(updateMessage);
 
-            var convertedInfo = Converter.ConvertToInfo(info);
+        //    var convertedInfo = Converter.ConvertToInfo(info);
             
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
-            //DatabaseClass.Instance.AddSensor(convertedInfo);
-            return key;
-        }
+        //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
+        //    //DatabaseClass.Instance.AddSensor(convertedInfo);
+        //    return key;
+        //}
 
         #endregion
 
@@ -124,8 +129,29 @@ namespace HSMServer.MonitoringServerCore
             User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
             //TODO: Read updates for ALL available sensors for the current user
-            sensorsUpdateMessage.Sensors.AddRange(new List<SensorUpdateMessage>());
+            foreach (var permission in user.UserPermissions)
+            {
+                var sensorsList = DatabaseClass.Instance.GetSensorsList(permission.ProductName);
+                foreach (var sensor in sensorsList)
+                {
+                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(permission.ProductName, sensor);
+                    if (lastVal != null)
+                    {
+                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal));
+                    }
+                }
+            }
             return sensorsUpdateMessage;
+        }
+
+        #endregion
+
+        #region Sub-methods
+
+        public string ExtractSensorName(string path)
+        {
+            var splitRes = path.Split(_pathSeparator);
+            return splitRes[^1];
         }
 
         #endregion

@@ -1,5 +1,4 @@
 ﻿using System;
-using HSMServer.DataLayer;
 using HSMServer.Model;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
@@ -35,19 +34,19 @@ namespace HSMServer.Controllers
             }
         }
 
-        [HttpPost("nokey")]
-        public ActionResult<string> Post([FromBody] NewJobResult newJobResult)
-        {
-            try
-            {
-                return _monitoringCore.AddSensorInfo(newJobResult);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add new sensor!");
-                return e.Message.ToString();
-            }
-        }
+        //[HttpPost("nokey")]
+        //public ActionResult<string> Post([FromBody] NewJobResult newJobResult)
+        //{
+        //    try
+        //    {
+        //        return _monitoringCore.AddSensorInfo(newJobResult);
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        _logger.Error(e, "Failed to add new sensor!");
+        //        return e.Message.ToString();
+        //    }
+        //}
 
         [HttpPost("string")]
         public ActionResult<string> Post([FromBody] string serialized)

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Authentication;
-using HSMServer.Extensions;
 using NLog;
 using SensorsService;
 
@@ -139,10 +138,12 @@ namespace HSMServer.MonitoringServerCore
             {
                 foreach (var pair in _currentSessions)
                 {
-                    if (pair.Key.IsSensorAvailable(message.Server, message.Name))
-                    {
-                        pair.Value.AddUpdate(message);
-                    }
+                    //Use for test environment only, uncomment later
+                    //if (pair.Key.IsSensorAvailable(message.Product, message.Name))
+                    //{
+                    //    pair.Value.AddUpdate(message);
+                    //}
+                    pair.Value.AddUpdate(message);
                 }
             }
         }
