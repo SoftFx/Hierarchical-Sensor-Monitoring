@@ -133,36 +133,36 @@ namespace HSMServer.DataLayer
 
         #region Async code
 
-        private async Task AddSensorDataAsync(SensorDataObject dataObject, string productName, string sensorName)
-        {
-            await Task.Run(() =>
-            {
-                try
-                {
-                    lock (_accessLock)
-                    {
-                        using var tx = environment.BeginTransaction();
-                        using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-                        dataObject.TimeCollected = DateTime.Now;
+        //private async Task AddSensorDataAsync(SensorDataObject dataObject, string productName, string sensorName)
+        //{
+        //    await Task.Run(() =>
+        //    {
+        //        try
+        //        {
+        //            lock (_accessLock)
+        //            {
+        //                using var tx = environment.BeginTransaction();
+        //                using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+        //                dataObject.TimeCollected = DateTime.Now;
 
-                        string json = JsonSerializer.Serialize(dataObject);
+        //                string json = JsonSerializer.Serialize(dataObject);
 
-                        var keyString = GetSensorWriteSearchKey(productName, sensorName, dataObject.TimeCollected);
-                        var code = tx.Put(db, Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json));
-                        tx.Commit();
+        //                var keyString = GetSensorWriteSearchKey(productName, sensorName, dataObject.TimeCollected);
+        //                var code = tx.Put(db, Encoding.ASCII.GetBytes(keyString), Encoding.ASCII.GetBytes(json));
+        //                tx.Commit();
 
-                        if (code != MDBResultCode.Success)
-                        {
-                            throw new ServerDatabaseException($"Failed to put data, code = {code}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"Failed to add object {dataObject.ToShortString()}");
-                }
-            });
-        }
+        //                if (code != MDBResultCode.Success)
+        //                {
+        //                    throw new ServerDatabaseException($"Failed to put data, code = {code}");
+        //                }
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.Error(ex, $"Failed to add object {dataObject.ToShortString()}");
+        //        }
+        //    });
+        //}
         public async Task<bool> AddSensorAsync(SensorInfo info)
         {
             try
@@ -287,13 +287,13 @@ namespace HSMServer.DataLayer
 
                     var bytesKey = Encoding.ASCII.GetBytes(PrefixConstants.PRODUCTS_LIST_PREFIX);
                     var (prevCode, prevKey, prevValue) = tx.Get(db, bytesKey);
-                    if (prevCode != MDBResultCode.Success)
+                    if (prevCode != MDBResultCode.Success && prevCode != MDBResultCode.NotFound)
                     {
                         throw new ServerDatabaseException("Failed to read products list", prevCode);
                     }
 
                     var delCode = tx.Delete(db, bytesKey);
-                    if (delCode != MDBResultCode.Success)
+                    if (delCode != MDBResultCode.Success && delCode != MDBResultCode.NotFound)
                     {
                         throw new ServerDatabaseException("Failed to delete products list", delCode);
                     }
@@ -309,14 +309,13 @@ namespace HSMServer.DataLayer
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to add product");
+                _logger.Error(ex, "Failed to add product to list");
             }
-            
         }
 
         public List<string> GetProductsList()
         {
-            List<string> result = new List<string>();
+            List<string> result = null;
             try
             {
                 lock (_accessLock)
@@ -324,7 +323,7 @@ namespace HSMServer.DataLayer
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
                     var (code, key, value) = tx.Get(db, Encoding.ASCII.GetBytes(PrefixConstants.PRODUCTS_LIST_PREFIX));
-                    result.AddRange(ParseProducts(Encoding.ASCII.GetString(value.CopyToNewArray())));
+                    result = JsonSerializer.Deserialize<List<string>>(Encoding.ASCII.GetString(value.CopyToNewArray()));
                 }
             }
             catch (Exception ex)
@@ -374,7 +373,7 @@ namespace HSMServer.DataLayer
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
                     var code = tx.Put(db,
-                        Encoding.ASCII.GetBytes($"{PrefixConstants.PRODUCT_INFO_PREFIX}_{product.Name}"),
+                        Encoding.ASCII.GetBytes(GetProductInfoKey(product.Name)),
                         Encoding.ASCII.GetBytes(JsonSerializer.Serialize(product)));
                     if (code != MDBResultCode.Success)
                     {
@@ -387,15 +386,103 @@ namespace HSMServer.DataLayer
                 _logger.Error(e, "Failed to add product info");
             }
         }
+
+        public void RemoveProductInfo(string name)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    var bytesKey = Encoding.ASCII.GetBytes(GetProductInfoKey(name));
+                    var code = tx.Delete(db, bytesKey);
+                    tx.Commit();
+
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException(code);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove product info for product = {name}");
+            }
+        }
+
+        public void RemoveProductFromList(string name)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    var bytesKey = Encoding.ASCII.GetBytes(PrefixConstants.PRODUCTS_LIST_PREFIX);
+                    var (prevCode, prevKey, prevValue) = tx.Get(db, bytesKey);
+                    if (prevCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Failed to read products list", prevCode);
+                    }
+                    
+                    var delCode = tx.Delete(db, bytesKey);
+                    if (delCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Failed to delete products list", delCode);
+                    }
+                    List<string> typedList =
+                        JsonSerializer.Deserialize<List<string>>(Encoding.ASCII.GetString(prevValue.CopyToNewArray()));
+                    _logger.Info($"Read {typedList.Count} products from list");
+                    typedList.Add(name);
+
+                    var code = tx.Put(db, bytesKey, Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedList)));
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Failed to add product", code);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to add product");
+            }
+        }
         #endregion
 
         #region Sensors' methods
 
-        public bool AddSensor(SensorInfo info)
+        public void RemoveSensor(SensorInfo info)
         {
-            lock (_accessLock)
+            try
             {
-                try
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    byte[] keyValue = Encoding.ASCII.GetBytes(GetSensorInfoKey(info));
+                    var code = tx.Delete(db, keyValue);
+                    tx.Commit();
+
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException(code);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Removing sensor = {info.SensorName}, product = {info.ProductName} error");
+            }
+        }
+        public void AddSensor(SensorInfo info)
+        {
+            try
+            {
+                lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
@@ -404,20 +491,18 @@ namespace HSMServer.DataLayer
                     var code = tx.Put(db, Encoding.ASCII.GetBytes(GetSensorInfoKey(info)),
                         Encoding.ASCII.GetBytes(stringVal));
                     tx.Commit();
+
                     if (code != MDBResultCode.Success)
                     {
-                        throw new ServerDatabaseException();
+                        throw new ServerDatabaseException(code);
                     }
-
-                }
-                catch (Exception e)
-                {
-                    _logger.Error(e, $"Adding sensor sensor = {info.SensorName}, server = {info.ProductName} error");
-                    return false;
                 }
             }
-
-            return true;
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Adding sensor sensor = {info.SensorName}, product = {info.ProductName} error");
+            }
+            
         }
         public void WriteSensorData(SensorDataObject dataObject, string productName, string sensorName)
         {
@@ -516,7 +601,46 @@ namespace HSMServer.DataLayer
             return result;
         }
 
-        public void AddNewSensor(string productName, string sensorName)
+        public void AddNewSensorToList(string productName, string sensorName)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                    byte[] bytesKey = Encoding.ASCII.GetBytes(GetSensorsListKey(productName));
+                    var (getCode, getKey, getValue) = tx.Get(db, bytesKey);
+                    if (getCode != MDBResultCode.Success && getCode != MDBResultCode.NotFound)
+                    {
+                        throw new ServerDatabaseException("Failed to get sensors list", getCode);
+                    }
+
+                    var delCode = tx.Delete(db, bytesKey);
+                    if (delCode != MDBResultCode.Success && delCode != MDBResultCode.NotFound)
+                    {
+                        throw new ServerDatabaseException("Failed to delete sensors list", delCode);
+                    }
+
+                    List<string> typedList =
+                        JsonSerializer.Deserialize<List<string>>(Encoding.ASCII.GetString(getValue.CopyToNewArray()));
+                    _logger.Info($"Read {typedList.Count} sensors from list for {productName} product");
+                    typedList.Add(sensorName);
+                    var serializedVal = Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedList));
+                    var code = tx.Put(db, bytesKey, serializedVal);
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Failed to write new list", code);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add new sensor = {sensorName} for product = {productName}");
+            }
+        }
+
+        public void RemoveSensorFromList(string productName, string sensorName)
         {
             try
             {
@@ -539,7 +663,7 @@ namespace HSMServer.DataLayer
 
                     List<string> typedList =
                         JsonSerializer.Deserialize<List<string>>(Encoding.ASCII.GetString(getValue.CopyToNewArray()));
-                    typedList.Add(sensorName);
+                    typedList.Remove(sensorName);
                     var serializedVal = Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedList));
                     var code = tx.Put(db, bytesKey, serializedVal);
                     if (code != MDBResultCode.Success)
@@ -550,7 +674,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add new sensor = {sensorName} for product = {productName}");
+                _logger.Error(e, $"Failed to remove sensor = {sensorName} for product = {productName}");
             }
         }
         #endregion
@@ -575,6 +699,11 @@ namespace HSMServer.DataLayer
         private string GetSensorInfoKey(SensorInfo info)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ProductName}_{info.SensorName}";
+        }
+
+        private string GetProductInfoKey(string name)
+        {
+            return $"{PrefixConstants.PRODUCT_INFO_PREFIX}_{name}";
         }
         private long GetTimestamp(DateTime dateTime)
         {

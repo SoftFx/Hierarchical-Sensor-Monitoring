@@ -8,6 +8,7 @@ using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
+using HSMServer.Products;
 using NLog;
 using SensorsService;
 
@@ -64,6 +65,7 @@ namespace HSMServer.MonitoringServerCore
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
         private readonly ClientCertificateValidator _validator;
+        private readonly ProductManager _productManager;
         private readonly Logger _logger;
 
         public MonitoringCore()
@@ -73,6 +75,7 @@ namespace HSMServer.MonitoringServerCore
             _validator = new ClientCertificateValidator(_certificateManager);
             _userManager = new UserManager(_certificateManager);
             _queueManager = new MonitoringQueueManager();
+            _productManager = new ProductManager();
             _logger.Debug("Monitoring core initialized");
         }
 
@@ -85,7 +88,7 @@ namespace HSMServer.MonitoringServerCore
 
             SensorDataObject obj = Converter.ConvertToDatabase(info);
 
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj));
+            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, ));
         }
 
         public string AddSensorInfo(NewJobResult info)
@@ -94,13 +97,7 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             var convertedInfo = Converter.ConvertToInfo(info);
-            string key = DatabaseClass.Instance.GetSensorKey(info.ProductName, info.SensorName);
-            if (string.IsNullOrEmpty(key))
-            {
-                key = KeyGenerator.GenerateKey(info.ProductName, info.SensorName);
-            }
-
-            convertedInfo.Key = key;
+            
             ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
             //DatabaseClass.Instance.AddSensor(convertedInfo);
             return key;

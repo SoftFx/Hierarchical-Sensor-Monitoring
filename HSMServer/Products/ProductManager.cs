@@ -11,8 +11,8 @@ namespace HSMServer.Products
     public class ProductManager
     {
         private readonly Logger _logger;
-        private List<Product> _products;
-        private object _accessLock = new object();
+        private readonly List<Product> _products;
+        private readonly object _accessLock = new object();
         public ProductManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -43,6 +43,26 @@ namespace HSMServer.Products
             
         }
 
+        public void RemoveProduct(string name)
+        {
+            try
+            {
+                DatabaseClass.Instance.RemoveProductFromList(name);
+                DatabaseClass.Instance.RemoveProductInfo(name);
+                var product = GetProductByName(name);
+                if (product != null)
+                {
+                    lock (_accessLock)
+                    {
+                        _products.Remove(product);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove product, name = {name}");
+            }
+        }
         public void AddProduct(string name)
         {
             string key = KeyGenerator.GenerateProductKey(name);
@@ -80,6 +100,17 @@ namespace HSMServer.Products
                 product = _products.FirstOrDefault(p => p.Key.Equals(key));
             }
             return product?.Name;
+        }
+
+        public Product GetProductByName(string name)
+        {
+            Product product = null;
+            lock (_accessLock)
+            {
+                product = _products.FirstOrDefault(p => p.Name.Equals(name));
+            }
+
+            return product;
         }
     }
 }
