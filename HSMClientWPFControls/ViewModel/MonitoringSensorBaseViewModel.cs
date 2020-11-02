@@ -114,7 +114,7 @@ namespace HSMClientWPFControls.ViewModel
 
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
-            ShortValue = $"{sensorUpdate.Name} value received, value = {GetSpecialTypedValue(sensorUpdate)}";
+            ShortValue = $"{sensorUpdate.Name} value from time = {sensorUpdate.Time:F} received, value = {GetSpecialTypedValue(sensorUpdate)}";
         }
 
         private string GetSpecialTypedValue(MonitoringSensorUpdate update)

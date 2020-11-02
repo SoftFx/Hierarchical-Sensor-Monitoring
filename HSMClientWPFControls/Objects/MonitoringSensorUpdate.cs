@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMClientWPFControls.Objects
 {
@@ -10,5 +11,6 @@ namespace HSMClientWPFControls.Objects
         public ActionTypes ActionType { get; set; }
         public SensorTypes SensorType { get; set; }
         public byte[] DataObject { get; set; }
+        public DateTime Time { get; set; }
     }
 }

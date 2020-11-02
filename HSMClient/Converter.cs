@@ -18,6 +18,7 @@ namespace HSMClient
             result.Path = ConvertSensorPath(updateMessage.Path);
             result.SensorType = Convert(updateMessage.ObjectType);
             result.DataObject = updateMessage.DataObject.ToByteArray();
+            result.Time = updateMessage.Time.ToDateTime();
             return result;
         }
 

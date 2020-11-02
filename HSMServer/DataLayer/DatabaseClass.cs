@@ -100,6 +100,7 @@ namespace HSMServer.DataLayer
         private static LightningEnvironment environment;
         private readonly object _accessLock;
         private readonly Logger _logger;
+        private readonly char[] _keysSeparator = {'_'};
 
         public DatabaseClass()
         {
@@ -546,27 +547,40 @@ namespace HSMServer.DataLayer
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
                     using var cursor = tx.CreateCursor(db);
-                    var lastCode = cursor.Last();
-                    if (lastCode != MDBResultCode.Success)
-                    {
-                        throw new ServerDatabaseException("Get last value failed", lastCode);
-                    }
-
                     byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, sensorName));
+                    var rangeCode = cursor.SetRange(searchKey);
+
+                    if (rangeCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Set range failed", rangeCode);
+                    }
+                    
+                    DateTime lastDateTime = DateTime.MinValue;
+                    byte[] bytesValue = new byte[0];
                     do
                     {
                         var (code, key, value) = cursor.GetCurrent();
                         if (key.CopyToNewArray().StartsWith(searchKey))
                         {
-                            byte[] bytesValue = value.CopyToNewArray();
-                            string stringValue = Encoding.UTF8.GetString(bytesValue);
-                            sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
+                            DateTime currentDateTime = GetTimeFromSensorWriteKey(key.CopyToNewArray());
+                            if (currentDateTime > lastDateTime)
+                            {
+                                lastDateTime = currentDateTime;
+                                bytesValue = value.CopyToNewArray();
+                            }
+                            //byte[] bytesValue = value.CopyToNewArray();
+                            //break;
+                        }
+                        else
+                        {
                             break;
                         }
 
-                    } while (cursor.Previous() == MDBResultCode.Success);
+                    } while (cursor.Next() == MDBResultCode.Success);
                     cursor.Dispose();
                     tx.Commit();
+                    string stringValue = Encoding.UTF8.GetString(bytesValue);
+                    sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
                 }
             }
             catch (Exception e)
@@ -703,7 +717,22 @@ namespace HSMServer.DataLayer
         private string GetSensorWriteValueKey(string productName, string sensorName, DateTime putTime)
         {
             return
-                $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{sensorName}_{putTime.ToString()}";
+                $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{sensorName}_{putTime:F}";
+        }
+
+        private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)
+        {
+            string str = Encoding.UTF8.GetString(keyBytes);
+            str = str.Split(_keysSeparator).Last();
+            try
+            {
+                return DateTime.Parse(str);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Error parsing datetime: {str}");
+                return DateTime.MinValue;
+            }
         }
         private string GetSensorInfoKey(SensorInfo info)
         {

@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
 using HSMServer.DataLayer.Model;
 using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Model;
@@ -61,6 +62,7 @@ namespace HSMServer.MonitoringServerCore
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(dataObject.TypedData));
             result.Name = ExtractSensor(dataObject.Path);
             result.Product = productName;
+            result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
             return result;
         }
         public static SensorUpdateMessage Convert(NewJobResult newJobResult)
@@ -87,6 +89,7 @@ namespace HSMServer.MonitoringServerCore
                 Success =  jobResult.Success
             };
             update.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(data)));
+            update.Time = Timestamp.FromDateTime(jobResult.Time.ToUniversalTime());
             return update;
         }
 

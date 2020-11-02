@@ -4,6 +4,8 @@ option csharp_namespace = "SensorsService";
 
 import "Protos/empty.proto";
 import "Protos/any.proto";
+import "Protos/timestamp.proto";
+
 package sensors;
 
 service Sensors {
@@ -33,4 +35,5 @@ message SensorUpdateMessage {
 	}
 	SensorObjectType ObjectType = 5;
 	bytes dataObject = 6;
+	google.protobuf.Timestamp time = 7;
 }
