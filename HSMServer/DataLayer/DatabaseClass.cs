@@ -595,6 +595,7 @@ namespace HSMServer.DataLayer
                     }
 
                     result = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value.CopyToNewArray()));
+
                 }
             }
             catch (Exception e)

@@ -82,12 +82,14 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorInfo(JobResult info)
         {
-            SensorUpdateMessage updateMessage = Converter.Convert(info);
+            string productName = _productManager.GetProductNameByKey(info.Key);
+
+            SensorUpdateMessage updateMessage = Converter.Convert(info, productName);
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject obj = Converter.ConvertToDatabase(info);
-            string productName = _productManager.GetProductNameByKey(info.Key);
-            string sensorName = ExtractSensorName(info.Path);
+
+            string sensorName = updateMessage.Name;
             if (!_productManager.IsSensorRegistered(productName, sensorName))
             {
                 _productManager.AddSensor(new SensorInfo(){ Path = info.Path, ProductName = productName, SensorName = sensorName });
@@ -151,12 +153,6 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         #region Sub-methods
-
-        public string ExtractSensorName(string path)
-        {
-            var splitRes = path.Split(_pathSeparator);
-            return splitRes[^1];
-        }
 
         #endregion
     }

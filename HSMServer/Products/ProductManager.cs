@@ -43,7 +43,7 @@ namespace HSMServer.Products
                     lock (_dictionaryLock)
                     {
                         _productSensorsDictionary[productName] = new List<string>();
-                        _productSensorsDictionary[productName].AddRange(productNames);
+                        _productSensorsDictionary[productName].AddRange(sensors);
                     }
                 }
             }

@@ -74,16 +74,13 @@ namespace HSMServer.MonitoringServerCore
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedData)));
             return result;
         }
-        public static SensorUpdateMessage Convert(JobResult jobResult)
+        public static SensorUpdateMessage Convert(JobResult jobResult, string productName)
         {
             SensorUpdateMessage update = new SensorUpdateMessage();
             update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
             update.Path = jobResult.Path;
-            string product;
-            string sensor;
-            ExtractProductAndSensor(update.Path, out product, out sensor);
-            update.Product = product;
-            update.Name = sensor;
+            update.Product = productName;
+            update.Name = ExtractSensor(jobResult.Path);
             TypedJobSensorData data = new TypedJobSensorData
             {
                 Comment =  jobResult.Comment,
