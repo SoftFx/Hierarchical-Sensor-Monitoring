@@ -88,3 +88,6 @@ UpgradeLog*.htm
 **/*.Server/GeneratedArtifacts
 **/*.Server/ModelManifest.xml
 _Pvt_Extensions
+
+# LMDB Database files
+*.mdb
