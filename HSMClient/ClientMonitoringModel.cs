@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading;
-using System.Windows.Controls;
-using System.Windows.Threading;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
 using HSMClient.Configuration;
@@ -30,7 +27,7 @@ namespace HSMClient
 
         #endregion
 
-        private ConnectorBase _sensorsClient;
+        private readonly ConnectorBase _sensorsClient;
         private Thread _nodeThread;
         private const int UPDATE_TIMEOUT = 5000;
         private const int CONNECTION_TIMEOUT = 5000;
@@ -38,7 +35,8 @@ namespace HSMClient
         private bool _continue = true;
         private ConnectionsStatus _connectionsStatus;
         private readonly object _lockObject = new object();
-        private Dictionary<string, MonitoringNodeBase> _nameToNode;
+        private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
+        private readonly SynchronizationContext _uiContext;
         public ClientMonitoringModel()
         {
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
@@ -47,6 +45,7 @@ namespace HSMClient
                 new GrpcClient(
                     $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
             _connectionsStatus = ConnectionsStatus.Init;
+            _uiContext = SynchronizationContext.Current;
             _nodeThread = new Thread(MonitoringLoopStep);
             _nodeThread.Name = $"Thread_{DateTime.Now.ToLongTimeString()}";
             _nodeThread.Start();
@@ -118,9 +117,11 @@ namespace HSMClient
                 {
                     MonitoringNodeBase node = new MonitoringNodeBase(sensorUpd.Product);
                     _nameToNode[sensorUpd.Product] = node;
-                    Dispatcher.CurrentDispatcher.Invoke(delegate { Nodes.Add(node); });
+                    //Dispatcher.CurrentDispatcher.Invoke(delegate { Nodes.Add(node); });
+                    _uiContext.Send(x => Nodes.Add(node), null);
                 }
-                _nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 1);
+                _uiContext.Send(x => _nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 0), null);
+                //_nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 1);
             }
         }
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }

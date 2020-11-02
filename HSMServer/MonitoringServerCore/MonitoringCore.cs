@@ -127,7 +127,10 @@ namespace HSMServer.MonitoringServerCore
             _validator.Validate(clientCertificate);
 
             User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            _queueManager.AddUserSession(user);
+            if (!_queueManager.IsUserRegistered(user))
+            {
+                _queueManager.AddUserSession(user);
+            }
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
             //TODO: Read updates for ALL available sensors for the current user
             foreach (var permission in user.UserPermissions)
@@ -138,7 +141,7 @@ namespace HSMServer.MonitoringServerCore
                     var lastVal = DatabaseClass.Instance.GetLastSensorValue(permission.ProductName, sensor);
                     if (lastVal != null)
                     {
-                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal));
+                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, permission.ProductName));
                     }
                 }
             }

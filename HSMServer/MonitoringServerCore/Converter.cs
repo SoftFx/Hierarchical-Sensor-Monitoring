@@ -53,17 +53,14 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to update messages
 
-        public static SensorUpdateMessage Convert(SensorDataObject dataObject)
+        public static SensorUpdateMessage Convert(SensorDataObject dataObject, string productName)
         {
             SensorUpdateMessage result = new SensorUpdateMessage();
             result.Path = dataObject.Path;
             result.ObjectType = Convert(dataObject.DataType);
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(dataObject.TypedData));
-            string product;
-            string sensor;
-            ExtractServerAndSensor(dataObject.Path, out product, out sensor);
-            result.Name = sensor;
-            result.Product = product;
+            result.Name = ExtractSensor(dataObject.Path);
+            result.Product = productName;
             return result;
         }
         public static SensorUpdateMessage Convert(NewJobResult newJobResult)
@@ -84,7 +81,7 @@ namespace HSMServer.MonitoringServerCore
             update.Path = jobResult.Path;
             string product;
             string sensor;
-            ExtractServerAndSensor(update.Path, out product, out sensor);
+            ExtractProductAndSensor(update.Path, out product, out sensor);
             update.Product = product;
             update.Name = sensor;
             TypedJobSensorData data = new TypedJobSensorData
@@ -121,7 +118,7 @@ namespace HSMServer.MonitoringServerCore
             return (long)timeSpan.TotalSeconds;
         }
 
-        public static void ExtractServerAndSensor(string path, out string server, out string sensor)
+        public static void ExtractProductAndSensor(string path, out string server, out string sensor)
         {
             server = string.Empty;
             sensor = string.Empty;
@@ -130,6 +127,11 @@ namespace HSMServer.MonitoringServerCore
             sensor = splitRes[^1];
         }
 
+        public static string ExtractSensor(string path)
+        {
+            var splitRes = path.Split("/".ToCharArray());
+            return splitRes[^1];
+        }
         #endregion
 
     }

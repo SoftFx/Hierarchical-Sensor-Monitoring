@@ -16,15 +16,17 @@ namespace HSMServer.MonitoringServerCore
         public event EventHandler<ClientMonitoringQueue> QueueOverflow;
         public event EventHandler QueueOverflowWarning;
         public event EventHandler UserDisconnected;
+        private int _elementsCount;
 
         private bool HasData
         {
             get
             {
-                lock (_lockObj)
-                {
-                    return _monitoringQueue.Count > 0;
-                }
+                //lock (_lockObj)
+                //{
+                //    return _monitoringQueue.Count > 0;
+                //}
+                return _elementsCount > 0;
             }
         } 
 
@@ -32,23 +34,23 @@ namespace HSMServer.MonitoringServerCore
         {
             _userName = userName;
             _monitoringQueue = new Queue<SensorUpdateMessage>();
+            _elementsCount = 0;
         }
 
         public void AddUpdate(SensorUpdateMessage message)
         {
-            int count = -1;
             lock (_lockObj)
             {
                 _monitoringQueue.Enqueue(message);
-                count = _monitoringQueue.Count;
+                ++_elementsCount;
             }
 
-            if (count >= ErrorCapacity)
+            if (_elementsCount >= ErrorCapacity)
             {
                 OnQueueOverflow();
             }
 
-            if (count >= WarningCapacity)
+            if (_elementsCount >= WarningCapacity)
             {
                 OnQueueOverflowWarning();
             }
@@ -65,7 +67,15 @@ namespace HSMServer.MonitoringServerCore
                 List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
                 for (int i = 0; i < UpdateListCapacity; i++)
                 {
-                    updateList.Add(_monitoringQueue.Dequeue());
+                    if (_elementsCount > 0)
+                    {
+                        updateList.Add(_monitoringQueue.Dequeue());
+                        --_elementsCount;
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
 
                 return updateList;
@@ -76,12 +86,13 @@ namespace HSMServer.MonitoringServerCore
         {
             lock (_lockObj)
             {
-                int count = _monitoringQueue.Count;
-                for (int i = 0; i < count; i++)
+                for (int i = 0; i < _elementsCount; i++)
                 {
                     _monitoringQueue.Dequeue();
                 }
             }
+
+            _elementsCount = 0;
         }
         private void OnQueueOverflow()
         {

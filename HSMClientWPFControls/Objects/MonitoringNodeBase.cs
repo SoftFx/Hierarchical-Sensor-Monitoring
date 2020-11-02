@@ -250,7 +250,9 @@ namespace HSMClientWPFControls.Objects
 
             if (!_nameToSensor.ContainsKey(sensorUpdate.Name))
             {
-                _nameToSensor[sensorUpdate.Name] = new MonitoringSensorBaseViewModel(sensorUpdate, this);
+                MonitoringSensorBaseViewModel sensor = new MonitoringSensorBaseViewModel(sensorUpdate, this);
+                _nameToSensor[sensorUpdate.Name] = sensor;
+                Sensors.Add(sensor);
             }
             _nameToSensor[sensorUpdate.Name].Update(sensorUpdate);
         }

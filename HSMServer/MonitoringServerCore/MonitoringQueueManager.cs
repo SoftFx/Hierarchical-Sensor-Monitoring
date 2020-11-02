@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Authentication;
+using HSMServer.Extensions;
 using NLog;
 using SensorsService;
 
@@ -76,6 +77,20 @@ namespace HSMServer.MonitoringServerCore
             _logger.Info("Monitoring queue manager initialized");
         }
 
+        #region Interface implementation
+
+        public bool IsUserRegistered(User user)
+        {
+            bool isRegistered;
+            lock (_accessLock)
+            {
+                var correspondingUser = _currentSessions.Keys.FirstOrDefault(u =>
+                    u.IsSame(user));
+                isRegistered = correspondingUser != null;
+            }
+
+            return isRegistered;
+        }
         public void AddUserSession(User user)
         {
             lock (_accessLock)
@@ -124,9 +139,11 @@ namespace HSMServer.MonitoringServerCore
         public List<SensorUpdateMessage> GetUserUpdates(User user)
         {
             List<SensorUpdateMessage> result = new List<SensorUpdateMessage>();
-            lock (_accessLock)
+
+            var queue = GetUserQueue(user);
+            if (queue != null)
             {
-                result.AddRange(_currentSessions[user].GetSensorUpdateMessages());
+                result.AddRange(queue.GetSensorUpdateMessages());
             }
 
             return result;
@@ -147,5 +164,17 @@ namespace HSMServer.MonitoringServerCore
                 }
             }
         }
+
+        #endregion
+
+        private ClientMonitoringQueue GetUserQueue(User user)
+        {
+            lock (_accessLock)
+            {
+                var corresponding =  _currentSessions.FirstOrDefault(p => p.Key.IsSame(user));
+                return corresponding.Value ?? null;
+            }
+        }
+
     }
 }

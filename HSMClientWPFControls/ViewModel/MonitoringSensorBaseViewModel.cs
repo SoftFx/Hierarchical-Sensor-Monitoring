@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
+using HSMClientWPFControls.Objects.TypedSensorData;
 
 namespace HSMClientWPFControls.ViewModel
 {
@@ -111,7 +114,22 @@ namespace HSMClientWPFControls.ViewModel
 
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
-            ShortValue = $"{sensorUpdate.Name} at path {sensorUpdate.Path} updated at {DateTime.Now}";
+            ShortValue = $"{sensorUpdate.Name} value received, value = {GetSpecialTypedValue(sensorUpdate)}";
+        }
+
+        private string GetSpecialTypedValue(MonitoringSensorUpdate update)
+        {
+            switch (update.SensorType)
+            {
+                case SensorTypes.JobSensor:
+                {
+                    string stringVal = Encoding.ASCII.GetString(update.DataObject);
+                    TypedJobSensorData typedData = JsonSerializer.Deserialize<TypedJobSensorData>(stringVal);
+                    return $"Success = {typedData.Success}, comment = {typedData.Comment}";
+                }
+            }
+
+            return string.Empty;
         }
     }
 }

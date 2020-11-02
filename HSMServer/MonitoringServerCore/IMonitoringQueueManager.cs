@@ -9,6 +9,7 @@ namespace HSMServer.MonitoringServerCore
 {
     public interface IMonitoringQueueManager
     {
+        public bool IsUserRegistered(User user);
         public void AddUserSession(User user);
         public void RemoveUserSession(User user);
         public List<SensorUpdateMessage> GetUserUpdates(User user);
