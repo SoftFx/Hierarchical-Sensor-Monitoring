@@ -22,7 +22,16 @@ namespace HSMClient
             return result;
         }
 
-        public static ActionTypes Convert(SensorUpdateMessage.Types.TransactionType transactionType)
+        public static ProductInfo Convert(ProductDataMessage productData)
+        {
+            ProductInfo result = new ProductInfo();
+            result.Name = productData.Name;
+            result.Key = productData.Key;
+            result.DateRegistered = productData.DateAdded.ToDateTime();
+            return result;
+        }
+
+        private static ActionTypes Convert(SensorUpdateMessage.Types.TransactionType transactionType)
         {
             switch (transactionType)
             {
@@ -38,7 +47,7 @@ namespace HSMClient
             throw new Exception($"Unknown transaction type: {transactionType}!");
         }
 
-        public static SensorTypes Convert(SensorUpdateMessage.Types.SensorObjectType type)
+        private static SensorTypes Convert(SensorUpdateMessage.Types.SensorObjectType type)
         {
             switch (type)
             {

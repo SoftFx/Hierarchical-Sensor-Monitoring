@@ -136,16 +136,9 @@
         </GroupBox>
 
         <DockPanel Grid.Column="0" Grid.Row="1" Margin="3">
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Top">
-                <TextBlock>Login:</TextBlock>
-                <TextBlock Text="{Binding Login}"></TextBlock>
+            <StackPanel>
+
             </StackPanel>
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Top">
-                <TextBlock>Password:</TextBlock>
-                <TextBlock Text="{Binding PasswordText}"></TextBlock>
-                <Button Margin="3,0,0,0">Show</Button>
-            </StackPanel>
-            
             <WrapPanel/>
             <!--<Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Height="20" Margin="0,0,5,0" Padding="2,0,2,2">Change</Button>-->
         </DockPanel>

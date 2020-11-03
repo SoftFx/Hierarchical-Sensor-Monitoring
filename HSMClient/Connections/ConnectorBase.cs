@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using HSMClientWPFControls.Objects;
 
 namespace HSMClient.Connections
 {
@@ -13,7 +14,10 @@ namespace HSMClient.Connections
             _address = address;
         }
 
-        public abstract object GetTree();
-        public abstract object GetUpdates();
+        public abstract List<MonitoringSensorUpdate> GetTree();
+        public abstract List<MonitoringSensorUpdate> GetUpdates();
+        public abstract List<ProductInfo> GetProductsList();
+        public abstract ProductInfo AddNewProduct(string name);
+        public abstract bool RemoveProduct(string name);
     }
 }

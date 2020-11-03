@@ -102,6 +102,15 @@ namespace HSMServer.MonitoringServerCore
 
         #endregion
 
+        public static ProductDataMessage Convert(Product product)
+        {
+            ProductDataMessage result = new ProductDataMessage();
+            result.Name = product.Name;
+            result.Key = product.Key;
+            result.DateAdded = product.DateAdded.ToUniversalTime().ToTimestamp();
+            return result;
+        }
+
         #region Sub-methods
 
         private static SensorUpdateMessage.Types.SensorObjectType Convert(SensorDataTypes type)

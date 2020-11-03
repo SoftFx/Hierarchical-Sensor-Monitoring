@@ -77,7 +77,7 @@ namespace HSMClient
             {
                 var responseObj = _sensorsClient.GetTree();
                 _connectionsStatus = ConnectionsStatus.Ok;
-                Update((SensorsUpdateMessage)responseObj);
+                Update(responseObj);
             }
             catch (Exception e)
             {
@@ -96,7 +96,7 @@ namespace HSMClient
             {
                 var responseObj = _sensorsClient.GetUpdates();
                 _connectionsStatus = ConnectionsStatus.Ok;
-                Update((SensorsUpdateMessage)responseObj);
+                Update(responseObj);
             }
             catch (Exception e)
             {
@@ -109,9 +109,9 @@ namespace HSMClient
             }
         }
 
-        private void Update(SensorsUpdateMessage updateMessage)
+        private void Update(List<MonitoringSensorUpdate> updateList)
         {
-            foreach (var sensorUpd in updateMessage.Sensors)
+            foreach (var sensorUpd in updateList)
             {
                 if (!_nameToNode.ContainsKey(sensorUpd.Product))
                 {
@@ -120,7 +120,7 @@ namespace HSMClient
                     //Dispatcher.CurrentDispatcher.Invoke(delegate { Nodes.Add(node); });
                     _uiContext.Send(x => Nodes.Add(node), null);
                 }
-                _uiContext.Send(x => _nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 0), null);
+                _uiContext.Send(x => _nameToNode[sensorUpd.Product].Update(sensorUpd, 0), null);
                 //_nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 1);
             }
         }

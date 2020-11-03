@@ -33,5 +33,26 @@ namespace HSMServer.Services
 
             return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection.ClientCertificate));
         }
+
+        public override Task<ProductsListMessage> GetProductsList(Empty request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(_monitoringCore.GetProductsList(httpContext.Connection.ClientCertificate));
+        }
+
+        public override Task<AddProductResultMessage> AddNewProduct(AddProductMessage request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(_monitoringCore.AddNewProduct(httpContext.Connection.ClientCertificate, request));
+        }
+
+        public override Task<RemoveProductResultMessage> RemoveProduct(RemoveProductMessage request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.Connection.ClientCertificate, request));
+        }
     }
 }

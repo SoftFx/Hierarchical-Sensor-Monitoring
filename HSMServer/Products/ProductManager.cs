@@ -26,6 +26,18 @@ namespace HSMServer.Products
             InitializeProducts();
         }
 
+        public List<Product> Products
+        {
+            get
+            {
+                lock (_productsLock)
+                {
+                    return _products.ToList();
+                }
+            }
+        }
+
+
         private void InitializeProducts()
         {
             List<string> productNames = DatabaseClass.Instance.GetProductsList();
@@ -162,5 +174,6 @@ namespace HSMServer.Products
 
             return product;
         }
+
     }
 }

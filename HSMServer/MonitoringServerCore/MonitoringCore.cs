@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using HSMServer.Authentication;
@@ -150,6 +152,75 @@ namespace HSMServer.MonitoringServerCore
                 }
             }
             return sensorsUpdateMessage;
+        }
+
+        #endregion
+
+        #region Products
+
+        public ProductsListMessage GetProductsList(X509Certificate2 clientCertificate)
+        {
+            _validator.Validate(clientCertificate);
+
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
+            var products = _productManager.Products;
+            //TODO: Add filtering list according to User permissions
+
+            ProductsListMessage message = new ProductsListMessage();
+            message.Sensors.AddRange(products.Select(Converter.Convert));
+            return message;
+        }
+
+        public AddProductResultMessage AddNewProduct(X509Certificate2 clientCertificate, AddProductMessage message)
+        {
+            _validator.Validate(clientCertificate);
+
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
+            //TODO: check whether user can add products
+
+            AddProductResultMessage result = new AddProductResultMessage();
+            try
+            {
+                _productManager.AddProduct(message.Name);
+
+                Product product = _productManager.GetProductByName(message.Name);
+
+                result.Result = true;
+                result.ProductData = Converter.Convert(product);
+            }
+            catch (Exception e)
+            {
+                result.Result = false;
+                result.Error = e.Message;
+                _logger.Error(e, $"Failed to add new product name = {message.Name}, user = {user.UserName}");
+            }
+
+            return result;
+        }
+
+        public RemoveProductResultMessage RemoveProduct(X509Certificate2 clientCertificate,
+            RemoveProductMessage message)
+        {
+            _validator.Validate(clientCertificate);
+
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
+            //TODO: check whether user can add products and is the product available for user
+
+            RemoveProductResultMessage result = new RemoveProductResultMessage();
+            try
+            {
+                result.ProductData = Converter.Convert(_productManager.GetProductByName(message.Name));
+                _productManager.RemoveProduct(message.Name);
+                result.Result = true;
+            }
+            catch (Exception e)
+            {
+                result.Result = false;
+                result.Error = e.Message;
+                _logger.Error(e, $"Failed to remove product name = {message.Name}, user = {user.UserName}");
+            }
+
+            return result;
         }
 
         #endregion

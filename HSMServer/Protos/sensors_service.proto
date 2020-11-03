@@ -11,6 +11,9 @@ package sensors;
 service Sensors {
 	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
+	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
+	rpc AddNewProduct (AddProductMessage) returns (AddProductResultMessage);
+	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
 }
 
 message SensorsUpdateMessage {
@@ -36,4 +39,34 @@ message SensorUpdateMessage {
 	SensorObjectType ObjectType = 5;
 	bytes dataObject = 6;
 	google.protobuf.Timestamp time = 7;
+}
+
+message ProductsListMessage {
+	repeated ProductDataMessage products = 1;
+}
+
+message ProductDataMessage {
+	string Name = 1;
+	string Key = 2;
+	google.protobuf.Timestamp DateAdded = 3;
+}
+
+message AddProductMessage {
+	string name = 1;
+}
+
+message AddProductResultMessage {
+	bool result = 1;
+	string error = 2;
+	ProductDataMessage productData = 3;
+}
+
+message RemoveProductMessage {
+	string name = 1;
+}
+
+message RemoveProductResultMessage {
+	bool result = 1;
+	string error = 2;
+	ProductDataMessage productData = 3;
 }
