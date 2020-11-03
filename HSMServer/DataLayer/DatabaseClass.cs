@@ -517,7 +517,7 @@ namespace HSMServer.DataLayer
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-                    dataObject.TimeCollected = DateTime.Now;
+                    //dataObject.TimeCollected = DateTime.Now;
 
                     string json = JsonSerializer.Serialize(dataObject);
 

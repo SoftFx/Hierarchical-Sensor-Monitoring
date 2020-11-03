@@ -84,10 +84,12 @@ namespace HSMServer.MonitoringServerCore
         {
             string productName = _productManager.GetProductNameByKey(info.Key);
 
-            SensorUpdateMessage updateMessage = Converter.Convert(info, productName);
+            DateTime timeCollected = DateTime.Now;
+
+            SensorUpdateMessage updateMessage = Converter.Convert(info, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject obj = Converter.ConvertToDatabase(info);
+            SensorDataObject obj = Converter.ConvertToDatabase(info, timeCollected);
 
             string sensorName = updateMessage.Name;
             if (!_productManager.IsSensorRegistered(productName, sensorName))

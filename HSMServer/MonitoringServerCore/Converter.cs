@@ -17,7 +17,7 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to database objects
 
-        public static SensorDataObject ConvertToDatabase(JobResult jobResult)
+        public static SensorDataObject ConvertToDatabase(JobResult jobResult, DateTime timeCollected)
         {
             SensorDataObject result = new SensorDataObject();
             result.DataType = SensorDataTypes.JobSensor;
@@ -26,6 +26,7 @@ namespace HSMServer.MonitoringServerCore
             result.Timestamp = GetTimestamp(result.Time);
             TypedJobSensorData typedData = new TypedJobSensorData { Success = jobResult.Success };
             result.TypedData = JsonSerializer.Serialize(typedData);
+            result.TimeCollected = timeCollected;
             return result;
         }
         public static SensorDataObject ConvertToDatabase(NewJobResult newJobResult)
@@ -62,7 +63,7 @@ namespace HSMServer.MonitoringServerCore
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(dataObject.TypedData));
             result.Name = ExtractSensor(dataObject.Path);
             result.Product = productName;
-            result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
+            result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
             return result;
         }
         public static SensorUpdateMessage Convert(NewJobResult newJobResult)
@@ -76,7 +77,7 @@ namespace HSMServer.MonitoringServerCore
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedData)));
             return result;
         }
-        public static SensorUpdateMessage Convert(JobResult jobResult, string productName)
+        public static SensorUpdateMessage Convert(JobResult jobResult, string productName, DateTime timeCollected)
         {
             SensorUpdateMessage update = new SensorUpdateMessage();
             update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
@@ -89,7 +90,7 @@ namespace HSMServer.MonitoringServerCore
                 Success =  jobResult.Success
             };
             update.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(data)));
-            update.Time = Timestamp.FromDateTime(jobResult.Time.ToUniversalTime());
+            update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
             return update;
         }
 
