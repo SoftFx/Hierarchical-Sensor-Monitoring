@@ -10,6 +10,7 @@ using HSMClient.Connections.gRPC;
 using HSMClientWPFControls;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
+using HSMClientWPFControls.ViewModel;
 using SensorsService;
 
 namespace HSMClient
@@ -27,6 +28,27 @@ namespace HSMClient
 
         #endregion
 
+        public event EventHandler ShowProductsEvent;
+        public void UpdateProducts()
+        {
+            var responseObj = _sensorsClient.GetProductsList();
+            foreach (var product in responseObj)
+            {
+                Products.Add(new ProductViewModel(product));
+            }
+        }
+
+        public void RemoveProduct(ProductInfo product)
+        {
+            bool res = _sensorsClient.RemoveProduct(product.Name);
+            Logger.Info($"Remove product name = {product.Name} result = {res}");
+        }
+
+        public ProductInfo AddProduct(string name)
+        {
+            return _sensorsClient.AddNewProduct(name);
+        }
+
         private readonly ConnectorBase _sensorsClient;
         private Thread _nodeThread;
         private const int UPDATE_TIMEOUT = 10000;
@@ -41,6 +63,7 @@ namespace HSMClient
         {
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             Nodes = new ObservableCollection<MonitoringNodeBase>();
+            Products = new ObservableCollection<ProductViewModel>();
             _sensorsClient =
                 new GrpcClient(
                     $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
@@ -125,10 +148,20 @@ namespace HSMClient
             }
         }
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
-
+        public ObservableCollection<ProductViewModel> Products { get; set; }
         public override void Dispose()
         {
             _continue = false;
+        }
+
+        public void ShowProducts()
+        {
+            OnShowProductsEvent();
+        }
+
+        private void OnShowProductsEvent()
+        {
+            ShowProductsEvent?.Invoke(this, EventArgs.Empty);
         }
     }
 }

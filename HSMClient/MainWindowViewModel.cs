@@ -1,4 +1,5 @@
-﻿using HSMClientWPFControls.Bases;
+﻿using System;
+using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ViewModel;
 
 namespace HSMClient
@@ -65,12 +66,21 @@ namespace HSMClient
             _monitoringModel = new ClientMonitoringModel();
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
+
+            _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
+        }
+
+        private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
+        {
+            ProductsWindow window = new ProductsWindow(_monitoringModel);
+            window.Owner = App.Current.MainWindow;
+            window.Show();
         }
 
         public MonitoringTreeViewModel MonitoringTree
         {
             get => _monitoringTree;
-            set { _monitoringTree = value; }
+            set => _monitoringTree = value;
         }
 
     }

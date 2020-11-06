@@ -39,7 +39,7 @@
                 <TextBlock FontWeight="Medium">Monitoring nodes</TextBlock>
             </GroupBox.Header>
             <DockPanel>
-                <Button DockPanel.Dock="Top" HorizontalAlignment="Left" Margin="5,0,0,5" Padding="5,0">Add</Button>
+                <!--<Button DockPanel.Dock="Top" HorizontalAlignment="Left" Margin="5,0,0,5" Padding="5,0">Add</Button>-->
                 <TreeView ItemsSource="{Binding Nodes}" Margin="0,0,7,0" BorderThickness="0,1,0,0" BorderBrush="LightSteelBlue">
                     <i:Interaction.Behaviors>
                         <behaviors:TreeViewSelectedItemBlendBehavior SelectedItem="{Binding SelectedNode}"></behaviors:TreeViewSelectedItemBlendBehavior>
@@ -136,8 +136,8 @@
         </GroupBox>
 
         <DockPanel Grid.Column="0" Grid.Row="1" Margin="3">
-            <StackPanel>
-
+            <StackPanel DockPanel.Dock="Top">
+                <Button Margin="10" Command="{Binding ShowProductsCommand}">Products</Button>
             </StackPanel>
             <WrapPanel/>
             <!--<Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Height="20" Margin="0,0,5,0" Padding="2,0,2,2">Change</Button>-->
@@ -160,7 +160,7 @@
                 </GroupBox.Header>
 
                 <DockPanel>
-                    <ListView Name="CountersListView" ItemsSource="{Binding CurrentCounters}" SelectedItem="{Binding SelectedCounter}" BorderThickness="0,0,0,1" BorderBrush="LightSteelBlue" HorizontalContentAlignment="Stretch">
+                    <ListView Name="CountersListView" ItemsSource="{Binding CurrentSensors}" SelectedItem="{Binding SelectedSensor}" BorderThickness="0,0,0,1" BorderBrush="LightSteelBlue" HorizontalContentAlignment="Stretch">
                         <ListView.Resources>
                             <DataTemplate DataType="{x:Type viewModel:MonitoringSensorBaseViewModel}">
                                 <Grid Width="Auto">

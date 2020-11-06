@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Windows.Input;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
 
@@ -73,12 +74,16 @@ namespace HSMClientWPFControls.ViewModel
         public MonitoringTreeViewModel(IMonitoringModel model) : base(model as ModelBase)
         {
             _model = model;
+
+            ShowProductsCommand = new MultipleDelegateCommand(ShowProducts, CanShowProducts);
         }
 
         private IMonitoringModel _model;
-        private ObservableCollection<MonitoringSensorBaseViewModel> _currentCounters;
+        private ObservableCollection<MonitoringSensorBaseViewModel> _currentSensors;
         private MonitoringNodeBase _selectedNode;
         private MonitoringSensorBaseViewModel _selectedSensor;
+
+        public ICommand ShowProductsCommand { get; private set; }
 
         public MonitoringNodeBase SelectedNode
         {
@@ -86,7 +91,7 @@ namespace HSMClientWPFControls.ViewModel
             set
             {
                 _selectedNode = value;
-                CurrentCounters = _selectedNode.Sensors;
+                CurrentSensors = _selectedNode.Sensors;
             }
         }
 
@@ -96,13 +101,13 @@ namespace HSMClientWPFControls.ViewModel
             set { _selectedSensor = value; }
         }
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> CurrentCounters
+        public ObservableCollection<MonitoringSensorBaseViewModel> CurrentSensors
         {
-            get => _currentCounters;
+            get => _currentSensors;
             set
             {
-                _currentCounters = value;
-                OnPropertyChanged(nameof(CurrentCounters));
+                _currentSensors = value;
+                OnPropertyChanged(nameof(CurrentSensors));
             }
         }
 
@@ -122,6 +127,16 @@ namespace HSMClientWPFControls.ViewModel
             get { return _model?.Nodes; }
         }
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> Counters { get; set; }
+        public ObservableCollection<MonitoringSensorBaseViewModel> Sensors { get; set; }
+
+        private void ShowProducts()
+        {
+            _model.ShowProducts();
+        }
+
+        private bool CanShowProducts()
+        {
+            return true;
+        }
     }
 }
