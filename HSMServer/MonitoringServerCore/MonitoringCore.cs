@@ -167,7 +167,7 @@ namespace HSMServer.MonitoringServerCore
             //TODO: Add filtering list according to User permissions
 
             ProductsListMessage message = new ProductsListMessage();
-            message.Sensors.AddRange(products.Select(Converter.Convert));
+            message.Products.AddRange(products.Select(Converter.Convert));
             return message;
         }
 
