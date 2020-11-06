@@ -1,0 +1,68 @@
+﻿<UserControl x:Class="HSMClientWPFControls.View.ProductsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:viewModel="clr-namespace:HSMClientWPFControls.ViewModel"
+             xmlns:behaviors="clr-namespace:HSMClientWPFControls.ViewModel.Behaviors"
+             mc:Ignorable="d"
+             d:DesignHeight="300" d:DesignWidth="300"
+             Name="ProductsListControl"
+             >
+    <!--<UserControl.Resources>
+        <Style BasedOn="{StaticResource {x:Type TextBlock}}"
+               TargetType="TextBlock"
+               x:Key="DisablingTextStyle">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEnabled}"  Value="True">
+                    <Setter Property="Foreground" Value="Black"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsEnabled}"  Value="False">
+                    <Setter Property="Foreground" Value="Gray"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>-->
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="5,0,5,0">
+            <TextBlock Margin="10, 10, 10, 10" DockPanel.Dock="Bottom" Text="{Binding StatusText}" HorizontalAlignment="Right"/>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Left" Margin="10">
+                <Button Height="20" Padding="5,0,5,0" Command="{Binding AddProductCommand}">Add</Button>
+                <Button Margin="5,0,0,0" Height="20" Padding="5,0,5,0">Remove</Button>
+            </StackPanel>
+            <ListView ItemsSource="{Binding Products}" SelectedItem="{Binding SelectedProduct}">
+                <ListView.Resources>
+                    <DataTemplate DataType="{x:Type viewModel:ProductViewModel}">
+                        <StackPanel Height="Auto" ToolTip="Double click to copy key to clipboard">
+                            <StackPanel.InputBindings>
+                                <MouseBinding Gesture="LeftDoubleClick" Command="{Binding ElementName=ProductsListControl, Path=DataContext.ProductDoubleClickCommand}"></MouseBinding>
+                            </StackPanel.InputBindings>
+                            <TextBlock Text="{Binding Name}" Margin="5,5,5,0"></TextBlock>
+                            <TextBlock Text="{Binding Key}" Margin="5,5,0,0"></TextBlock>
+                            <TextBlock Text="{Binding DateAdded}" Margin="5,5,0,0"></TextBlock>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.Resources>
+            </ListView>
+        </DockPanel>
+
+        <!--<Grid DockPanel.Dock="Top" Margin="5,10,5,0">
+            
+            --><!--<StackPanel Grid.Column="1" Orientation="Vertical" Margin="5,0,0,0">
+                <StackPanel Margin="10,10,0,0" Orientation="Horizontal">
+                    <TextBlock>Name:</TextBlock>
+                    <TextBlock Text="{Binding SelectedProduct.Name}" Margin="5,0,0,0"></TextBlock>
+                </StackPanel>
+                <StackPanel Margin="10,10,0,0" Orientation="Horizontal">
+                    <TextBlock>Key:</TextBlock>
+                    <TextBlock Text="{Binding SelectedProduct.Key}" Margin="5,0,0,0"></TextBlock>
+                </StackPanel>
+                <StackPanel Margin="10,10,0,0" Orientation="Horizontal">
+                    <TextBlock>Registered at:</TextBlock>
+                    <TextBlock Text="{Binding SelectedProduct.DateAdded}" Margin="5,0,0,0"></TextBlock>
+                </StackPanel>
+            </StackPanel>--><!--
+        </Grid>-->
+        <!--<WrapPanel/>-->
+    </DockPanel>
+</UserControl>
