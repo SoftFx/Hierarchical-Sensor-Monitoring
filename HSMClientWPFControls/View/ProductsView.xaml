@@ -28,7 +28,7 @@
             <TextBlock Margin="10, 10, 10, 10" DockPanel.Dock="Bottom" Text="{Binding StatusText}" HorizontalAlignment="Right"/>
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Left" Margin="10">
                 <Button Height="20" Padding="5,0,5,0" Command="{Binding AddProductCommand}">Add</Button>
-                <Button Margin="5,0,0,0" Height="20" Padding="5,0,5,0">Remove</Button>
+                <Button Margin="5,0,0,0" Height="20" Padding="5,0,5,0" Command="{Binding RemoveProductCommand}" CommandParameter="{Binding SelectedProduct}">Remove</Button>
             </StackPanel>
             <ListView ItemsSource="{Binding Products}" SelectedItem="{Binding SelectedProduct}">
                 <ListView.Resources>

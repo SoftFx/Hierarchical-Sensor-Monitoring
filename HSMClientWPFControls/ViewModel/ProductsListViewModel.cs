@@ -9,25 +9,21 @@ namespace HSMClientWPFControls.ViewModel
 {
     public class ProductsListViewModel : ViewModelBase
     {
-        private readonly IMonitoringModel _monitoringModel;
+        private readonly IProductsMonitoringModel _productsModel;
         private ProductViewModel _selectedProduct;
         private string _statusText;
-        public ProductsListViewModel(IMonitoringModel monitoringModel) : base(monitoringModel as ModelBase)
+        public ProductsListViewModel(IProductsMonitoringModel productsModel) : base(productsModel as ModelBase)
         {
-            _monitoringModel = monitoringModel;
+            _productsModel = productsModel;
             //Products = new ObservableCollection<ProductViewModel>();
             //Products.CollectionChanged += Products_CollectionChanged;
             ProductDoubleClickCommand = new SingleDelegateCommand(CopyProductKey);
             AddProductCommand = new MultipleDelegateCommand(AddProduct, CanAddProduct);
-            DisplayProductsList();
+            RemoveProductCommand = new RelayCommand<ProductViewModel>(RemoveProduct);
+            //DisplayProductsList();
         }
 
-        //private void Products_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
-        //{
-        //    OnPropertyChanged(nameof(StatusText));
-        //}
-
-        public ObservableCollection<ProductViewModel> Products => _monitoringModel?.Products;
+        public ObservableCollection<ProductViewModel> Products => _productsModel?.Products;
 
         public ICommand RemoveProductCommand { get; private set; }
         public ICommand AddProductCommand { get; private set; }
@@ -54,7 +50,7 @@ namespace HSMClientWPFControls.ViewModel
 
         private void AddProduct()
         {
-            //AddNewProductWindow 
+            _productsModel.AddProduct();
         }
 
         private bool CanAddProduct()
@@ -62,12 +58,17 @@ namespace HSMClientWPFControls.ViewModel
             return true;
         }
 
-        private void DisplayProductsList()
+        private void RemoveProduct(ProductViewModel product)
         {
-            _monitoringModel.UpdateProducts();
-
-            StatusText = $"{Products.Count} in list, updated at {DateTime.Now:T}";
+            _productsModel.RemoveProduct(product.Info);
         }
+
+        //private void DisplayProductsList()
+        //{
+        //    _monitoringModel.UpdateProducts();
+
+        //    StatusText = $"{Products.Count} in list, updated at {DateTime.Now:T}";
+        //}
 
         private bool CopyProductKey(object o, bool isCheckOnly)
         {

@@ -2,6 +2,7 @@
 using System.Windows;
 using HSMClientWPFControls;
 using HSMClientWPFControls.ViewModel;
+using HSMGrpcClient;
 
 namespace HSMClient
 {
@@ -11,11 +12,11 @@ namespace HSMClient
     public partial class ProductsWindow : Window
     {
         private readonly ProductsWindowViewModel _viewModel;
-        public ProductsWindow(IMonitoringModel monitoringModel)
+        public ProductsWindow(ConnectorBase connectorBase)
         {
-            InitializeComponent();
-            _viewModel = new ProductsWindowViewModel(monitoringModel);
+            _viewModel = new ProductsWindowViewModel(connectorBase);
             this.DataContext = _viewModel;
+            InitializeComponent();
         }
 
         private void ShowProductsList()

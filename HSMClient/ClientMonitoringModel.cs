@@ -152,6 +152,9 @@ namespace HSMClient
         }
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         public ObservableCollection<ProductViewModel> Products { get; set; }
+
+        public object Connector => _sensorsClient;
+
         public override void Dispose()
         {
             _continue = false;

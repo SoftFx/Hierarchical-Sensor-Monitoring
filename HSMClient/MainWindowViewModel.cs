@@ -1,6 +1,7 @@
 ﻿using System;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ViewModel;
+using HSMGrpcClient;
 
 namespace HSMClient
 {
@@ -72,7 +73,7 @@ namespace HSMClient
 
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {
-            ProductsWindow window = new ProductsWindow(_monitoringModel);
+            ProductsWindow window = new ProductsWindow(_monitoringModel.Connector as ConnectorBase);
             window.Owner = App.Current.MainWindow;
             window.Show();
         }

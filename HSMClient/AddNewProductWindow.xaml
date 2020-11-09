@@ -5,14 +5,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:HSMClient"
         mc:Ignorable="d"
-        Title="Add new product" Height="110" MinWidth="300">
+        Title="Add new product" Height="150" Width="300">
     <DockPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="5" HorizontalAlignment="Right">
             <Button Height="20" Click="ButtonAdd_Click">Add</Button>
             <Button Height="20" Margin="5,0,5,0" Click="ButtonCancel_Click">Cancel</Button>
         </StackPanel>
         <TextBlock DockPanel.Dock="Top" Margin="10">Enter new product name:</TextBlock>
-        <TextBox Name="ProductNameBox" DockPanel.Dock="Top" Margin="10,0,10,0" Height="20"></TextBox>
+        <TextBox Name="ProductNameBox" DockPanel.Dock="Top" Margin="10,0,10,0" Height="20" TextChanged="ProductNameBox_TextChanged"></TextBox>
         <WrapPanel/>
     </DockPanel>
 </Window>
