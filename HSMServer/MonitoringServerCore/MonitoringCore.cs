@@ -171,6 +171,7 @@ namespace HSMServer.MonitoringServerCore
             return message;
         }
 
+
         public AddProductResultMessage AddNewProduct(X509Certificate2 clientCertificate, AddProductMessage message)
         {
             _validator.Validate(clientCertificate);

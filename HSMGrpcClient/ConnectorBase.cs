@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 using HSMClientWPFControls.Objects;
 
-namespace HSMClient.Connections
+namespace HSMGrpcClient
 {
     public abstract class ConnectorBase
     {

@@ -4,7 +4,7 @@ using System.Linq;
 using HSMClientWPFControls.Objects;
 using SensorsService;
 
-namespace HSMClient
+namespace HSMGrpcClient
 {
     public static class Converter
     {

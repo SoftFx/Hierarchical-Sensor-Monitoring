@@ -5,23 +5,24 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Net.Client;
-using HSMClient.Configuration;
 using HSMClientWPFControls.Objects;
+using HSMGrpcClient;
 using SensorsService;
 
-namespace HSMClient.Connections.gRPC
+namespace HSMgRPCClient
 {
-    public class GrpcClient : ConnectorBase
+    public class GrpcClientConnector : ConnectorBase
     {
         private readonly Sensors.SensorsClient _sensorsClient;
-        public GrpcClient(string sensorsUrl) : base(sensorsUrl)
+        public GrpcClientConnector(string sensorsUrl, string certFolderPath) : base(sensorsUrl)
         {
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
             handler.ClientCertificates.Add(
-                new X509Certificate2(Path.Combine(ConfigProvider.Instance.CertificatesFolderPath, "test.pfx")));
+                new X509Certificate2(Path.Combine(certFolderPath, "test.pfx")));
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
 
 
@@ -50,7 +51,7 @@ namespace HSMClient.Connections.gRPC
         }
         public override ProductInfo AddNewProduct(string name)
         {
-            AddProductResultMessage message = _sensorsClient.AddNewProduct(new AddProductMessage {Name = name});
+            AddProductResultMessage message = _sensorsClient.AddNewProduct(new AddProductMessage { Name = name });
             if (!message.Result)
             {
                 throw new Exception(message.Error);
@@ -59,9 +60,9 @@ namespace HSMClient.Connections.gRPC
             return Converter.Convert(message.ProductData);
         }
 
-        public override bool RemoveProduct(string name) 
+        public override bool RemoveProduct(string name)
         {
-            RemoveProductResultMessage message = _sensorsClient.RemoveProduct(new RemoveProductMessage {Name = name});
+            RemoveProductResultMessage message = _sensorsClient.RemoveProduct(new RemoveProductMessage { Name = name });
             return message.Result;
         }
 

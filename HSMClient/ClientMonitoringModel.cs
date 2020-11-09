@@ -5,13 +5,13 @@ using System.Threading;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
 using HSMClient.Configuration;
-using HSMClient.Connections;
-using HSMClient.Connections.gRPC;
+using HSMGrpcClient;
 using HSMClientWPFControls;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
-using SensorsService;
+using HSMgRPCClient;
+using ConnectorBase = HSMGrpcClient.ConnectorBase;
 
 namespace HSMClient
 {
@@ -64,9 +64,12 @@ namespace HSMClient
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             Nodes = new ObservableCollection<MonitoringNodeBase>();
             Products = new ObservableCollection<ProductViewModel>();
-            _sensorsClient =
-                new GrpcClient(
-                    $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
+            //_sensorsClient =
+            //    new GrpcClient(
+            //        $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
+            _sensorsClient = new GrpcClientConnector(
+                $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}",
+                ConfigProvider.Instance.CertificatesFolderPath);
             _connectionsStatus = ConnectionsStatus.Init;
             _uiContext = SynchronizationContext.Current;
             _nodeThread = new Thread(MonitoringLoopStep);
