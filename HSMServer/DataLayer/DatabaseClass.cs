@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using HSMCommon.Extensions;
 using LightningDB;
 using HSMServer.DataLayer.Model;
@@ -591,6 +592,63 @@ namespace HSMServer.DataLayer
             return sensorDataObject;
         }
 
+        public List<SensorDataObject> GetSensorDataHistory(string productName, string sensorName, long n)
+        {
+            List<SensorDataObject> result = new List<SensorDataObject>();
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                    using var cursor = tx.CreateCursor(db);
+                    byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, sensorName));
+                    var rangeCode = cursor.SetRange(searchKey);
+
+                    if (rangeCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Set range failed", rangeCode);
+                    }
+
+                    long count = 0;
+                    do
+                    {
+                        var (code, key, value) = cursor.GetCurrent();
+                        if (key.CopyToNewArray().StartsWith(searchKey))
+                        {
+                            try
+                            {
+                                result.Add(GetTypedValue<SensorDataObject>(value));
+                                ++count;
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed to read sensorDataaObject");
+                            }
+
+                            if (n != -1 && count == n)
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+
+                    } while (cursor.Next() == MDBResultCode.Success);
+                    cursor.Dispose();
+                    tx.Commit();
+                }
+
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get history for sensor = {sensorName} in product = {productName}");
+            }
+            return result;
+        }
+        
         public List<string> GetSensorsList(string productName)
         {
             List<string> result = new List<string>();
@@ -755,6 +813,13 @@ namespace HSMServer.DataLayer
             string[] splitRes = serversListString.Split(";".ToCharArray());
             result.AddRange(splitRes.Select(srv => srv.Trim()));
             return result;
+        }
+
+        private T GetTypedValue<T>(MDBValue value)
+        {
+            byte[] bytes = value.CopyToNewArray();
+            string stringVal = Encoding.UTF8.GetString(bytes);
+            return JsonSerializer.Deserialize<T>(stringVal);
         }
 
         #endregion

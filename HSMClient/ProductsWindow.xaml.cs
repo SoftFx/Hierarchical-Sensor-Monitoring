@@ -1,7 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Windows;
-using HSMClientWPFControls;
-using HSMClientWPFControls.ViewModel;
 using HSMGrpcClient;
 
 namespace HSMClient

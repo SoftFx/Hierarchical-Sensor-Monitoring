@@ -14,6 +14,7 @@ service Sensors {
 	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
 	rpc AddNewProduct (AddProductMessage) returns (AddProductResultMessage);
 	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
+	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
 }
 
 message SensorsUpdateMessage {
@@ -69,4 +70,10 @@ message RemoveProductResultMessage {
 	bool result = 1;
 	string error = 2;
 	ProductDataMessage productData = 3;
+}
+
+message GetSensorHistoryMessage {
+	string name = 1;
+	string product = 2;
+	int64 n = 3;
 }

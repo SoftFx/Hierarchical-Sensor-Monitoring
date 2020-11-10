@@ -154,6 +154,18 @@ namespace HSMServer.MonitoringServerCore
             return sensorsUpdateMessage;
         }
 
+        public SensorsUpdateMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
+        {
+            _validator.Validate(clientCertificate);
+
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
+
+            SensorsUpdateMessage sensorsUpdate = new SensorsUpdateMessage();
+            List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(getHistoryMessage.Product,
+                getHistoryMessage.Name, getHistoryMessage.N);
+            sensorsUpdate.Sensors.AddRange(dataList.Select(s => Converter.Convert(s, getHistoryMessage.Product)));
+            return sensorsUpdate;
+        }
         #endregion
 
         #region Products
