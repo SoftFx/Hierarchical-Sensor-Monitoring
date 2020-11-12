@@ -2,7 +2,7 @@
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 
-namespace HSMClientWPFControls
+namespace HSMClientWPFControls.Model
 {
     public interface IProductsMonitoringModel
     {

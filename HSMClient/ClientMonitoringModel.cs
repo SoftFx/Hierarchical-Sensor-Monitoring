@@ -5,13 +5,12 @@ using System.Threading;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
 using HSMClient.Configuration;
-using HSMGrpcClient;
-using HSMClientWPFControls;
+using HSMClient.Connection;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.ConnectorInterface;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
-using HSMgRPCClient;
-using ConnectorBase = HSMGrpcClient.ConnectorBase;
 
 namespace HSMClient
 {
@@ -64,9 +63,6 @@ namespace HSMClient
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             Nodes = new ObservableCollection<MonitoringNodeBase>();
             Products = new ObservableCollection<ProductViewModel>();
-            //_sensorsClient =
-            //    new GrpcClient(
-            //        $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
             _sensorsClient = new GrpcClientConnector(
                 $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}",
                 ConfigProvider.Instance.CertificatesFolderPath);
@@ -153,7 +149,8 @@ namespace HSMClient
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         public ObservableCollection<ProductViewModel> Products { get; set; }
 
-        public object Connector => _sensorsClient;
+        public ISensorHistoryConnector SensorHistoryConnector => _sensorsClient;
+        public IProductsConnector ProductsConnector => _sensorsClient;
 
         public override void Dispose()
         {

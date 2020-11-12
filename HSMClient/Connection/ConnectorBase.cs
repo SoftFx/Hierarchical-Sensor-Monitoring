@@ -1,9 +1,10 @@
 ﻿using System.Collections.Generic;
+using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Objects;
 
-namespace HSMGrpcClient
+namespace HSMClient.Connection
 {
-    public abstract class ConnectorBase
+    public abstract class ConnectorBase : IProductsConnector, ISensorsTreeConnector, ISensorHistoryConnector
     {
         protected string _address;
 
@@ -17,5 +18,6 @@ namespace HSMGrpcClient
         public abstract List<ProductInfo> GetProductsList();
         public abstract ProductInfo AddNewProduct(string name);
         public abstract bool RemoveProduct(string name);
+        public abstract List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n);
     }
 }

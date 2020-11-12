@@ -1,7 +1,9 @@
 ﻿using System;
+using HSMClient.Dialog;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.Objects;
+using HSMClientWPFControls.SensorExpandingService;
 using HSMClientWPFControls.ViewModel;
-using HSMGrpcClient;
 
 namespace HSMClient
 {
@@ -67,13 +69,17 @@ namespace HSMClient
             _monitoringModel = new ClientMonitoringModel();
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
+            DialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
+            factory.RegisterModel(SensorTypes.JobSensor, typeof(ClientDefaultValuesListSensorModel));
+            SensorExpandingService expandingService = new SensorExpandingService(factory);
+            _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
         }
 
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {
-            ProductsWindow window = new ProductsWindow(_monitoringModel.Connector as ConnectorBase);
+            ProductsWindow window = new ProductsWindow(_monitoringModel.ProductsConnector);
             window.Owner = App.Current.MainWindow;
             window.Show();
         }

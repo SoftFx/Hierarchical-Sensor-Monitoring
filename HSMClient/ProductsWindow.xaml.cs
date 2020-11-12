@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Windows;
-using HSMGrpcClient;
+using HSMClientWPFControls.ConnectorInterface;
 
 namespace HSMClient
 {
@@ -10,9 +10,9 @@ namespace HSMClient
     public partial class ProductsWindow : Window
     {
         private readonly ProductsWindowViewModel _viewModel;
-        public ProductsWindow(ConnectorBase connectorBase)
+        public ProductsWindow(IProductsConnector productsConnector)
         {
-            _viewModel = new ProductsWindowViewModel(connectorBase);
+            _viewModel = new ProductsWindowViewModel(productsConnector);
             this.DataContext = _viewModel;
             InitializeComponent();
         }

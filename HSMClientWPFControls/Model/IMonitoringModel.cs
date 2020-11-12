@@ -1,14 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 
-namespace HSMClientWPFControls
+namespace HSMClientWPFControls.Model
 {
     public interface IMonitoringModel
     {
-        public object Connector { get; }
+        public IProductsConnector ProductsConnector { get; }
+        public ISensorHistoryConnector SensorHistoryConnector { get; }
         ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         ObservableCollection<ProductViewModel> Products { get; set; }
         void Dispose();

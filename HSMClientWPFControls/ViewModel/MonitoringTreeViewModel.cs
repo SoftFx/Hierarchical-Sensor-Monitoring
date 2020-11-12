@@ -2,7 +2,9 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
+using HSMClientWPFControls.SensorExpandingService;
 
 namespace HSMClientWPFControls.ViewModel
 {
@@ -71,11 +73,14 @@ namespace HSMClientWPFControls.ViewModel
 
         #endregion
 
+        private ISensorExpandingService _expandingService;
         public MonitoringTreeViewModel(IMonitoringModel model) : base(model as ModelBase)
         {
             _model = model;
 
             ShowProductsCommand = new MultipleDelegateCommand(ShowProducts, CanShowProducts);
+            SensorDoubleClickCommand = new SingleDelegateCommand(ExpandSensor);
+
         }
 
         private IMonitoringModel _model;
@@ -84,6 +89,7 @@ namespace HSMClientWPFControls.ViewModel
         private MonitoringSensorBaseViewModel _selectedSensor;
 
         public ICommand ShowProductsCommand { get; private set; }
+        public ICommand SensorDoubleClickCommand { get; private set; }
 
         public MonitoringNodeBase SelectedNode
         {
@@ -122,6 +128,12 @@ namespace HSMClientWPFControls.ViewModel
             }
         }
 
+        public ISensorExpandingService SensorExpandingService
+        {
+            get => _expandingService;
+            set => _expandingService = value;
+        }
+
         public ObservableCollection<MonitoringNodeBase> Nodes
         {
             get { return _model?.Nodes; }
@@ -136,6 +148,15 @@ namespace HSMClientWPFControls.ViewModel
 
         private bool CanShowProducts()
         {
+            return true;
+        }
+
+        private bool ExpandSensor(object o, bool isCheckOnly)
+        {
+            if(isCheckOnly)
+                return true;
+
+            _expandingService?.Expand(SelectedSensor);
             return true;
         }
     }

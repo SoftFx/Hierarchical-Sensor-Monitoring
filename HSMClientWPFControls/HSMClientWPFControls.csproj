@@ -9,6 +9,7 @@
   <ItemGroup>
     <None Remove="View\MainView.xaml" />
     <None Remove="View\ProductsView.xaml" />
+    <None Remove="View\SensorDialog\DefaultValuesListSensorView.xaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,8 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Page Include="View\MainView.xaml"/>
+    <Page Include="View\MainView.xaml" />
     <Page Include="View\ProductsView.xaml" />
+    <Page Include="View\SensorDialog\DefaultValuesListSensorView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
 
   <ItemGroup>

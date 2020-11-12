@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.Model;
 
 namespace HSMClientWPFControls.ViewModel
 {

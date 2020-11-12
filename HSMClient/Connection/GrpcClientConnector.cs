@@ -9,10 +9,9 @@ using System.Text;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Net.Client;
 using HSMClientWPFControls.Objects;
-using HSMGrpcClient;
 using SensorsService;
 
-namespace HSMgRPCClient
+namespace HSMClient.Connection
 {
     public class GrpcClientConnector : ConnectorBase
     {
@@ -64,6 +63,15 @@ namespace HSMgRPCClient
         {
             RemoveProductResultMessage message = _sensorsClient.RemoveProduct(new RemoveProductMessage { Name = name });
             return message.Result;
+        }
+
+        public override List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n)
+        {
+            GetSensorHistoryMessage message = new GetSensorHistoryMessage { Product = product, Name = name, N = n };
+            SensorsUpdateMessage sensorsUpdate = _sensorsClient.GetSensorHistory(message);
+            var convertedList = sensorsUpdate.Sensors.Select(Converter.Convert).ToList();
+            convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));
+            return convertedList;
         }
 
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)

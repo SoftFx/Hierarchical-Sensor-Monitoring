@@ -34,6 +34,13 @@ namespace HSMServer.Services
             return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection.ClientCertificate));
         }
 
+        public override Task<SensorsUpdateMessage> GetSensorHistory(GetSensorHistoryMessage request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(_monitoringCore.GetSensorHistory(httpContext.Connection.ClientCertificate, request));
+        }
+
         public override Task<ProductsListMessage> GetProductsList(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();

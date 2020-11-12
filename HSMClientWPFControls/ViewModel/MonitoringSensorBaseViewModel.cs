@@ -24,6 +24,7 @@ namespace HSMClientWPFControls.ViewModel
             _lastStatusUpdate = DateTime.Now;
             Name = sensorUpdate.Name;
             _parent = parent;
+            Product = sensorUpdate.Product;
             _status = TextConstants.Error;
             _sensorType = sensorUpdate.SensorType;
             _dataObject = sensorUpdate.DataObject;
@@ -36,7 +37,7 @@ namespace HSMClientWPFControls.ViewModel
             _status = TextConstants.Error;
         }
         public string Name { get; set; }
-
+        public string Product { get; private set; }
         public MonitoringNodeBase Parent
         {
             get { return _parent; }

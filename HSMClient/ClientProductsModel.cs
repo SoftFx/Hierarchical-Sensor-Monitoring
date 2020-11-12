@@ -2,22 +2,22 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using HSMClient.Common.Logging;
-using HSMClientWPFControls;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.ConnectorInterface;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
-using HSMGrpcClient;
 
 namespace HSMClient
 {
     public class ClientProductsModel : ModelBase, IProductsMonitoringModel
     {
-        private readonly ConnectorBase _connector;
+        private IProductsConnector _connector;
         private readonly List<ProductInfo> _currentProducts;
         private readonly object _lockObj = new object();
         public ObservableCollection<ProductViewModel> Products { get; set; }
         private Dictionary<string, ProductViewModel> _nameToProduct;
-        public ClientProductsModel(ConnectorBase connector)
+        public ClientProductsModel(IProductsConnector connector)
         {
             _connector = connector;
             _currentProducts = new List<ProductInfo>();
@@ -25,9 +25,9 @@ namespace HSMClient
             _nameToProduct = new Dictionary<string, ProductViewModel>();
             UpdateProducts();
         }
-        public void Dispose()
+        public override void Dispose()
         {
-            throw new NotImplementedException();
+            _connector = null;
         }
 
         public void RemoveProduct(ProductInfo product)
