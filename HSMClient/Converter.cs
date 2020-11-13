@@ -58,7 +58,7 @@ namespace HSMClient
 
         public static List<string> ConvertSensorPath(string path)
         {
-            return path.Split(new[] {'/'}).ToList();
+            return path.Split(new[] {'/'}, StringSplitOptions.RemoveEmptyEntries).ToList();
         }
     }
 }
