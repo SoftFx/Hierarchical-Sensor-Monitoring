@@ -6,12 +6,19 @@ using NLog;
 
 namespace HSMServer.Controllers
 {
+    /// <summary>
+    /// Controller for receiving sensors data via https protocol
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class SensorsController : ControllerBase
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="monitoringCore"></param>
         public SensorsController(MonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -19,6 +26,11 @@ namespace HSMServer.Controllers
             _logger.Info("Sensors controller started");
         }
         
+        /// <summary>
+        /// Method receives data of simple type, which has boolean result and string comment
+        /// </summary>
+        /// <param name="jobResult"></param>
+        /// <returns></returns>
         [HttpPost("")]
         public ActionResult<JobResult> Post([FromBody] JobResult jobResult)
         {

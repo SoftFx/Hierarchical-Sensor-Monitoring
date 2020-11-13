@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
@@ -18,7 +16,7 @@ namespace HSMClientWPFControls.ViewModel
             _productsModel = productsModel;
             //Products = new ObservableCollection<ProductViewModel>();
             //Products.CollectionChanged += Products_CollectionChanged;
-            ProductDoubleClickCommand = new SingleDelegateCommand(CopyProductKey);
+            ContextMenuProductCopyProductKey = new SingleDelegateCommand(CopyProductKey);
             AddProductCommand = new MultipleDelegateCommand(AddProduct, CanAddProduct);
             RemoveProductCommand = new RelayCommand<ProductViewModel>(RemoveProduct);
             //DisplayProductsList();
@@ -28,7 +26,7 @@ namespace HSMClientWPFControls.ViewModel
 
         public ICommand RemoveProductCommand { get; private set; }
         public ICommand AddProductCommand { get; private set; }
-        public ICommand ProductDoubleClickCommand { get; private set; }
+        public ICommand ContextMenuProductCopyProductKey { get; private set; }
         public ProductViewModel SelectedProduct
         {
             get => _selectedProduct;
@@ -75,11 +73,9 @@ namespace HSMClientWPFControls.ViewModel
         {
             if (isCheckOnly)
                 return true;
-            else
-            {
-                Clipboard.SetDataObject(SelectedProduct.Key);
-                return true;
-            }
+
+            Clipboard.SetDataObject(SelectedProduct.Key);
+            return true;
         }
     }
 }

@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>HSMServer</name>
+    </assembly>
+    <members>
+        <member name="T:HSMServer.Controllers.SensorsController">
+            <summary>
+            Controller for receiving sensors data via https protocol
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.#ctor(HSMServer.MonitoringServerCore.MonitoringCore)">
+            <summary>
+            
+            </summary>
+            <param name="monitoringCore"></param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMServer.Model.JobResult)">
+            <summary>
+            Method receives data of simple type, which has boolean result and string comment
+            </summary>
+            <param name="jobResult"></param>
+            <returns></returns>
+        </member>
+        <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
+        <member name="T:SensorsService.SensorsServiceReflection">
+            <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
+        </member>
+        <member name="P:SensorsService.SensorsServiceReflection.Descriptor">
+            <summary>File descriptor for Protos/sensors_service.proto</summary>
+        </member>
+        <member name="F:SensorsService.SensorsUpdateMessage.SensorsFieldNumber">
+            <summary>Field number for the "sensors" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.NameFieldNumber">
+            <summary>Field number for the "Name" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.PathFieldNumber">
+            <summary>Field number for the "Path" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.ProductFieldNumber">
+            <summary>Field number for the "Product" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.ActionTypeFieldNumber">
+            <summary>Field number for the "ActionType" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.ObjectTypeFieldNumber">
+            <summary>Field number for the "ObjectType" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.DataObjectFieldNumber">
+            <summary>Field number for the "dataObject" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorUpdateMessage.TimeFieldNumber">
+            <summary>Field number for the "time" field.</summary>
+        </member>
+        <member name="T:SensorsService.SensorUpdateMessage.Types">
+            <summary>Container for nested types declared in the SensorUpdateMessage message type.</summary>
+        </member>
+        <member name="F:SensorsService.ProductsListMessage.ProductsFieldNumber">
+            <summary>Field number for the "products" field.</summary>
+        </member>
+        <member name="F:SensorsService.ProductDataMessage.NameFieldNumber">
+            <summary>Field number for the "Name" field.</summary>
+        </member>
+        <member name="F:SensorsService.ProductDataMessage.KeyFieldNumber">
+            <summary>Field number for the "Key" field.</summary>
+        </member>
+        <member name="F:SensorsService.ProductDataMessage.DateAddedFieldNumber">
+            <summary>Field number for the "DateAdded" field.</summary>
+        </member>
+        <member name="F:SensorsService.AddProductMessage.NameFieldNumber">
+            <summary>Field number for the "name" field.</summary>
+        </member>
+        <member name="F:SensorsService.AddProductResultMessage.ResultFieldNumber">
+            <summary>Field number for the "result" field.</summary>
+        </member>
+        <member name="F:SensorsService.AddProductResultMessage.ErrorFieldNumber">
+            <summary>Field number for the "error" field.</summary>
+        </member>
+        <member name="F:SensorsService.AddProductResultMessage.ProductDataFieldNumber">
+            <summary>Field number for the "productData" field.</summary>
+        </member>
+        <member name="F:SensorsService.RemoveProductMessage.NameFieldNumber">
+            <summary>Field number for the "name" field.</summary>
+        </member>
+        <member name="F:SensorsService.RemoveProductResultMessage.ResultFieldNumber">
+            <summary>Field number for the "result" field.</summary>
+        </member>
+        <member name="F:SensorsService.RemoveProductResultMessage.ErrorFieldNumber">
+            <summary>Field number for the "error" field.</summary>
+        </member>
+        <member name="F:SensorsService.RemoveProductResultMessage.ProductDataFieldNumber">
+            <summary>Field number for the "productData" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.NameFieldNumber">
+            <summary>Field number for the "name" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.ProductFieldNumber">
+            <summary>Field number for the "product" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.NFieldNumber">
+            <summary>Field number for the "n" field.</summary>
+        </member>
+        <member name="P:SensorsService.Sensors.Descriptor">
+            <summary>Service descriptor</summary>
+        </member>
+        <member name="T:SensorsService.Sensors.SensorsBase">
+            <summary>Base class for server-side implementations of Sensors</summary>
+        </member>
+        <member name="M:SensorsService.Sensors.BindService(SensorsService.Sensors.SensorsBase)">
+            <summary>Creates service definition that can be registered with a server</summary>
+            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
+        </member>
+        <member name="M:SensorsService.Sensors.BindService(Grpc.Core.ServiceBinderBase,SensorsService.Sensors.SensorsBase)">
+            <summary>Register service method with a service binder with or without implementation. Useful when customizing the  service binding logic.
+            Note: this method is part of an experimental API that can change or be removed without any prior notice.</summary>
+            <param name="serviceBinder">Service methods will be bound by calling <c>AddMethod</c> on this object.</param>
+            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
+        </member>
+    </members>
+</doc>

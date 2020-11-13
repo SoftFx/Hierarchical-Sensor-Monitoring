@@ -14,7 +14,8 @@
   "profiles": {
     "HSMgRPC": {
       "commandName": "Project",
-      "launchBrowser": false,
+      "launchBrowser": true,
+      "launchUrl": "api/swagger",
       "applicationUrl": "https://localhost:5015",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

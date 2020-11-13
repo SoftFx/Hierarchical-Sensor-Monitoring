@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using HSMServer.DataLayer;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.PlatformAbstractions;
 
 namespace HSMServer
 {
@@ -38,6 +40,13 @@ namespace HSMServer
             });
 
             services.AddSwaggerGen();
+
+            services.ConfigureSwaggerGen(options =>
+            {
+                var basePath = PlatformServices.Default.Application.ApplicationBasePath;
+                var xmlPath = Path.Combine(basePath, "HSMServer.xml");
+                options.IncludeXmlComments(xmlPath);
+            });
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)
         {
@@ -48,8 +57,8 @@ namespace HSMServer
 
             app.UseSwaggerUI(c =>
             {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "api");
-                c.RoutePrefix = string.Empty;
+                c.RoutePrefix = "api/swagger";
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "HSM server api");
             });
 
             if (env.IsDevelopment())

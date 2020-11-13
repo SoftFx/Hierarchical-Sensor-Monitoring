@@ -7,7 +7,7 @@
              xmlns:behaviors="clr-namespace:HSMClientWPFControls.ViewModel.Behaviors"
              mc:Ignorable="d"
              d:DesignHeight="300" d:DesignWidth="300"
-             Name="ProductsListControl"
+             x:Name="ProductsListControl"
              >
     <!--<UserControl.Resources>
         <Style BasedOn="{StaticResource {x:Type TextBlock}}"
@@ -30,13 +30,18 @@
                 <Button Height="20" Padding="5,0,5,0" Command="{Binding AddProductCommand}">Add</Button>
                 <Button Margin="5,0,0,0" Height="20" Padding="5,0,5,0" Command="{Binding RemoveProductCommand}" CommandParameter="{Binding SelectedProduct}">Remove</Button>
             </StackPanel>
-            <ListView ItemsSource="{Binding Products}" SelectedItem="{Binding SelectedProduct}">
+            <ListView ItemsSource="{Binding Products}" SelectedItem="{Binding SelectedProduct}" >
                 <ListView.Resources>
                     <DataTemplate DataType="{x:Type viewModel:ProductViewModel}">
-                        <StackPanel Height="Auto" ToolTip="Double click to copy key to clipboard">
+                        <StackPanel Height="Auto" ToolTip="Double click to copy key" Tag="{Binding ElementName=ProductsListControl, Path=DataContext}">
                             <StackPanel.InputBindings>
-                                <MouseBinding Gesture="LeftDoubleClick" Command="{Binding ElementName=ProductsListControl, Path=DataContext.ProductDoubleClickCommand}"></MouseBinding>
+                                <MouseBinding Gesture="LeftDoubleClick" Command="{Binding ElementName=ProductsListControl, Path=DataContext.ContextMenuProductCopyProductKey}"></MouseBinding>
                             </StackPanel.InputBindings>
+                            <!--<StackPanel.ContextMenu> 
+                                <ContextMenu DataContext="{Binding Path=PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                    <MenuItem Header="Copy product key" Command="{Binding ContextMenuProductCopyProductKey}"/>
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>-->
                             <TextBlock Text="{Binding Name}" Margin="5,5,5,0"></TextBlock>
                             <TextBlock Text="{Binding Key}" Margin="5,5,0,0"></TextBlock>
                             <TextBlock Text="{Binding DateAdded}" Margin="5,5,0,0"></TextBlock>
