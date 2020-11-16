@@ -105,7 +105,7 @@ namespace HSMClient.Configuration
                 throw new Exception("Client certificate folder does not exist!");
             }
 
-            string[] files = Directory.GetFiles(certFolder, "*.crt");
+            string[] files = Directory.GetFiles(certFolder, "*.pfx");
             if (files.Length < 1)
             {
                 throw new Exception("No client certificate provided!");

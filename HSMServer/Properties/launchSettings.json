@@ -12,13 +12,22 @@
     }
   },
   "profiles": {
-    "HSMgRPC": {
+    "HSMServer-dev": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "api/swagger",
       "applicationUrl": "https://localhost:5015",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "HSMServer-Production": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "api/swagger",
+      "applicationUrl": "https://localhost:5015",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production"
       }
     }
   }
