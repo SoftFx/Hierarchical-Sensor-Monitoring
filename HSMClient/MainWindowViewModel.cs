@@ -48,7 +48,7 @@ namespace HSMClient
                 // Set large fields to null here...
 
                 // Mark as disposed.
-                _monitoringTree.Dispose();
+                _monitoringTree?.Dispose();
                 _disposed = true;
             }
         }
