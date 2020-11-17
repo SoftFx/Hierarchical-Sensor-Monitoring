@@ -46,31 +46,33 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Public fields
-        public static int GrpcPort
-        {
-            get
-            {
-                if (_gRPCPort == 0)
-                {
-                    ReadConfig();
-                }
+        //public static int GrpcPort
+        //{
+        //    get
+        //    {
+        //        if (_gRPCPort == 0)
+        //        {
+        //            ReadConfig();
+        //        }
 
-                return _gRPCPort;
-            }
-        }
+        //        return _gRPCPort;
+        //    }
+        //}
 
-        public static int SensorsPort
-        {
-            get
-            {
-                if (_sensorsPort == 0)
-                {
-                    ReadConfig();
-                }
+        //public static int SensorsPort
+        //{
+        //    get
+        //    {
+        //        if (_sensorsPort == 0)
+        //        {
+        //            ReadConfig();
+        //        }
 
-                return _sensorsPort;
-            }
-        }
+        //        return _sensorsPort;
+        //    }
+        //}
+        public const int GrpcPort = 5015;
+        public const int SensorsPort = 44330;
         public static X509Certificate2 ServerCertificate
         {
             get
@@ -151,19 +153,19 @@ namespace HSMServer.Configuration
                 _serverCertName = certAttr.Value;
             }
 
-            XmlNode endpointsConfigNode = serverConfigNode.SelectSingleNode("endpointsConfiguration");
+            //XmlNode endpointsConfigNode = serverConfigNode.SelectSingleNode("endpointsConfiguration");
 
-            var gRPCPortAttr = endpointsConfigNode?.Attributes?["gRPCPort"];
-            if (gRPCPortAttr != null)
-            {
-                _gRPCPort = int.Parse(gRPCPortAttr.Value);
-            }
+            //var gRPCPortAttr = endpointsConfigNode?.Attributes?["gRPCPort"];
+            //if (gRPCPortAttr != null)
+            //{
+            //    _gRPCPort = int.Parse(gRPCPortAttr.Value);
+            //}
 
-            var sensorsPortAttr = endpointsConfigNode?.Attributes?["sensorsPort"];
-            if (sensorsPortAttr != null)
-            {
-                _sensorsPort = int.Parse(sensorsPortAttr.Value);
-            }
+            //var sensorsPortAttr = endpointsConfigNode?.Attributes?["sensorsPort"];
+            //if (sensorsPortAttr != null)
+            //{
+            //    _sensorsPort = int.Parse(sensorsPortAttr.Value);
+            //}
         }
 
         private static string ConfigToXml()
