@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Windows;
+using HSMClient.Common;
+using HSMClient.Configuration;
 using HSMClient.Dialog;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
@@ -66,6 +69,7 @@ namespace HSMClient
         private readonly ClientMonitoringModel _monitoringModel;
         public MainWindowViewModel()
         {
+            //CheckConfiguration();
             _monitoringModel = new ClientMonitoringModel();
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
@@ -75,6 +79,23 @@ namespace HSMClient
             _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
+        }
+
+        private void CheckConfiguration()
+        {
+            if (!string.IsNullOrEmpty(ConfigProvider.Instance.ConnectionInfo.Address))
+            {
+                return;
+            }
+
+            var result = MessageBox.Show($"The app is not configured.{Environment.NewLine}Configure now?",
+                $"{TextConstants.AppName} settings", MessageBoxButton.OKCancel, MessageBoxImage.Exclamation);
+            if (result != MessageBoxResult.OK)
+            {
+                return;
+            }
+
+
         }
 
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)

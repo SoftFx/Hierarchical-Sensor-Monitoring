@@ -4,8 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:view="clr-namespace:HSMClientWPFControls.View;assembly=HSMClientWPFControls"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        mc:Ignorable="d" 
+        Height="450" Width="800">
 
     <view:MainView Margin="8,5,8,8" DataContext="{Binding MonitoringTree}" BorderBrush="Transparent" BorderThickness="0"></view:MainView>
 

@@ -4,7 +4,15 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UseWPF>true</UseWPF>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Win32Resource></Win32Resource>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Images\Icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Images\Icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Google.Protobuf">

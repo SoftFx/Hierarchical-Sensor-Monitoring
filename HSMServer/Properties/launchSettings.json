@@ -1,16 +1,16 @@
 ﻿{
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iis": {
-      "applicationUrl": "http://localhost/HSMServer",
-      "sslPort": 0
-    },
-    "iisExpress": {
-      "applicationUrl": "https://localhost:44313",
-      "sslPort": 44313
-    }
-  },
+  //"iisSettings": {
+  //  "windowsAuthentication": false,
+  //  "anonymousAuthentication": true,
+  //  "iis": {
+  //    "applicationUrl": "http://localhost/HSMServer",
+  //    "sslPort": 0
+  //  },
+  //  "iisExpress": {
+  //    "applicationUrl": "https://localhost:44313",
+  //    "sslPort": 44313
+  //  }
+  //},
   "profiles": {
     "HSMServer-dev": {
       "commandName": "Project",
