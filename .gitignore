@@ -91,3 +91,7 @@ _Pvt_Extensions
 
 # LMDB Database files
 *.mdb
+
+# Installer output files
+HSMlientInstaller/Output
+HSMServerInstaller/Output
