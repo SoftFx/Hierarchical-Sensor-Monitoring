@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Protobuf" Version="3.13.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.14.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.33.1" />
     <PackageReference Include="Grpc.Tools" Version="2.33.1">
       <PrivateAssets>all</PrivateAssets>
@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\sensors_service.proto" GrpcService="Client"/>
+    <Protobuf Include="Protos\sensors_service.proto" GrpcService="Client" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HSMClientWPFControls\HSMClientWPFControls.csproj" />

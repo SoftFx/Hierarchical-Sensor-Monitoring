@@ -2,6 +2,8 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 #define AppIcon "Icon.ico"
 #define AppExeFile "HSMClient.exe"
+#define AppShortcutName "HSM"
+#define ReleaseFilesPath "..\HSMClient\bin\Release\netcoreapp3.1\publish"
 
 [Setup]
 AppId={{8FB93B9E-B78C-4B1F-9C19-4BD0663B985C}
@@ -35,8 +37,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ;Name: "{app}"; Attribs: system
 
 [Files]
-Source: "..\HSMClient\bin\Release\netcoreapp3.1\publish\{#AppExeFile}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\HSMClient\bin\Release\netcoreapp3.1\publish\*"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ReleaseFilesPath}\{#AppExeFile}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ReleaseFilesPath}\runtimes\*"; DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#ReleaseFilesPath}\*"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppIcon}"; DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallDelete]
 ;
@@ -44,7 +48,7 @@ Source: "..\HSMClient\bin\Release\netcoreapp3.1\publish\*"; DestDir: "{app}"; Fl
 [Icons]
 ;
 ;Name: "{app}\HSMClient"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
-Name: "{autodesktop}\{app}"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
+Name: "{userdesktop}\{#AppShortcutName}"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
 
 [Run]
 Filename: "{app}\{#AppExeFile}"; Description: "Launch client application"; Flags: nowait postinstall

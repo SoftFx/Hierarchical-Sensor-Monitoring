@@ -2,7 +2,6 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
-using HSMClient;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
 
@@ -49,7 +48,7 @@ namespace HSMClient
 
         private void MainWindow_Closing(object sender, CancelEventArgs e)
         {
-            _model.Dispose();
+            _model?.Dispose();
             //ConfigProvider.Instance.SaveConfig();
         }
 
