@@ -49,8 +49,8 @@ namespace HSMClient
                 // Set large fields to null here...
 
                 // Mark as disposed.
-                _productsViewModel.Dispose();
-                _productsClientModel.Dispose();
+                _productsViewModel?.Dispose();
+                _productsClientModel?.Dispose();
                 _disposed = true;
             }
         }
