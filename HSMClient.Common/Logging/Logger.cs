@@ -5,7 +5,7 @@ namespace HSMClient.Common.Logging
 {
     public static class Logger
     {
-        private static ILog _log = LogManager.GetLogger("LOGGER");
+        private static readonly ILog _log = LogManager.GetLogger("LOGGER");
 
         public static ILog Log => _log;
 
