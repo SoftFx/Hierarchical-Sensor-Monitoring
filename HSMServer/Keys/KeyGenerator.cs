@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Text;
 
-namespace HSMCommon.Keys
+namespace HSMServer.Keys
 {
     public static class KeyGenerator
     {

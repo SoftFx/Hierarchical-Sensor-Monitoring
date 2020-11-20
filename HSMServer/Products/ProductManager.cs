@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using HSMCommon.Keys;
+using HSMServer.Keys;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using NLog;
