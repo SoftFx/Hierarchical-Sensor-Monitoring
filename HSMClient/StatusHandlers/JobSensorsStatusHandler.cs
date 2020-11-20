@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using HSMClient.Common;
-using HSMClient.Configuration;
 using HSMClientWPFControls;
 using HSMClientWPFControls.ViewModel;
-using HSMCommon.DataObjects;
 
 namespace HSMClient.StatusHandlers
 {
