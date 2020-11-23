@@ -25,7 +25,7 @@ jobs:
       run: New-Item -Path '${{ github.workspace }}' -Name "Artifacts" -ItemType "directory"
       shell: powershell
     - name: Copy Artifacts
-      run: Copy-Item 'Artifacts\' -Path '${{ github.workspace }}\Release' -Destination ${{ github.workspace }}\Artifacts
+      run: Copy-Item -Path '${{ github.workspace }}\Release' -Destination ${{ github.workspace }}\Artifacts
       shell: powershell
     - name: Publish Artifact
       uses: actions/upload-artifact@v2
