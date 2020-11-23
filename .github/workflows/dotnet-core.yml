@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: dotnet restore HSMServer/HSMServer.sln
     - name: Build
-      run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore     
+      run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
     - name: Create Artifact Folder
       run: New-Item -Path '${{ github.workspace }}' -Name "Artifacts" -ItemType "directory"
       shell: powershell
