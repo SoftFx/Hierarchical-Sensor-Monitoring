@@ -32,3 +32,7 @@ jobs:
       with:
        path: ${{ github.workspace }}\Artifacts
        name: ${{ github.run_number }}
+    - name: Download Artifacts
+      uses: actions/download-artifact@v2
+    - name: Display structure of downloaded files
+      run: ls -R      
