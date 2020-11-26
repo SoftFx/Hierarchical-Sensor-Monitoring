@@ -42,7 +42,6 @@ namespace HSMServer.Configuration
             ConfigFolderName, CertificatesFolderName, ServerCertName);
 
         private static X509Certificate2 _serverCertificate;
-
         #endregion
 
         #region Public fields
@@ -108,6 +107,8 @@ namespace HSMServer.Configuration
             {
                 FileManager.SafeCreateFile(_configFilePath);
             }
+
+
             _logger.Info("Config initialized, config file created/exists");
         }
 
@@ -183,6 +184,22 @@ namespace HSMServer.Configuration
             sb.Replace("encoding=\"utf-16\"", string.Empty);
 
             return sb.ToString();
+        }
+
+        private static string GetDefaultConfig()
+        {
+            XmlDocument document = new XmlDocument();
+            XmlElement rootElement = document.CreateElement("config");
+            document.AppendChild(rootElement);
+
+            XmlElement configElement = document.CreateElement("serverConfiguration");
+            rootElement.AppendChild(configElement);
+
+            XmlAttribute certificateAttr = document.CreateAttribute("certificate");
+            certificateAttr.Value = HSMCommon.CommonConstants.DefaultServerPfxCertificateName;
+            configElement.Attributes.Append(certificateAttr);
+
+            return string.Empty;
         }
 
         public static void Dispose()

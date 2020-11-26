@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using HSMCommon;
 using NLog;
 
 namespace HSMServer.Configuration
@@ -66,6 +67,25 @@ namespace HSMServer.Configuration
             UpdateCertificates();
 
             return _certificates.FirstOrDefault(d => d.FileName.Equals(fileName))?.Certificate;
+        }
+
+        public string GetDefaultClientCertificateThumbprint()
+        {
+            string certFolderPath = Config.CertificatesFolderPath;
+
+            //if (!Directory.Exists(certFolderPath))
+
+            string[] files = Directory.GetFiles(certFolderPath, "*.crt");
+            var defaultClientCertFile =
+                files.FirstOrDefault(f => Path.GetFileName(f) == CommonConstants.DefaultClientCrtCertificateName);
+
+            if (!string.IsNullOrEmpty(defaultClientCertFile))
+            {
+                X509Certificate2 defaultClientCertificate = new X509Certificate2(defaultClientCertFile);
+                return defaultClientCertificate.Thumbprint;
+            }
+
+            return string.Empty;
         }
     }
 }

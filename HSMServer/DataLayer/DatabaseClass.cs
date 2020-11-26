@@ -760,6 +760,72 @@ namespace HSMServer.DataLayer
         }
         #endregion
 
+        #region Other data
+
+        public void PutFirstLoginInfo(FirstLoginInfo info)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+
+                    var bytesKey = Encoding.UTF8.GetBytes(PrefixConstants.FIRST_LOGIN_PREFIX);
+                    var (prevCode, prevKey, prevValue) = tx.Get(db, bytesKey);
+                    if (prevCode != MDBResultCode.Success && prevCode != MDBResultCode.NotFound)
+                    {
+                        throw new ServerDatabaseException("Failed to read first login info list", prevCode);
+                    }
+
+                    var delCode = tx.Delete(db, bytesKey);
+                    if (delCode != MDBResultCode.Success && delCode != MDBResultCode.NotFound)
+                    {
+                        throw new ServerDatabaseException("Failed to delete first login info list", delCode);
+                    }
+
+                    string stringVal = Encoding.UTF8.GetString(prevValue.CopyToNewArray());
+                    var infoList = string.IsNullOrEmpty(stringVal) ? new List<FirstLoginInfo>() : JsonSerializer.Deserialize<List<FirstLoginInfo>>(stringVal);
+                    _logger.Info($"First login infos read: {stringVal}");
+                    infoList.Add(info);
+                    var code = tx.Put(db, bytesKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(infoList)));
+                    tx.Commit();
+                    if (code != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Failed to add first login info", code);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to add first login info to list");
+            }
+        }
+
+        public List<FirstLoginInfo> GetFirstLoginInfos()
+        {
+            List<FirstLoginInfo> result = new List<FirstLoginInfo>();
+            try
+            {
+                lock (_accessLock)
+                {
+                    using var tx = environment.BeginTransaction();
+                    using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
+                    var (code, key, value) = tx.Get(db, Encoding.UTF8.GetBytes(PrefixConstants.FIRST_LOGIN_PREFIX));
+                    tx.Commit();
+                    result.AddRange(JsonSerializer.Deserialize<List<FirstLoginInfo>>(Encoding.UTF8.GetString(value.CopyToNewArray())));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to get first login infos list!");
+            }
+
+            return result;
+        }
+
+        #endregion
+
         #endregion
 
         #region Sub-methods

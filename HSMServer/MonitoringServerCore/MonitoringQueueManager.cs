@@ -1,7 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Threading;
+using HSMCommon;
 using HSMServer.Authentication;
+using HSMServer.DataLayer;
+using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
 using NLog;
 using SensorsService;
@@ -66,6 +71,7 @@ namespace HSMServer.MonitoringServerCore
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
+        private FirstLoginInfo _firstLoginInfo;
         public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -90,6 +96,12 @@ namespace HSMServer.MonitoringServerCore
             }
 
             return isRegistered;
+        }
+
+        public void AddUserSession(User user, IPAddress address, int port)
+        {
+            _firstLoginInfo = new FirstLoginInfo() {Address = address, Port = port, Time = DateTime.Now};
+            AddUserSession(user);
         }
         public void AddUserSession(User user)
         {
@@ -118,8 +130,7 @@ namespace HSMServer.MonitoringServerCore
                 var correspondingUser = _currentSessions.Keys.FirstOrDefault(u => u.UserName.Equals(e.GetUserName()));
                 if (correspondingUser != null)
                 {
-                    _currentSessions[correspondingUser].Clear();
-                    _currentSessions.Remove(correspondingUser);
+                    RemoveUserSession(correspondingUser);
                 }
             }
         }
@@ -133,6 +144,11 @@ namespace HSMServer.MonitoringServerCore
                     _currentSessions[user].Clear();
                     _currentSessions.Remove(user);
                 }
+            }
+
+            if (user.UserName == CommonConstants.DefaultClientUserName)
+            {
+                ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.PutFirstLoginInfo(_firstLoginInfo));
             }
         }
 

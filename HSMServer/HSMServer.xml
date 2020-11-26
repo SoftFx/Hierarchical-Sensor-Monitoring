@@ -23,6 +23,11 @@
             <returns></returns>
         </member>
         <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
+        <member name="T:HSMServer.DataLayer.Model.FirstLoginInfo">
+            <summary>
+            Info about the first client connection from a particular address
+            </summary>
+        </member>
         <member name="T:SensorsService.SensorsServiceReflection">
             <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
         </member>

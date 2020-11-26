@@ -1,34 +1,32 @@
-﻿{
-  //"iisSettings": {
-  //  "windowsAuthentication": false,
-  //  "anonymousAuthentication": true,
-  //  "iis": {
-  //    "applicationUrl": "http://localhost/HSMServer",
-  //    "sslPort": 0
-  //  },
-  //  "iisExpress": {
-  //    "applicationUrl": "https://localhost:44313",
-  //    "sslPort": 44313
-  //  }
-  //},
+{
   "profiles": {
     "HSMServer-dev": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "api/swagger",
-      "applicationUrl": "https://localhost:5015",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      },
+      "applicationUrl": "https://localhost:5015"
     },
     "HSMServer-Production": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "api/swagger",
-      "applicationUrl": "https://localhost:5015",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Production"
-      }
+      },
+      "applicationUrl": "https://localhost:5015"
+    },
+    "WSL 2": {
+      "commandName": "WSL2",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5015/api/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_URLS": "https://localhost:5015",
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "distributionName": "Ubuntu"
     }
   }
 }

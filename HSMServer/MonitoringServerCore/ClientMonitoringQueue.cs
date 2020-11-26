@@ -28,7 +28,7 @@ namespace HSMServer.MonitoringServerCore
                 //}
                 return _elementsCount > 0;
             }
-        } 
+        }
 
         public ClientMonitoringQueue(string userName)
         {
