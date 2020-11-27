@@ -11,6 +11,7 @@ using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
+using HSMCommon;
 
 namespace HSMClient
 {
@@ -64,8 +65,7 @@ namespace HSMClient
             Nodes = new ObservableCollection<MonitoringNodeBase>();
             Products = new ObservableCollection<ProductViewModel>();
             _sensorsClient = new GrpcClientConnector(
-                $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}",
-                ConfigProvider.Instance.CertificatesFolderPath);
+                $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
             _connectionsStatus = ConnectionsStatus.Init;
             _uiContext = SynchronizationContext.Current;
             _nodeThread = new Thread(MonitoringLoopStep);
@@ -149,6 +149,16 @@ namespace HSMClient
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         public ObservableCollection<ProductViewModel> Products { get; set; }
 
+        public bool IsClientCertificateDefault
+        {
+            get
+            {
+                var cert = ConfigProvider.Instance.ConnectionInfo.ClientCertificate;
+                return cert?.Thumbprint?.Equals(CommonConstants.DefaultClientCertificateThumbprint,
+                    StringComparison.OrdinalIgnoreCase) ?? false;
+            }
+        }
+            
         public ISensorHistoryConnector SensorHistoryConnector => _sensorsClient;
         public IProductsConnector ProductsConnector => _sensorsClient;
 

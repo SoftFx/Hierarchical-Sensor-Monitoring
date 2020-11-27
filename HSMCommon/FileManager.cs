@@ -103,5 +103,29 @@ namespace HSMCommon
                 }
             }
         }
+
+        public static void SafeCopy(string path, string destination)
+        {
+            bool isWrite = false;
+            int attempts = 5;
+
+            while (!isWrite)
+            {
+                try
+                {
+                    File.Copy(path, destination);
+                    isWrite = true;
+                }
+                catch (Exception ex)
+                {
+                    attempts -= 1;
+
+                    if (attempts == 0)
+                        throw;
+
+                    Thread.Sleep(_waitTime);
+                }
+            }
+        }
     }
 }

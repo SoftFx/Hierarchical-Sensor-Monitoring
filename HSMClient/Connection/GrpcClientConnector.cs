@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Net.Client;
+using HSMClient.Configuration;
 using HSMClientWPFControls.Objects;
 using SensorsService;
 
@@ -16,12 +17,12 @@ namespace HSMClient.Connection
     public class GrpcClientConnector : ConnectorBase
     {
         private readonly Sensors.SensorsClient _sensorsClient;
-        public GrpcClientConnector(string sensorsUrl, string certFolderPath) : base(sensorsUrl)
+        public GrpcClientConnector(string sensorsUrl) : base(sensorsUrl)
         {
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
             handler.ClientCertificates.Add(
-                new X509Certificate2(Path.Combine(certFolderPath, "test.pfx")));
+                new X509Certificate2(ConfigProvider.Instance.ConnectionInfo.ClientCertificate));
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
 
 

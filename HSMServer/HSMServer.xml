@@ -28,6 +28,28 @@
             Info about the first client connection from a particular address
             </summary>
         </member>
+        <member name="T:AdminService.AdminServiceReflection">
+            <summary>Holder for reflection information generated from Protos/admin_service.proto</summary>
+        </member>
+        <member name="P:AdminService.AdminServiceReflection.Descriptor">
+            <summary>File descriptor for Protos/admin_service.proto</summary>
+        </member>
+        <member name="P:AdminService.Admin.Descriptor">
+            <summary>Service descriptor</summary>
+        </member>
+        <member name="T:AdminService.Admin.AdminBase">
+            <summary>Base class for server-side implementations of Admin</summary>
+        </member>
+        <member name="M:AdminService.Admin.BindService(AdminService.Admin.AdminBase)">
+            <summary>Creates service definition that can be registered with a server</summary>
+            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
+        </member>
+        <member name="M:AdminService.Admin.BindService(Grpc.Core.ServiceBinderBase,AdminService.Admin.AdminBase)">
+            <summary>Register service method with a service binder with or without implementation. Useful when customizing the  service binding logic.
+            Note: this method is part of an experimental API that can change or be removed without any prior notice.</summary>
+            <param name="serviceBinder">Service methods will be bound by calling <c>AddMethod</c> on this object.</param>
+            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
+        </member>
         <member name="T:SensorsService.SensorsServiceReflection">
             <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
         </member>
@@ -106,11 +128,44 @@
         <member name="F:SensorsService.GetSensorHistoryMessage.NFieldNumber">
             <summary>Field number for the "n" field.</summary>
         </member>
+        <member name="F:SensorsService.ClientCertificateMessage.CertificateBytesFieldNumber">
+            <summary>Field number for the "certificateBytes" field.</summary>
+        </member>
+        <member name="F:SensorsService.GenerateServerCertificateResulMessage.ResultFieldNumber">
+            <summary>Field number for the "result" field.</summary>
+        </member>
+        <member name="F:SensorsService.GenerateServerCertificateResulMessage.ErrorFieldNumber">
+            <summary>Field number for the "error" field.</summary>
+        </member>
         <member name="P:SensorsService.Sensors.Descriptor">
             <summary>Service descriptor</summary>
         </member>
         <member name="T:SensorsService.Sensors.SensorsBase">
             <summary>Base class for server-side implementations of Sensors</summary>
+        </member>
+        <member name="M:SensorsService.Sensors.SensorsBase.GetMonitoringTree(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+             <summary>
+            Sensors methods
+             </summary>
+             <param name="request">The request received from the client.</param>
+             <param name="context">The context of the server-side call handler being invoked.</param>
+             <returns>The response to send back to the client (wrapped by a task).</returns>
+        </member>
+        <member name="M:SensorsService.Sensors.SensorsBase.GetProductsList(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+             <summary>
+            Products methods
+             </summary>
+             <param name="request">The request received from the client.</param>
+             <param name="context">The context of the server-side call handler being invoked.</param>
+             <returns>The response to send back to the client (wrapped by a task).</returns>
+        </member>
+        <member name="M:SensorsService.Sensors.SensorsBase.GenerateClientCertificate(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+             <summary>
+            Certificates
+             </summary>
+             <param name="request">The request received from the client.</param>
+             <param name="context">The context of the server-side call handler being invoked.</param>
+             <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
         <member name="M:SensorsService.Sensors.BindService(SensorsService.Sensors.SensorsBase)">
             <summary>Creates service definition that can be registered with a server</summary>

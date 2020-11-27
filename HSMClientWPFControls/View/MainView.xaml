@@ -148,6 +148,9 @@
             <GroupBox.Header>
                 <TextBlock FontWeight="Medium">Problems</TextBlock>
             </GroupBox.Header>
+            <DockPanel>
+                <ListView></ListView>
+            </DockPanel>
         </GroupBox>
         <Grid Grid.Row="0" Grid.Column="1">
             <Grid.ColumnDefinitions>

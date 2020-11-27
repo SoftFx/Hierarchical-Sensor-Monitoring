@@ -9,12 +9,19 @@ import "Protos/timestamp.proto";
 package sensors;
 
 service Sensors {
+	//Sensors methods
 	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
+	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+
+	//Products methods
 	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
 	rpc AddNewProduct (AddProductMessage) returns (AddProductResultMessage);
 	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
-	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+	
+	//Certificates
+	rpc GenerateClientCertificate (google.protobuf.Empty) returns (ClientCertificateMessage);
+	rpc GenerateServerCertificate (google.protobuf.Empty) returns (GenerateServerCertificateResulMessage);
 }
 
 message SensorsUpdateMessage {
@@ -76,4 +83,13 @@ message GetSensorHistoryMessage {
 	string name = 1;
 	string product = 2;
 	int64 n = 3;
+}
+
+message ClientCertificateMessage {
+	bytes certificateBytes = 1;
+}
+
+message GenerateServerCertificateResulMessage {
+	bool result = 1;
+	string error = 2;
 }

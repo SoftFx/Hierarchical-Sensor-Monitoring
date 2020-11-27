@@ -91,6 +91,12 @@ namespace HSMClientWPFControls.ViewModel
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
 
+        public bool IsDefaultCertificateWarning
+        {
+            get => _model.IsClientCertificateDefault;
+        }
+
+
         public MonitoringNodeBase SelectedNode
         {
             get => _selectedNode;

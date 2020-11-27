@@ -41,6 +41,7 @@ namespace HSMClient.Configuration
         private const string _configFileName = "config.xml";
         private readonly string _configFilePath;
         private readonly string _configFolderPath;
+        private readonly string _certificatesFolderPath;
         private readonly object _configLock = new object();
 
         public string CertificatesFolderPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName,
@@ -56,20 +57,52 @@ namespace HSMClient.Configuration
         {
             _connectionInfo = new ConnectionInfo();
             _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
-            if (!Directory.Exists(_configFolderPath))
-            {
-                FileManager.SafeCreateDirectory(_configFolderPath);
-            }
-
             _configFilePath = Path.Combine(_configFolderPath, _configFileName);
-            if (!File.Exists(_configFilePath))
+            _certificatesFolderPath = Path.Combine(_configFolderPath, _certificatesFolderName);
+            if (!CheckFoldersFilesExistence())
             {
-                FileManager.SafeCreateFile(_configFilePath);
+                CreateDefaultConfig();
             }
 
             ReadConnectionInfo();
         }
 
+        private void CreateDefaultConfig()
+        {
+            if (!Directory.Exists(_configFolderPath))
+            {
+                FileManager.SafeCreateDirectory(_configFolderPath);
+            }
+
+            if (!Directory.Exists(_certificatesFolderPath))
+            {
+                FileManager.SafeCreateDirectory(_certificatesFolderPath);
+            }
+            
+
+            if (!File.Exists(_configFilePath))
+            {
+                FileManager.SafeCreateFile(_configFilePath);
+            }
+
+            //TODO: save default config
+
+
+        }
+
+        private bool CheckFoldersFilesExistence()
+        {
+            if (!Directory.Exists(_configFolderPath))
+                return false;
+
+            if (!File.Exists(_configFilePath))
+                return false;
+
+            if (!Directory.Exists(_certificatesFolderPath))
+                return false;
+
+            return true;
+        }
         private void ReadConnectionInfo()
         {
             try

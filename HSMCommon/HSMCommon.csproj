@@ -5,6 +5,11 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <Folder Include="DefaultCertificates\" />
+    <None Remove="DefaultCertificates\default.client.crt" />
+    <None Remove="DefaultCertificates\default.client.pfx" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="DefaultCertificates\default.client.crt" />
+    <EmbeddedResource Include="DefaultCertificates\default.client.pfx" />
   </ItemGroup>
 </Project>

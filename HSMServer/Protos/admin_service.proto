@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option csharp_namespace = "AdminService";
+
+import "Protos/empty.proto";
+import "Protos/any.proto";
+import "Protos/timestamp.proto";
+
+package admin;
+
+service Admin {
+	rpc GenerateClientCertificate (google.protobuf.Empty) returns (.google.protobuf.Empty); 
+}

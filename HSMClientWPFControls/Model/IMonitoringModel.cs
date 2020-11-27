@@ -7,6 +7,7 @@ namespace HSMClientWPFControls.Model
 {
     public interface IMonitoringModel
     {
+        public bool IsClientCertificateDefault { get; }
         public IProductsConnector ProductsConnector { get; }
         public ISensorHistoryConnector SensorHistoryConnector { get; }
         ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
