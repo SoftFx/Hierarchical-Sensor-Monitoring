@@ -24,42 +24,44 @@ namespace HSMServer.Services
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.GetSensorUpdates(httpContext.Connection));
+            return Task.FromResult(_monitoringCore.GetSensorUpdates(httpContext.Connection.ClientCertificate));
         }
 
         public override Task<SensorsUpdateMessage> GetMonitoringTree(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection));
+            return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection.ClientCertificate));
         }
 
         public override Task<SensorsUpdateMessage> GetSensorHistory(GetSensorHistoryMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.GetSensorHistory(httpContext.Connection, request));
+            return Task.FromResult(_monitoringCore.GetSensorHistory(httpContext.Connection.ClientCertificate, request));
         }
 
         public override Task<ProductsListMessage> GetProductsList(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.GetProductsList(httpContext.Connection));
+            return Task.FromResult(_monitoringCore.GetProductsList(httpContext.Connection.ClientCertificate));
         }
 
         public override Task<AddProductResultMessage> AddNewProduct(AddProductMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.AddNewProduct(httpContext.Connection, request));
+            return Task.FromResult(_monitoringCore.AddNewProduct(httpContext.Connection.ClientCertificate, request));
         }
 
         public override Task<RemoveProductResultMessage> RemoveProduct(RemoveProductMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.Connection, request));
+            return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.Connection.ClientCertificate, request));
         }
+
+
     }
 }

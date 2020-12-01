@@ -19,7 +19,7 @@ namespace HSMServer.Configuration
         private readonly List<string> _certificateThumbprints = new List<string>();
         private readonly List<FirstLoginInfo> _firstLoginInfos = new List<FirstLoginInfo>();
         private DateTime _lastUpdate;
-        private DateTime _lastFirstLoginInfosUpdate;
+        private readonly DateTime _lastFirstLoginInfosUpdate;
         private string _defaultClientCertificateThumbprint;
         public ClientCertificateValidator(CertificateManager certificateManager)
         {
@@ -52,19 +52,19 @@ namespace HSMServer.Configuration
             _certificateThumbprints.AddRange(_certificateManager.GetUserCertificates().Select(d => d.Certificate.Thumbprint));
         }
 
-        public void Validate(ConnectionInfo connection)
+        public void Validate(X509Certificate2 clientCertificate)
         {
             try
             {
-                if (connection.ClientCertificate.Thumbprint == _defaultClientCertificateThumbprint)
-                {
-                    if (!IsDefaultClientForbidden(connection))
-                    {
-                        throw new DefaultClientCertificateRejectedException("Default client certificate for the current address rejected!");
-                    }
+                //if (connection.ClientCertificate.Thumbprint == _defaultClientCertificateThumbprint)
+                //{
+                //    if (!IsDefaultClientForbidden(connection))
+                //    {
+                //        throw new DefaultClientCertificateRejectedException("Default client certificate for the current address rejected!");
+                //    }
 
-                    return;
-                }
+                //    return;
+                //}
 
                 if (DateTime.Now - _lastUpdate > _updateInterval)
                 {
@@ -72,15 +72,15 @@ namespace HSMServer.Configuration
                     _lastUpdate = DateTime.Now;
                 }
 
-                if (_certificateThumbprints.Contains(connection.ClientCertificate.Thumbprint))
+                if (_certificateThumbprints.Contains(clientCertificate.Thumbprint))
                 {
                     return;
                 }
 
-                _logger.Warn($"Rejecting certificate: '{connection.ClientCertificate.SubjectName.Name}'");
+                _logger.Warn($"Rejecting certificate: '{clientCertificate.SubjectName.Name}'");
 
                 throw new UserRejectedException(
-                    $"User certificate '{connection.ClientCertificate.SubjectName.Name}' is wrong, authorization failed.");
+                    $"User certificate '{clientCertificate.SubjectName.Name}' is wrong, authorization failed.");
             }
             catch (UserRejectedException ex)
             {

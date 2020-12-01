@@ -119,33 +119,35 @@ namespace HSMServer.MonitoringServerCore
 
         #region SensorRequests
 
-        public SensorsUpdateMessage GetSensorUpdates(ConnectionInfo connection)
+        public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
             sensorsUpdateMessage.Sensors.AddRange(_queueManager.GetUserUpdates(user));
             return sensorsUpdateMessage;
         }
 
-        public SensorsUpdateMessage GetAllAvailableSensorsUpdates(ConnectionInfo connection)
+        public SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             if (!_queueManager.IsUserRegistered(user))
             {
-                bool isDefaultClientCert = (connection.ClientCertificate.Thumbprint ==
-                                            _certificateManager.GetDefaultClientCertificateThumbprint());
-                if (isDefaultClientCert)
-                {
-                    _queueManager.AddUserSession(user, connection.RemoteIpAddress, connection.RemotePort);
-                }
-                else
-                {
-                    _queueManager.AddUserSession(user);
-                }
+                //bool isDefaultClientCert = (clientCertificate.ClientCertificate.Thumbprint ==
+                //                            _certificateManager.GetDefaultClientCertificateThumbprint());
+                //if (isDefaultClientCert)
+                //{
+                //    _queueManager.AddUserSession(user, clientCertificate.RemoteIpAddress, clientCertificate.RemotePort);
+                //}
+                //else
+                //{
+                //    _queueManager.AddUserSession(user);
+                //}
+
+                _queueManager.AddUserSession(user);
             }
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
             //TODO: Read updates for ALL available sensors for the current user
@@ -164,11 +166,11 @@ namespace HSMServer.MonitoringServerCore
             return sensorsUpdateMessage;
         }
 
-        public SensorsUpdateMessage GetSensorHistory(ConnectionInfo connection, GetSensorHistoryMessage getHistoryMessage)
+        public SensorsUpdateMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
 
             SensorsUpdateMessage sensorsUpdate = new SensorsUpdateMessage();
             List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(getHistoryMessage.Product,
@@ -180,11 +182,11 @@ namespace HSMServer.MonitoringServerCore
 
         #region Products
 
-        public ProductsListMessage GetProductsList(ConnectionInfo connection)
+        public ProductsListMessage GetProductsList(X509Certificate2 clientCertificate)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             var products = _productManager.Products;
             //TODO: Add filtering list according to User permissions
 
@@ -194,11 +196,11 @@ namespace HSMServer.MonitoringServerCore
         }
 
 
-        public AddProductResultMessage AddNewProduct(ConnectionInfo connection, AddProductMessage message)
+        public AddProductResultMessage AddNewProduct(X509Certificate2 clientCertificate, AddProductMessage message)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             //TODO: check whether user can add products
 
             AddProductResultMessage result = new AddProductResultMessage();
@@ -221,12 +223,12 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public RemoveProductResultMessage RemoveProduct(ConnectionInfo connection,
+        public RemoveProductResultMessage RemoveProduct(X509Certificate2 clientCertificate,
             RemoveProductMessage message)
         {
-            _validator.Validate(connection);
+            _validator.Validate(clientCertificate);
 
-            User user = _userManager.GetUserByCertificateThumbprint(connection.ClientCertificate.Thumbprint);
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             //TODO: check whether user can add products and is the product available for user
 
             RemoveProductResultMessage result = new RemoveProductResultMessage();
