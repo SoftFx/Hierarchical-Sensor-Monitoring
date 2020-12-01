@@ -29,6 +29,7 @@ namespace HSMClient
         #endregion
 
         public event EventHandler ShowProductsEvent;
+        public event EventHandler ShowSettingsWindowEvent;
         public void UpdateProducts()
         {
             var responseObj = _sensorsClient.GetProductsList();
@@ -161,6 +162,7 @@ namespace HSMClient
             
         public ISensorHistoryConnector SensorHistoryConnector => _sensorsClient;
         public IProductsConnector ProductsConnector => _sensorsClient;
+        public ISettingsConnector SettingsConnector => _sensorsClient;
 
         public override void Dispose()
         {
@@ -170,6 +172,16 @@ namespace HSMClient
         public void ShowProducts()
         {
             OnShowProductsEvent();
+        }
+
+        public void ShowSettingsWindow()
+        {
+            OnShowSettingsWindowEvent();
+        }
+
+        private void OnShowSettingsWindowEvent()
+        {
+            ShowSettingsWindowEvent?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnShowProductsEvent()

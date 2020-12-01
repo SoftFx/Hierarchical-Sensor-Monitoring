@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Windows.Controls;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
@@ -80,7 +81,13 @@ namespace HSMClientWPFControls.ViewModel
 
             ShowProductsCommand = new MultipleDelegateCommand(ShowProducts, CanShowProducts);
             SensorDoubleClickCommand = new SingleDelegateCommand(ExpandSensor);
+            MenuShowSettingsCommand = new SingleDelegateCommand(ShowSettingsWindow);
 
+            if (IsDefaultCertificateWarning)
+            {
+                Problems.Add(new ProblemBaseViewModel("Client certificate is default",
+                    "Default client certificate is used. It cannot be used after the first login. Create new client certificate in menu."));
+            }
         }
 
         private IMonitoringModel _model;
@@ -90,12 +97,9 @@ namespace HSMClientWPFControls.ViewModel
 
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
+        public ICommand MenuShowSettingsCommand { get; private set; }
 
-        public bool IsDefaultCertificateWarning
-        {
-            get => _model.IsClientCertificateDefault;
-        }
-
+        public bool IsDefaultCertificateWarning => _model.IsClientCertificateDefault;
 
         public MonitoringNodeBase SelectedNode
         {
@@ -140,6 +144,13 @@ namespace HSMClientWPFControls.ViewModel
             set => _expandingService = value;
         }
 
+        private ObservableCollection<ProblemBaseViewModel> _problems;
+
+        public ObservableCollection<ProblemBaseViewModel> Problems
+        {
+            get { return _problems ?? (_problems = new ObservableCollection<ProblemBaseViewModel>()); }
+            set => _problems = value;
+        }
         public ObservableCollection<MonitoringNodeBase> Nodes
         {
             get { return _model?.Nodes; }
@@ -163,6 +174,15 @@ namespace HSMClientWPFControls.ViewModel
                 return true;
 
             _expandingService?.Expand(SelectedSensor);
+            return true;
+        }
+
+        private bool ShowSettingsWindow(object o, bool isCheckOnly)
+        {
+            if (isCheckOnly)
+                return true;
+
+            _model.ShowSettingsWindow();
             return true;
         }
     }

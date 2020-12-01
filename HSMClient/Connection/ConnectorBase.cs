@@ -4,7 +4,8 @@ using HSMClientWPFControls.Objects;
 
 namespace HSMClient.Connection
 {
-    public abstract class ConnectorBase : IProductsConnector, ISensorsTreeConnector, ISensorHistoryConnector
+    public abstract class ConnectorBase : IProductsConnector, ISensorsTreeConnector, ISensorHistoryConnector,
+        ISettingsConnector
     {
         protected string _address;
 

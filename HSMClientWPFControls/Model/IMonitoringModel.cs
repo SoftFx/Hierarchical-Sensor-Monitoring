@@ -10,10 +10,12 @@ namespace HSMClientWPFControls.Model
         public bool IsClientCertificateDefault { get; }
         public IProductsConnector ProductsConnector { get; }
         public ISensorHistoryConnector SensorHistoryConnector { get; }
+        public ISettingsConnector SettingsConnector { get; }
         ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         ObservableCollection<ProductViewModel> Products { get; set; }
         void Dispose();
         void ShowProducts();
+        void ShowSettingsWindow();
         void UpdateProducts();
         void RemoveProduct(ProductInfo product);
         ProductInfo AddProduct(string name);

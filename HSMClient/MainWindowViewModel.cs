@@ -79,6 +79,7 @@ namespace HSMClient
             _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
+            _monitoringModel.ShowSettingsWindowEvent += MonitoringModelShowSettingsWindowEvent;
         }
 
         private void CheckConfiguration()
@@ -105,6 +106,12 @@ namespace HSMClient
             window.Show();
         }
 
+        private void MonitoringModelShowSettingsWindowEvent(object sender, EventArgs e)
+        {
+            SettingsWindow window = new SettingsWindow(_monitoringModel.SettingsConnector);
+            window.Owner = App.Current.MainWindow;
+            window.Show();
+        }
         public MonitoringTreeViewModel MonitoringTree
         {
             get => _monitoringTree;
