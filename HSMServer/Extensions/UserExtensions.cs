@@ -24,6 +24,16 @@ namespace HSMServer.Extensions
 
         public static bool IsSame(this User user, User user2)
         {
+            if (user == null && user2 == null)
+            {
+                return true;
+            }
+
+            if (user == null || user2 == null)
+            {
+                return false;
+            }
+
             return user.CertificateThumbprint.Equals(user2.CertificateThumbprint) &&
                    user.UserName.Equals(user2.UserName);
         }
