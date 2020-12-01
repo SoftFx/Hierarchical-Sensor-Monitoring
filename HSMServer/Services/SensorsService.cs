@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.MonitoringServerCore;
@@ -62,6 +63,19 @@ namespace HSMServer.Services
             return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.Connection.ClientCertificate, request));
         }
 
+        public override Task<ClientCertificateMessage> GenerateClientCertificate(CertificateRequestMessage request, ServerCallContext context)
+        {
+            return base.GenerateClientCertificate(request, context);
+        }
 
+        public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)
+        {
+            return base.GenerateServerCertificate(request, context);
+        }
+
+        public override Task<ServerAvailableMessage> CheckServerAvailable(Empty request, ServerCallContext context)
+        {
+            return Task.FromResult(new ServerAvailableMessage() {Time = Timestamp.FromDateTime(DateTime.Now)});
+        }
     }
 }
