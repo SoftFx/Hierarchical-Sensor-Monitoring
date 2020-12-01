@@ -9,7 +9,7 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
@@ -20,4 +20,19 @@ jobs:
     - name: Install dependencies
       run: dotnet restore HSMServer/HSMServer.sln
     - name: Build
-      run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore     
+      run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+    - name: Create Artifact Folder
+      run: New-Item -Path '${{ github.workspace }}' -Name "Artifacts" -ItemType "directory"
+      shell: powershell
+    - name: Copy Artifacts
+      run: Copy-Item -Path '${{ github.workspace }}\Release' -Destination ${{ github.workspace }}\Artifacts -Recurse
+      shell: powershell
+    - name: Publish Artifact
+      uses: actions/upload-artifact@v2
+      with:
+       path: ${{ github.workspace }}\Artifacts
+       name: ${{ github.run_number }}
+    - name: Download Artifacts
+      uses: actions/download-artifact@v2
+    - name: Display structure of downloaded files
+      run: ls -R      
