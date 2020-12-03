@@ -6,7 +6,7 @@ namespace HSMClient
     /// <summary>
     /// Interaction logic for AddNewProductWindow.xaml
     /// </summary>
-    public partial class AddNewProductWindow : Window
+    public partial class AddNewProductWindow : System.Windows.Window
     {
         private readonly List<string> _existingProductsNames;
         public string NewProductName { get; private set; }

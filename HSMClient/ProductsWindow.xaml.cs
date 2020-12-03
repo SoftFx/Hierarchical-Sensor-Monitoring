@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.Windows;
 using HSMClientWPFControls.ConnectorInterface;
 
 namespace HSMClient
@@ -7,7 +6,7 @@ namespace HSMClient
     /// <summary>
     /// Interaction logic for ProductsWindow.xaml
     /// </summary>
-    public partial class ProductsWindow : Window
+    public partial class ProductsWindow : System.Windows.Window
     {
         private readonly ProductsWindowViewModel _viewModel;
         public ProductsWindow(IProductsConnector productsConnector)

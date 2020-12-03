@@ -34,6 +34,11 @@ namespace HSMClient.Connection
             _sensorsClient = new Sensors.SensorsClient(channel);
         }
 
+        public override DateTime CheckServerAvailable()
+        {
+            return _sensorsClient.CheckServerAvailable(new Empty()).Time.ToDateTime();
+        }
+
         public override List<MonitoringSensorUpdate> GetTree()
         {
             SensorsUpdateMessage updatesList = _sensorsClient.GetMonitoringTree(new Empty());

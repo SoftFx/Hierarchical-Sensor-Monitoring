@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
@@ -82,12 +83,7 @@ namespace HSMClientWPFControls.ViewModel
             ShowProductsCommand = new MultipleDelegateCommand(ShowProducts, CanShowProducts);
             SensorDoubleClickCommand = new SingleDelegateCommand(ExpandSensor);
             MenuShowSettingsCommand = new SingleDelegateCommand(ShowSettingsWindow);
-
-            if (IsDefaultCertificateWarning)
-            {
-                Problems.Add(new ProblemBaseViewModel("Client certificate is default",
-                    "Default client certificate is used. It cannot be used after the first login. Create new client certificate in menu."));
-            }
+            GenerateCertificateCommand = new SingleDelegateCommand(ShowGenerateCertificateWindow);
         }
 
         private IMonitoringModel _model;
@@ -98,8 +94,12 @@ namespace HSMClientWPFControls.ViewModel
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
         public ICommand MenuShowSettingsCommand { get; private set; }
+        public ICommand GenerateCertificateCommand { get; private set; }
+        public Visibility MainTreeVisibility =>
+            _model.IsClientCertificateDefault ? Visibility.Collapsed : Visibility.Visible;
 
-        public bool IsDefaultCertificateWarning => _model.IsClientCertificateDefault;
+        public Visibility DefaultCertificateControlVisibility =>
+            _model.IsClientCertificateDefault ? Visibility.Visible : Visibility.Collapsed;
 
         public MonitoringNodeBase SelectedNode
         {
@@ -183,6 +183,15 @@ namespace HSMClientWPFControls.ViewModel
                 return true;
 
             _model.ShowSettingsWindow();
+            return true;
+        }
+
+        private bool ShowGenerateCertificateWindow(object o, bool isCheckOnly)
+        {
+            if (isCheckOnly)
+                return false;
+
+            _model.ShowGenerateCertificateWindow();
             return true;
         }
     }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Objects;
 
@@ -14,6 +15,7 @@ namespace HSMClient.Connection
             _address = address;
         }
 
+        public abstract DateTime CheckServerAvailable();
         public abstract List<MonitoringSensorUpdate> GetTree();
         public abstract List<MonitoringSensorUpdate> GetUpdates();
         public abstract List<ProductInfo> GetProductsList();

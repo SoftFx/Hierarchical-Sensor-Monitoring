@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.Windows;
 using HSMClientWPFControls.ConnectorInterface;
 
 namespace HSMClient
@@ -7,7 +6,7 @@ namespace HSMClient
     /// <summary>
     /// Interaction logic for SettingsWindow.xaml
     /// </summary>
-    public partial class SettingsWindow : Window
+    public partial class SettingsWindow : System.Windows.Window
     {
         private readonly SettingsWindowViewModel _viewModel;
         public SettingsWindow(ISettingsConnector settingsConnector)

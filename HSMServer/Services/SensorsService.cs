@@ -75,7 +75,7 @@ namespace HSMServer.Services
 
         public override Task<ServerAvailableMessage> CheckServerAvailable(Empty request, ServerCallContext context)
         {
-            return Task.FromResult(new ServerAvailableMessage() {Time = Timestamp.FromDateTime(DateTime.Now)});
+            return Task.FromResult(new ServerAvailableMessage() {Time = Timestamp.FromDateTime(DateTime.Now.ToUniversalTime())});
         }
     }
 }

@@ -67,20 +67,25 @@ namespace HSMClient
 
         private MonitoringTreeViewModel _monitoringTree;
         private readonly ClientMonitoringModel _monitoringModel;
+        private ChangeClientCertificateViewModel _changeCertificateModel;
         public MainWindowViewModel()
         {
             //CheckConfiguration();
             _monitoringModel = new ClientMonitoringModel();
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
+            _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
             DialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
             factory.RegisterModel(SensorTypes.JobSensor, typeof(ClientDefaultValuesListSensorModel));
             SensorExpandingService expandingService = new SensorExpandingService(factory);
             _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
-            _monitoringModel.ShowSettingsWindowEvent += MonitoringModelShowSettingsWindowEvent;
+            _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
+            _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
         }
+
+        
 
         private void CheckConfiguration()
         {
@@ -106,9 +111,16 @@ namespace HSMClient
             window.Show();
         }
 
-        private void MonitoringModelShowSettingsWindowEvent(object sender, EventArgs e)
+        private void monitoringModel_ShowSettingsWindowEvent(object sender, EventArgs e)
         {
             SettingsWindow window = new SettingsWindow(_monitoringModel.SettingsConnector);
+            window.Owner = App.Current.MainWindow;
+            window.Show();
+        }
+
+        private void monitoringModel_ShowGenerateCertificateWindowEvent(object sender, EventArgs e)
+        {
+            GenerateCertificateWindow window = new GenerateCertificateWindow();
             window.Owner = App.Current.MainWindow;
             window.Show();
         }
@@ -118,5 +130,10 @@ namespace HSMClient
             set => _monitoringTree = value;
         }
 
+        public ChangeClientCertificateViewModel ChangeCertificateModel
+        {
+            get => _changeCertificateModel;
+            set => _changeCertificateModel = value;
+        }
     }
 }

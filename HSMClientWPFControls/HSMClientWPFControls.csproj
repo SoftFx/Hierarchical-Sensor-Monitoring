@@ -7,6 +7,7 @@
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="View\ChangeClientCertificateView.xaml" />
     <None Remove="View\MainView.xaml" />
     <None Remove="View\ProductsView.xaml" />
     <None Remove="View\SensorDialog\DefaultValuesListSensorView.xaml" />
@@ -23,6 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Page Include="View\ChangeClientCertificateView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="View\MainView.xaml" />
     <Page Include="View\ProductsView.xaml" />
     <Page Include="View\SensorDialog\DefaultValuesListSensorView.xaml">

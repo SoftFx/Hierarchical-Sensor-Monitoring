@@ -16,6 +16,7 @@ namespace HSMClientWPFControls.Model
         void Dispose();
         void ShowProducts();
         void ShowSettingsWindow();
+        void ShowGenerateCertificateWindow();
         void UpdateProducts();
         void RemoveProduct(ProductInfo product);
         ProductInfo AddProduct(string name);

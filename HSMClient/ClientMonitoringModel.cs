@@ -30,6 +30,7 @@ namespace HSMClient
 
         public event EventHandler ShowProductsEvent;
         public event EventHandler ShowSettingsWindowEvent;
+        public event EventHandler ShowGenerateCertificateWindowEvent;
         public void UpdateProducts()
         {
             var responseObj = _sensorsClient.GetProductsList();
@@ -179,6 +180,10 @@ namespace HSMClient
             OnShowSettingsWindowEvent();
         }
 
+        public void ShowGenerateCertificateWindow()
+        {
+            OnShowGenerateCertificateWindowEvent();
+        }
         private void OnShowSettingsWindowEvent()
         {
             ShowSettingsWindowEvent?.Invoke(this, EventArgs.Empty);
@@ -187,6 +192,11 @@ namespace HSMClient
         private void OnShowProductsEvent()
         {
             ShowProductsEvent?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OnShowGenerateCertificateWindowEvent()
+        {
+            ShowGenerateCertificateWindowEvent?.Invoke(this, EventArgs.Empty);
         }
     }
 }

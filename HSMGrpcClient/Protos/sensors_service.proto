@@ -9,12 +9,22 @@ import "Protos/timestamp.proto";
 package sensors;
 
 service Sensors {
+	//Sensors methods
 	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
+	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+
+	//Products methods
 	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
 	rpc AddNewProduct (AddProductMessage) returns (AddProductResultMessage);
 	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
-	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+	
+	//Certificates
+	rpc GenerateClientCertificate (CertificateRequestMessage) returns (ClientCertificateMessage);
+	rpc GenerateServerCertificate (CertificateRequestMessage) returns (GenerateServerCertificateResulMessage);
+
+	//Admin methods
+	rpc CheckServerAvailable (google.protobuf.Empty) returns (ServerAvailableMessage);
 }
 
 message SensorsUpdateMessage {
@@ -76,4 +86,27 @@ message GetSensorHistoryMessage {
 	string name = 1;
 	string product = 2;
 	int64 n = 3;
+}
+
+message ClientCertificateMessage {
+	bytes certificateBytes = 1;
+}
+
+message GenerateServerCertificateResulMessage {
+	bool result = 1;
+	string error = 2;
+}
+
+message CertificateRequestMessage {
+	string countryName = 1;
+	string stateOrProvinceName = 2;
+	string localityName = 3;
+	string OrganiztionName = 4;
+	string OrganizationUnitName = 5;
+	string CommonName = 6;
+	string EmailAddress = 7;
+}
+
+message ServerAvailableMessage {
+	google.protobuf.Timestamp time = 1;
 }

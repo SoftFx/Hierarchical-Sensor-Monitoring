@@ -1,0 +1,43 @@
+﻿<Window x:Class="HSMClient.GenerateCertificateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:HSMClient"
+        mc:Ignorable="d"
+        Title="GenerateCertificateWindow" Height="450" Width="400">
+    <DockPanel>
+        <Button DockPanel.Dock="Bottom" Margin="0,0,10,10" VerticalAlignment="Center" HorizontalAlignment="Right" Content="Generate">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="IsEnabled" Value="False"></Setter>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Path=(Validation.HasError), ElementName=textOrganization}" Value="False"/>
+                                <Condition Binding="{Binding Path=(Validation.HasError), ElementName=textCountry}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="IsEnabled" Value="True"></Setter>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+        </Button>
+        <StackPanel Margin="10">
+            <TextBlock>Country name (required):</TextBlock>
+            <TextBox Margin="0,5,0,5" Name="textCountry" Text="{Binding CountryName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" MinWidth="100"></TextBox>
+            <TextBlock>State or province name:</TextBlock>
+            <TextBox Margin="0,5,0,5" Text="{Binding StateOrProvinceName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Locality name:</TextBlock>
+            <TextBox Margin="0,5,0,5" Text="{Binding LocalityName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Organization name (required):</TextBlock>
+            <TextBox Margin="0,5,0,5" Name="textOrganization" Text="{Binding OrganizationName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Organization unit name:</TextBlock>
+            <TextBox Margin="0,5,0,5" Text="{Binding OrganizationUnitName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Common name:</TextBlock>
+            <TextBox Margin="0,5,0,5" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Email address:</TextBlock>
+            <TextBox Margin="0,5,0,5" Text="{Binding EmailAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+        </StackPanel>
+    </DockPanel>
+</Window>
