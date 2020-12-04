@@ -2,7 +2,10 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text;
+using System.Windows.Input;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.Model;
+using HSMClientWPFControls.ViewModel;
 
 namespace HSMClient
 {
@@ -15,11 +18,15 @@ namespace HSMClient
         private string _organizationUnitName;
         private string _commonName;
         private string _emailAddress;
-        public GenerateCertificateWindowViewModel()
+        private readonly IMonitoringModel _monitoringModel;
+        public GenerateCertificateWindowViewModel(IMonitoringModel monitoringModel)
         {
-
+            _monitoringModel = monitoringModel;
+            GenerateCertificateCommand = new MultipleDelegateCommand(GenerateNewClientCertificate,
+                CanGenerateNewClientCertificate);
         }
 
+        public ICommand GenerateCertificateCommand { get; set; }
         public string CountryName
         {
             get => _countryName;
@@ -106,7 +113,7 @@ namespace HSMClient
                             error = "You must enter the country name!";
                         }
 
-                        if (CountryName.Length > 2)
+                        if (CountryName?.Length > 2)
                         {
                             error = "Country name must not be longer than 2 symbols!";
                         }
@@ -124,6 +131,26 @@ namespace HSMClient
                 }
                 return error;
             }
+        }
+        public CreateCertificateModel CreateCertificateModel =>
+            new CreateCertificateModel
+            {
+                CommonName = CommonName,
+                CountryName = CountryName,
+                EmailAddress = EmailAddress,
+                LocalityName = LocalityName,
+                OrganizationName = OrganizationName,
+                OrganizationUnitName = OrganizationUnitName,
+                StateOrProvinceName = StateOrProvinceName
+            };
+        private void GenerateNewClientCertificate()
+        {
+            _monitoringModel.MakeNewClientCertificate(CreateCertificateModel);
+        }
+
+        private bool CanGenerateNewClientCertificate()
+        {
+            return true;
         }
     }
 }

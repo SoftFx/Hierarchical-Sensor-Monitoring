@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="GenerateCertificateWindow" Height="450" Width="400">
     <DockPanel>
-        <Button DockPanel.Dock="Bottom" Margin="0,0,10,10" VerticalAlignment="Center" HorizontalAlignment="Right" Content="Generate">
+        <Button DockPanel.Dock="Bottom" Margin="0,0,10,10" VerticalAlignment="Center" HorizontalAlignment="Right" Content="Generate" Command="{Binding GenerateCertificateCommand}">
             <Button.Style>
                 <Style TargetType="Button">
                     <Setter Property="IsEnabled" Value="False"></Setter>
@@ -25,19 +25,19 @@
         </Button>
         <StackPanel Margin="10">
             <TextBlock>Country name (required):</TextBlock>
-            <TextBox Margin="0,5,0,5" Name="textCountry" Text="{Binding CountryName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" MinWidth="100"></TextBox>
+            <TextBox Margin="0,5,0,5" Name="textCountry" MaxLength="2" Text="{Binding CountryName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" MinWidth="100"></TextBox>
             <TextBlock>State or province name:</TextBlock>
-            <TextBox Margin="0,5,0,5" Text="{Binding StateOrProvinceName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding StateOrProvinceName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Locality name:</TextBlock>
-            <TextBox Margin="0,5,0,5" Text="{Binding LocalityName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding LocalityName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Organization name (required):</TextBlock>
-            <TextBox Margin="0,5,0,5" Name="textOrganization" Text="{Binding OrganizationName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" Name="textOrganization" MaxLength="64" Text="{Binding OrganizationName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Organization unit name:</TextBlock>
-            <TextBox Margin="0,5,0,5" Text="{Binding OrganizationUnitName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding OrganizationUnitName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Common name:</TextBlock>
-            <TextBox Margin="0,5,0,5" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Email address:</TextBlock>
-            <TextBox Margin="0,5,0,5" Text="{Binding EmailAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding EmailAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
         </StackPanel>
     </DockPanel>
 </Window>

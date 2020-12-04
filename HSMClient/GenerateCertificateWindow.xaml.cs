@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using HSMClientWPFControls.Model;
 
 namespace HSMClient
 {
@@ -17,8 +18,11 @@ namespace HSMClient
     /// </summary>
     public partial class GenerateCertificateWindow : System.Windows.Window
     {
-        public GenerateCertificateWindow()
+        private readonly GenerateCertificateWindowViewModel _viewModel;
+        public GenerateCertificateWindow(IMonitoringModel monitoringModel)
         {
+            _viewModel = new GenerateCertificateWindowViewModel(monitoringModel);
+            this.DataContext = _viewModel;
             InitializeComponent();
         }
     }

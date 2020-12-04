@@ -9,6 +9,7 @@ using System.Text;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Net.Client;
 using HSMClient.Configuration;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using SensorsService;
 
@@ -78,6 +79,28 @@ namespace HSMClient.Connection
             var convertedList = sensorsUpdate.Sensors.Select(Converter.Convert).ToList();
             convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));
             return convertedList;
+        }
+
+        public override X509Certificate2 GetNewClientCertificate(CreateCertificateModel model)
+        {
+            CertificateRequestMessage message = new CertificateRequestMessage
+            {
+                CommonName = model.CommonName,
+                CountryName = model.CountryName,
+                EmailAddress = model.EmailAddress,
+                LocalityName = model.LocalityName,
+                OrganizationUnitName = model.OrganizationUnitName,
+                OrganiztionName = model.OrganizationName,
+                StateOrProvinceName = model.StateOrProvinceName
+            };
+            var newCertificateBytes = _sensorsClient.MakeNewClientCertificate(message);
+            X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray());
+            return certificate;
+        }
+
+        public override void ReplaceClientCertificate(X509Certificate2 certificate)
+        {
+            
         }
 
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)

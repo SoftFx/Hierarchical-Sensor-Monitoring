@@ -17,6 +17,7 @@ namespace HSMClientWPFControls.Model
         void ShowProducts();
         void ShowSettingsWindow();
         void ShowGenerateCertificateWindow();
+        void MakeNewClientCertificate(CreateCertificateModel model);
         void UpdateProducts();
         void RemoveProduct(ProductInfo product);
         ProductInfo AddProduct(string name);

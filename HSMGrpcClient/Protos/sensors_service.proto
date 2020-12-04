@@ -20,7 +20,7 @@ service Sensors {
 	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
 	
 	//Certificates
-	rpc GenerateClientCertificate (CertificateRequestMessage) returns (ClientCertificateMessage);
+	rpc MakeNewClientCertificate (CertificateRequestMessage) returns (ClientCertificateMessage);
 	rpc GenerateServerCertificate (CertificateRequestMessage) returns (GenerateServerCertificateResulMessage);
 
 	//Admin methods

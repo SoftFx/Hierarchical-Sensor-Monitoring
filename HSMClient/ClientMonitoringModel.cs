@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
@@ -31,6 +32,12 @@ namespace HSMClient
         public event EventHandler ShowProductsEvent;
         public event EventHandler ShowSettingsWindowEvent;
         public event EventHandler ShowGenerateCertificateWindowEvent;
+        public void MakeNewClientCertificate(CreateCertificateModel model)
+        {
+            X509Certificate2 newCertificate = _sensorsClient.GetNewClientCertificate(model);
+
+        }
+
         public void UpdateProducts()
         {
             var responseObj = _sensorsClient.GetProductsList();

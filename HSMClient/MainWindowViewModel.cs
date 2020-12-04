@@ -120,7 +120,7 @@ namespace HSMClient
 
         private void monitoringModel_ShowGenerateCertificateWindowEvent(object sender, EventArgs e)
         {
-            GenerateCertificateWindow window = new GenerateCertificateWindow();
+            GenerateCertificateWindow window = new GenerateCertificateWindow(_monitoringModel);
             window.Owner = App.Current.MainWindow;
             window.Show();
         }
