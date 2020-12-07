@@ -17,15 +17,18 @@ namespace HSMClient.Connection
 {
     public class GrpcClientConnector : ConnectorBase
     {
-        private readonly Sensors.SensorsClient _sensorsClient;
+        private Sensors.SensorsClient _sensorsClient;
         public GrpcClientConnector(string sensorsUrl) : base(sensorsUrl)
+        {
+            InitializeSensorsClient(sensorsUrl, ConfigProvider.Instance.ConnectionInfo.ClientCertificate);
+        }
+
+        private void InitializeSensorsClient(string sensorsUrl, X509Certificate2 clientCertificate)
         {
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
-            handler.ClientCertificates.Add(
-                new X509Certificate2(ConfigProvider.Instance.ConnectionInfo.ClientCertificate));
+            handler.ClientCertificates.Add(new X509Certificate2(clientCertificate));
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
-
 
             var channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
             {
@@ -34,7 +37,6 @@ namespace HSMClient.Connection
 
             _sensorsClient = new Sensors.SensorsClient(channel);
         }
-
         public override DateTime CheckServerAvailable()
         {
             return _sensorsClient.CheckServerAvailable(new Empty()).Time.ToDateTime();
@@ -90,17 +92,18 @@ namespace HSMClient.Connection
                 EmailAddress = model.EmailAddress,
                 LocalityName = model.LocalityName,
                 OrganizationUnitName = model.OrganizationUnitName,
-                OrganiztionName = model.OrganizationName,
+                OrganizationName = model.OrganizationName,
                 StateOrProvinceName = model.StateOrProvinceName
             };
-            var newCertificateBytes = _sensorsClient.MakeNewClientCertificate(message);
-            X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray());
+            var newCertificateBytes = _sensorsClient.GenerateClientCertificate(message);
+            //X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray());
+            X509Certificate2 certificate = new X509Certificate2();
             return certificate;
         }
 
         public override void ReplaceClientCertificate(X509Certificate2 certificate)
         {
-            
+            InitializeSensorsClient(_address, certificate);
         }
 
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)

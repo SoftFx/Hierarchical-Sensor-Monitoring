@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Xml;
+using HSMClient.Common.Logging;
 using HSMCommon;
 
 namespace HSMClient.Configuration
@@ -39,6 +41,7 @@ namespace HSMClient.Configuration
         private const string _configFolderName = "Config";
         private const string _certificatesFolderName = "Certificates";
         private const string _configFileName = "config.xml";
+        private string _certFileName;
         private readonly string _configFilePath;
         private readonly string _configFolderPath;
         private readonly string _certificatesFolderPath;
@@ -65,6 +68,31 @@ namespace HSMClient.Configuration
             }
 
             ReadConnectionInfo();
+        }
+
+        public void ReplaceClientCertificateFile(X509Certificate2 newCertificate, string fileName)
+        {
+            string fullFileName = $"{fileName}.pfx";
+            string templatePath = Path.Combine(Path.GetTempPath(), fullFileName);
+            //byte[] newCertBytes = newCertificate.Export(X509ContentType.Pkcs12);
+            byte[] newCertBytes = Encoding.UTF8.GetBytes("Certificate");
+            FileManager.SafeWriteBytes(templatePath, newCertBytes);
+            string currentCertPath = GetCurrentCertificatePath();
+            FileManager.SafeDelete(currentCertPath);
+            FileManager.SafeCopy(templatePath, Path.Combine(CertificatesFolderPath, fullFileName));
+            FileManager.SafeDelete(templatePath);
+        }
+
+        private string GetCurrentCertificatePath()
+        {
+            string[] files = Directory.GetFiles(CertificatesFolderPath, "*.pfx");
+            if (files.Length < 1)
+            {
+                Logger.Error("No client certificate file!");
+                throw new Exception("No client certificate file!");
+            }
+
+            return files[0];
         }
 
         private void CreateDefaultConfig()
@@ -156,10 +184,13 @@ namespace HSMClient.Configuration
             }
         }
 
-        private void ConnectionInfoToXml(XmlDocument document, ConnectionInfo connectionInfo)
+        private void ConfigInfoToXml(ConnectionInfo connectionInfo)
         {
+            XmlDocument document = new XmlDocument();
+            XmlElement rootElement = document.CreateElement("config");
+
             XmlElement connectionElement = document.CreateElement("connection");
-            document.AppendChild(connectionElement);
+            rootElement.AppendChild(connectionElement);
 
             XmlAttribute addressAttr = document.CreateAttribute("address");
             addressAttr.Value = connectionInfo.Address;

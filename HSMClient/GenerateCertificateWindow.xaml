@@ -38,6 +38,8 @@
             <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Email address:</TextBlock>
             <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding EmailAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>File name:</TextBlock>
+            <TextBox Margin="0,5,0,5" MaxLength="100" Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
         </StackPanel>
     </DockPanel>
 </Window>

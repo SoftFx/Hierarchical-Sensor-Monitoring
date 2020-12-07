@@ -35,7 +35,8 @@ namespace HSMClient
         public void MakeNewClientCertificate(CreateCertificateModel model)
         {
             X509Certificate2 newCertificate = _sensorsClient.GetNewClientCertificate(model);
-
+            _sensorsClient.ReplaceClientCertificate(newCertificate);
+            ConfigProvider.Instance.ReplaceClientCertificateFile(newCertificate, model.FileName);
         }
 
         public void UpdateProducts()
