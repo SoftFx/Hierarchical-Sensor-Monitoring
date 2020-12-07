@@ -137,6 +137,30 @@
         <member name="F:SensorsService.GenerateServerCertificateResulMessage.ErrorFieldNumber">
             <summary>Field number for the "error" field.</summary>
         </member>
+        <member name="F:SensorsService.CertificateRequestMessage.CountryNameFieldNumber">
+            <summary>Field number for the "countryName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.StateOrProvinceNameFieldNumber">
+            <summary>Field number for the "stateOrProvinceName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.LocalityNameFieldNumber">
+            <summary>Field number for the "localityName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.OrganizationNameFieldNumber">
+            <summary>Field number for the "OrganizationName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.OrganizationUnitNameFieldNumber">
+            <summary>Field number for the "OrganizationUnitName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.CommonNameFieldNumber">
+            <summary>Field number for the "CommonName" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateRequestMessage.EmailAddressFieldNumber">
+            <summary>Field number for the "EmailAddress" field.</summary>
+        </member>
+        <member name="F:SensorsService.ServerAvailableMessage.TimeFieldNumber">
+            <summary>Field number for the "time" field.</summary>
+        </member>
         <member name="P:SensorsService.Sensors.Descriptor">
             <summary>Service descriptor</summary>
         </member>
@@ -159,9 +183,17 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GenerateClientCertificate(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+        <member name="M:SensorsService.Sensors.SensorsBase.GenerateClientCertificate(SensorsService.CertificateRequestMessage,Grpc.Core.ServerCallContext)">
              <summary>
             Certificates
+             </summary>
+             <param name="request">The request received from the client.</param>
+             <param name="context">The context of the server-side call handler being invoked.</param>
+             <returns>The response to send back to the client (wrapped by a task).</returns>
+        </member>
+        <member name="M:SensorsService.Sensors.SensorsBase.CheckServerAvailable(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+             <summary>
+            Admin methods
              </summary>
              <param name="request">The request received from the client.</param>
              <param name="context">The context of the server-side call handler being invoked.</param>

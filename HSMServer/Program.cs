@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using HSMServer.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -17,6 +18,10 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
+            X509Store store = new X509Store();
+            store.Open(OpenFlags.MaxAllowed);
+            int count = store.Certificates.Count;
+            store.Certificates.Add(Config.ServerCertificate);
             try
             {
                 logger.Debug("init main");

@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.MonitoringServerCore;
@@ -65,7 +69,10 @@ namespace HSMServer.Services
 
         public override Task<ClientCertificateMessage> GenerateClientCertificate(CertificateRequestMessage request, ServerCallContext context)
         {
-            return base.GenerateClientCertificate(request, context);
+            X509Certificate2 certificate = new X509Certificate2();
+            byte[] certificateBytes = Encoding.UTF8.GetBytes("posifjfpojos;");
+            ClientCertificateMessage message = new ClientCertificateMessage {CertificateBytes = ByteString.CopyFrom(certificateBytes)};
+            return Task.FromResult(message);
         }
 
         public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)
