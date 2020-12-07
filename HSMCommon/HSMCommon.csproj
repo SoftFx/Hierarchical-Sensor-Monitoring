@@ -9,7 +9,11 @@
     <None Remove="DefaultCertificates\default.client.pfx" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="DefaultCertificates\default.client.crt" />
-    <EmbeddedResource Include="DefaultCertificates\default.client.pfx" />
+    <EmbeddedResource Include="DefaultCertificates\default.client.crt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="DefaultCertificates\default.client.pfx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>
