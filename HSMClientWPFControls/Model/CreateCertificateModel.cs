@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace HSMClientWPFControls.Model
+﻿namespace HSMClientWPFControls.Model
 {
     public class CreateCertificateModel
     {
@@ -13,5 +9,6 @@ namespace HSMClientWPFControls.Model
         public string OrganizationUnitName { get; set; }
         public string CommonName { get; set; }
         public string EmailAddress { get; set; }
+        public string FileName { get; set; }
     }
 }

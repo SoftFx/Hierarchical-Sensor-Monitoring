@@ -20,7 +20,7 @@ service Sensors {
 	rpc RemoveProduct (RemoveProductMessage) returns (RemoveProductResultMessage);
 	
 	//Certificates
-	rpc MakeNewClientCertificate (CertificateRequestMessage) returns (ClientCertificateMessage);
+	rpc GenerateClientCertificate (CertificateRequestMessage) returns (ClientCertificateMessage);
 	rpc GenerateServerCertificate (CertificateRequestMessage) returns (GenerateServerCertificateResulMessage);
 
 	//Admin methods
@@ -101,7 +101,7 @@ message CertificateRequestMessage {
 	string countryName = 1;
 	string stateOrProvinceName = 2;
 	string localityName = 3;
-	string OrganiztionName = 4;
+	string OrganizationName = 4;
 	string OrganizationUnitName = 5;
 	string CommonName = 6;
 	string EmailAddress = 7;
