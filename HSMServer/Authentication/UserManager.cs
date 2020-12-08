@@ -29,10 +29,6 @@ namespace HSMServer.Authentication
             _certificateManager = certificateManager;
             _users = new List<User>();
             CheckUsersUpToDate();
-            lock (_accessLock)
-            {
-                _users.Add(new User(CommonConstants.DefaultClientUserName, _certificateManager.GetDefaultClientCertificateThumbprint()));
-            }
             _logger.Info("UserManager initialized");
         }
 

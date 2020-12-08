@@ -27,7 +27,6 @@ namespace HSMServer.Configuration
             _lastUpdate = DateTime.MinValue;
             _lastFirstLoginInfosUpdate = DateTime.MinValue;
             _certificateManager = certificateManager;
-            _defaultClientCertificateThumbprint = _certificateManager.GetDefaultClientCertificateThumbprint();
             _logger.Info("ClientCertificateValidator initialized");
         }
 
@@ -90,11 +89,6 @@ namespace HSMServer.Configuration
             {
                 _logger.Error($"ClientCertificateValidator: validate error = {ex}");
             }
-        }
-
-        private bool IsDefaultClientForbidden(ConnectionInfo connection)
-        {
-            return FirstLoginInfos.FirstOrDefault(i => i.Address.Equals(connection.LocalIpAddress)) != null;
         }
     }
 }
