@@ -95,11 +95,12 @@ namespace HSMClientWPFControls.ViewModel
         public ICommand SensorDoubleClickCommand { get; private set; }
         public ICommand MenuShowSettingsCommand { get; private set; }
         public ICommand GenerateCertificateCommand { get; private set; }
+        public bool IsClientCertificateDefault => _model.IsClientCertificateDefault;
         public Visibility MainTreeVisibility =>
             _model.IsClientCertificateDefault ? Visibility.Collapsed : Visibility.Visible;
 
         public Visibility DefaultCertificateControlVisibility =>
-            _model.IsClientCertificateDefault ? Visibility.Visible : Visibility.Collapsed;
+            !_model.IsClientCertificateDefault ? Visibility.Collapsed : Visibility.Visible;
 
         public MonitoringNodeBase SelectedNode
         {

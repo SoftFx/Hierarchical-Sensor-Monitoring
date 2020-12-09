@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace MAMSClient.Properties
+namespace HSMClient.Properties
 {
 
 

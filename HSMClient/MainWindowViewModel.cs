@@ -85,7 +85,7 @@ namespace HSMClient
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
         }
 
-        
+        public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
 
         private void CheckConfiguration()
         {

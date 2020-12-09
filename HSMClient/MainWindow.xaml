@@ -6,13 +6,47 @@
         xmlns:view="clr-namespace:HSMClientWPFControls.View;assembly=HSMClientWPFControls"
         mc:Ignorable="d" 
         Height="450" Width="800">
-    <Grid>
-        <DockPanel Visibility="{Binding MonitoringTree.MainTreeVisibility}" DockPanel.Dock="Top">
-            <view:MainView   Margin="8,5,8,8" DataContext="{Binding MonitoringTree}" BorderBrush="Transparent" BorderThickness="0"></view:MainView>
-        </DockPanel>
+    <DockPanel>
+        <Grid>
+            <DockPanel>
+                <DockPanel.Style>
+                    <Style TargetType="DockPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="True">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Setter Property="ZIndex" Value="-1"/>
+                                <Setter Property="Opacity" Value="0"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="False">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Setter Property="ZIndex" Value="1"/>
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DockPanel.Style>
+                <view:MainView   Margin="8,5,8,8" DataContext="{Binding MonitoringTree}" BorderBrush="Transparent" BorderThickness="0"></view:MainView>
+            </DockPanel>
 
-        <DockPanel DockPanel.Dock="Top" Visibility="{Binding MonitoringTree.DefaultCertificateControlVisibility}">
-            <view:ChangeClientCertificateView  Margin="8,5,8,8" DataContext="{Binding ChangeCertificateModel}" BorderBrush="Transparent" BorderThickness="0"></view:ChangeClientCertificateView>
-        </DockPanel>
-    </Grid>
+            <DockPanel>
+                <DockPanel.Style>
+                    <Style TargetType="DockPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Setter Property="ZIndex" Value="1"/>
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="False">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Setter Property="ZIndex" Value="-1"/>
+                                <Setter Property="Opacity" Value="0"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DockPanel.Style>
+                <view:ChangeClientCertificateView  Margin="8,5,8,8" DataContext="{Binding ChangeCertificateModel}" BorderBrush="Transparent" BorderThickness="0"></view:ChangeClientCertificateView>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
 </Window>
