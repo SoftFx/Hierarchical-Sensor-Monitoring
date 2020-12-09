@@ -174,7 +174,11 @@ namespace HSMClient.Configuration
 
             try
             {
-                X509Certificate2 certificate = new X509Certificate2(files[0]);
+                X509Certificate2 certificate = new X509Certificate2(files[0], string.Empty, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
+                if (IsCertificateDefault(certificate))
+                {
+                    InstallCertificate(certificate);
+                }
                 return certificate;
             }
             catch (Exception e)
@@ -199,6 +203,20 @@ namespace HSMClient.Configuration
             XmlAttribute portAttr = document.CreateAttribute("port");
             portAttr.Value = connectionInfo.Port;
             connectionElement.Attributes.Append(portAttr);
+        }
+
+        public void InstallCertificate(X509Certificate2 certificate)
+        {
+            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(certificate);
+            store.Close();
+        }
+
+        public bool IsCertificateDefault(X509Certificate2 certificate)
+        {
+            return certificate.Thumbprint.Equals(
+                CommonConstants.DefaultClientCertificateThumbprint, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
