@@ -158,6 +158,9 @@
         <member name="F:SensorsService.CertificateRequestMessage.EmailAddressFieldNumber">
             <summary>Field number for the "EmailAddress" field.</summary>
         </member>
+        <member name="F:SensorsService.CertificateRequestMessage.FileNameFieldNumber">
+            <summary>Field number for the "fileName" field.</summary>
+        </member>
         <member name="F:SensorsService.ServerAvailableMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>

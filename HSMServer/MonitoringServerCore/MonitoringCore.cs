@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Google.Protobuf;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -178,6 +179,7 @@ namespace HSMServer.MonitoringServerCore
             sensorsUpdate.Sensors.AddRange(dataList.Select(s => Converter.Convert(s, getHistoryMessage.Product)));
             return sensorsUpdate;
         }
+
         #endregion
 
         #region Products
@@ -249,6 +251,17 @@ namespace HSMServer.MonitoringServerCore
         }
 
         #endregion
+
+        public ClientCertificateMessage GenerateClientCertificate(X509Certificate2 clientCertificate,
+            CertificateRequestMessage requestMessage)
+        {
+            GenerateClientCertificateModel model = Converter.Convert(requestMessage);
+            X509Certificate2 newCert = _certificateManager.GenerateClientCertificate(model);
+            _certificateManager.AddClientCertificate(newCert, $"{requestMessage.FileName}.crt");
+            ClientCertificateMessage message = new ClientCertificateMessage();
+            message.CertificateBytes = ByteString.CopyFrom(newCert.Export(X509ContentType.Pkcs12));
+            return message;
+        }
 
         #region Sub-methods
 

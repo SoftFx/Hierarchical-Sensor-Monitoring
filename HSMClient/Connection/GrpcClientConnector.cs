@@ -93,11 +93,12 @@ namespace HSMClient.Connection
                 LocalityName = model.LocalityName,
                 OrganizationUnitName = model.OrganizationUnitName,
                 OrganizationName = model.OrganizationName,
-                StateOrProvinceName = model.StateOrProvinceName
+                StateOrProvinceName = model.StateOrProvinceName,
+                FileName = model.FileName
             };
             var newCertificateBytes = _sensorsClient.GenerateClientCertificate(message);
-            //X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray());
-            X509Certificate2 certificate = new X509Certificate2();
+            var type = X509Certificate2.GetCertContentType(newCertificateBytes.CertificateBytes.ToByteArray());
+            X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray(), "", X509KeyStorageFlags.Exportable);
             return certificate;
         }
 

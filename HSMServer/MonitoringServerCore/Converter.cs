@@ -111,6 +111,20 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
+        public static GenerateClientCertificateModel Convert(CertificateRequestMessage requestMessage)
+        {
+            GenerateClientCertificateModel model = new GenerateClientCertificateModel
+            {
+                CommonName = requestMessage.CommonName,
+                CountryName = requestMessage.CountryName,
+                EmailAddress = requestMessage.EmailAddress,
+                LocalityName = requestMessage.LocalityName,
+                OrganizationName = requestMessage.OrganizationName,
+                OrganizationUnitName = requestMessage.OrganizationUnitName,
+                StateOrProvinceName = requestMessage.StateOrProvinceName
+            };
+            return model;
+        }
         #region Sub-methods
 
         private static SensorUpdateMessage.Types.SensorObjectType Convert(SensorDataTypes type)

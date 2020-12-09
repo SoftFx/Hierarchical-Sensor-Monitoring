@@ -202,6 +202,27 @@ namespace HSMServer.Configuration
             return string.Empty;
         }
 
+        public static void InstallCertificate(X509Certificate2 certificate)
+        {
+            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            try
+            {
+                
+                store.Open(OpenFlags.ReadWrite);
+                store.Add(certificate);
+                store.Close();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to install certificate with thumbprint = {certificate.Thumbprint}");
+            }
+            finally
+            {
+                store.Close();
+            }
+            
+        }
+
         public static void Dispose()
         {
             //SaveConfigFile();

@@ -69,10 +69,10 @@ namespace HSMServer.Services
 
         public override Task<ClientCertificateMessage> GenerateClientCertificate(CertificateRequestMessage request, ServerCallContext context)
         {
-            X509Certificate2 certificate = new X509Certificate2();
-            byte[] certificateBytes = Encoding.UTF8.GetBytes("posifjfpojos;");
-            ClientCertificateMessage message = new ClientCertificateMessage {CertificateBytes = ByteString.CopyFrom(certificateBytes)};
-            return Task.FromResult(message);
+            var httpContext = context.GetHttpContext();
+
+            return Task.FromResult(
+                _monitoringCore.GenerateClientCertificate(httpContext.Connection.ClientCertificate, request));
         }
 
         public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)

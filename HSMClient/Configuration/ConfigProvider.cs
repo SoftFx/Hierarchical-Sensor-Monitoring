@@ -74,8 +74,7 @@ namespace HSMClient.Configuration
         {
             string fullFileName = $"{fileName}.pfx";
             string templatePath = Path.Combine(Path.GetTempPath(), fullFileName);
-            //byte[] newCertBytes = newCertificate.Export(X509ContentType.Pkcs12);
-            byte[] newCertBytes = Encoding.UTF8.GetBytes("Certificate");
+            byte[] newCertBytes = newCertificate.Export(X509ContentType.Pkcs12);
             FileManager.SafeWriteBytes(templatePath, newCertBytes);
             string currentCertPath = GetCurrentCertificatePath();
             FileManager.SafeDelete(currentCertPath);
@@ -174,7 +173,8 @@ namespace HSMClient.Configuration
 
             try
             {
-                X509Certificate2 certificate = new X509Certificate2(files[0], string.Empty, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
+                var type = X509Certificate2.GetCertContentType(files[0]);
+                X509Certificate2 certificate = new X509Certificate2(files[0], "", X509KeyStorageFlags.DefaultKeySet);
                 if (IsCertificateDefault(certificate))
                 {
                     InstallCertificate(certificate);
@@ -183,6 +183,7 @@ namespace HSMClient.Configuration
             }
             catch (Exception e)
             {
+                Logger.Error($"Failed to read certificate, error = {e}");
                 return new X509Certificate2();
                 //throw;
             }
