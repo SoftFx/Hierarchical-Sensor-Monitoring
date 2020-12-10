@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.IO;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
@@ -16,7 +15,6 @@ namespace HSMClient
         private string _organizationUnitName;
         private string _commonName;
         private string _emailAddress;
-        private string _fileName;
         private readonly IMonitoringModel _monitoringModel;
         public GenerateCertificateWindowViewModel(IMonitoringModel monitoringModel)
         {
@@ -95,16 +93,6 @@ namespace HSMClient
                 OnPropertyChanged(nameof(EmailAddress));
             }
         }
-
-        public string FileName
-        {
-            get => _fileName;
-            set
-            {
-                _fileName = value;
-                OnPropertyChanged(nameof(FileName));
-            }
-        }
         public string Error { get; }
 
         public string this[string columnName]
@@ -136,18 +124,12 @@ namespace HSMClient
 
                         break;
                     }
-                    case "FileName":
+                    case "CommonName":
                     {
-                        if (string.IsNullOrEmpty(FileName))
+                        if (string.IsNullOrEmpty(CommonName))
                         {
-                            error = "You must enter certificate filename!";
+                            error = "You must specify common name!";
                         }
-
-                        if (FileName.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
-                        {
-                            error = "You are using an invalid character!";
-                        }
-
                         break;
                     }
                 }
@@ -164,7 +146,6 @@ namespace HSMClient
                 OrganizationName = OrganizationName,
                 OrganizationUnitName = OrganizationUnitName ?? string.Empty,
                 StateOrProvinceName = StateOrProvinceName ?? string.Empty,
-                FileName = FileName
             };
         private void GenerateNewClientCertificate()
         {

@@ -9,6 +9,5 @@
         public string OrganizationUnitName { get; set; }
         public string CommonName { get; set; }
         public string EmailAddress { get; set; }
-        public string FileName { get; set; }
     }
 }

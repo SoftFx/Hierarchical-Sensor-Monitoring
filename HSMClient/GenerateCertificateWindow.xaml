@@ -16,6 +16,7 @@
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding Path=(Validation.HasError), ElementName=textOrganization}" Value="False"/>
                                 <Condition Binding="{Binding Path=(Validation.HasError), ElementName=textCountry}" Value="False"/>
+                                <Condition Binding="{Binding Path=(Validation.HasError), ElementName=textCommonName}" Value="False"/>
                             </MultiDataTrigger.Conditions>
                             <Setter Property="IsEnabled" Value="True"></Setter>
                         </MultiDataTrigger>
@@ -34,12 +35,10 @@
             <TextBox Margin="0,5,0,5" Name="textOrganization" MaxLength="64" Text="{Binding OrganizationName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Organization unit name:</TextBlock>
             <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding OrganizationUnitName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
-            <TextBlock>Common name:</TextBlock>
-            <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
+            <TextBlock>Common name (will be used as username and certificate filename!):</TextBlock>
+            <TextBox Margin="0,5,0,5" Name="textCommonName" MaxLength="32" Text="{Binding CommonName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
             <TextBlock>Email address:</TextBlock>
             <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding EmailAddress, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
-            <TextBlock>File name:</TextBlock>
-            <TextBox Margin="0,5,0,5" MaxLength="100" Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
         </StackPanel>
     </DockPanel>
 </Window>
