@@ -137,30 +137,33 @@ namespace HSMServer.MonitoringServerCore
             User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
             if (!_queueManager.IsUserRegistered(user))
             {
-                //bool isDefaultClientCert = (clientCertificate.ClientCertificate.Thumbprint ==
-                //                            _certificateManager.GetDefaultClientCertificateThumbprint());
-                //if (isDefaultClientCert)
-                //{
-                //    _queueManager.AddUserSession(user, clientCertificate.RemoteIpAddress, clientCertificate.RemotePort);
-                //}
-                //else
-                //{
-                //    _queueManager.AddUserSession(user);
-                //}
-
                 _queueManager.AddUserSession(user);
             }
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
-            //TODO: Read updates for ALL available sensors for the current user
-            foreach (var permission in user.UserPermissions)
+            //TODO: use products permissions later
+            //foreach (var permission in user.UserPermissions)
+            //{
+            //    var sensorsList = DatabaseClass.Instance.GetSensorsList(permission.ProductName);
+            //    foreach (var sensor in sensorsList)
+            //    {
+            //        var lastVal = DatabaseClass.Instance.GetLastSensorValue(permission.ProductName, sensor);
+            //        if (lastVal != null)
+            //        {
+            //            sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, permission.ProductName));
+            //        }
+            //    }
+            //}
+            //Let client see all available products by default
+            var productsList = _productManager.Products.Select(p => p.Name);
+            foreach (var product in productsList)
             {
-                var sensorsList = DatabaseClass.Instance.GetSensorsList(permission.ProductName);
+                var sensorsList = DatabaseClass.Instance.GetSensorsList(product);
                 foreach (var sensor in sensorsList)
                 {
-                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(permission.ProductName, sensor);
+                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensor);
                     if (lastVal != null)
                     {
-                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, permission.ProductName));
+                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product));
                     }
                 }
             }
@@ -257,7 +260,9 @@ namespace HSMServer.MonitoringServerCore
         {
             GenerateClientCertificateModel model = Converter.Convert(requestMessage);
             X509Certificate2 newCert = _certificateManager.GenerateClientCertificate(model);
-            _certificateManager.AddClientCertificate(newCert, $"{requestMessage.FileName}.crt");
+            string fileName = $"{requestMessage.CommonName}.crt";
+            _certificateManager.AddClientCertificate(newCert, fileName);
+            _userManager.AddNewUser(model.CommonName, newCert.Thumbprint, fileName);
             ClientCertificateMessage message = new ClientCertificateMessage();
             message.CertificateBytes = ByteString.CopyFrom(newCert.Export(X509ContentType.Pkcs12));
             return message;

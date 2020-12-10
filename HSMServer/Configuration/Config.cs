@@ -196,7 +196,7 @@ namespace HSMServer.Configuration
             rootElement.AppendChild(configElement);
 
             XmlAttribute certificateAttr = document.CreateAttribute("certificate");
-            certificateAttr.Value = HSMCommon.CommonConstants.DefaultServerPfxCertificateName;
+            certificateAttr.Value = CommonConstants.DefaultServerPfxCertificateName;
             configElement.Attributes.Append(certificateAttr);
 
             return string.Empty;

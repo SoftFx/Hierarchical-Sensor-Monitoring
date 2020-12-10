@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
@@ -20,6 +21,7 @@ namespace HSMServer.Authentication
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
         private readonly string _usersFileName = "users.xml";
+        private readonly string _usersFilePath;
 
         #endregion
 
@@ -28,16 +30,15 @@ namespace HSMServer.Authentication
             _logger = LogManager.GetCurrentClassLogger();
             _certificateManager = certificateManager;
             _users = new List<User>();
+            _usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
             CheckUsersUpToDate();
             _logger.Info("UserManager initialized");
         }
 
         private List<User> ParseUsersFile()
         {
-            string usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
-
             XmlDocument document = new XmlDocument();
-            document.Load(usersFilePath);
+            document.Load(_usersFilePath);
             
             XmlNodeList nodes = document.SelectNodes("//users/user");
 
@@ -66,11 +67,10 @@ namespace HSMServer.Authentication
                 user.UserName = nameAttr.Value;
             }
 
-            string certFile = string.Empty;
             var certAttr = node.Attributes?["Certificate"];
             if (certAttr != null)
             {
-                certFile = certAttr.Value;
+                user.CertificateFileName = certAttr.Value;
             }
 
             XmlNodeList products = node.SelectNodes("//products/product");
@@ -99,7 +99,7 @@ namespace HSMServer.Authentication
                 }
             }
 
-            user.CertificateThumbprint = _certificateManager.GetCertificateByFileName(certFile)?.Thumbprint;
+            user.CertificateThumbprint = _certificateManager.GetCertificateByFileName(user.CertificateFileName)?.Thumbprint;
             return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
         }
 
@@ -141,6 +141,95 @@ namespace HSMServer.Authentication
             }
 
             return user;
+        }
+
+        public void AddNewUser(string userName, string certificateThumbprint, string certificateFileName)
+        {
+            User user = new User
+            {
+                CertificateThumbprint = certificateThumbprint, UserName = userName,
+                CertificateFileName = certificateFileName
+            };
+            lock (_accessLock)
+            {
+                _users.Add(user);
+            }
+            SaveUsers();
+        }
+
+        private void SaveUsers()
+        {
+            List<User> usersCopy = new List<User>();
+            lock (_accessLock)
+            {
+                usersCopy.AddRange(_users);
+            }
+
+            string xml = GetUsersXml(usersCopy);
+            FileManager.SafeDelete(_usersFilePath);
+            //using FileStream fs = new FileStream(_usersFilePath, FileMode.OpenOrCreate);
+            //fs.Write(Encoding.UTF8.GetBytes(xml));
+            FileManager.SafeWriteToNewFile(_usersFilePath, xml);
+        }
+
+        private string GetUsersXml(List<User> users)
+        {
+            XmlDocument document = new XmlDocument();
+            XmlElement rootElement = document.CreateElement("users");
+            document.AppendChild(rootElement);
+            foreach (var user in users)
+            {
+                XmlNode node = UserToXml(document, user);
+                rootElement.AppendChild(node);
+            }
+
+            StringBuilder sb = new StringBuilder();
+            using (StringWriter sw = new StringWriter(sb))
+            {
+                document.Save(sw);
+            }
+
+            sb.Replace("encoding=\"utf-16\"", string.Empty);
+
+            return sb.ToString();
+        }
+
+        private XmlElement UserToXml(XmlDocument document, User user)
+        {
+            XmlElement rootElement = document.CreateElement("user");
+
+            XmlAttribute nameAttr = document.CreateAttribute("Name");
+            nameAttr.Value = user.UserName;
+            rootElement.Attributes.Append(nameAttr);
+
+            XmlAttribute certificateAttr = document.CreateAttribute("Certificate");
+            certificateAttr.Value = user.CertificateFileName;
+            rootElement.Attributes.Append(certificateAttr);
+
+            //TODO: serialize products when they will be needed
+            //if (user.UserPermissions.Count > 0)
+            //{
+            //    rootElement.AppendChild(UserPermissionsToXml(document, user.UserPermissions));
+            //}
+
+            return rootElement;
+        }
+
+        private XmlElement UserPermissionsToXml(XmlDocument document, List<PermissionItem> items)
+        {
+            XmlElement productsElement = document.CreateElement("products");
+
+            foreach (var item in items)
+            {
+                XmlElement element = document.CreateElement("product");
+                productsElement.AppendChild(element);
+
+                XmlAttribute nameAttr = document.CreateAttribute("Name");
+                nameAttr.Value = item.ProductName;
+                //TODO: add ignored sensors specification
+            }
+
+            return productsElement;
         }
     }
 }

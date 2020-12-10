@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using HSMServer.Configuration;
@@ -19,9 +20,10 @@ namespace HSMServer
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
             X509Store store = new X509Store();
-            store.Open(OpenFlags.MaxAllowed);
-            int count = store.Certificates.Count;
-            store.Certificates.Add(Config.ServerCertificate);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(Config.ServerCertificate);
+            store.Close();
+
             try
             {
                 logger.Debug("init main");
@@ -52,6 +54,11 @@ namespace HSMServer
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
                             listenOptions.UseHttps(Config.ServerCertificate);
+                            //listenOptions.UseHttps(portOptions =>
+                            //{
+                            //    portOptions.ServerCertificate = Config.ServerCertificate;
+                            //    portOptions.ClientCertificateValidation = ValidateClientCertificate;
+                            //});
                         });
                         options.Listen(IPAddress.Any, Config.SensorsPort, listenOptions =>
                         {

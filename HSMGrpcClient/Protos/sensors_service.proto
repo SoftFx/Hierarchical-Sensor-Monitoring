@@ -105,7 +105,6 @@ message CertificateRequestMessage {
 	string OrganizationUnitName = 5;
 	string CommonName = 6;
 	string EmailAddress = 7;
-	string fileName = 8;
 }
 
 message ServerAvailableMessage {

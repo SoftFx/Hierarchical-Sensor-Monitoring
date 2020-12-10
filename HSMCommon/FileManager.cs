@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 
 namespace HSMCommon
@@ -139,6 +140,36 @@ namespace HSMCommon
                 try
                 {
                     File.WriteAllBytes(path, dataBytes);
+                    isWrite = true;
+                }
+                catch (Exception ex)
+                {
+                    attempts -= 1;
+
+                    if (attempts == 0)
+                        throw;
+
+                    Thread.Sleep(_waitTime);
+                }
+            }
+        }
+
+        public static void SafeWriteToNewFile(string filePath, string text)
+        {
+            bool isWrite = false;
+            int attempts = 5;
+
+            while (!isWrite)
+            {
+                try
+                {
+                    using (FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate))
+                    {
+                        byte[] bytes = Encoding.UTF8.GetBytes(text);
+                        fs.Write(bytes, 0, bytes.Length);
+                        fs.Flush();
+                        fs.Close();
+                    }
                     isWrite = true;
                 }
                 catch (Exception ex)

@@ -7,6 +7,7 @@ namespace HSMServer.Authentication
         public string UserName { get; set; }
         public string CertificateThumbprint { get; set; }
         public List<PermissionItem> UserPermissions { get; set; }
+        public string CertificateFileName { get; set; }
 
         public User(string userName, string thumbprint) : this()
         {
