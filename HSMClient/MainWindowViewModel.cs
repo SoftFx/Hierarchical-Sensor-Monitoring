@@ -83,6 +83,7 @@ namespace HSMClient
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
             _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
+            _monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
         }
 
         public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
@@ -122,7 +123,11 @@ namespace HSMClient
         {
             GenerateCertificateWindow window = new GenerateCertificateWindow(_monitoringModel);
             window.Owner = App.Current.MainWindow;
-            window.Show();
+            window.ShowDialog();
+        }
+        private void monitoringModel_DefaultCertificateReplacedEvent(object sender, EventArgs e)
+        {
+            OnPropertyChanged(nameof(IsClientCertificateDefault));
         }
         public MonitoringTreeViewModel MonitoringTree
         {

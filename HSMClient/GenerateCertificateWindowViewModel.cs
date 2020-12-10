@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Text;
+﻿using System.ComponentModel;
+using System.IO;
 using System.Windows.Input;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
@@ -143,6 +141,11 @@ namespace HSMClient
                         if (string.IsNullOrEmpty(FileName))
                         {
                             error = "You must enter certificate filename!";
+                        }
+
+                        if (FileName.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+                        {
+                            error = "You are using an invalid character!";
                         }
 
                         break;

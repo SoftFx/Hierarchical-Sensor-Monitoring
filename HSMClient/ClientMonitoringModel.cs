@@ -34,12 +34,13 @@ namespace HSMClient
         public event EventHandler ShowProductsEvent;
         public event EventHandler ShowSettingsWindowEvent;
         public event EventHandler ShowGenerateCertificateWindowEvent;
+        public event EventHandler DefaultCertificateReplacedEvent;
         public void MakeNewClientCertificate(CreateCertificateModel model)
         {
             X509Certificate2 newCertificate = _sensorsClient.GetNewClientCertificate(model);
-            ConfigProvider.Instance.InstallCertificate(newCertificate);
+            ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.FileName);
             _sensorsClient.ReplaceClientCertificate(newCertificate);
-            ConfigProvider.Instance.ReplaceClientCertificateFile(newCertificate, model.FileName);
+            OnDefaultCertificateReplacedEvent();
         }
 
         public void UpdateProducts()
@@ -208,6 +209,11 @@ namespace HSMClient
         private void OnShowGenerateCertificateWindowEvent()
         {
             ShowGenerateCertificateWindowEvent?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OnDefaultCertificateReplacedEvent()
+        {
+            DefaultCertificateReplacedEvent?.Invoke(this, EventArgs.Empty);
         }
     }
 }

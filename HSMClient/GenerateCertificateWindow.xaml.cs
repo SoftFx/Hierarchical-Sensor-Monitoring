@@ -25,5 +25,11 @@ namespace HSMClient
             this.DataContext = _viewModel;
             InitializeComponent();
         }
+
+        private void buttonGenerate_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = true;
+            Close();
+        }
     }
 }

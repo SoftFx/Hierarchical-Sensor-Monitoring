@@ -12,12 +12,12 @@
                 <DockPanel.Style>
                     <Style TargetType="DockPanel">
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="True">
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="True">
                                 <Setter Property="Visibility" Value="Hidden"/>
                                 <Setter Property="ZIndex" Value="-1"/>
                                 <Setter Property="Opacity" Value="0"/>
                             </DataTrigger>
-                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="False">
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="False">
                                 <Setter Property="Visibility" Value="Visible"/>
                                 <Setter Property="ZIndex" Value="1"/>
                                 <Setter Property="Opacity" Value="1"/>
@@ -32,12 +32,12 @@
                 <DockPanel.Style>
                     <Style TargetType="DockPanel">
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="True">
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="True">
                                 <Setter Property="Visibility" Value="Visible"/>
                                 <Setter Property="ZIndex" Value="1"/>
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
-                            <DataTrigger Binding="{Binding IsClientCertificateDefault}" Value="False">
+                            <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="False">
                                 <Setter Property="Visibility" Value="Hidden"/>
                                 <Setter Property="ZIndex" Value="-1"/>
                                 <Setter Property="Opacity" Value="0"/>

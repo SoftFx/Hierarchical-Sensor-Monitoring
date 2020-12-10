@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="GenerateCertificateWindow" Height="450" Width="400">
     <DockPanel>
-        <Button DockPanel.Dock="Bottom" Margin="0,0,10,10" VerticalAlignment="Center" HorizontalAlignment="Right" Content="Generate" Command="{Binding GenerateCertificateCommand}">
+        <Button DockPanel.Dock="Bottom" Margin="0,0,10,10" Click="buttonGenerate_Click" VerticalAlignment="Center" HorizontalAlignment="Right" Content="Generate" Command="{Binding GenerateCertificateCommand}">
             <Button.Style>
                 <Style TargetType="Button">
                     <Setter Property="IsEnabled" Value="False"></Setter>

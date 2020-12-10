@@ -70,7 +70,7 @@ namespace HSMClient.Configuration
             ReadConnectionInfo();
         }
 
-        public void ReplaceClientCertificateFile(X509Certificate2 newCertificate, string fileName)
+        private void ReplaceClientCertificateFile(X509Certificate2 newCertificate, string fileName)
         {
             string fullFileName = $"{fileName}.pfx";
             string templatePath = Path.Combine(Path.GetTempPath(), fullFileName);
@@ -206,7 +206,18 @@ namespace HSMClient.Configuration
             connectionElement.Attributes.Append(portAttr);
         }
 
-        public void InstallCertificate(X509Certificate2 certificate)
+        public void UpdateClientCertificate(X509Certificate2 certificate, string fileName)
+        {
+            ReplaceClientCertificate(certificate);
+            InstallCertificate(certificate);
+            ReplaceClientCertificateFile(certificate, fileName);
+        }
+
+        private void ReplaceClientCertificate(X509Certificate2 certificate)
+        {
+            ConnectionInfo.ClientCertificate = certificate;
+        }
+        private void InstallCertificate(X509Certificate2 certificate)
         {
             X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
