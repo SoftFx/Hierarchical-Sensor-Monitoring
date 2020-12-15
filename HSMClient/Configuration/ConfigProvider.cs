@@ -174,10 +174,10 @@ namespace HSMClient.Configuration
             try
             {
                 var type = X509Certificate2.GetCertContentType(files[0]);
-                X509Certificate2 certificate = new X509Certificate2(files[0], "", X509KeyStorageFlags.DefaultKeySet);
+                X509Certificate2 certificate = new X509Certificate2(files[0]);
                 if (IsCertificateDefault(certificate))
                 {
-                    InstallCertificate(certificate);
+                    InstallDefaultCertificate(certificate);
                 }
                 return certificate;
             }
@@ -209,7 +209,7 @@ namespace HSMClient.Configuration
         public void UpdateClientCertificate(X509Certificate2 certificate, string fileName)
         {
             ReplaceClientCertificate(certificate);
-            InstallCertificate(certificate);
+            InstallSelfSignedCertificate(certificate);
             ReplaceClientCertificateFile(certificate, fileName);
         }
 
@@ -217,9 +217,17 @@ namespace HSMClient.Configuration
         {
             ConnectionInfo.ClientCertificate = certificate;
         }
-        private void InstallCertificate(X509Certificate2 certificate)
+        private void InstallDefaultCertificate(X509Certificate2 certificate)
         {
             X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(certificate);
+            store.Close();
+        }
+
+        private void InstallSelfSignedCertificate(X509Certificate2 certificate)
+        {
+            X509Store store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
             store.Add(certificate);
             store.Close();

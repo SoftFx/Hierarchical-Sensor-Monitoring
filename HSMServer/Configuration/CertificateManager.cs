@@ -148,15 +148,30 @@ namespace HSMServer.Configuration
             return convertedCertificate;
         }
 
-        public void AddClientCertificate(X509Certificate2 certificate, string fileName)
+        public void SaveClientCertificate(X509Certificate2 certificate, string fileName)
         {
             string certPath = Path.Combine(Config.CertificatesFolderPath, fileName);
-            byte[] certBytes = certificate.Export(X509ContentType.Pkcs12);
+            byte[] certBytes = certificate.Export(X509ContentType.Cert);
 
             FileStream fs = new FileStream(certPath, FileMode.CreateNew);
             fs.Write(certBytes, 0, certBytes.Length);
             fs.Flush();
             fs.Close();
+        }
+
+        public void InstallClientCertificate(X509Certificate2 certificate)
+        {
+            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(certificate);
+            store.Close();
+        }
+
+        public X509Certificate2 GetCrtCertificateFromPfx(X509Certificate2 pfxCert)
+        {
+            byte[] bytes = pfxCert.Export(X509ContentType.Cert, "");
+            X509Certificate2 crtCert = new X509Certificate2(bytes);
+            return crtCert;
         }
     }
 }

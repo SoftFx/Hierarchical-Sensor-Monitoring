@@ -259,12 +259,14 @@ namespace HSMServer.MonitoringServerCore
             CertificateRequestMessage requestMessage)
         {
             GenerateClientCertificateModel model = Converter.Convert(requestMessage);
-            X509Certificate2 newCert = _certificateManager.GenerateClientCertificate(model);
+            X509Certificate2 newPfxCert = _certificateManager.GenerateClientCertificate(model);
+            X509Certificate2 newCrtCert = _certificateManager.GetCrtCertificateFromPfx(newPfxCert);
             string fileName = $"{requestMessage.CommonName}.crt";
-            _certificateManager.AddClientCertificate(newCert, fileName);
-            _userManager.AddNewUser(model.CommonName, newCert.Thumbprint, fileName);
+            _certificateManager.SaveClientCertificate(newCrtCert, fileName);
+            _certificateManager.InstallClientCertificate(newCrtCert);
+            _userManager.AddNewUser(model.CommonName, newPfxCert.Thumbprint, fileName);
             ClientCertificateMessage message = new ClientCertificateMessage();
-            message.CertificateBytes = ByteString.CopyFrom(newCert.Export(X509ContentType.Pkcs12));
+            message.CertificateBytes = ByteString.CopyFrom(newPfxCert.Export(X509ContentType.Pkcs12));
             return message;
         }
 

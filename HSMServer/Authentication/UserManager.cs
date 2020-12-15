@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
@@ -154,7 +155,8 @@ namespace HSMServer.Authentication
             {
                 _users.Add(user);
             }
-            SaveUsers();
+
+            ThreadPool.QueueUserWorkItem(_ => SaveUsers());
         }
 
         private void SaveUsers()

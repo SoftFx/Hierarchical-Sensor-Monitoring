@@ -9,8 +9,8 @@
     <Grid>
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
             <TextBlock Foreground="Red" HorizontalAlignment="Center">WARNING!</TextBlock>
-            <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center">You are using default client certificate!</TextBlock>
-            <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center">Your connection is successful. Generate new certificate to continue</TextBlock>
+            <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center">You are using default client certificate! Generate new certificate to continue</TextBlock>
+            <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center" Text="{Binding ConnectionStatusText}"/>
             <Button Margin="0,10,0,0" Width="100" Command="{Binding ShowGenerateCertificateWindowCommand}" IsEnabledChanged="UIElement_OnIsEnabledChanged">Generate</Button>
         </StackPanel>
     </Grid>

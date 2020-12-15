@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using System.Windows;
 using HSMClient.Common;
 using HSMClient.Common.Logging;
 using HSMClient.Configuration;
 using HSMClient.Connection;
-using HSMClient.Properties;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model;
@@ -31,6 +29,7 @@ namespace HSMClient
 
         #endregion
 
+        private bool _isConnected;
         public event EventHandler ShowProductsEvent;
         public event EventHandler ShowSettingsWindowEvent;
         public event EventHandler ShowGenerateCertificateWindowEvent;
@@ -40,6 +39,7 @@ namespace HSMClient
             X509Certificate2 newCertificate = _sensorsClient.GetNewClientCertificate(model);
             ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
             _sensorsClient.ReplaceClientCertificate(newCertificate);
+            StartTreeThread();
             OnDefaultCertificateReplacedEvent();
         }
 
@@ -64,7 +64,7 @@ namespace HSMClient
         }
 
         private readonly ConnectorBase _sensorsClient;
-        private Thread _nodeThread;
+        private Thread _treeThread;
         private const int UPDATE_TIMEOUT = 10000;
         private const int CONNECTION_TIMEOUT = 10000;
         private DateTime _lastUpdate = DateTime.MinValue;
@@ -82,38 +82,57 @@ namespace HSMClient
                 $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
             _connectionsStatus = ConnectionsStatus.Init;
             _uiContext = SynchronizationContext.Current;
-            _nodeThread = new Thread(MonitoringLoopStep);
-            _nodeThread.Name = $"Thread_{DateTime.Now.ToLongTimeString()}";
-            _nodeThread.Start();
+            StartTreeThread();
         }
 
         private void MonitoringLoopStep()
         {
             while (_continue)
             {
-                DateTime stepStart = DateTime.Now;
-                if (_connectionsStatus == ConnectionsStatus.Init || _connectionsStatus == ConnectionsStatus.Error)
+                try
                 {
-                    Connect();
+                    DateTime stepStart = DateTime.Now;
                     if (_connectionsStatus == ConnectionsStatus.Init || _connectionsStatus == ConnectionsStatus.Error)
-                        if ((DateTime.Now - stepStart).TotalMilliseconds < CONNECTION_TIMEOUT)
-                            Thread.Sleep(Math.Max(0, CONNECTION_TIMEOUT - (int)((DateTime.Now - stepStart).TotalMilliseconds)));
+                    {
+                        Connect();
+                        if (_connectionsStatus == ConnectionsStatus.Init ||
+                            _connectionsStatus == ConnectionsStatus.Error)
+                            if ((DateTime.Now - stepStart).TotalMilliseconds < CONNECTION_TIMEOUT)
+                                Thread.Sleep(Math.Max(0,
+                                    CONNECTION_TIMEOUT - (int) ((DateTime.Now - stepStart).TotalMilliseconds)));
+                    }
+                    else
+                    {
+                        Update();
+                        if ((DateTime.Now - stepStart).TotalMilliseconds < UPDATE_TIMEOUT)
+                            Thread.Sleep(Math.Max(0,
+                                UPDATE_TIMEOUT - (int) ((DateTime.Now - stepStart).TotalMilliseconds)));
+                    }
                 }
-                else
+                catch (ThreadInterruptedException ex)
                 {
-                    Update();
-                    if ((DateTime.Now - stepStart).TotalMilliseconds < UPDATE_TIMEOUT)
-                        Thread.Sleep(Math.Max(0, UPDATE_TIMEOUT - (int)((DateTime.Now - stepStart).TotalMilliseconds)));
                 }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Client monitoring model: MonitoringLoopStep error = {ex}");
+                }
+                
             }
         }
         private void Connect()
         {
             try
             {
-                var responseObj = _sensorsClient.GetTree();
-                _connectionsStatus = ConnectionsStatus.Ok;
-                Update(responseObj);
+                if (IsClientCertificateDefault)
+                {
+                    _isConnected = _sensorsClient.CheckServerAvailable();
+                }
+                else
+                {
+                    var responseObj = _sensorsClient.GetTree();
+                    _connectionsStatus = ConnectionsStatus.Ok;
+                    Update(responseObj);
+                }
             }
             catch (Exception e)
             {
@@ -145,6 +164,27 @@ namespace HSMClient
             }
         }
 
+        private void StartTreeThread()
+        {
+            if (_treeThread != null)
+            {
+                try
+                {
+                    _treeThread.Interrupt();
+                }
+                catch (ThreadInterruptedException exception)
+                { }
+                catch (Exception e)
+                {
+                    Logger.Error($"Failed to stop working tree thread, error = {e}");
+                }
+            }
+            _connectionsStatus = ConnectionsStatus.Init;
+            _treeThread = new Thread(MonitoringLoopStep);
+            _treeThread.Name = $"Thread_{DateTime.Now.ToLongTimeString()}";
+            _treeThread.Start();
+        }
+
         private void Update(List<MonitoringSensorUpdate> updateList)
         {
             foreach (var sensorUpd in updateList)
@@ -162,6 +202,9 @@ namespace HSMClient
         }
         public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
         public ObservableCollection<ProductViewModel> Products { get; set; }
+
+        public event EventHandler ConnectionStatusChanged;
+        public bool IsConnected => _isConnected;
 
         public bool IsClientCertificateDefault
         {
@@ -214,6 +257,11 @@ namespace HSMClient
         private void OnDefaultCertificateReplacedEvent()
         {
             DefaultCertificateReplacedEvent?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OnConnectionStatusChangedEvent()
+        {
+            ConnectionStatusChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }

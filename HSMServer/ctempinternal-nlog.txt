@@ -43,3 +43,13 @@
 2020-12-07 16:34:27.3649 Info Adding target FileTarget(Name=allfile)
 2020-12-07 16:34:27.3741 Info Adding target FileTarget(Name=ownFile-web)
 2020-12-07 16:34:27.3987 Info Validating config: TargetNames=allfile, ownFile-web, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2020-12-14 12:22:34.6075 Info Message Template Auto Format enabled
+2020-12-14 12:22:34.6329 Info Loading assembly: NLog.Web.AspNetCore
+2020-12-14 12:22:34.6857 Info Adding target FileTarget(Name=allfile)
+2020-12-14 12:22:34.6960 Info Adding target FileTarget(Name=ownFile-web)
+2020-12-14 12:22:34.7256 Info Validating config: TargetNames=allfile, ownFile-web, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2020-12-14 12:23:05.5247 Info Message Template Auto Format enabled
+2020-12-14 12:23:05.5491 Info Loading assembly: NLog.Web.AspNetCore
+2020-12-14 12:23:05.6012 Info Adding target FileTarget(Name=allfile)
+2020-12-14 12:23:05.6101 Info Adding target FileTarget(Name=ownFile-web)
+2020-12-14 12:23:05.6377 Info Validating config: TargetNames=allfile, ownFile-web, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config

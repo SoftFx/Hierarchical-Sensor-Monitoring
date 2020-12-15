@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Grpc.Net.Client;
 using HSMClient.Configuration;
 using HSMClientWPFControls.Model;
@@ -20,6 +20,8 @@ namespace HSMClient.Connection
         private Sensors.SensorsClient _sensorsClient;
         public GrpcClientConnector(string sensorsUrl) : base(sensorsUrl)
         {
+            AppContext.SetSwitch(
+                "System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
             InitializeSensorsClient(sensorsUrl, ConfigProvider.Instance.ConnectionInfo.ClientCertificate);
         }
 
@@ -28,18 +30,29 @@ namespace HSMClient.Connection
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
             handler.ClientCertificates.Add(new X509Certificate2(clientCertificate));
+            handler.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+            handler.AllowAutoRedirect = true;
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
 
             var channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
             {
-                HttpHandler = handler
+                HttpHandler = handler,
+                
             });
 
             _sensorsClient = new Sensors.SensorsClient(channel);
         }
-        public override DateTime CheckServerAvailable()
+        public override bool CheckServerAvailable()
         {
-            return _sensorsClient.CheckServerAvailable(new Empty()).Time.ToDateTime();
+            try
+            {
+                var time = _sensorsClient.CheckServerAvailable(new Empty()).Time.ToDateTime();
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
         }
 
         public override List<MonitoringSensorUpdate> GetTree()

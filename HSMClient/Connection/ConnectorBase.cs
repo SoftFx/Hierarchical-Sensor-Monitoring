@@ -17,7 +17,7 @@ namespace HSMClient.Connection
             _address = address;
         }
 
-        public abstract DateTime CheckServerAvailable();
+        public abstract bool CheckServerAvailable();
         public abstract List<MonitoringSensorUpdate> GetTree();
         public abstract List<MonitoringSensorUpdate> GetUpdates();
         public abstract List<ProductInfo> GetProductsList();

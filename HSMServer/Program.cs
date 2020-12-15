@@ -19,7 +19,7 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
-            X509Store store = new X509Store();
+            X509Store store = new X509Store(StoreName.AuthRoot, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
             store.Add(Config.ServerCertificate);
             store.Close();
@@ -53,12 +53,12 @@ namespace HSMServer
                         options.Listen(IPAddress.Loopback, Config.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
-                            listenOptions.UseHttps(Config.ServerCertificate);
-                            //listenOptions.UseHttps(portOptions =>
-                            //{
-                            //    portOptions.ServerCertificate = Config.ServerCertificate;
-                            //    portOptions.ClientCertificateValidation = ValidateClientCertificate;
-                            //});
+                            //listenOptions.UseHttps(Config.ServerCertificate);
+                            listenOptions.UseHttps(portOptions =>
+                            {
+                                portOptions.ServerCertificate = Config.ServerCertificate;
+                                portOptions.ClientCertificateValidation = ValidateClientCertificate;
+                            });
                         });
                         options.Listen(IPAddress.Any, Config.SensorsPort, listenOptions =>
                         {
@@ -79,10 +79,10 @@ namespace HSMServer
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
                 }).UseNLog();
 
-        //public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
-        //    SslPolicyErrors policyErrors)
-        //{
-        //    return true;
-        //}
+        public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
+            SslPolicyErrors policyErrors)
+        {
+            return true;
+        }
     }
 }
