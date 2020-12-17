@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Globalization;
 using System.IO;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
 using HSMCommon;
+using HSMCommon.Certificates;
 using NLog;
 
 namespace HSMServer.Configuration
@@ -17,15 +20,22 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Private fields
-
-        public const string ConfigFolderName = "Config";
-        public const string CertificatesFolderName = "Certificates";
         private static Logger _logger;
+        private static string _configFolderPath;
         private static string _configFilePath;
         private static string _serverCertName;
+        private static string _caFolderPath;
+        private static string _certificatesFolderPath;
+        private static string _serverCertificatePath;
+        private static string _caKeyFilePath;
         private static int _gRPCPort;
         private static int _sensorsPort;
         private static string _configFileName = "config.xml";
+        private const string _caCertificateFileName = "ca.crt";
+        private const string _caKeyFileName = "ca.key.pem";
+        private const string _configFolderName = "Config";
+        private const string _certificatesFolderName = "Certificates";
+        private const string _CAFolderName = "CA";
         private static string ServerCertName
         {
             get
@@ -38,57 +48,22 @@ namespace HSMServer.Configuration
                 return _serverCertName;
             }
         }
-        private static string ServerCertificatePath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-            ConfigFolderName, CertificatesFolderName, ServerCertName);
 
+        private static string CACertificatePath => Path.Combine(_caFolderPath, _caCertificateFileName);
         private static X509Certificate2 _serverCertificate;
+        private static X509Certificate2 _caCertificate;
         #endregion
 
         #region Public fields
-        //public static int GrpcPort
-        //{
-        //    get
-        //    {
-        //        if (_gRPCPort == 0)
-        //        {
-        //            ReadConfig();
-        //        }
-
-        //        return _gRPCPort;
-        //    }
-        //}
-
-        //public static int SensorsPort
-        //{
-        //    get
-        //    {
-        //        if (_sensorsPort == 0)
-        //        {
-        //            ReadConfig();
-        //        }
-
-        //        return _sensorsPort;
-        //    }
-        //}
         public const int GrpcPort = 5015;
         public const int SensorsPort = 44330;
-        public static X509Certificate2 ServerCertificate
-        {
-            get
-            {
-                lock (_certificateSync)
-                {
-                    _serverCertificate ??= ReadServerCertificate();
-                }
+        public static X509Certificate2 ServerCertificate => _serverCertificate ??= ReadServerCertificate();
 
-                return _serverCertificate;
-            }
-        }
+        public static X509Certificate2 CACertificate => _caCertificate ??= ReadCACertificate();
+        public static string CAKeyFilePath => _caKeyFilePath;
+        public static string CertificatesFolderPath => _certificatesFolderPath;
+        public static string ConfigFolderPath => _configFolderPath;
 
-        public static string ConfigFolderPath;
-
-        public static string CertificatesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName,
-            CertificatesFolderName);
         #endregion
 
 
@@ -96,30 +71,63 @@ namespace HSMServer.Configuration
         {
             _logger = LogManager.GetCurrentClassLogger();
 
-            ConfigFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName);
-            if (!Directory.Exists(ConfigFolderPath))
+            InitializeConstants();
+
+            if (!Directory.Exists(_configFolderPath))
             {
-                FileManager.SafeCreateDirectory(ConfigFolderPath);
+                FileManager.SafeCreateDirectory(_configFolderPath);
             }
 
-            _configFilePath = Path.Combine(ConfigFolderPath, _configFileName);
             if (!File.Exists(_configFilePath))
             {
                 FileManager.SafeCreateFile(_configFilePath);
             }
 
+            if (!Directory.Exists(_caFolderPath))
+            {
+                FileManager.SafeCreateDirectory(_caFolderPath);
+                CreateCertificateAuthority();
+            }
 
             _logger.Info("Config initialized, config file created/exists");
+        }
+
+        private static void InitializeConstants()
+        {
+            _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
+            _configFilePath = Path.Combine(_configFolderPath, _configFileName);
+            _certificatesFolderPath = Path.Combine(_configFolderPath, _certificatesFolderName);
+            _caFolderPath = Path.Combine(_certificatesFolderPath, _CAFolderName);
+            _caKeyFilePath = Path.Combine(_caFolderPath, _caKeyFileName);
+            _serverCertificatePath = Path.Combine(_certificatesFolderPath, ServerCertName);
+        }
+        private static void CreateCertificateAuthority()
+        {
+            CertificateData data = new CertificateData();
+            data.CommonName = "HSM CA";
+            data.CountryName = RegionInfo.CurrentRegion.TwoLetterISORegionName;
+            data.OrganizationName = "HSM";
+            X509Certificate2 caCertificate = CertificatesProcessor.CreateSelfSignedCertificate(data, true);
+            CertificatesProcessor.ExportCrt(caCertificate, Path.Combine(_caFolderPath, _caCertificateFileName));
+            CertificatesProcessor.ExportPEMPrivateKey(caCertificate, _caKeyFilePath);
+            CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
+
+            _logger.Info("CA created");
         }
 
         private static X509Certificate2 ReadServerCertificate()
         {
             //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
-            X509Certificate2 certificate =  new X509Certificate2(ServerCertificatePath);
+            X509Certificate2 certificate =  new X509Certificate2(_serverCertificatePath);
 
             return certificate;
         }
 
+        private static X509Certificate2 ReadCACertificate()
+        {
+            return new X509Certificate2(CACertificatePath, "",
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+        }
         private static void ReadConfig()
         {
             try

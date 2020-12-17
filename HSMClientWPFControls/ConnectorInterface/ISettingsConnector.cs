@@ -5,6 +5,6 @@ namespace HSMClientWPFControls.ConnectorInterface
 {
     public interface ISettingsConnector
     {
-        public X509Certificate2 GetNewClientCertificate(CreateCertificateModel model);
+        //public X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model);
     }
 }

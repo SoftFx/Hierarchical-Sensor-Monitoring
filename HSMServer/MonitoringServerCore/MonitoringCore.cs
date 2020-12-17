@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using Google.Protobuf;
+using HSMCommon.Certificates;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -12,6 +14,8 @@ using HSMServer.Model;
 using HSMServer.Products;
 using Microsoft.AspNetCore.Http;
 using NLog;
+using Org.BouncyCastle.Pkcs;
+using Org.BouncyCastle.Security;
 using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
@@ -255,19 +259,26 @@ namespace HSMServer.MonitoringServerCore
 
         #endregion
 
-        public ClientCertificateMessage GenerateClientCertificate(X509Certificate2 clientCertificate,
-            CertificateRequestMessage requestMessage)
+        public SignedCertificateMessage SignClientCertificate(X509Certificate2 clientCertificate,
+            CertificateSignRequestMessage request)
         {
-            GenerateClientCertificateModel model = Converter.Convert(requestMessage);
-            X509Certificate2 newPfxCert = _certificateManager.GenerateClientCertificate(model);
-            X509Certificate2 newCrtCert = _certificateManager.GetCrtCertificateFromPfx(newPfxCert);
-            string fileName = $"{requestMessage.CommonName}.crt";
-            _certificateManager.SaveClientCertificate(newCrtCert, fileName);
-            _certificateManager.InstallClientCertificate(newCrtCert);
-            _userManager.AddNewUser(model.CommonName, newPfxCert.Thumbprint, fileName);
-            ClientCertificateMessage message = new ClientCertificateMessage();
-            message.CertificateBytes = ByteString.CopyFrom(newPfxCert.Export(X509ContentType.Pkcs12));
-            return message;
+            _validator.Validate(clientCertificate);
+
+            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
+            var bytes = request.RequestBytes.ToByteArray();
+
+            Pkcs10CertificationRequest certRequest = new Pkcs10CertificationRequest(bytes);
+            Org.BouncyCastle.X509.X509Certificate signedCertificate =
+                CertificatesProcessor.SignCertificate(certRequest, Config.CACertificate, Config.CAKeyFilePath);
+
+            X509Certificate certV1 = DotNetUtilities.ToX509Certificate(signedCertificate);
+            X509Certificate2 certV2 = new X509Certificate2(certV1);
+            //TODO: add new certificate & user
+            string fileName = $"{request.CommonName}.crt";
+            _certificateManager.InstallClientCertificate(certV2);
+            _certificateManager.SaveClientCertificate(certV2, fileName);
+            _userManager.AddNewUser(request.CommonName, certV2.Thumbprint, fileName);
+            return Converter.Convert(certV2, Config.CACertificate);
         }
 
         #region Sub-methods

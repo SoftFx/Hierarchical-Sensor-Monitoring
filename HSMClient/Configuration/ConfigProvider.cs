@@ -227,7 +227,7 @@ namespace HSMClient.Configuration
 
         private void InstallSelfSignedCertificate(X509Certificate2 certificate)
         {
-            X509Store store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
             store.Add(certificate);
             store.Close();

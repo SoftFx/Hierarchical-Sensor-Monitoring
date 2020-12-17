@@ -13,6 +13,9 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon;
+using HSMCommon.Certificates;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Crypto;
 
 namespace HSMClient
 {
@@ -36,9 +39,14 @@ namespace HSMClient
         public event EventHandler DefaultCertificateReplacedEvent;
         public void MakeNewClientCertificate(CreateCertificateModel model)
         {
-            X509Certificate2 newCertificate = _sensorsClient.GetNewClientCertificate(model);
-            ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
-            _sensorsClient.ReplaceClientCertificate(newCertificate);
+            AsymmetricCipherKeyPair subjectKeyPair = default(AsymmetricCipherKeyPair);
+            X509Certificate2 caCertificate = default(X509Certificate2);
+            Org.BouncyCastle.X509.X509Certificate newCertificate = _sensorsClient.GetSignedClientCertificate(model, out subjectKeyPair,
+                out caCertificate);
+            CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
+            var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
+            ConfigProvider.Instance.UpdateClientCertificate(convertedCertWithKey, model.CommonName);
+            _sensorsClient.ReplaceClientCertificate(convertedCertWithKey);
             StartTreeThread();
             OnDefaultCertificateReplacedEvent();
         }
@@ -111,6 +119,7 @@ namespace HSMClient
                 }
                 catch (ThreadInterruptedException ex)
                 {
+                    Logger.Info("Monitoring tree loop step stopped!");
                 }
                 catch (Exception ex)
                 {
@@ -126,6 +135,7 @@ namespace HSMClient
                 if (IsClientCertificateDefault)
                 {
                     _isConnected = _sensorsClient.CheckServerAvailable();
+                    OnConnectionStatusChangedEvent();
                 }
                 else
                 {

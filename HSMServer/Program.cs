@@ -53,12 +53,12 @@ namespace HSMServer
                         options.Listen(IPAddress.Loopback, Config.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
-                            //listenOptions.UseHttps(Config.ServerCertificate);
-                            listenOptions.UseHttps(portOptions =>
-                            {
-                                portOptions.ServerCertificate = Config.ServerCertificate;
-                                portOptions.ClientCertificateValidation = ValidateClientCertificate;
-                            });
+                            listenOptions.UseHttps(Config.ServerCertificate);
+                            //listenOptions.UseHttps(portOptions =>
+                            //{
+                            //    portOptions.ServerCertificate = Config.ServerCertificate;
+                            //    portOptions.ClientCertificateValidation = ValidateClientCertificate;
+                            //});
                         });
                         options.Listen(IPAddress.Any, Config.SensorsPort, listenOptions =>
                         {

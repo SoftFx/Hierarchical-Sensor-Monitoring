@@ -16,6 +16,7 @@ namespace HSMServer.MonitoringServerCore
             RemoveProductMessage message);
         public SensorsUpdateMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage);
 
-        public ClientCertificateMessage GenerateClientCertificate(X509Certificate2 clientCertificate, CertificateRequestMessage requestMessage);
+        public SignedCertificateMessage SignClientCertificate(X509Certificate2 clientCertificate,
+            CertificateSignRequestMessage request);
     }
 }

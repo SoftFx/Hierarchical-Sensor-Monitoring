@@ -67,12 +67,12 @@ namespace HSMServer.Services
             return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.Connection.ClientCertificate, request));
         }
 
-        public override Task<ClientCertificateMessage> GenerateClientCertificate(CertificateRequestMessage request, ServerCallContext context)
+        public override Task<SignedCertificateMessage> SignClientCertificate(CertificateSignRequestMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 
             return Task.FromResult(
-                _monitoringCore.GenerateClientCertificate(httpContext.Connection.ClientCertificate, request));
+                _monitoringCore.SignClientCertificate(httpContext.Connection.ClientCertificate, request));
         }
 
         public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)

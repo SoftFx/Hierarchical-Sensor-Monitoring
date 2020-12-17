@@ -161,6 +161,18 @@
         <member name="F:SensorsService.ServerAvailableMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
+        <member name="F:SensorsService.CertificateSignRequestMessage.RequestBytesFieldNumber">
+            <summary>Field number for the "requestBytes" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateSignRequestMessage.CommonNameFieldNumber">
+            <summary>Field number for the "commonName" field.</summary>
+        </member>
+        <member name="F:SensorsService.SignedCertificateMessage.SignedCertificateBytesFieldNumber">
+            <summary>Field number for the "signedCertificateBytes" field.</summary>
+        </member>
+        <member name="F:SensorsService.SignedCertificateMessage.CaCertificateBytesFieldNumber">
+            <summary>Field number for the "caCertificateBytes" field.</summary>
+        </member>
         <member name="P:SensorsService.Sensors.Descriptor">
             <summary>Service descriptor</summary>
         </member>
@@ -183,7 +195,7 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GenerateClientCertificate(SensorsService.CertificateRequestMessage,Grpc.Core.ServerCallContext)">
+        <member name="M:SensorsService.Sensors.SensorsBase.GenerateServerCertificate(SensorsService.CertificateRequestMessage,Grpc.Core.ServerCallContext)">
              <summary>
             Certificates
              </summary>

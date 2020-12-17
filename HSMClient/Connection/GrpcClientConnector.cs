@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -12,6 +13,8 @@ using HSMClient.Configuration;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using SensorsService;
+using HSMCommon.Certificates;
+using Org.BouncyCastle.Crypto;
 
 namespace HSMClient.Connection
 {
@@ -96,22 +99,30 @@ namespace HSMClient.Connection
             return convertedList;
         }
 
-        public override X509Certificate2 GetNewClientCertificate(CreateCertificateModel model)
+        public override Org.BouncyCastle.X509.X509Certificate GetSignedClientCertificate(CreateCertificateModel model, 
+            out AsymmetricCipherKeyPair subjectKeyPair,
+            out X509Certificate2 caCertificate)
         {
-            CertificateRequestMessage message = new CertificateRequestMessage
+            CertificateData data = new CertificateData
             {
                 CommonName = model.CommonName,
-                CountryName = model.CountryName,
-                EmailAddress = model.EmailAddress,
-                LocalityName = model.LocalityName,
-                OrganizationUnitName = model.OrganizationUnitName,
                 OrganizationName = model.OrganizationName,
                 StateOrProvinceName = model.StateOrProvinceName,
+                LocalityName = model.LocalityName,
+                OrganizationUnitName = model.OrganizationUnitName,
+                EmailAddress = model.EmailAddress,
+                CountryName = model.CountryName
             };
-            var newCertificateBytes = _sensorsClient.GenerateClientCertificate(message);
-            var type = X509Certificate2.GetCertContentType(newCertificateBytes.CertificateBytes.ToByteArray());
-            X509Certificate2 certificate = new X509Certificate2(newCertificateBytes.CertificateBytes.ToByteArray(), "", 
+            var certificateRequest = CertificatesProcessor.CreateCertificateSignRequest(data, out subjectKeyPair);
+            CertificateSignRequestMessage request = new CertificateSignRequestMessage();
+            request.RequestBytes = ByteString.CopyFrom(certificateRequest.GetDerEncoded());
+            request.CommonName = model.CommonName;
+            var signedCertificateMessage = _sensorsClient.SignClientCertificate(request);
+            caCertificate = new X509Certificate2(signedCertificateMessage.CaCertificateBytes.ToByteArray(), "",
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+            X509Certificate2 winCertificate = new X509Certificate2(signedCertificateMessage.SignedCertificateBytes.ToByteArray(), "",
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+            Org.BouncyCastle.X509.X509Certificate certificate = Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(winCertificate);
             return certificate;
         }
 
