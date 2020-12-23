@@ -112,8 +112,20 @@ message ServerAvailableMessage {
 }
 
 message CertificateSignRequestMessage {
-	bytes requestBytes = 1;
-	string commonName = 2;
+	string subject = 1;
+	RSAParameters RSAParameters = 2;
+	string CommonName = 3;
+}
+
+message RSAParameters {
+	bytes inverseQ = 1;
+	bytes D = 2;
+	bytes DP = 3;
+	bytes DQ = 4;
+	bytes exponent = 5;
+	bytes modulus = 6;
+	bytes P = 7;
+	bytes Q = 8;
 }
 
 message SignedCertificateMessage {

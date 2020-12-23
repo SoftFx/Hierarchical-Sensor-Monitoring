@@ -9,6 +9,7 @@ using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Model;
 using NLog;
 using SensorsService;
+using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -31,7 +32,7 @@ namespace HSMServer.MonitoringServerCore
         {
             SignedCertificateMessage message = new SignedCertificateMessage();
             message.CaCertificateBytes = ByteString.CopyFrom(caCertificate.Export(X509ContentType.Cert));
-            message.SignedCertificateBytes = ByteString.CopyFrom(signedCertificate.Export(X509ContentType.Cert));
+            message.SignedCertificateBytes = ByteString.CopyFrom(signedCertificate.Export(X509ContentType.Pfx));
             return message;
         }
         #region Convert to database objects
@@ -143,6 +144,20 @@ namespace HSMServer.MonitoringServerCore
                 StateOrProvinceName = requestMessage.StateOrProvinceName
             };
             return model;
+        }
+
+        public static RSAParameters Convert(SensorsService.RSAParameters rsaParameters)
+        {
+            RSAParameters result = new RSAParameters();
+            result.D = rsaParameters.D.ToByteArray();
+            result.DP = rsaParameters.DP.ToByteArray();
+            result.DQ = rsaParameters.DQ.ToByteArray();
+            result.Exponent = rsaParameters.Exponent.ToByteArray();
+            result.InverseQ = rsaParameters.InverseQ.ToByteArray();
+            result.Modulus = rsaParameters.Modulus.ToByteArray();
+            result.P = rsaParameters.P.ToByteArray();
+            result.Q = rsaParameters.Q.ToByteArray();
+            return result;
         }
         #region Sub-methods
 

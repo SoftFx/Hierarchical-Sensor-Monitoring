@@ -39,14 +39,12 @@ namespace HSMClient
         public event EventHandler DefaultCertificateReplacedEvent;
         public void MakeNewClientCertificate(CreateCertificateModel model)
         {
-            AsymmetricCipherKeyPair subjectKeyPair = default(AsymmetricCipherKeyPair);
             X509Certificate2 caCertificate = default(X509Certificate2);
-            Org.BouncyCastle.X509.X509Certificate newCertificate = _sensorsClient.GetSignedClientCertificate(model, out subjectKeyPair,
-                out caCertificate);
+            X509Certificate2 newCertificate = _sensorsClient.GetSignedClientCertificate(model, out caCertificate);
             CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
-            var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
-            ConfigProvider.Instance.UpdateClientCertificate(convertedCertWithKey, model.CommonName);
-            _sensorsClient.ReplaceClientCertificate(convertedCertWithKey);
+            //var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
+            ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
+            _sensorsClient.ReplaceClientCertificate(newCertificate);
             StartTreeThread();
             OnDefaultCertificateReplacedEvent();
         }

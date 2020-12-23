@@ -2,10 +2,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
+using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
@@ -41,16 +43,11 @@ namespace HSMCommon.Certificates
 
         #endregion
 
-        public static X509Certificate2 CreateUnsignedCertificate(CertificateData certificateData, bool addPrivateKey)
-        {
+        //public static X509Certificate2 GetCert()
+        //{
+        //    var rsa = RSA.Create(2048);
 
-            return new X509Certificate2();
-        }
-
-        public static X509Certificate2 CreateSignedCertificate(CertificateData certificateData, string keyFilePath)
-        {
-            return new X509Certificate2();
-        }
+        //}
 
         public static Org.BouncyCastle.X509.X509Certificate SignCertificate(Pkcs10CertificationRequest csr,
             X509Certificate2 caCertificate,
@@ -77,7 +74,22 @@ namespace HSMCommon.Certificates
             Org.BouncyCastle.X509.X509Certificate signedCertificate = certGen.Generate(signatureFactory);
             return signedCertificate;
         }
-        public static X509Certificate2 CreateSelfSignedCertificate(CertificateData certificateData, bool addPrivateKey)
+
+        public static X509Certificate2 CreateSelfSignedCertificate(CertificateData data)
+        {
+            var rsaKey = RSA.Create(2048);
+
+            string subject = GetSubjectString(data);
+            var certRequest = new CertificateRequest(subject, rsaKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            certRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            certRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certRequest.PublicKey, false));
+            certRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, false));
+
+            var expire = DateTimeOffset.Now.AddYears(15);
+            var caCert = certRequest.CreateSelfSigned(DateTimeOffset.Now, expire);
+            return caCert;
+        }
+        public static X509Certificate2 CreateSelfSignedCertificateWithBouncyCastle(CertificateData certificateData, bool addPrivateKey)
         {
             IDictionary attributes = GetNameParametersTable(certificateData);
             X509Name name = new X509Name(_orderedAttributes, attributes);
@@ -165,6 +177,19 @@ namespace HSMCommon.Certificates
             return result;
         }
 
+        public static X509Certificate2 CreateAndSignCertificate(string subject, RSA key, X509Certificate2 caCertificate)
+        {
+            CertificateRequest request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.DigitalSignature, false));
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+            byte[] serialNumber = BitConverter.GetBytes(DateTime.Now.ToBinary());
+
+            DateTimeOffset expiration = DateTimeOffset.Now.AddYears(14);
+
+            var clientCertificate = request.Create(caCertificate, DateTimeOffset.Now, expiration, serialNumber);
+            return clientCertificate.CopyWithPrivateKey(key);
+        }
         //public static void AddPrivateKeyToCertificate(Org.BouncyCastle.X509.X509Certificate certificate, )
         public static void ExportCrt(X509Certificate2 certificate, string filePath, string password = "")
         {
@@ -201,6 +226,26 @@ namespace HSMCommon.Certificates
             }
         }
 
+        public static X509Certificate2 ReadCertificate(string crtFilePath, string keyFilePath)
+        {
+            X509Certificate2 cert = new X509Certificate2(crtFilePath, "",
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+
+            AsymmetricKeyParameter keyParam = ImportPrivateKey(keyFilePath);
+            var store = new Pkcs12Store();
+            string friendlyName = cert.Subject.ToString();
+            var entry = new X509CertificateEntry(Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(cert));
+            store.SetCertificateEntry(friendlyName, entry);
+            store.SetKeyEntry(friendlyName, new AsymmetricKeyEntry(keyParam),new []{entry} );
+
+            var stream = new MemoryStream();
+            store.Save(stream, "".ToArray(), new SecureRandom());
+
+            var convertedCertificate = new X509Certificate2(stream.ToArray(), "", X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+
+            return convertedCertificate;
+        }
+
         #region Store methods
         public static void AddCertificateToTrustedRootCA(X509Certificate2 certificate)
         {
@@ -229,14 +274,9 @@ namespace HSMCommon.Certificates
         private static X509Name CreateIssuerName(X500DistinguishedName name)
         {
             IDictionary attributes = new Hashtable();
-            attributes[X509Name.E] = string.Empty;
-            attributes[X509Name.CN] = string.Empty;
-            attributes[X509Name.O] = string.Empty;
-            attributes[X509Name.C] = string.Empty;
-            attributes[X509Name.ST] = string.Empty;
-            attributes[X509Name.OU] = string.Empty;
-            attributes[X509Name.L] = string.Empty;
-            var splitName = name.Name.Split(_commaSeparator);
+            IList orderedList = new ArrayList();
+            string replacedStr = name.Name.Replace('\"', ' ');
+            var splitName = replacedStr.Split(_commaSeparator);
             foreach (var param in splitName)
             {
                 var res = param.Split(_equalsSeparator);
@@ -244,29 +284,38 @@ namespace HSMCommon.Certificates
                 {
                     case "E":
                         attributes[X509Name.E] = res[1].Trim();
+                        orderedList.Add(X509Name.E);
                         break;
                     case "CN":
                         attributes[X509Name.CN] = res[1].Trim();
+                        orderedList.Add(X509Name.CN);
                         break;
                     case "O":
                         attributes[X509Name.O] = res[1].Trim();
+                        orderedList.Add(X509Name.O);
                         break;
                     case "C":
                         attributes[X509Name.C] = res[1].Trim();
+                        orderedList.Add(X509Name.C);
                         break;
+                    case "S":
                     case "ST":
                         attributes[X509Name.ST] = res[1].Trim();
+                        orderedList.Add(X509Name.ST);
                         break;
                     case "OU":
                         attributes[X509Name.OU] = res[1].Trim();
+                        orderedList.Add(X509Name.OU);
                         break;
                     case "L":
                         attributes[X509Name.L] = res[1].Trim();
+                        orderedList.Add(X509Name.L);
                         break;
                 }
             }
 
-            return new X509Name(_orderedAttributes, attributes);
+
+            return new X509Name(orderedList, attributes);
         }
 
         private static AsymmetricKeyParameter ImportPrivateKey(string filePath)
@@ -289,6 +338,60 @@ namespace HSMCommon.Certificates
             return keyParameter;
         }
 
+        public static string GetSubjectString(CertificateData data)
+        {
+            StringBuilder sb = new StringBuilder();
+            if (!string.IsNullOrEmpty(data.StateOrProvinceName))
+            {
+                sb.Append("ST = ");
+                sb.Append(data.StateOrProvinceName);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.CommonName))
+            {
+                sb.Append("CN = ");
+                sb.Append(data.CommonName);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.LocalityName))
+            {
+                sb.Append("L = ");
+                sb.Append(data.LocalityName);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.OrganizationName))
+            {
+                sb.Append("O = ");
+                sb.Append(data.OrganizationName);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.OrganizationUnitName))
+            {
+                sb.Append("OU = ");
+                sb.Append(data.OrganizationUnitName);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.EmailAddress))
+            {
+                sb.Append("E = ");
+                sb.Append(data.EmailAddress);
+                sb.Append(", ");
+            }
+
+            if (!string.IsNullOrEmpty(data.CountryName))
+            {
+                sb.Append("C = ");
+                sb.Append(data.CountryName);
+                sb.Append(", ");
+            }
+
+            return sb.Remove(sb.Length - 2, 2).ToString();
+        }
         #endregion
     }
 }

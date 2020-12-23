@@ -161,11 +161,38 @@
         <member name="F:SensorsService.ServerAvailableMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateSignRequestMessage.RequestBytesFieldNumber">
-            <summary>Field number for the "requestBytes" field.</summary>
+        <member name="F:SensorsService.CertificateSignRequestMessage.SubjectFieldNumber">
+            <summary>Field number for the "subject" field.</summary>
+        </member>
+        <member name="F:SensorsService.CertificateSignRequestMessage.RSAParametersFieldNumber">
+            <summary>Field number for the "RSAParameters" field.</summary>
         </member>
         <member name="F:SensorsService.CertificateSignRequestMessage.CommonNameFieldNumber">
-            <summary>Field number for the "commonName" field.</summary>
+            <summary>Field number for the "CommonName" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.InverseQFieldNumber">
+            <summary>Field number for the "inverseQ" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.DFieldNumber">
+            <summary>Field number for the "D" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.DPFieldNumber">
+            <summary>Field number for the "DP" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.DQFieldNumber">
+            <summary>Field number for the "DQ" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.ExponentFieldNumber">
+            <summary>Field number for the "exponent" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.ModulusFieldNumber">
+            <summary>Field number for the "modulus" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.PFieldNumber">
+            <summary>Field number for the "P" field.</summary>
+        </member>
+        <member name="F:SensorsService.RSAParameters.QFieldNumber">
+            <summary>Field number for the "Q" field.</summary>
         </member>
         <member name="F:SensorsService.SignedCertificateMessage.SignedCertificateBytesFieldNumber">
             <summary>Field number for the "signedCertificateBytes" field.</summary>

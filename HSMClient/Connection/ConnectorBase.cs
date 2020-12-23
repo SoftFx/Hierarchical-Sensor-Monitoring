@@ -25,8 +25,8 @@ namespace HSMClient.Connection
         public abstract ProductInfo AddNewProduct(string name);
         public abstract bool RemoveProduct(string name);
         public abstract List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n);
-        public abstract Org.BouncyCastle.X509.X509Certificate GetSignedClientCertificate(CreateCertificateModel model,
-            out AsymmetricCipherKeyPair subjectKeyPair, out X509Certificate2 caCertificate);
+        public abstract X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model,
+             out X509Certificate2 caCertificate);
 
         public abstract void ReplaceClientCertificate(X509Certificate2 certificate);
     }

@@ -52,6 +52,7 @@ namespace HSMServer.Configuration
         private static string CACertificatePath => Path.Combine(_caFolderPath, _caCertificateFileName);
         private static X509Certificate2 _serverCertificate;
         private static X509Certificate2 _caCertificate;
+        private static X509Certificate2 _caCertificateWithKey;
         #endregion
 
         #region Public fields
@@ -107,7 +108,7 @@ namespace HSMServer.Configuration
             data.CommonName = "HSM CA";
             data.CountryName = RegionInfo.CurrentRegion.TwoLetterISORegionName;
             data.OrganizationName = "HSM";
-            X509Certificate2 caCertificate = CertificatesProcessor.CreateSelfSignedCertificate(data, true);
+            X509Certificate2 caCertificate = CertificatesProcessor.CreateSelfSignedCertificate(data);
             CertificatesProcessor.ExportCrt(caCertificate, Path.Combine(_caFolderPath, _caCertificateFileName));
             CertificatesProcessor.ExportPEMPrivateKey(caCertificate, _caKeyFilePath);
             CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
@@ -125,9 +126,9 @@ namespace HSMServer.Configuration
 
         private static X509Certificate2 ReadCACertificate()
         {
-            return new X509Certificate2(CACertificatePath, "",
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+            return CertificatesProcessor.ReadCertificate(CACertificatePath, CAKeyFilePath);
         }
+
         private static void ReadConfig()
         {
             try

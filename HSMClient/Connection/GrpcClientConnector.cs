@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
@@ -99,31 +100,23 @@ namespace HSMClient.Connection
             return convertedList;
         }
 
-        public override Org.BouncyCastle.X509.X509Certificate GetSignedClientCertificate(CreateCertificateModel model, 
-            out AsymmetricCipherKeyPair subjectKeyPair,
+        public override X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model,
             out X509Certificate2 caCertificate)
         {
-            CertificateData data = new CertificateData
-            {
-                CommonName = model.CommonName,
-                OrganizationName = model.OrganizationName,
-                StateOrProvinceName = model.StateOrProvinceName,
-                LocalityName = model.LocalityName,
-                OrganizationUnitName = model.OrganizationUnitName,
-                EmailAddress = model.EmailAddress,
-                CountryName = model.CountryName
-            };
-            var certificateRequest = CertificatesProcessor.CreateCertificateSignRequest(data, out subjectKeyPair);
+            CertificateData data = Converter.Convert(model);
+            string subjectString = CertificatesProcessor.GetSubjectString(data);
+            var rsa = RSA.Create(2048);
             CertificateSignRequestMessage request = new CertificateSignRequestMessage();
-            request.RequestBytes = ByteString.CopyFrom(certificateRequest.GetDerEncoded());
+            request.Subject = subjectString;
+            request.RSAParameters = Converter.Convert(rsa.ExportParameters(true));
             request.CommonName = model.CommonName;
+            //var certificateRequest = CertificatesProcessor.CreateCertificateSignRequest(data, out subjectKeyPair);
             var signedCertificateMessage = _sensorsClient.SignClientCertificate(request);
             caCertificate = new X509Certificate2(signedCertificateMessage.CaCertificateBytes.ToByteArray(), "",
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
             X509Certificate2 winCertificate = new X509Certificate2(signedCertificateMessage.SignedCertificateBytes.ToByteArray(), "",
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
-            Org.BouncyCastle.X509.X509Certificate certificate = Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(winCertificate);
-            return certificate;
+            return winCertificate;
         }
 
         public override void ReplaceClientCertificate(X509Certificate2 certificate)
