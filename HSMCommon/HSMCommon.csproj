@@ -5,14 +5,22 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="DefaultCertificates\default.ca.crt" />
     <None Remove="DefaultCertificates\default.client.crt" />
     <None Remove="DefaultCertificates\default.client.pfx" />
+    <None Remove="DefaultCertificates\default.server.pfx" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="DefaultCertificates\default.ca.crt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
     <EmbeddedResource Include="DefaultCertificates\default.client.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="DefaultCertificates\default.client.pfx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="DefaultCertificates\default.server.pfx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>

@@ -2,11 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
-using HSMCommon.Exceptions;
-using HSMServer.DataLayer;
-using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
-using Microsoft.AspNetCore.Http;
 using NLog;
 
 namespace HSMServer.Configuration
@@ -17,31 +13,13 @@ namespace HSMServer.Configuration
         private readonly CertificateManager _certificateManager;
         private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(20);
         private readonly List<string> _certificateThumbprints = new List<string>();
-        private readonly List<FirstLoginInfo> _firstLoginInfos = new List<FirstLoginInfo>();
         private DateTime _lastUpdate;
-        private readonly DateTime _lastFirstLoginInfosUpdate;
-        private string _defaultClientCertificateThumbprint;
         public ClientCertificateValidator(CertificateManager certificateManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _lastUpdate = DateTime.MinValue;
-            _lastFirstLoginInfosUpdate = DateTime.MinValue;
             _certificateManager = certificateManager;
             _logger.Info("ClientCertificateValidator initialized");
-        }
-
-        private List<FirstLoginInfo> FirstLoginInfos
-        {
-            get
-            {
-                if (DateTime.Now - _lastFirstLoginInfosUpdate > _updateInterval)
-                {
-                    _firstLoginInfos.Clear();
-                    _firstLoginInfos.AddRange(DatabaseClass.Instance.GetFirstLoginInfos());
-                }
-
-                return _firstLoginInfos;
-            }
         }
 
         private void UpdateCertificates()

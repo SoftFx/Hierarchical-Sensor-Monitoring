@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using HSMClient.Common;
@@ -14,8 +15,6 @@ using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon;
 using HSMCommon.Certificates;
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
 
 namespace HSMClient
 {
@@ -88,6 +87,17 @@ namespace HSMClient
                 $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
             _connectionsStatus = ConnectionsStatus.Init;
             _uiContext = SynchronizationContext.Current;
+
+            if (IsClientCertificateDefault)
+            {
+                string defaultCAPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultCACrtCertificateName);
+
+                X509Certificate2 defaultCA = new X509Certificate2(defaultCAPath);
+                CertificatesProcessor.AddCertificateToTrustedRootCA(defaultCA);
+            }
+
             StartTreeThread();
         }
 

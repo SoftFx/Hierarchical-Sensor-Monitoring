@@ -19,10 +19,10 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
-            X509Store store = new X509Store(StoreName.AuthRoot, StoreLocation.CurrentUser);
-            store.Open(OpenFlags.ReadWrite);
-            store.Add(Config.ServerCertificate);
-            store.Close();
+            //X509Store store = new X509Store(StoreName.AuthRoot, StoreLocation.CurrentUser);
+            //store.Open(OpenFlags.ReadWrite);
+            //store.Add(Config.ServerCertificate);
+            //store.Close();
 
             try
             {
@@ -68,6 +68,7 @@ namespace HSMServer
                                 portOptions.CheckCertificateRevocation = false;
                                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls11 | SslProtocols.Tls12;
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+                                portOptions.ServerCertificate = Config.ServerCertificate;
                             });
                         });
                     });

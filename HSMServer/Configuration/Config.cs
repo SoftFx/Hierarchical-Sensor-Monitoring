@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Globalization;
 using System.IO;
-using System.Net.NetworkInformation;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Xml;
 using HSMCommon;
 using HSMCommon.Certificates;
@@ -20,6 +20,8 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Private fields
+
+        private static bool _isFirstLaunch = false;
         private static Logger _logger;
         private static string _configFolderPath;
         private static string _configFilePath;
@@ -28,8 +30,6 @@ namespace HSMServer.Configuration
         private static string _certificatesFolderPath;
         private static string _serverCertificatePath;
         private static string _caKeyFilePath;
-        private static int _gRPCPort;
-        private static int _sensorsPort;
         private static string _configFileName = "config.xml";
         private const string _caCertificateFileName = "ca.crt";
         private const string _caKeyFileName = "ca.key.pem";
@@ -40,9 +40,14 @@ namespace HSMServer.Configuration
         {
             get
             {
-                if (string.IsNullOrEmpty(_serverCertName))
+                if (string.IsNullOrEmpty(_serverCertName) && !_isFirstLaunch)
                 {
                     ReadConfig();
+                }
+
+                if (_isFirstLaunch)
+                {
+                    _serverCertName = CommonConstants.DefaultServerPfxCertificateName;
                 }
 
                 return _serverCertName;
@@ -72,7 +77,7 @@ namespace HSMServer.Configuration
         {
             _logger = LogManager.GetCurrentClassLogger();
 
-            InitializeConstants();
+            InitializeIndependentConstants();
 
             if (!Directory.Exists(_configFolderPath))
             {
@@ -81,8 +86,19 @@ namespace HSMServer.Configuration
 
             if (!File.Exists(_configFilePath))
             {
-                FileManager.SafeCreateFile(_configFilePath);
+                _isFirstLaunch = true;
+                CreateDefaultConfig();
+                _serverCertificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultServerPfxCertificateName);
+                string defaultCAPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultCACrtCertificateName);
+                X509Certificate2 cert = new X509Certificate2(defaultCAPath);
+                CertificatesProcessor.AddCertificateToTrustedRootCA(cert);
             }
+
+            InitializeDependentConstants();
 
             if (!Directory.Exists(_caFolderPath))
             {
@@ -91,16 +107,45 @@ namespace HSMServer.Configuration
             }
 
             _logger.Info("Config initialized, config file created/exists");
+
+            if (_isFirstLaunch)
+            {
+                FileManager.SafeCopy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultClientCrtCertificateName), Path.Combine(_certificatesFolderPath,
+                    CommonConstants.DefaultClientCrtCertificateName));
+
+                _logger.Info("Added default client certificate to certificates folder");
+            }
         }
 
-        private static void InitializeConstants()
+        private static void InitializeIndependentConstants()
         {
             _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
             _configFilePath = Path.Combine(_configFolderPath, _configFileName);
             _certificatesFolderPath = Path.Combine(_configFolderPath, _certificatesFolderName);
             _caFolderPath = Path.Combine(_certificatesFolderPath, _CAFolderName);
             _caKeyFilePath = Path.Combine(_caFolderPath, _caKeyFileName);
-            _serverCertificatePath = Path.Combine(_certificatesFolderPath, ServerCertName);
+        }
+
+        private static void InitializeDependentConstants()
+        {
+            if (_isFirstLaunch)
+            {
+                _serverCertificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultServerPfxCertificateName);
+            }
+            else
+            {
+                _serverCertificatePath = Path.Combine(_certificatesFolderPath, ServerCertName);
+            }
+        }
+
+        private static void CreateDefaultConfig()
+        {
+            string defaultConfigContent = GetDefaultConfig();
+            FileManager.SafeWriteToNewFile(_configFilePath, defaultConfigContent);
+
         }
         private static void CreateCertificateAuthority()
         {
@@ -119,9 +164,29 @@ namespace HSMServer.Configuration
         private static X509Certificate2 ReadServerCertificate()
         {
             //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
-            X509Certificate2 certificate =  new X509Certificate2(_serverCertificatePath);
+            if (!_isFirstLaunch)
+            {
+                X509Certificate2 certificate = new X509Certificate2(_serverCertificatePath);
 
-            return certificate;
+                return certificate;
+            }
+
+            string certOriginalPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                CommonConstants.DefaultCertificatesFolderName, CommonConstants.DefaultServerPfxCertificateName);
+
+            X509Certificate2 serverCert = new X509Certificate2(certOriginalPath);
+            try
+            {
+                ThreadPool.QueueUserWorkItem(_ => FileManager.SafeCopy(certOriginalPath, Path.Combine(_certificatesFolderPath,
+                    CommonConstants.DefaultServerPfxCertificateName)));
+                CertificatesProcessor.InstallCertificate(serverCert);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to copy default server certificate");                
+            }
+            
+            return serverCert;
         }
 
         private static X509Certificate2 ReadCACertificate()
@@ -208,7 +273,15 @@ namespace HSMServer.Configuration
             certificateAttr.Value = CommonConstants.DefaultServerPfxCertificateName;
             configElement.Attributes.Append(certificateAttr);
 
-            return string.Empty;
+            StringBuilder sb = new StringBuilder();
+            using (StringWriter sw = new StringWriter(sb))
+            {
+                document.Save(sw);
+            }
+
+            sb.Replace("encoding=\"utf-16\"", string.Empty);
+
+            return sb.ToString();
         }
 
         public static void InstallCertificate(X509Certificate2 certificate)

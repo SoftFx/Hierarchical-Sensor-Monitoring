@@ -11,7 +11,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="HSMServer.xml" />
     <None Remove="Protos\admin_service.proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="HSMServer.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

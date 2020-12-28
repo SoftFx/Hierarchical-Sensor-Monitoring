@@ -46,6 +46,7 @@ namespace HSMClient.Configuration
         private readonly string _configFolderPath;
         private readonly string _certificatesFolderPath;
         private readonly object _configLock = new object();
+        private bool _isFirstLaunch = false;
 
         public string CertificatesFolderPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName,
             _certificatesFolderName);
@@ -104,17 +105,31 @@ namespace HSMClient.Configuration
             if (!Directory.Exists(_certificatesFolderPath))
             {
                 FileManager.SafeCreateDirectory(_certificatesFolderPath);
+                _isFirstLaunch = true;
+                FileManager.SafeCopy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultClientPfxCertificateName),
+                    Path.Combine(_certificatesFolderPath, CommonConstants.DefaultClientPfxCertificateName));
             }
             
 
             if (!File.Exists(_configFilePath))
             {
-                FileManager.SafeCreateFile(_configFilePath);
+                WriteDefaultConfig();
             }
 
             //TODO: save default config
 
 
+        }
+
+        private void WriteDefaultConfig()
+        {
+            ConnectionInfo info = new ConnectionInfo();
+            info.Port = 5015.ToString();
+            info.Address = "https://localhost";
+            info.CertificateFileName = CommonConstants.DefaultClientPfxCertificateName;
+            string configText = ConfigInfoToXml(info);
+            FileManager.SafeWriteToNewFile(_configFilePath, configText);
         }
 
         private bool CheckFoldersFilesExistence()
@@ -189,10 +204,11 @@ namespace HSMClient.Configuration
             }
         }
 
-        private void ConfigInfoToXml(ConnectionInfo connectionInfo)
+        private string ConfigInfoToXml(ConnectionInfo connectionInfo)
         {
             XmlDocument document = new XmlDocument();
             XmlElement rootElement = document.CreateElement("config");
+            document.AppendChild(rootElement);
 
             XmlElement connectionElement = document.CreateElement("connection");
             rootElement.AppendChild(connectionElement);
@@ -204,6 +220,16 @@ namespace HSMClient.Configuration
             XmlAttribute portAttr = document.CreateAttribute("port");
             portAttr.Value = connectionInfo.Port;
             connectionElement.Attributes.Append(portAttr);
+
+            StringBuilder sb = new StringBuilder();
+            using (StringWriter sw = new StringWriter(sb))
+            {
+                document.Save(sw);
+            }
+
+            sb.Replace("encoding=\"utf-16\"", string.Empty);
+
+            return sb.ToString();
         }
 
         public void UpdateClientCertificate(X509Certificate2 certificate, string fileName)

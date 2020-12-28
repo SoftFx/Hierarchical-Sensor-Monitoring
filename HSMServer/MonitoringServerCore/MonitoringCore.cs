@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading;
-using Google.Protobuf;
 using HSMCommon.Certificates;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
@@ -13,10 +11,7 @@ using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using HSMServer.Products;
-using Microsoft.AspNetCore.Http;
 using NLog;
-using Org.BouncyCastle.Pkcs;
-using Org.BouncyCastle.Security;
 using SensorsService;
 
 namespace HSMServer.MonitoringServerCore

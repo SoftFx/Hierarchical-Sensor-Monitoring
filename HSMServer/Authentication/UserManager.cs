@@ -32,8 +32,19 @@ namespace HSMServer.Authentication
             _certificateManager = certificateManager;
             _users = new List<User>();
             _usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
+            if (!File.Exists(_usersFilePath))
+            {
+                AddDefaultUser();
+            }
             CheckUsersUpToDate();
             _logger.Info("UserManager initialized");
+        }
+
+        private void AddDefaultUser()
+        {
+            AddNewUser(CommonConstants.DefaultClientUserName,
+                CommonConstants.DefaultClientCertificateThumbprint,
+                CommonConstants.DefaultClientCrtCertificateName);
         }
 
         private List<User> ParseUsersFile()
@@ -57,6 +68,19 @@ namespace HSMServer.Authentication
             }
 
             return users;
+        }
+
+        private void CreateDefaultUsersFile()
+        {
+            User defaultUser = new User()
+            {
+                CertificateFileName = "default.client.crt", 
+                CertificateThumbprint = CommonConstants.DefaultClientCertificateThumbprint,
+                UserName = "default.client"
+            };
+            string content = GetUsersXml(new List<User>() {defaultUser});
+            FileManager.SafeCreateFile(_usersFilePath);
+            FileManager.SafeWriteText(_usersFilePath, content);
         }
 
         private User ParseUserNode(XmlNode node)
