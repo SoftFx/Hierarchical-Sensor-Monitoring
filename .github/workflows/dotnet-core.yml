@@ -3,8 +3,6 @@ name: .NET Core
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 jobs:
   build:
@@ -21,6 +19,10 @@ jobs:
       run: dotnet restore HSMServer/HSMServer.sln
     - name: Build
       run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+    - name: Install Client Dependencies
+      run: dotnet restore HSMClient/HSMClient.sln
+    - name: Build Client
+      run: dotnet build HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
     - name: Create Artifact Folder
       run: New-Item -Path '${{ github.workspace }}' -Name "Artifacts" -ItemType "directory"
       shell: powershell
