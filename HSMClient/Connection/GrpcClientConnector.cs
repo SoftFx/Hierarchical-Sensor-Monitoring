@@ -6,16 +6,14 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
 using Grpc.Net.Client;
+using HSMClient.Common.Logging;
 using HSMClient.Configuration;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using SensorsService;
 using HSMCommon.Certificates;
-using Org.BouncyCastle.Crypto;
 
 namespace HSMClient.Connection
 {
@@ -55,6 +53,7 @@ namespace HSMClient.Connection
             }
             catch (Exception e)
             {
+                Logger.Error($"CheckServerAvailable error = {e}");
                 return false;
             }
         }

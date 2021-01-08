@@ -38,7 +38,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#ReleaseFilesPath}\{#AppExeFile}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#ReleaseFilesPath}\runtimes\*"; DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs
+;Source: "{#ReleaseFilesPath}\runtimes\*"; DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#ReleaseFilesPath}\*"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppIcon}"; DestDir: "{app}"; Flags: ignoreversion
 
