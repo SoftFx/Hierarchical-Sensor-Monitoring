@@ -50,7 +50,7 @@ namespace HSMServer
                         {
                             httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                         });
-                        options.Listen(IPAddress.Loopback, Config.GrpcPort, listenOptions =>
+                        options.Listen(IPAddress.Any, Config.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
                             listenOptions.UseHttps(Config.ServerCertificate);
@@ -78,7 +78,7 @@ namespace HSMServer
                 {
                     logging.ClearProviders();
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-                }).UseNLog();
+                }).UseNLog().UseConsoleLifetime();
 
         public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
             SslPolicyErrors policyErrors)
