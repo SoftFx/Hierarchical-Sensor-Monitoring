@@ -17,16 +17,6 @@ namespace HSMServer.MonitoringServerCore
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-
-        public static SignedCertificateMessage Convert(Org.BouncyCastle.X509.X509Certificate signedCert,
-            X509Certificate2 caCertificate)
-        {
-            SignedCertificateMessage message = new SignedCertificateMessage();
-            message.CaCertificateBytes = ByteString.CopyFrom(caCertificate.Export(X509ContentType.Cert));
-            message.SignedCertificateBytes = ByteString.CopyFrom(signedCert.GetEncoded());
-            return message;
-        }
-
         public static SignedCertificateMessage Convert(X509Certificate2 signedCertificate,
             X509Certificate2 caCertificate)
         {
