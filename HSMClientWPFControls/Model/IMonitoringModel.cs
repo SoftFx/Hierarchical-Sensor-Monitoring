@@ -8,6 +8,8 @@ namespace HSMClientWPFControls.Model
 {
     public interface IMonitoringModel
     {
+        public string ConnectionAddress { get; }
+        //public DateTime LastConnectedTime { get; } 
         event EventHandler ConnectionStatusChanged;
         public bool IsConnected { get; }
         public bool IsClientCertificateDefault { get; }

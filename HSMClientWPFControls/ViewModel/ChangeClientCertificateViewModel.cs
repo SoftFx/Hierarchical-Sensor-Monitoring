@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Input;
+using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
 
@@ -19,6 +20,7 @@ namespace HSMClientWPFControls.ViewModel
         private void monitoringModel_ConnectionStatusChanged(object sender, EventArgs e)
         {
             OnPropertyChanged(nameof(ConnectionStatusText));
+            OnPropertyChanged(nameof(IsGenerateEnabled));
         }
 
         public ICommand ShowGenerateCertificateWindowCommand { get; private set; }
@@ -35,8 +37,13 @@ namespace HSMClientWPFControls.ViewModel
 
         public string ConnectionStatusText
         {
-            get => _monitoringModel.IsConnected ? "Connection is successful" : "Failed to connect to server!";
+            get => _monitoringModel.IsConnected ? 
+                TextConstants.SuccessfulConnectionText 
+                : TextConstants.BadConnectionText;
         }
 
+        public bool IsGenerateEnabled => _monitoringModel.IsConnected;
+
+        public string ServerAddressText => $"Current server address: '{_monitoringModel.ConnectionAddress}'";
     }
 }

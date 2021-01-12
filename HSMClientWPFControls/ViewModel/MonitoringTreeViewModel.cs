@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
@@ -90,7 +91,13 @@ namespace HSMClientWPFControls.ViewModel
         private ObservableCollection<MonitoringSensorBaseViewModel> _currentSensors;
         private MonitoringNodeBase _selectedNode;
         private MonitoringSensorBaseViewModel _selectedSensor;
+        public string ConnectionAddressText => _model.ConnectionAddress;
 
+        public string ConnectionStatusText => _model.IsConnected
+            ? TextConstants.SuccessfulConnectionText
+            : TextConstants.BadConnectionText;
+
+        public string LastConnectedTimeText => _model.LastConnectedTime.ToString("T");
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
         public ICommand MenuShowSettingsCommand { get; private set; }

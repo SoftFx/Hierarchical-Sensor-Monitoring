@@ -10,5 +10,7 @@
         //public const string Unknown = "Unknown";
         public const string CompletedText = "completed";
         public const string FailedText = "failed";
+        public const string SuccessfulConnectionText = "Connection is successful";
+        public const string BadConnectionText = "Failed to connect to server!";
     }
 }

@@ -31,7 +31,6 @@ namespace HSMClient
 
         #endregion
 
-        private bool _isConnected;
         public event EventHandler ShowProductsEvent;
         public event EventHandler ShowSettingsWindowEvent;
         public event EventHandler ShowGenerateCertificateWindowEvent;
@@ -78,13 +77,15 @@ namespace HSMClient
         private readonly object _lockObject = new object();
         private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
         private readonly SynchronizationContext _uiContext;
+        private readonly string _connectionAddress;
         public ClientMonitoringModel()
         {
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             Nodes = new ObservableCollection<MonitoringNodeBase>();
             Products = new ObservableCollection<ProductViewModel>();
-            _sensorsClient = new GrpcClientConnector(
-                $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}");
+            _connectionAddress =
+                $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}";
+            _sensorsClient = new GrpcClientConnector(_connectionAddress);
             _connectionsStatus = ConnectionsStatus.Init;
             _uiContext = SynchronizationContext.Current;
 
@@ -142,13 +143,15 @@ namespace HSMClient
             {
                 if (IsClientCertificateDefault)
                 {
-                    _isConnected = _sensorsClient.CheckServerAvailable();
+                    bool isConnected = _sensorsClient.CheckServerAvailable();
+                    _connectionsStatus = isConnected ? ConnectionsStatus.Ok : ConnectionsStatus.Error;
                     OnConnectionStatusChangedEvent();
                 }
                 else
                 {
                     var responseObj = _sensorsClient.GetTree();
                     _connectionsStatus = ConnectionsStatus.Ok;
+                    _lastUpdate = DateTime.Now;
                     Update(responseObj);
                 }
             }
@@ -169,6 +172,7 @@ namespace HSMClient
             {
                 var responseObj = _sensorsClient.GetUpdates();
                 _connectionsStatus = ConnectionsStatus.Ok;
+                _lastUpdate = DateTime.Now;
                 Update(responseObj);
             }
             catch (Exception e)
@@ -222,7 +226,9 @@ namespace HSMClient
         public ObservableCollection<ProductViewModel> Products { get; set; }
 
         public event EventHandler ConnectionStatusChanged;
-        public bool IsConnected => _isConnected;
+        public bool IsConnected => _connectionsStatus == ConnectionsStatus.Ok;
+        public string ConnectionAddress => _connectionAddress;
+        //public DateTime LastConnectedTime => _lastUpdate;
 
         public bool IsClientCertificateDefault
         {

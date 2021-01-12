@@ -151,9 +151,17 @@
 
         <GroupBox Grid.Row="2" Grid.Column="1">
             <GroupBox.Header>
-                <TextBlock FontWeight="Medium">Problems</TextBlock>
+                <TextBlock FontWeight="Medium">Information</TextBlock>
             </GroupBox.Header>
-            <DockPanel>
+            <StackPanel>
+                <StackPanel Margin="5,5,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Connection address: "/>
+                    <TextBlock Text="{Binding ConnectionAddressText}"></TextBlock>
+                </StackPanel>
+                <TextBlock Margin="5,5,0,0" Text="{Binding ConnectionStatusText}"/>
+                <!--<TextBlock Margin="5,5,0,0" Text="{Binding LastConnectedTimeText}"/>-->
+            </StackPanel>
+            <!--<DockPanel>
                 <ListView Name="listProblems" ItemsSource="{Binding Problems}" SelectedItem="{Binding SelectedProblem}">
                     <ListView.Resources>
                         <DataTemplate DataType="{x:Type viewModel:ProblemBaseViewModel}">
@@ -164,7 +172,7 @@
                         </DataTemplate>
                     </ListView.Resources>
                 </ListView>
-            </DockPanel>
+            </DockPanel>-->
         </GroupBox>
         <Grid Grid.Row="1" Grid.Column="1">
             <Grid.ColumnDefinitions>

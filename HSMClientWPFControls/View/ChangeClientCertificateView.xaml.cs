@@ -22,10 +22,5 @@ namespace HSMClientWPFControls.View
         {
             InitializeComponent();
         }
-
-        private void UIElement_OnIsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
-        {
-            
-        }
     }
 }
