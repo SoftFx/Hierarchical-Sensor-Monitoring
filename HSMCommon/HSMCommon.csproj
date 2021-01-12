@@ -25,6 +25,8 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="BouncyCastle" Version="1.8.6.1" />
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>..\ThirdPartyLib\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>
