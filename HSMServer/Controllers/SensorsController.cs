@@ -7,7 +7,10 @@ using NLog;
 namespace HSMServer.Controllers
 {
     /// <summary>
-    /// Controller for receiving sensors data via https protocol
+    /// Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods. Default product key is
+    ///
+    ///     2201cd7959dc87a1dc82b8abf29f48
+    /// 
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -25,7 +28,7 @@ namespace HSMServer.Controllers
             _monitoringCore = monitoringCore;
             _logger.Info("Sensors controller started");
         }
-        
+
         /// <summary>
         /// Method receives data of simple type, which has boolean result and string comment
         /// </summary>

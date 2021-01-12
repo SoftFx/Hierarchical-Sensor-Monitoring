@@ -45,7 +45,7 @@ namespace HSMServer
             {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMServer.xml");
-                options.IncludeXmlComments(xmlPath);
+                options.IncludeXmlComments(xmlPath, true);
             });
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)

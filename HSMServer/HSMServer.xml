@@ -5,9 +5,12 @@
     </assembly>
     <members>
         <member name="T:HSMServer.Controllers.SensorsController">
-            <summary>
-            Controller for receiving sensors data via https protocol
-            </summary>
+             <summary>
+             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods. Default product key is
+            
+                 2201cd7959dc87a1dc82b8abf29f48
+             
+             </summary>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.#ctor(HSMServer.MonitoringServerCore.MonitoringCore)">
             <summary>
