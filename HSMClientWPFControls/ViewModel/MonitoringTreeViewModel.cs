@@ -97,7 +97,7 @@ namespace HSMClientWPFControls.ViewModel
             ? TextConstants.SuccessfulConnectionText
             : TextConstants.BadConnectionText;
 
-        public string LastConnectedTimeText => _model.LastConnectedTime.ToString("T");
+        //public string LastConnectedTimeText => _model.LastConnectedTime.ToString("T");
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
         public ICommand MenuShowSettingsCommand { get; private set; }

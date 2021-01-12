@@ -4,7 +4,6 @@ using System.Security.Cryptography.X509Certificates;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
-using Org.BouncyCastle.Crypto;
 
 namespace HSMClient.Connection
 {
