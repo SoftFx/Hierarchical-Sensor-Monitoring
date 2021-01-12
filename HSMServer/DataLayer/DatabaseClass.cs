@@ -275,7 +275,6 @@ namespace HSMServer.DataLayer
         #region Sync code
 
         #region Products' methods
-
         public void AddProductToList(string productName)
         {
             try

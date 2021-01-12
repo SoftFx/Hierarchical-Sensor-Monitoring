@@ -60,11 +60,25 @@ namespace HSMServer.Products
                 }
             }
 
+            if (productNames.Count < 1)
+            {
+                AddDefaultProduct();
+            }
+
             lock (_productsLock)
             {
                 _logger.Info($"{_products.Count} products read, ProductManager initialized");
             }
             
+        }
+
+        private void AddDefaultProduct()
+        {
+            Product product = new Product();
+            product.Name = TextConstants.DefaultProductName;
+            product.Key = TextConstants.DefaultProductKey;
+            product.DateAdded = DateTime.Now;
+            AddProduct(product);
         }
 
         public void RemoveProduct(string name)
@@ -98,9 +112,14 @@ namespace HSMServer.Products
             string key = KeyGenerator.GenerateProductKey(name);
             _logger.Info($"Created product key = '{key}' for product = '{name}'");
             Product product = new Product {Key = key, Name = name, DateAdded = DateTime.Now};
+            AddProduct(product);
+        }
+
+        private void AddProduct(Product product)
+        {
             try
             {
-                DatabaseClass.Instance.AddProductToList(name);
+                DatabaseClass.Instance.AddProductToList(product.Name);
                 DatabaseClass.Instance.PutProductInfo(product);
                 lock (_productsLock)
                 {
@@ -114,10 +133,9 @@ namespace HSMServer.Products
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add new product, name = {name}");
+                _logger.Error(e, $"Failed to add new product, name = {product.Name}");
             }
         }
-
         public bool IsSensorRegistered(string productName, string sensorName)
         {
             lock (_dictionaryLock)
