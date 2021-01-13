@@ -145,7 +145,6 @@ namespace HSMClient
                 {
                     bool isConnected = _sensorsClient.CheckServerAvailable();
                     _connectionsStatus = isConnected ? ConnectionsStatus.Ok : ConnectionsStatus.Error;
-                    OnConnectionStatusChangedEvent();
                 }
                 else
                 {
@@ -164,6 +163,7 @@ namespace HSMClient
                     node.Status = TextConstants.UpdateError;
                 }
             }
+            OnConnectionStatusChangedEvent();
         }
 
         private void Update()
@@ -184,6 +184,7 @@ namespace HSMClient
                     node.Status = TextConstants.UpdateError;
                 }
             }
+            OnConnectionStatusChangedEvent();
         }
 
         private void StartTreeThread()
@@ -226,7 +227,16 @@ namespace HSMClient
         public ObservableCollection<ProductViewModel> Products { get; set; }
 
         public event EventHandler ConnectionStatusChanged;
-        public bool IsConnected => _connectionsStatus == ConnectionsStatus.Ok;
+
+        public bool IsConnected
+        {
+            get
+            {
+                if (_connectionsStatus == ConnectionsStatus.Error)
+                    return false;
+                return _connectionsStatus == ConnectionsStatus.Ok;
+            }
+        }
         public string ConnectionAddress => _connectionAddress;
         //public DateTime LastConnectedTime => _lastUpdate;
 
@@ -285,6 +295,7 @@ namespace HSMClient
 
         private void OnConnectionStatusChangedEvent()
         {
+            OnPropertyChanged(nameof(IsConnected));
             ConnectionStatusChanged?.Invoke(this, EventArgs.Empty);
         }
     }

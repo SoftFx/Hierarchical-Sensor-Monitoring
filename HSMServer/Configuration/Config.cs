@@ -61,7 +61,7 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Public fields
-        public const int GrpcPort = 5015;
+        public const int GrpcPort = 22900;
         public const int SensorsPort = 44330;
         public static X509Certificate2 ServerCertificate => _serverCertificate ??= ReadServerCertificate();
 

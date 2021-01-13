@@ -158,7 +158,7 @@
                     <TextBlock Text="Connection address: "/>
                     <TextBlock Text="{Binding ConnectionAddressText}"></TextBlock>
                 </StackPanel>
-                <TextBlock Margin="5,5,0,0" Text="{Binding ConnectionStatusText}"/>
+                <TextBlock Margin="5,5,0,0" Text="{Binding ConnectionStatusText, UpdateSourceTrigger=PropertyChanged}"/>
                 <!--<TextBlock Margin="5,5,0,0" Text="{Binding LastConnectedTimeText}"/>-->
             </StackPanel>
             <!--<DockPanel>
