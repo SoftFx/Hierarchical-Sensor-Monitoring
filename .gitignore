@@ -92,5 +92,11 @@ _Pvt_Extensions
 *.mdb
 
 # Installer output files
-HSMlientInstaller/Output
+HSMlientInstaller/Output/*
 HSMServerInstaller/Output
+
+# Visual studio files
+.vs/
+
+# Publish profiles
+*.pubxml
