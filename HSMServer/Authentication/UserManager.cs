@@ -130,17 +130,18 @@ namespace HSMServer.Authentication
 
         private void CheckUsersUpToDate()
         {
+            if (DateTime.Now - _lastUsersUpdate <= _usersUpdateTimeSpan) 
+                return;
+
             int count = -1;
-            if (DateTime.Now - _lastUsersUpdate > _usersUpdateTimeSpan)
+            lock (_accessLock)
             {
-                lock (_accessLock)
-                {
-                    _users.Clear();
-                    _users.AddRange(ParseUsersFile());
-                    _lastUsersUpdate = DateTime.Now;
-                    count = _users.Count;
-                }
+                _users.Clear();
+                _users.AddRange(ParseUsersFile());
+                _lastUsersUpdate = DateTime.Now;
+                count = _users.Count;
             }
+
             _logger.Info($"Users read, users count = {count}");
         }
 
