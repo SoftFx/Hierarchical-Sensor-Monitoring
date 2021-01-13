@@ -19,10 +19,6 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
-            //X509Store store = new X509Store(StoreName.AuthRoot, StoreLocation.CurrentUser);
-            //store.Open(OpenFlags.ReadWrite);
-            //store.Add(Config.ServerCertificate);
-            //store.Close();
 
             try
             {

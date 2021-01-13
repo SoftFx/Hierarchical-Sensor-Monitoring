@@ -21,8 +21,6 @@ namespace HSMServer.Products
         {
             _logger = LogManager.GetCurrentClassLogger();
             _products = new List<Product>();
-            //AddProduct("TEST");
-            //DatabaseClass.Instance.ClearProductsList();
             InitializeProducts();
         }
 

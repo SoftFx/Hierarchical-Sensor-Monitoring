@@ -30,9 +30,6 @@ namespace HSMServer
 
             services.AddSingleton<DatabaseClass>();
             services.AddSingleton<MonitoringCore>();
-            //services.AddSingleton<CertificateManager>();
-            //services.AddSingleton<ClientCertificateValidator>();
-            //services.AddSingleton<MonitoringQueueManager>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
