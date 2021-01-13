@@ -440,19 +440,19 @@ namespace HSMServer.DataLayer
                     List<string> typedList =
                         JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(prevValue.CopyToNewArray()));
                     _logger.Info($"Read {typedList.Count} products from list");
-                    typedList.Add(name);
+                    typedList.Remove(name);
 
                     var code = tx.Put(db, bytesKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(typedList)));
                     tx.Commit();
                     if (code != MDBResultCode.Success)
                     {
-                        throw new ServerDatabaseException("Failed to add product", code);
+                        throw new ServerDatabaseException("Failed to remove product", code);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to add product");
+                _logger.Error(ex, "Failed to remove product");
             }
         }
         #endregion
