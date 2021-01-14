@@ -8,7 +8,7 @@
 [Setup]
 AppId={{8FB93B9E-B78C-4B1F-9C19-4BD0663B985C}
 AppName=HSMClient
-AppVerName=HSMClient 0.8
+AppVerName=HSMClient 0.9
 DefaultDirName={pf}\HSMClient
 DefaultGroupName=HSMClient
 AppPublisher=Soft-FX
@@ -23,6 +23,7 @@ Compression=lzma
 SolidCompression=yes
 ;WizardImageFile=
 ;WizardSmallImageFile=
+UsePreviousAppDir=false
 
 [Languages]
 ;
@@ -37,6 +38,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ;Name: "{app}"; Attribs: system
 ;Name: "{app}\Config"
 ;Name: "{app}\Certificates"
+Name: "{app}"; Flags: uninsalwaysuninstall
 
 [Files]
 Source: "{#ReleaseFilesPath}\{#AppExeFile}"; DestDir: "{app}"; Flags: ignoreversion
@@ -62,7 +64,8 @@ Source: "{#AppIcon}"; DestDir: "{app}"; Flags: ignoreversion
 
 
 [UninstallDelete]
-;
+Type: filesandordirs; Name: "{app}\*"
+Type: dirifempty; Name: "{app}"
 
 [Icons]
 ;
