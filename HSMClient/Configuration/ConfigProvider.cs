@@ -126,7 +126,7 @@ namespace HSMClient.Configuration
         private void WriteDefaultConfig()
         {
             ConnectionInfo info = new ConnectionInfo();
-            info.Port = 5015.ToString();
+            info.Port = 22900.ToString();
             info.Address = "https://localhost";
             info.CertificateFileName = CommonConstants.DefaultClientPfxCertificateName;
             string configText = ConfigInfoToXml(info);
