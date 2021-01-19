@@ -34,9 +34,14 @@ namespace HSMServer.Authentication
             _usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
             if (!File.Exists(_usersFilePath))
             {
+                _logger.Info("First launch, users file does not exist");
                 AddDefaultUser();
             }
-            CheckUsersUpToDate();
+            //else
+            //{
+            //    CheckUsersUpToDate();
+            //}
+            
             _logger.Info("UserManager initialized");
         }
 
@@ -49,22 +54,29 @@ namespace HSMServer.Authentication
 
         private List<User> ParseUsersFile()
         {
-            XmlDocument document = new XmlDocument();
-            document.Load(_usersFilePath);
-            
-            XmlNodeList nodes = document.SelectNodes("//users/user");
-
-            if (nodes == null)
-                return new List<User>();
-
             List<User> users = new List<User>();
-            foreach (XmlNode node in nodes)
+            try
             {
-                var user = ParseUserNode(node);
-                if (user != null)
+                XmlDocument document = new XmlDocument();
+                document.Load(_usersFilePath);
+
+                XmlNodeList nodes = document.SelectNodes("//users/user");
+
+                if (nodes == null)
+                    return users;
+
+                foreach (XmlNode node in nodes)
                 {
-                    users.Add(user);
+                    var user = ParseUserNode(node);
+                    if (user != null)
+                    {
+                        users.Add(user);
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to parse users file!");
             }
 
             return users;
@@ -186,17 +198,24 @@ namespace HSMServer.Authentication
 
         private void SaveUsers()
         {
-            List<User> usersCopy = new List<User>();
-            lock (_accessLock)
+            try
             {
-                usersCopy.AddRange(_users);
-            }
+                List<User> usersCopy = new List<User>();
+                lock (_accessLock)
+                {
+                    usersCopy.AddRange(_users);
+                }
 
-            string xml = GetUsersXml(usersCopy);
-            FileManager.SafeDelete(_usersFilePath);
-            //using FileStream fs = new FileStream(_usersFilePath, FileMode.OpenOrCreate);
-            //fs.Write(Encoding.UTF8.GetBytes(xml));
-            FileManager.SafeWriteToNewFile(_usersFilePath, xml);
+                string xml = GetUsersXml(usersCopy);
+                FileManager.SafeDelete(_usersFilePath);
+                //using FileStream fs = new FileStream(_usersFilePath, FileMode.OpenOrCreate);
+                //fs.Write(Encoding.UTF8.GetBytes(xml));
+                FileManager.SafeWriteToNewFile(_usersFilePath, xml);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to save users file!");   
+            }
         }
 
         private string GetUsersXml(List<User> users)
