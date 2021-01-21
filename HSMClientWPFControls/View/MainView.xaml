@@ -159,7 +159,10 @@
                     <TextBlock Text="{Binding ConnectionAddressText}"></TextBlock>
                 </StackPanel>
                 <TextBlock Margin="5,5,0,0" Text="{Binding ConnectionStatusText, UpdateSourceTrigger=PropertyChanged}"/>
-                <!--<TextBlock Margin="5,5,0,0" Text="{Binding LastConnectedTimeText}"/>-->
+                <StackPanel Margin="5,5,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Last updated at "/>
+                    <TextBlock Text="{Binding LastUpdateTimeText, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
             </StackPanel>
             <!--<DockPanel>
                 <ListView Name="listProblems" ItemsSource="{Binding Problems}" SelectedItem="{Binding SelectedProblem}">

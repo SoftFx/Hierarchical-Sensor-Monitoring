@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -46,7 +47,7 @@ namespace HSMClientWPFControls.ViewModel
                     //Dispose managed resources here...
                     foreach (var node in Nodes)
                     {
-                        if (node.SubNodes != null)
+                        if (node?.SubNodes != null)
                         {
                             foreach (var childNode in node.SubNodes)
                             {
@@ -54,10 +55,10 @@ namespace HSMClientWPFControls.ViewModel
                             }
                         }
 
-                        node.Dispose();
+                        node?.Dispose();
                     }
                 }
-                _model.Dispose();
+                _model?.Dispose();
                 // Dispose unmanaged resources here...
 
                 // Set large fields to null here...
@@ -80,11 +81,29 @@ namespace HSMClientWPFControls.ViewModel
         public MonitoringTreeViewModel(IMonitoringModel model) : base(model as ModelBase)
         {
             _model = model;
+            _model.PropertyChanged += model_PropertyChanged;
 
             ShowProductsCommand = new MultipleDelegateCommand(ShowProducts, CanShowProducts);
             SensorDoubleClickCommand = new SingleDelegateCommand(ExpandSensor);
             MenuShowSettingsCommand = new SingleDelegateCommand(ShowSettingsWindow);
             GenerateCertificateCommand = new SingleDelegateCommand(ShowGenerateCertificateWindow);
+        }
+
+        private void model_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            //MessageBox.Show(e.PropertyName);
+            string propName = e.PropertyName;
+            switch (propName)
+            {
+                case "IsConnected":
+                    OnPropertyChanged(nameof(ConnectionStatusText));
+                    break;
+                case "LastUpdateTime":
+                    OnPropertyChanged(nameof(LastUpdateTimeText));
+                    break;
+                default:
+                    break;
+            }
         }
 
         private IMonitoringModel _model;
@@ -97,7 +116,7 @@ namespace HSMClientWPFControls.ViewModel
             ? TextConstants.SuccessfulConnectionText
             : TextConstants.BadConnectionText;
 
-        //public string LastConnectedTimeText => _model.LastConnectedTime.ToString("T");
+        public string LastUpdateTimeText => _model.LastUpdateTime.ToString("T");
         public ICommand ShowProductsCommand { get; private set; }
         public ICommand SensorDoubleClickCommand { get; private set; }
         public ICommand MenuShowSettingsCommand { get; private set; }

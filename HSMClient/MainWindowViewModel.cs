@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Windows;
 using HSMClient.Common;
 using HSMClient.Configuration;
@@ -83,27 +84,10 @@ namespace HSMClient
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
             _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
-            _monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
+            //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
         }
 
         public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
-
-        private void CheckConfiguration()
-        {
-            if (!string.IsNullOrEmpty(ConfigProvider.Instance.ConnectionInfo.Address))
-            {
-                return;
-            }
-
-            var result = MessageBox.Show($"The app is not configured.{Environment.NewLine}Configure now?",
-                $"{TextConstants.AppName} settings", MessageBoxButton.OKCancel, MessageBoxImage.Exclamation);
-            if (result != MessageBoxResult.OK)
-            {
-                return;
-            }
-
-
-        }
 
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {

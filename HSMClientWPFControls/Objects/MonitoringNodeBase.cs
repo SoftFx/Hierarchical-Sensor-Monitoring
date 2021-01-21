@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Threading;
+using System.Windows;
+using System.Windows.Threading;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ViewModel;
@@ -211,6 +214,21 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
+        public void Update(List<MonitoringSensorUpdate> sensorUpdates)
+        {
+            foreach (var sensorUpd in sensorUpdates)
+            {
+                if (!_nameToNode.ContainsKey(sensorUpd.Product))
+                {
+                    MonitoringNodeBase node = new MonitoringNodeBase(sensorUpd.Product, this);
+                    _nameToNode[sensorUpd.Product] = node;
+                    //SynchronizationContext.Current.Send(x => SubNodes.Add(node), null);
+                    Application.Current.Dispatcher.Invoke( delegate { SubNodes.Add(node); });
+                }
+                //SynchronizationContext.Current.Send(x => _nameToNode[sensorUpd.Product].Update(sensorUpd, 0), null);
+                _nameToNode[sensorUpd.Name].Update(sensorUpd, 0);
+            }
+        }
         //Pass the node number, 0 for the root
         public void Update(MonitoringSensorUpdate sensorUpdate, int level)
         {

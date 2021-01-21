@@ -54,6 +54,16 @@ namespace HSMClient.Configuration
 
         #endregion
 
+        public bool IsClientCertificateDefault
+        {
+            get
+            {
+                var cert = ConnectionInfo.ClientCertificate;
+                return cert?.Thumbprint?.Equals(CommonConstants.DefaultClientCertificateThumbprint,
+                    StringComparison.OrdinalIgnoreCase) ?? false;
+            }
+        }
+
         public ConnectionInfo ConnectionInfo
         {
             get { return _connectionInfo; }

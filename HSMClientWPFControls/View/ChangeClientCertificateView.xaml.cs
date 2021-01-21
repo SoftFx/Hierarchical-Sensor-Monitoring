@@ -22,5 +22,10 @@ namespace HSMClientWPFControls.View
         {
             InitializeComponent();
         }
+
+        private void Button_Click()
+        {
+
+        }
     }
 }

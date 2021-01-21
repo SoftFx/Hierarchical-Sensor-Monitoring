@@ -20,32 +20,89 @@ namespace HSMClient
 {
     public class ClientMonitoringModel : ModelBase, IMonitoringModel
     {
-        #region Connection
+        #region Private fields
 
-        public enum ConnectionsStatus
-        {
-            Init,
-            Error,
-            Ok
-        }
+        private readonly ConnectorBase _sensorsClient;
+        private Thread _treeThread;
+        private const int UPDATE_TIMEOUT = 5000;
+        private const int CONNECTION_TIMEOUT = 5000;
+        private DateTime _lastUpdate = DateTime.MinValue;
+        private bool _continue = true;
+        private ConnectionStatus _connectionStatus;
+        private readonly object _lockObject = new object();
+        private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
+        private readonly SynchronizationContext _uiContext;
+        private readonly string _connectionAddress;
+        private bool _isClientCertificateDefault;
 
         #endregion
 
-        public event EventHandler ShowProductsEvent;
-        public event EventHandler ShowSettingsWindowEvent;
-        public event EventHandler ShowGenerateCertificateWindowEvent;
-        public event EventHandler DefaultCertificateReplacedEvent;
-        public void MakeNewClientCertificate(CreateCertificateModel model)
+        #region Fields with notify
+
+        private ConnectionStatus connectionStatus
         {
-            X509Certificate2 caCertificate = default(X509Certificate2);
-            X509Certificate2 newCertificate = _sensorsClient.GetSignedClientCertificate(model, out caCertificate);
-            CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
-            //var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
-            ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
-            _sensorsClient.ReplaceClientCertificate(newCertificate);
-            StartTreeThread();
-            OnDefaultCertificateReplacedEvent();
+            get => _connectionStatus;
+            set
+            {
+                _connectionStatus = value;
+                OnPropertyChanged(nameof(IsConnected));
+            }
         }
+
+        private DateTime lastUpdate
+        {
+            get => _lastUpdate;
+            set
+            {
+                _lastUpdate = value;
+                OnPropertyChanged(nameof(LastUpdateTime));
+            }
+        }
+
+        private bool isClientCertificateDefault
+        {
+            get => _isClientCertificateDefault;
+            set
+            {
+                _isClientCertificateDefault = value;
+                OnPropertyChanged(nameof(IsClientCertificateDefault));
+            }
+        }
+        #endregion
+
+        #region TODO Functionality with connector
+
+        //private IMonitoringConnector _monitoringConnector;
+
+        //public ClientMonitoringModel()
+        //{
+        //    _monitoringConnector = new MonitoringConnector();
+        //    CheckDefaultCA();
+        //}
+
+        //public void MakeNewClientCertificate(CreateCertificateModel model)
+        //{
+        //    X509Certificate2 caCertificate = default(X509Certificate2);
+        //    X509Certificate2 newCertificate = _monitoringConnector.GetSignedClientCertificate(model, out caCertificate);
+        //    CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
+        //    //var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
+        //    ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
+        //    _monitoringConnector.Restart();
+        //}
+        //public ObservableCollection<MonitoringNodeBase> Nodes => _monitoringConnector.Nodes;
+        //public bool IsConnected => _monitoringConnector.IsConnected;
+        //public string ConnectionAddress => _monitoringConnector.ConnectionAddress;
+        //public bool IsClientCertificateDefault => _monitoringConnector.IsClientCertificateDefault;
+        //public override void Dispose()
+        //{
+        //    _monitoringConnector.Stop();
+        //}
+
+        #endregion
+
+        #region Interface
+
+        #region Methods
 
         public void UpdateProducts()
         {
@@ -67,17 +124,67 @@ namespace HSMClient
             return _sensorsClient.AddNewProduct(name);
         }
 
-        private readonly ConnectorBase _sensorsClient;
-        private Thread _treeThread;
-        private const int UPDATE_TIMEOUT = 10000;
-        private const int CONNECTION_TIMEOUT = 10000;
-        private DateTime _lastUpdate = DateTime.MinValue;
-        private bool _continue = true;
-        private ConnectionsStatus _connectionsStatus;
-        private readonly object _lockObject = new object();
-        private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
-        private readonly SynchronizationContext _uiContext;
-        private readonly string _connectionAddress;
+        public void ShowProducts()
+        {
+            OnShowProductsEvent();
+        }
+
+        public void ShowSettingsWindow()
+        {
+            OnShowSettingsWindowEvent();
+        }
+
+        public void ShowGenerateCertificateWindow()
+        {
+            OnShowGenerateCertificateWindowEvent();
+        }
+        #endregion
+
+        #region Public fields
+        public ObservableCollection<ProductViewModel> Products { get; set; }
+        public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
+        public ISensorHistoryConnector SensorHistoryConnector => _sensorsClient;
+        public IProductsConnector ProductsConnector => _sensorsClient;
+        public ISettingsConnector SettingsConnector => _sensorsClient;
+        public bool IsConnected
+        {
+            get
+            {
+                if (_connectionStatus == ConnectionStatus.Error)
+                    return false;
+                return _connectionStatus == ConnectionStatus.Ok;
+            }
+        }
+
+        public string ConnectionAddress => _connectionAddress;
+        public bool IsClientCertificateDefault => _isClientCertificateDefault;
+        public DateTime LastUpdateTime => _lastUpdate;
+        #endregion
+
+        #region Event handlers
+
+        public event EventHandler ShowProductsEvent;
+        public event EventHandler ShowSettingsWindowEvent;
+        public event EventHandler ShowGenerateCertificateWindowEvent;
+
+        #endregion
+
+        #endregion
+
+        public event EventHandler DefaultCertificateReplacedEvent;
+        public void MakeNewClientCertificate(CreateCertificateModel model)
+        {
+            X509Certificate2 caCertificate = default(X509Certificate2);
+            X509Certificate2 newCertificate = _sensorsClient.GetSignedClientCertificate(model, out caCertificate);
+            CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
+            //var convertedCertWithKey = CertificatesProcessor.AddPrivateKey(newCertificate, subjectKeyPair);
+            ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
+            _sensorsClient.ReplaceClientCertificate(newCertificate);
+            UpdateIsCertificateDefault();
+            StartTreeThread();
+            //OnDefaultCertificateReplacedEvent();
+        }
+
         public ClientMonitoringModel()
         {
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
@@ -85,22 +192,18 @@ namespace HSMClient
             Products = new ObservableCollection<ProductViewModel>();
             _connectionAddress =
                 $"{ConfigProvider.Instance.ConnectionInfo.Address}:{ConfigProvider.Instance.ConnectionInfo.Port}";
+            UpdateIsCertificateDefault();
             _sensorsClient = new GrpcClientConnector(_connectionAddress);
-            _connectionsStatus = ConnectionsStatus.Init;
+            connectionStatus = ConnectionStatus.Init;
             _uiContext = SynchronizationContext.Current;
-
-            if (IsClientCertificateDefault)
-            {
-                string defaultCAPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                    CommonConstants.DefaultCertificatesFolderName,
-                    CommonConstants.DefaultCACrtCertificateName);
-
-                X509Certificate2 defaultCA = new X509Certificate2(defaultCAPath);
-                CertificatesProcessor.AddCertificateToTrustedRootCA(defaultCA);
-            }
+            CheckDefaultCA();
 
             StartTreeThread();
         }
+
+        #region Private methods
+
+        #region Monitoring loop
 
         private void MonitoringLoopStep()
         {
@@ -109,21 +212,21 @@ namespace HSMClient
                 try
                 {
                     DateTime stepStart = DateTime.Now;
-                    if (_connectionsStatus == ConnectionsStatus.Init || _connectionsStatus == ConnectionsStatus.Error)
+                    if (connectionStatus == ConnectionStatus.Init || connectionStatus == ConnectionStatus.Error)
                     {
                         Connect();
-                        if (_connectionsStatus == ConnectionsStatus.Init ||
-                            _connectionsStatus == ConnectionsStatus.Error)
+                        if (connectionStatus == ConnectionStatus.Init ||
+                            connectionStatus == ConnectionStatus.Error)
                             if ((DateTime.Now - stepStart).TotalMilliseconds < CONNECTION_TIMEOUT)
                                 Thread.Sleep(Math.Max(0,
-                                    CONNECTION_TIMEOUT - (int) ((DateTime.Now - stepStart).TotalMilliseconds)));
+                                    CONNECTION_TIMEOUT - (int)((DateTime.Now - stepStart).TotalMilliseconds)));
                     }
                     else
                     {
                         Update();
                         if ((DateTime.Now - stepStart).TotalMilliseconds < UPDATE_TIMEOUT)
                             Thread.Sleep(Math.Max(0,
-                                UPDATE_TIMEOUT - (int) ((DateTime.Now - stepStart).TotalMilliseconds)));
+                                UPDATE_TIMEOUT - (int)((DateTime.Now - stepStart).TotalMilliseconds)));
                     }
                 }
                 catch (ThreadInterruptedException ex)
@@ -134,7 +237,7 @@ namespace HSMClient
                 {
                     Logger.Error($"Client monitoring model: MonitoringLoopStep error = {ex}");
                 }
-                
+
             }
         }
         private void Connect()
@@ -144,26 +247,23 @@ namespace HSMClient
                 if (IsClientCertificateDefault)
                 {
                     bool isConnected = _sensorsClient.CheckServerAvailable();
-                    _connectionsStatus = isConnected ? ConnectionsStatus.Ok : ConnectionsStatus.Error;
+                    connectionStatus = isConnected ? ConnectionStatus.Ok : ConnectionStatus.Error;
                 }
                 else
                 {
                     var responseObj = _sensorsClient.GetTree();
-                    _connectionsStatus = ConnectionsStatus.Ok;
-                    _lastUpdate = DateTime.Now;
+                    connectionStatus = ConnectionStatus.Ok;
+                    lastUpdate = DateTime.Now;
                     Update(responseObj);
                 }
             }
             catch (Exception e)
             {
                 Logger.Error($"ClientMonitoringModel: Connect error: {e}");
-                _connectionsStatus = ConnectionsStatus.Error;
-                foreach (var node in Nodes)
-                {
-                    node.Status = TextConstants.UpdateError;
-                }
+                connectionStatus = ConnectionStatus.Error;
+                _uiContext.Send(x => Nodes?.Clear(), null);
+                _nameToNode.Clear();
             }
-            OnConnectionStatusChangedEvent();
         }
 
         private void Update()
@@ -171,20 +271,19 @@ namespace HSMClient
             try
             {
                 var responseObj = _sensorsClient.GetUpdates();
-                _connectionsStatus = ConnectionsStatus.Ok;
-                _lastUpdate = DateTime.Now;
+                connectionStatus = ConnectionStatus.Ok;
+                lastUpdate = DateTime.Now;
                 Update(responseObj);
             }
             catch (Exception e)
             {
                 Logger.Error($"ClientMonitoringModel: Update error: {e}");
-                _connectionsStatus = ConnectionsStatus.Error;
+                connectionStatus = ConnectionStatus.Error;
                 foreach (var node in Nodes)
                 {
                     node.Status = TextConstants.UpdateError;
                 }
             }
-            OnConnectionStatusChangedEvent();
         }
 
         private void StartTreeThread()
@@ -202,7 +301,7 @@ namespace HSMClient
                     Logger.Error($"Failed to stop working tree thread, error = {e}");
                 }
             }
-            _connectionsStatus = ConnectionsStatus.Init;
+            connectionStatus = ConnectionStatus.Init;
             _treeThread = new Thread(MonitoringLoopStep);
             _treeThread.Name = $"Thread_{DateTime.Now.ToLongTimeString()}";
             _treeThread.Start();
@@ -223,56 +322,26 @@ namespace HSMClient
                 //_nameToNode[sensorUpd.Product].Update(Converter.Convert(sensorUpd), 1);
             }
         }
-        public ObservableCollection<MonitoringNodeBase> Nodes { get; set; }
-        public ObservableCollection<ProductViewModel> Products { get; set; }
 
-        public event EventHandler ConnectionStatusChanged;
+        #endregion
 
-        public bool IsConnected
+        private void UpdateIsCertificateDefault()
         {
-            get
+            isClientCertificateDefault = ConfigProvider.Instance.IsClientCertificateDefault;
+        }
+        private void CheckDefaultCA()
+        {
+            if (IsClientCertificateDefault)
             {
-                if (_connectionsStatus == ConnectionsStatus.Error)
-                    return false;
-                return _connectionsStatus == ConnectionsStatus.Ok;
+                string defaultCAPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    CommonConstants.DefaultCertificatesFolderName,
+                    CommonConstants.DefaultCACrtCertificateName);
+
+                X509Certificate2 defaultCA = new X509Certificate2(defaultCAPath);
+                CertificatesProcessor.AddCertificateToTrustedRootCA(defaultCA);
             }
         }
-        public string ConnectionAddress => _connectionAddress;
-        //public DateTime LastConnectedTime => _lastUpdate;
 
-        public bool IsClientCertificateDefault
-        {
-            get
-            {
-                var cert = ConfigProvider.Instance.ConnectionInfo.ClientCertificate;
-                return cert?.Thumbprint?.Equals(CommonConstants.DefaultClientCertificateThumbprint,
-                    StringComparison.OrdinalIgnoreCase) ?? false;
-            }
-        }
-            
-        public ISensorHistoryConnector SensorHistoryConnector => _sensorsClient;
-        public IProductsConnector ProductsConnector => _sensorsClient;
-        public ISettingsConnector SettingsConnector => _sensorsClient;
-
-        public override void Dispose()
-        {
-            _continue = false;
-        }
-
-        public void ShowProducts()
-        {
-            OnShowProductsEvent();
-        }
-
-        public void ShowSettingsWindow()
-        {
-            OnShowSettingsWindowEvent();
-        }
-
-        public void ShowGenerateCertificateWindow()
-        {
-            OnShowGenerateCertificateWindowEvent();
-        }
         private void OnShowSettingsWindowEvent()
         {
             ShowSettingsWindowEvent?.Invoke(this, EventArgs.Empty);
@@ -295,8 +364,41 @@ namespace HSMClient
 
         private void OnConnectionStatusChangedEvent()
         {
-            OnPropertyChanged(nameof(IsConnected));
             ConnectionStatusChanged?.Invoke(this, EventArgs.Empty);
         }
+        #endregion
+
+
+
+
+
+        public event EventHandler ConnectionStatusChanged;
+
+        //public bool IsConnected
+        //{
+        //    get
+        //    {
+        //        if (ConnectionStatus == ConnectionStatus.Error)
+        //            return false;
+        //        return ConnectionStatus == ConnectionStatus.Ok;
+        //    }
+        //}
+        //public string ConnectionAddress => _connectionAddress;
+        //public DateTime LastUpdateTime => _lastUpdate;
+        
+        //{
+        //    get
+        //    {
+        //        var cert = ConfigProvider.Instance.ConnectionInfo.ClientCertificate;
+        //        return cert?.Thumbprint?.Equals(CommonConstants.DefaultClientCertificateThumbprint,
+        //            StringComparison.OrdinalIgnoreCase) ?? false;
+        //    }
+        //}
+
+        public override void Dispose()
+        {
+            _continue = false;
+        }
+        
     }
 }
