@@ -64,9 +64,9 @@ namespace HSMClientWPFControls.Bases
 
         #endregion
 
-        public ViewModelBase(ModelBase model = null)
+        protected ViewModelBase(ModelBase model = null)
         {
-            if (model as ModelBase != null)
+            if (model != null)
             {
                 model.PropertyChanged += model_PropertyChanged;
                 _model = model;
@@ -78,13 +78,8 @@ namespace HSMClientWPFControls.Bases
 
         protected Dictionary<string, string> _modelPropertyToProperty;
 
-        public Dictionary<string, string> ModelPropertyToProperty
-        {
-            get
-            {
-                return _modelPropertyToProperty;
-            }
-        }
+        public Dictionary<string, string> ModelPropertyToProperty => _modelPropertyToProperty;
+
         private void model_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (_modelPropertyToProperty.ContainsKey(e.PropertyName))
@@ -97,7 +92,7 @@ namespace HSMClientWPFControls.Bases
 
         public ModelBase Model
         {
-            get { return _model; }
+            get => _model;
             set
             {
                 if (_model != null)

@@ -24,8 +24,8 @@ namespace HSMClient
 
         private readonly ConnectorBase _sensorsClient;
         private Thread _treeThread;
-        private const int UPDATE_TIMEOUT = 5000;
-        private const int CONNECTION_TIMEOUT = 5000;
+        private const int UPDATE_TIMEOUT = 3000;
+        private const int CONNECTION_TIMEOUT = 3000;
         private DateTime _lastUpdate = DateTime.MinValue;
         private bool _continue = true;
         private ConnectionStatus _connectionStatus;
