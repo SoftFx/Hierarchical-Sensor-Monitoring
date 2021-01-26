@@ -8,4 +8,8 @@
     <Folder Include="DataSender\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SensorDataObjects\HSMSensorDataObjects.csproj" />
+  </ItemGroup>
+
 </Project>

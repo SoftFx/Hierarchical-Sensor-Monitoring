@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using HSMDataCollector.Base;
 
@@ -28,11 +27,11 @@ namespace HSMDataCollector.Bar
         {
             _syncRoot = new object();
             ValuesList = new List<T>();
-            _barTimer = new Timer(SendData, null, collectPeriod, collectPeriod);
+            _barTimer = new Timer(SendDataTimer, null, collectPeriod, collectPeriod);
         }
 
         //public event EventHandler<BarCollectedEventArgs<T>> BarCollected;
 
-        protected abstract void SendData(object state);
+        protected abstract void SendDataTimer(object state);
     }
 }

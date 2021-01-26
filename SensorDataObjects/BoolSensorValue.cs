@@ -1,9 +1,7 @@
-﻿namespace SensorDataObjects
+﻿namespace HSMSensorDataObjects
 {
-    public class BoolSensorValue
+    public class BoolSensorValue : SensorValueBase, ISensorValue
     {
         public bool BoolValue { get; set; }
-        public string Key { get; set; }
-        public string Path { get; set; }
     }
 }

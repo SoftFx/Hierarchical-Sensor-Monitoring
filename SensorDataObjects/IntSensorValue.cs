@@ -1,13 +1,7 @@
-﻿using System;
-
-namespace SensorDataObjects
+﻿namespace HSMSensorDataObjects
 {
-    public class IntSensorValue
+    public class IntSensorValue : SensorValueBase, ISensorValue
     {
         public int IntValue { get; set; }
-        public string Key { get; set; }
-        public string Path { get; set; }
-        public DateTime Time { get; set; }
-        public string Comment { get; set; }
     }
 }
