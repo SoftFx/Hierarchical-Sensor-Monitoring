@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography.X509Certificates;
+using HSMSensorDataObjects;
 using HSMServer.Model;
 using SensorsService;
 
@@ -6,8 +7,15 @@ namespace HSMServer.MonitoringServerCore
 {
     public interface IMonitoringCore
     {
-        public void AddSensorInfo(JobResult info);
-        //public string AddSensorInfo(NewJobResult info);
+        public void AddSensorValue(JobResult value);
+        public void AddSensorValue(BoolSensorValue value);
+        public void AddSensorValue(IntSensorValue value);
+        public void AddSensorValue(DoubleSensorValue value);
+        public void AddSensorValue(StringSensorValue value);
+        public void AddSensorValue(IntBarSensorValue value);
+        public void AddSensorValue(DoubleBarSensorValue value);
+
+        //public string AddSensorValue(NewJobResult value);
         public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate);
         public SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate);
         public ProductsListMessage GetProductsList(X509Certificate2 clientCertificate);

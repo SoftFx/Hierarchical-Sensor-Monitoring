@@ -151,7 +151,7 @@ namespace HSMServer.DataLayer
         //                var code = tx.Put(db, Encoding.UTF8.GetBytes(keyString), Encoding.UTF8.GetBytes(json));
         //                tx.Commit();
 
-        //                if (code != MDBResultCode.Success)
+        //                if (code != MDBResultCode.BoolValue)
         //                {
         //                    throw new ServerDatabaseException($"Failed to put data, code = {code}");
         //                }

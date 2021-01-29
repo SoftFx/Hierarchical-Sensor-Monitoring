@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using HSMSensorDataObjects;
 using HSMServer.DataLayer.Model;
 using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Model;
@@ -30,26 +31,26 @@ namespace HSMServer.MonitoringServerCore
         public static SensorDataObject ConvertToDatabase(JobResult jobResult, DateTime timeCollected)
         {
             SensorDataObject result = new SensorDataObject();
-            result.DataType = SensorDataTypes.JobSensor;
+            result.DataType = SensorDataTypes.BoolSensor;
             result.Path = jobResult.Path;
             result.Time = jobResult.Time;
             result.Timestamp = GetTimestamp(result.Time);
-            TypedJobSensorData typedData = new TypedJobSensorData { Success = jobResult.Success };
+            BoolSensorData typedData = new BoolSensorData { BoolValue = jobResult.Success };
             result.TypedData = JsonSerializer.Serialize(typedData);
             result.TimeCollected = timeCollected;
             return result;
         }
-        public static SensorDataObject ConvertToDatabase(NewJobResult newJobResult)
-        {
-            SensorDataObject result = new SensorDataObject();
-            result.DataType = SensorDataTypes.JobSensor;
-            result.Path = newJobResult.Path;
-            result.Time = newJobResult.Time;
-            result.Timestamp = GetTimestamp(newJobResult.Time);
-            TypedJobSensorData typedData = new TypedJobSensorData { Success = newJobResult.Success };
-            result.TypedData = JsonSerializer.Serialize(typedData);
-            return result;
-        }
+        //public static SensorDataObject ConvertToDatabase(NewJobResult newJobResult)
+        //{
+        //    SensorDataObject result = new SensorDataObject();
+        //    result.DataType = SensorDataTypes.BoolSensor;
+        //    result.Path = newJobResult.Path;
+        //    result.Time = newJobResult.Time;
+        //    result.Timestamp = GetTimestamp(newJobResult.Time);
+        //    BoolSensorData typedData = new BoolSensorData { BoolValue = newJobResult.Success };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
 
         public static SensorInfo ConvertToInfo(NewJobResult newJobResult)
         {
@@ -81,34 +82,56 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage result = new SensorUpdateMessage();
             result.Product = newJobResult.ProductName;
             result.Name = newJobResult.SensorName;
-            result.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
+            result.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor;
             result.Path = newJobResult.Path;
-            TypedJobSensorData typedData = new TypedJobSensorData { Success = newJobResult.Success };
+            BoolSensorData typedData = new BoolSensorData { BoolValue = newJobResult.Success };
             result.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(typedData)));
             return result;
         }
         public static SensorUpdateMessage Convert(JobResult jobResult, string productName, DateTime timeCollected)
         {
             SensorUpdateMessage update = new SensorUpdateMessage();
-            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor;
             update.Path = jobResult.Path;
             update.Product = productName;
             update.Name = ExtractSensor(jobResult.Path);
-            TypedJobSensorData data = new TypedJobSensorData
+            BoolSensorData data = new BoolSensorData
             {
                 Comment =  jobResult.Comment,
-                Success =  jobResult.Success
+                BoolValue =  jobResult.Success
             };
             update.DataObject = ByteString.CopyFrom(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(data)));
             update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
             return update;
         }
 
+        public static SensorUpdateMessage Convert(BoolSensorValue value, string productName, DateTime timeCollected)
+        {
+            SensorUpdateMessage update = new SensorUpdateMessage();
+            AddCommonValues(value as SensorValueBase, productName, timeCollected, update);
+            BoolSensorData data = new BoolSensorData
+            {
+                Comment = value.Comment,
+                BoolValue = value.BoolValue
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            
+            return update;
+        }
+
+        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, SensorUpdateMessage update)
+        {
+            update.Path = value.Path;
+            update.Product = productName;
+            update.Name = ExtractSensor(value.Path);
+            update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
+        }
+
         #endregion
 
         #region Typed data objects
 
-        
+
 
         #endregion
 
@@ -149,14 +172,25 @@ namespace HSMServer.MonitoringServerCore
             result.Q = rsaParameters.Q.ToByteArray();
             return result;
         }
+
         #region Sub-methods
 
         private static SensorUpdateMessage.Types.SensorObjectType Convert(SensorDataTypes type)
         {
             switch (type)
             {
-                case SensorDataTypes.JobSensor:
-                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor;
+                case SensorDataTypes.BoolSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor;
+                case SensorDataTypes.DoubleSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeDoubleSensor;
+                case SensorDataTypes.IntSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeIntSensor;
+                case SensorDataTypes.StringSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeStringSensor;
+                case SensorDataTypes.BarIntSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarIntSensor;
+                case SensorDataTypes.BarDoubleSensor:
+                    return SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarDoubleSensor;
             }
             throw new Exception($"Unknown SensorDataType = {type}!");
         }

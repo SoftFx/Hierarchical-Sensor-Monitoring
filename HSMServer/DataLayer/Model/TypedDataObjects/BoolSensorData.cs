@@ -1,8 +1,8 @@
 ﻿namespace HSMServer.DataLayer.Model.TypedDataObjects
 {
-    public class TypedJobSensorData
+    public class BoolSensorData
     {
-        public bool Success { get; set; }
+        public bool BoolValue { get; set; }
         public string Comment { get; set; }
     }
 }

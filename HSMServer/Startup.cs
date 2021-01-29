@@ -50,7 +50,7 @@ namespace HSMServer
         {
             app.UseSwagger(c =>
             {
-                //c.RouteTemplate = "api/swagger/swagger/{documentname}/swagger.json";
+                //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";
                 c.SerializeAsV2 = true;
             });
 

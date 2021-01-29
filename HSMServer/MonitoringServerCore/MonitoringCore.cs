@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using HSMCommon.Certificates;
+using HSMSensorDataObjects;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -84,32 +85,66 @@ namespace HSMServer.MonitoringServerCore
 
         #region Sensor saving
 
-        public void AddSensorInfo(JobResult info)
+        public void AddSensorValue(JobResult value)
         {
-            string productName = _productManager.GetProductNameByKey(info.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
 
-            SensorUpdateMessage updateMessage = Converter.Convert(info, productName, timeCollected);
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject obj = Converter.ConvertToDatabase(info, timeCollected);
+            SensorDataObject obj = Converter.ConvertToDatabase(value, timeCollected);
 
             string sensorName = updateMessage.Name;
             if (!_productManager.IsSensorRegistered(productName, sensorName))
             {
-                _productManager.AddSensor(new SensorInfo(){ Path = info.Path, ProductName = productName, SensorName = sensorName });
+                _productManager.AddSensor(new SensorInfo(){ Path = value.Path, ProductName = productName, SensorName = sensorName });
             }
 
             ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
         }
 
-        //public string AddSensorInfo(NewJobResult info)
+        public void AddSensorValue(BoolSensorValue value)
+        {
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+
+        }
+
+        public void AddSensorValue(IntSensorValue value)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddSensorValue(DoubleSensorValue value)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddSensorValue(StringSensorValue value)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddSensorValue(IntBarSensorValue value)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddSensorValue(DoubleBarSensorValue value)
+        {
+            throw new NotImplementedException();
+        }
+
+
+        //public string AddSensorInfo(NewJobResult value)
         //{
-        //    SensorUpdateMessage updateMessage = Converter.Convert(info);
+        //    SensorUpdateMessage updateMessage = Converter.Convert(value);
         //    _queueManager.AddSensorData(updateMessage);
 
-        //    var convertedInfo = Converter.ConvertToInfo(info);
+        //    var convertedInfo = Converter.ConvertToInfo(value);
             
         //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
         //    //DatabaseClass.Instance.AddSensor(convertedInfo);

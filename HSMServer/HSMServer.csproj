@@ -12,18 +12,12 @@
 
   <ItemGroup>
     <None Remove="HSMServer.xml" />
-    <None Remove="Protos\admin_service.proto" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="HSMServer.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Protobuf Include="Protos\admin_service.proto" GrpcServices="Server" />
-    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Server" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,10 +40,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Images\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\Protos\sensors_service.proto" GrpcServices="Server" Link="Protos\sensors_service.proto" />
   </ItemGroup>
 
   <ItemGroup>

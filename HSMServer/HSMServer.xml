@@ -18,11 +18,46 @@
             </summary>
             <param name="monitoringCore"></param>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMServer.Model.JobResult)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.BoolSensorValue)">
             <summary>
-            Method receives data of simple type, which has boolean result and string comment
+            Receives value of bool sensor
             </summary>
-            <param name="jobResult"></param>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.IntSensorValue)">
+            <summary>
+            Receives value of int sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.DoubleSensorValue)">
+            <summary>
+            Receives value of double sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.StringSensorValue)">
+            <summary>
+            Receives value of string sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.DoubleBarSensorValue)">
+            <summary>
+            Receives value of double bar sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.IntBarSensorValue)">
+            <summary>
+            Receives value of integer bar sensor
+            </summary>
+            <param name="sensorValue"></param>
             <returns></returns>
         </member>
         <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
@@ -31,33 +66,11 @@
             Info about the first client connection from a particular address
             </summary>
         </member>
-        <member name="T:AdminService.AdminServiceReflection">
-            <summary>Holder for reflection information generated from Protos/admin_service.proto</summary>
-        </member>
-        <member name="P:AdminService.AdminServiceReflection.Descriptor">
-            <summary>File descriptor for Protos/admin_service.proto</summary>
-        </member>
-        <member name="P:AdminService.Admin.Descriptor">
-            <summary>Service descriptor</summary>
-        </member>
-        <member name="T:AdminService.Admin.AdminBase">
-            <summary>Base class for server-side implementations of Admin</summary>
-        </member>
-        <member name="M:AdminService.Admin.BindService(AdminService.Admin.AdminBase)">
-            <summary>Creates service definition that can be registered with a server</summary>
-            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
-        </member>
-        <member name="M:AdminService.Admin.BindService(Grpc.Core.ServiceBinderBase,AdminService.Admin.AdminBase)">
-            <summary>Register service method with a service binder with or without implementation. Useful when customizing the  service binding logic.
-            Note: this method is part of an experimental API that can change or be removed without any prior notice.</summary>
-            <param name="serviceBinder">Service methods will be bound by calling <c>AddMethod</c> on this object.</param>
-            <param name="serviceImpl">An object implementing the server-side handling logic.</param>
-        </member>
         <member name="T:SensorsService.SensorsServiceReflection">
-            <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
+            <summary>Holder for reflection information generated from sensors_service.proto</summary>
         </member>
         <member name="P:SensorsService.SensorsServiceReflection.Descriptor">
-            <summary>File descriptor for Protos/sensors_service.proto</summary>
+            <summary>File descriptor for sensors_service.proto</summary>
         </member>
         <member name="F:SensorsService.SensorsUpdateMessage.SensorsFieldNumber">
             <summary>Field number for the "sensors" field.</summary>
