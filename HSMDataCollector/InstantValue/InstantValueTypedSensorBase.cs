@@ -4,7 +4,7 @@
     {
         protected T Value;
         
-        protected InstantValueTypedSensorBase(string name, string path, string productKey, string address) : base(name, path, productKey, address)
+        protected InstantValueTypedSensorBase(string path, string productKey, string address) : base(path, productKey, address)
         {
         }
     }

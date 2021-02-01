@@ -6,7 +6,7 @@ namespace HSMDataCollector.Core
     {
         //void Initialize();
         //void CheckConnection();
-        ISensor CreateSensor(string name, string path, SensorType type);
+        ISensor CreateSensor(string path, SensorType type);
         
     }
 }

@@ -44,8 +44,12 @@ message SensorUpdateMessage {
 	TransactionType ActionType = 4;
 	enum SensorObjectType {
 		OBJECT_TYPE_NONE = 0;
-		OBJECT_TYPE_JOB_SENSOR = 1;
-		OBJECT_TYPE_PERFORMANCE_SENSOR = 2;
+		OBJECT_TYPE_BOOL_SENSOR = 1;
+		OBJECT_TYPE_INT_SENSOR = 2;
+		OBJECT_TYPE_DOUBLE_SENSOR = 3;
+		OBJECT_TYPE_STRING_SENSOR = 4;
+		OBJECT_TYPE_BAR_DOUBLE_SENSOR = 5;
+		OBJECT_TYPE_BAR_INT_SENSOR = 6;
 	}
 	SensorObjectType ObjectType = 5;
 	bytes dataObject = 6;

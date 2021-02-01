@@ -60,7 +60,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -80,7 +80,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -100,7 +100,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -120,7 +120,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -140,7 +140,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -160,7 +160,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                //_monitoringCore.AddSensorInfo(sensorValue);
+                _monitoringCore.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)

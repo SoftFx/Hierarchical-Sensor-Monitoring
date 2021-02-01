@@ -12,12 +12,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
-
-  <ItemGroup>
-    <Protobuf Include="Protos\sensors_service.proto" GrpcService="Client" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HSMClientWPFControls\HSMClientWPFControls.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Client" />
   </ItemGroup>
 
 </Project>

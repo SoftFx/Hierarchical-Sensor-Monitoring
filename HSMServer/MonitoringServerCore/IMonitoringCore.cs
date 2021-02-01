@@ -14,6 +14,7 @@ namespace HSMServer.MonitoringServerCore
         public void AddSensorValue(StringSensorValue value);
         public void AddSensorValue(IntBarSensorValue value);
         public void AddSensorValue(DoubleBarSensorValue value);
+        //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);
         public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate);

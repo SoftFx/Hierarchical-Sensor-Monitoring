@@ -181,7 +181,8 @@ namespace HSMClient
             ConfigProvider.Instance.UpdateClientCertificate(newCertificate, model.CommonName);
             _sensorsClient.ReplaceClientCertificate(newCertificate);
             UpdateIsCertificateDefault();
-            StartTreeThread();
+            connectionStatus = ConnectionStatus.Init;
+            //StartTreeThread();
             //OnDefaultCertificateReplacedEvent();
         }
 

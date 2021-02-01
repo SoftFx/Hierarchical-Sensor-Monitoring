@@ -85,6 +85,18 @@ namespace HSMServer.MonitoringServerCore
 
         #region Sensor saving
 
+        private void SaveSensorValue(SensorUpdateMessage updateMessage, string productName, DateTime originalTime)
+        {
+            SensorDataObject obj = Converter.ConvertToDatabase(updateMessage, originalTime);
+
+            string sensorName = updateMessage.Name;
+            if (!_productManager.IsSensorRegistered(productName, sensorName))
+            {
+                _productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = sensorName });
+            }
+
+            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
+        }
         public void AddSensorValue(JobResult value)
         {
             string productName = _productManager.GetProductNameByKey(value.Key);
@@ -110,32 +122,65 @@ namespace HSMServer.MonitoringServerCore
             string productName = _productManager.GetProductKeyByName(value.Key);
 
             DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
 
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
         public void AddSensorValue(IntSensorValue value)
         {
-            throw new NotImplementedException();
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
         public void AddSensorValue(DoubleSensorValue value)
         {
-            throw new NotImplementedException();
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
         public void AddSensorValue(StringSensorValue value)
         {
-            throw new NotImplementedException();
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
         public void AddSensorValue(IntBarSensorValue value)
         {
-            throw new NotImplementedException();
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
         public void AddSensorValue(DoubleBarSensorValue value)
         {
-            throw new NotImplementedException();
+            string productName = _productManager.GetProductKeyByName(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SaveSensorValue(updateMessage, productName, value.Time);
         }
 
 

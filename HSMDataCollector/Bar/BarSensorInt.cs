@@ -9,8 +9,8 @@ namespace HSMDataCollector.Bar
     public class BarSensorInt : BarSensorBase<int>
     {
         private long _sum = 0;
-        public BarSensorInt(string name, string path, string productKey, string serverAddress, int collectPeriod = 5000)
-            : base(name, path, productKey, serverAddress, collectPeriod)
+        public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 5000)
+            : base(path, productKey, serverAddress, collectPeriod)
         {
             Min = Int32.MaxValue;
             Max = Int32.MinValue;

@@ -7,7 +7,7 @@ namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorBool : InstantValueTypedSensorBase<bool>
     {
-        public InstantValueSensorBool(string name, string path, string productKey, string address) : base(name, path, productKey, address)
+        public InstantValueSensorBool(string path, string productKey, string address) : base(path, productKey, address)
         {
         }
 

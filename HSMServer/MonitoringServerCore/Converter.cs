@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -11,6 +12,7 @@ using HSMServer.Model;
 using NLog;
 using SensorsService;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
+using Timestamp = Google.Protobuf.WellKnownTypes.Timestamp;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -27,7 +29,47 @@ namespace HSMServer.MonitoringServerCore
             return message;
         }
         #region Convert to database objects
+        
+        private static void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataObject dataObject)
+        {
+            dataObject = new SensorDataObject();
+            dataObject.Path = value.Path;
+            dataObject.Time = value.Time;
+            dataObject.TimeCollected = timeCollected;
+            dataObject.Timestamp = GetTimestamp(value.Time);
+        }
 
+        private static SensorDataTypes Convert(SensorUpdateMessage.Types.SensorObjectType type)
+        {
+            switch (type)
+            {
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor:
+                    return SensorDataTypes.BoolSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeDoubleSensor:
+                    return SensorDataTypes.DoubleSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeIntSensor:
+                    return SensorDataTypes.IntSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeStringSensor:
+                    return SensorDataTypes.StringSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarDoubleSensor:
+                    return SensorDataTypes.BarDoubleSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarIntSensor:
+                    return SensorDataTypes.BarIntSensor;
+                default:
+                    throw new InvalidEnumArgumentException($"Invalid SensorDataType: {type}");
+            }
+        }
+        public static SensorDataObject ConvertToDatabase(SensorUpdateMessage update, DateTime originalTime)
+        {
+            SensorDataObject result = new SensorDataObject();
+            result.Path = update.Path;
+            result.Time = originalTime;
+            result.TypedData = update.DataObject.ToString(Encoding.UTF8);
+            result.TimeCollected = update.Time.ToDateTime();
+            result.Timestamp = GetTimestamp(result.TimeCollected);
+            result.DataType = Convert(update.ObjectType);
+            return result;
+        }
         public static SensorDataObject ConvertToDatabase(JobResult jobResult, DateTime timeCollected)
         {
             SensorDataObject result = new SensorDataObject();
@@ -38,6 +80,83 @@ namespace HSMServer.MonitoringServerCore
             BoolSensorData typedData = new BoolSensorData { BoolValue = jobResult.Success };
             result.TypedData = JsonSerializer.Serialize(typedData);
             result.TimeCollected = timeCollected;
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.BoolSensor;
+
+            BoolSensorData typedData = new BoolSensorData() {BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment};
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.IntSensor;
+
+            IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.DoubleSensor;
+
+            DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.StringSensor;
+
+            StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.BarIntSensor;
+
+            IntBarSensorData typedData = new IntBarSensorData()
+            {
+                Max = sensorValue.Max, Min = sensorValue.Min, Mean = sensorValue.Mean,
+                Count = sensorValue.Count, Comment = sensorValue.Comment
+            };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorDataTypes.BarIntSensor;
+
+            DoubleBarSensorData typedData = new DoubleBarSensorData()
+            {
+                Max = sensorValue.Max,
+                Min = sensorValue.Min,
+                Mean = sensorValue.Mean,
+                Count = sensorValue.Count,
+                Comment = sensorValue.Comment
+            };
+            result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
         //public static SensorDataObject ConvertToDatabase(NewJobResult newJobResult)
@@ -107,8 +226,8 @@ namespace HSMServer.MonitoringServerCore
 
         public static SensorUpdateMessage Convert(BoolSensorValue value, string productName, DateTime timeCollected)
         {
-            SensorUpdateMessage update = new SensorUpdateMessage();
-            AddCommonValues(value as SensorValueBase, productName, timeCollected, update);
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
             BoolSensorData data = new BoolSensorData
             {
                 Comment = value.Comment,
@@ -119,8 +238,84 @@ namespace HSMServer.MonitoringServerCore
             return update;
         }
 
-        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, SensorUpdateMessage update)
+        public static SensorUpdateMessage Convert(IntSensorValue value, string productName, DateTime timeCollected)
         {
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
+            IntSensorData data = new IntSensorData()
+            {
+                Comment = value.Comment,
+                IntValue = value.IntValue
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+
+            return update;
+        }
+
+        public static SensorUpdateMessage Convert(DoubleSensorValue value, string productName, DateTime timeCollected)
+        {
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
+            DoubleSensorData data = new DoubleSensorData()
+            {
+                Comment = value.Comment,
+                DoubleValue = value.DoubleValue
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+
+            return update;
+        }
+
+        public static SensorUpdateMessage Convert(StringSensorValue value, string productName, DateTime timeCollected)
+        {
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
+            StringSensorData data = new StringSensorData()
+            {
+                Comment = value.Comment,
+                StringValue = value.StringValue
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+
+            return update;
+        }
+
+        public static SensorUpdateMessage Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
+        {
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
+            IntBarSensorData data = new IntBarSensorData()
+            {
+                Comment = value.Comment,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                Count = value.Count
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+
+            return update;
+        }
+
+        public static SensorUpdateMessage Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected)
+        {
+            SensorUpdateMessage update;
+            AddCommonValues(value, productName, timeCollected, out update);
+            DoubleBarSensorData data = new DoubleBarSensorData()
+            {
+                Comment = value.Comment,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                Count = value.Count
+            };
+            update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+
+            return update;
+        }
+        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, out SensorUpdateMessage update)
+        {
+            update = new SensorUpdateMessage();
             update.Path = value.Path;
             update.Product = productName;
             update.Name = ExtractSensor(value.Path);

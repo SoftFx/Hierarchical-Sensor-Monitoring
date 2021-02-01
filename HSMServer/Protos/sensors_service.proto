@@ -2,9 +2,9 @@ syntax = "proto3";
 
 option csharp_namespace = "SensorsService";
 
-import "empty.proto";
-import "any.proto";
-import "timestamp.proto";
+import "Protos/empty.proto";
+import "Protos/any.proto";
+import "Protos/timestamp.proto";
 
 package sensors;
 

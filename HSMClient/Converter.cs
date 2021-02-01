@@ -55,7 +55,7 @@ namespace HSMClient
         {
             switch (type)
             {
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeJobSensor:
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor:
                     return SensorTypes.JobSensor;
             }
             throw new Exception($"Unknown sensor type: {type}!");

@@ -21,9 +21,9 @@ namespace HSMDataCollector.Bar
         /// <param name="path"></param>
         /// <param name="productKey"></param>
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds</param>
-        protected BarSensorBase(string name, string path, string productKey, string serverAddress,
+        protected BarSensorBase(string path, string productKey, string serverAddress,
             int collectPeriod = 5000)
-            : base(name, path, productKey, serverAddress)
+            : base(path, productKey, serverAddress)
         {
             _syncRoot = new object();
             ValuesList = new List<T>();

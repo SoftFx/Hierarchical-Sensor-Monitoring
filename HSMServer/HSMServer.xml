@@ -67,10 +67,10 @@
             </summary>
         </member>
         <member name="T:SensorsService.SensorsServiceReflection">
-            <summary>Holder for reflection information generated from sensors_service.proto</summary>
+            <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
         </member>
         <member name="P:SensorsService.SensorsServiceReflection.Descriptor">
-            <summary>File descriptor for sensors_service.proto</summary>
+            <summary>File descriptor for Protos/sensors_service.proto</summary>
         </member>
         <member name="F:SensorsService.SensorsUpdateMessage.SensorsFieldNumber">
             <summary>Field number for the "sensors" field.</summary>
