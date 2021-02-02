@@ -234,7 +234,9 @@ namespace HSMServer.MonitoringServerCore
                 BoolValue = value.BoolValue
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
-            
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+
             return update;
         }
 
@@ -248,6 +250,8 @@ namespace HSMServer.MonitoringServerCore
                 IntValue = value.IntValue
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeIntSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
 
             return update;
         }
@@ -262,6 +266,8 @@ namespace HSMServer.MonitoringServerCore
                 DoubleValue = value.DoubleValue
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeDoubleSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
 
             return update;
         }
@@ -276,6 +282,8 @@ namespace HSMServer.MonitoringServerCore
                 StringValue = value.StringValue
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeStringSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
 
             return update;
         }
@@ -293,6 +301,8 @@ namespace HSMServer.MonitoringServerCore
                 Count = value.Count
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarIntSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
 
             return update;
         }
@@ -310,6 +320,8 @@ namespace HSMServer.MonitoringServerCore
                 Count = value.Count
             };
             update.DataObject = ByteString.CopyFrom(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data)));
+            update.ObjectType = SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarDoubleSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
 
             return update;
         }

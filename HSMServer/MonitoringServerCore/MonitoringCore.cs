@@ -119,7 +119,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(BoolSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
@@ -130,7 +130,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(IntSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
@@ -141,7 +141,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(DoubleSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
@@ -152,7 +152,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(StringSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
@@ -163,7 +163,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(IntBarSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
@@ -174,7 +174,7 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(DoubleBarSensorValue value)
         {
-            string productName = _productManager.GetProductKeyByName(value.Key);
+            string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
