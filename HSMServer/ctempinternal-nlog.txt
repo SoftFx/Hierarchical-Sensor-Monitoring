@@ -268,3 +268,23 @@
 2021-02-02 18:02:18.5455 Info Adding target FileTarget(Name=errorfile)
 2021-02-02 18:02:18.5548 Info Adding target FileTarget(Name=allfile)
 2021-02-02 18:02:18.5934 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-02 19:57:39.9509 Info Message Template Auto Format enabled
+2021-02-02 19:57:39.9753 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-02 19:57:40.0310 Info Adding target FileTarget(Name=errorfile)
+2021-02-02 19:57:40.0434 Info Adding target FileTarget(Name=allfile)
+2021-02-02 19:57:40.0708 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-02 20:01:22.5873 Info Message Template Auto Format enabled
+2021-02-02 20:01:22.6056 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-02 20:01:22.6782 Info Adding target FileTarget(Name=errorfile)
+2021-02-02 20:01:22.6895 Info Adding target FileTarget(Name=allfile)
+2021-02-02 20:01:22.7424 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-02 20:09:59.0651 Info Message Template Auto Format enabled
+2021-02-02 20:09:59.0836 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-02 20:09:59.1488 Info Adding target FileTarget(Name=errorfile)
+2021-02-02 20:09:59.1581 Info Adding target FileTarget(Name=allfile)
+2021-02-02 20:09:59.1879 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-02 20:17:04.5842 Info Message Template Auto Format enabled
+2021-02-02 20:17:04.6005 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-02 20:17:04.6611 Info Adding target FileTarget(Name=errorfile)
+2021-02-02 20:17:04.6704 Info Adding target FileTarget(Name=allfile)
+2021-02-02 20:17:04.7008 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config

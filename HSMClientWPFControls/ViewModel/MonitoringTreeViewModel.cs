@@ -134,7 +134,7 @@ namespace HSMClientWPFControls.ViewModel
             set
             {
                 _selectedNode = value;
-                CurrentSensors = _selectedNode.Sensors;
+                CurrentSensors = _selectedNode?.Sensors ?? new ObservableCollection<MonitoringSensorBaseViewModel>();
             }
         }
 
