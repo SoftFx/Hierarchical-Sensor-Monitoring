@@ -2,7 +2,12 @@
 {
     public enum SensorTypes
     {
-        JobSensor,
-
+        BoolSensor,
+        IntSensor,
+        DoubleSensor,
+        StringSensor,
+        BarIntSensor,
+        BarDoubleSensor,
+        None
     }
 }

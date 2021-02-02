@@ -1,8 +1,8 @@
 ﻿namespace HSMClientWPFControls.Objects.TypedSensorData
 {
-    public class TypedJobSensorData
+    public class DoubleSensorData
     {
-        public bool Success { get; set; }
+        public double DoubleValue { get; set; }
         public string Comment { get; set; }
     }
 }

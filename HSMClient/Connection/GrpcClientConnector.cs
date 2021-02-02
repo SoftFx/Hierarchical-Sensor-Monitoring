@@ -29,9 +29,13 @@ namespace HSMClient.Connection
 
         private void InitializeSensorsClient(string sensorsUrl, X509Certificate2 clientCertificate)
         {
+            if (_sensorsClient != null)
+            {
+                _sensorsClient = null;
+            }
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
-            handler.ClientCertificates.Add(new X509Certificate2(clientCertificate));
+            handler.ClientCertificates.Add(clientCertificate);
             handler.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
             handler.AllowAutoRedirect = true;
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;

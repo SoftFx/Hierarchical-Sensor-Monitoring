@@ -56,7 +56,19 @@ namespace HSMClient
             switch (type)
             {
                 case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor:
-                    return SensorTypes.JobSensor;
+                    return SensorTypes.BoolSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeIntSensor:
+                    return SensorTypes.IntSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeDoubleSensor:
+                    return SensorTypes.DoubleSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeStringSensor:
+                    return SensorTypes.StringSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarDoubleSensor:
+                    return SensorTypes.BarDoubleSensor;
+                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarIntSensor:
+                    return SensorTypes.BarIntSensor;
+                default:
+                    return SensorTypes.None;
             }
             throw new Exception($"Unknown sensor type: {type}!");
         }

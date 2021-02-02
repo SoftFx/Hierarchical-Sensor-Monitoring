@@ -222,7 +222,7 @@
                                             <MouseBinding Gesture="LeftDoubleClick" Command="{Binding Path=DataContext.SensorDoubleClickCommand, ElementName=TreeControl}" CommandParameter="{Binding Path=DataContext.SelectedSensor, ElementName=TreeControl}"></MouseBinding>
                                         </StackPanel.InputBindings>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                            <TextBlock Text="{Binding Name}"></TextBlock>
+                                            <TextBlock Text="{Binding Name}" Width="100"></TextBlock>
                                             <TextBlock Text="      "></TextBlock>
                                             <TextBlock Text="{Binding ShortValue}"></TextBlock>
                                         </StackPanel>

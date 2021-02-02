@@ -115,18 +115,51 @@ namespace HSMClientWPFControls.ViewModel
 
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
-            ShortValue = $"{sensorUpdate.Name} value from time = {sensorUpdate.Time:F} received, value = {GetSpecialTypedValue(sensorUpdate)}";
+            ShortValue = $"{sensorUpdate.Time:F}. {GetSpecialTypedValue(sensorUpdate)}";
         }
 
         private string GetSpecialTypedValue(MonitoringSensorUpdate update)
         {
+            string stringVal = Encoding.UTF8.GetString(update.DataObject);
             switch (update.SensorType)
             {
-                case SensorTypes.JobSensor:
+                case SensorTypes.BoolSensor:
                 {
-                    string stringVal = Encoding.ASCII.GetString(update.DataObject);
-                    TypedJobSensorData typedData = JsonSerializer.Deserialize<TypedJobSensorData>(stringVal);
-                    return $"Success = {typedData.Success}, comment = {typedData.Comment}";
+                    BoolSensorData typedData = JsonSerializer.Deserialize<BoolSensorData>(stringVal);
+                    return $"Value = {typedData.BoolValue}";
+                }
+
+                case SensorTypes.DoubleSensor:
+                {
+                    DoubleSensorData typedData = JsonSerializer.Deserialize<DoubleSensorData>(stringVal);
+                    return $"Value = '{typedData.DoubleValue}'";
+                }
+
+                case SensorTypes.IntSensor:
+                {
+                    IntSensorData typedData = JsonSerializer.Deserialize<IntSensorData>(stringVal);
+                    return $"Value = '{typedData.IntValue}'";
+                }
+
+                case SensorTypes.StringSensor:
+                {
+                    StringSensorData typedData = JsonSerializer.Deserialize<StringSensorData>(stringVal);
+                    return $"Value = '{typedData.StringValue}'";
+                }
+
+                case SensorTypes.BarDoubleSensor:
+                {
+                    DoubleBarSensorData typedData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringVal);
+                    return
+                        $"Value: Min = {typedData.Min}, Max = {typedData.Max}, Mean = {typedData.Mean}, Count = {typedData.Count}";
+                }
+
+
+                case SensorTypes.BarIntSensor:
+                {
+                    IntBarSensorData typedData = JsonSerializer.Deserialize<IntBarSensorData>(stringVal);
+                    return
+                        $"Value: Min = {typedData.Min}, Max = {typedData.Max}, Mean = {typedData.Mean}, Count = {typedData.Count}";
                 }
             }
 

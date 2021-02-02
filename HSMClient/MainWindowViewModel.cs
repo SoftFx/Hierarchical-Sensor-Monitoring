@@ -77,7 +77,7 @@ namespace HSMClient
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
             _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
             DialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
-            factory.RegisterModel(SensorTypes.JobSensor, typeof(ClientDefaultValuesListSensorModel));
+            factory.RegisterModel(SensorTypes.BoolSensor, typeof(ClientDefaultValuesListSensorModel));
             SensorExpandingService expandingService = new SensorExpandingService(factory);
             _monitoringTree.SensorExpandingService = expandingService;
 
