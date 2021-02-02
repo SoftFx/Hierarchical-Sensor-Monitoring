@@ -10,7 +10,7 @@ namespace HSMDataCollector.Bar
     {
         private long _sum = 0;
         public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 5000)
-            : base(path, productKey, serverAddress, collectPeriod)
+            : base(path, productKey, $"{serverAddress}/intBar", collectPeriod)
         {
             Min = Int32.MaxValue;
             Max = Int32.MinValue;

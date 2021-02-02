@@ -7,7 +7,7 @@ namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorInt : InstantValueTypedSensorBase<int>
     {
-        public InstantValueSensorInt(string path, string productKey, string address) : base(path, productKey, address)
+        public InstantValueSensorInt(string path, string productKey, string address) : base(path, productKey, $"{address}/int")
         {
         }
 

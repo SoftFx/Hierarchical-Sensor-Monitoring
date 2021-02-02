@@ -19,22 +19,32 @@ namespace HSMDataCollector.Base
         protected abstract byte[] GetBytesData(object data);
         protected void SendData(object data)
         {
-            var request = (HttpWebRequest)WebRequest.Create(new Uri(ServerAddress));
-            request.ContentType = "application/json";
-            request.Method = "POST";
-            request.KeepAlive = false;
-            byte[] dataBytes = GetBytesData(data);
-            using (var reqStream = request.GetRequestStream())
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            try
             {
-                reqStream.Write(dataBytes, 0, dataBytes.Length);
-            }
+                Console.WriteLine("Sending the data...");
+                Console.WriteLine($"Sensor path = '{Path}'");
+                var request = (HttpWebRequest)WebRequest.Create(new Uri(ServerAddress));
+                request.ContentType = "application/json";
+                request.Method = "POST";
+                request.KeepAlive = false;
+                byte[] dataBytes = GetBytesData(data);
+                using (var reqStream = request.GetRequestStream())
+                {
+                    reqStream.Write(dataBytes, 0, dataBytes.Length);
+                }
 
-            var response = request.GetResponse();
-            using (var stream = response.GetResponseStream())
+                var response = request.GetResponse();
+                using (var stream = response.GetResponseStream())
+                {
+
+                }
+                response.Close();
+            }
+            catch (Exception e)
             {
-
+                Console.WriteLine(e);
             }
-            response.Close();
         }
     }
 }

@@ -7,7 +7,7 @@ using HSMDataCollector.InstantValue;
 
 namespace HSMDataCollector.Core
 {
-    class DataCollector : IDataCollector
+    public class DataCollector : IDataCollector
     {
         private readonly string _productKey;
         private readonly string _connectionAddress;
@@ -16,7 +16,7 @@ namespace HSMDataCollector.Core
         private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
-            _connectionAddress = $"{address}:{port}";
+            _connectionAddress = $"{address}:{port}/api/sensors";
             _productKey = productKey;
             _nameToSensor = new Dictionary<string, ISensor>();
             _countSensor = new InstantValueSensorInt("CountSensor", productKey, address);

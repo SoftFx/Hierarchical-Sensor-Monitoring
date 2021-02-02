@@ -10,7 +10,7 @@ namespace HSMDataCollector.Bar
     {
         private double _sum = 0.0;
         public BarSensorDouble(string path, string productKey, string serverAddress, int collectPeriod = 5000)
-            : base(path, productKey, serverAddress, collectPeriod)
+            : base(path, productKey, $"{serverAddress}/doubleBar", collectPeriod)
         {
             Max = double.MinValue;
             Min = double.MaxValue;
