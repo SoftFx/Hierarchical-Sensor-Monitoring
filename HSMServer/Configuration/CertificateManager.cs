@@ -12,7 +12,7 @@ namespace HSMServer.Configuration
         private readonly Logger _logger;
         private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(10);
         private readonly List<CertificateDescriptor> _certificates = new List<CertificateDescriptor>();
-        private readonly DateTime _lastUpdate = DateTime.MinValue;
+        private DateTime _lastUpdate = DateTime.MinValue;
 
         public CertificateManager()
         {
@@ -52,6 +52,7 @@ namespace HSMServer.Configuration
             {
                 _certificates.Clear();
                 _certificates.AddRange(ReadUserCertificates());
+                _lastUpdate = DateTime.Now;
             }
         }
         public List<CertificateDescriptor> GetUserCertificates()

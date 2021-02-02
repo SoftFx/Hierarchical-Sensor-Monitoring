@@ -20,6 +20,8 @@ namespace HSMServer.Configuration
             _lastUpdate = DateTime.MinValue;
             _certificateManager = certificateManager;
             _logger.Info("ClientCertificateValidator initialized");
+
+            //UpdateCertificates();
         }
 
         private void UpdateCertificates()

@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <None Remove="HSMServer.xml" />
+    <None Remove="Protos\admin_service.proto" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,6 +50,7 @@
 
   <ItemGroup>
     <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Server" />
+    <Protobuf Include="Protos\admin_service.proto" GrpcServices="Server" />
   </ItemGroup>
 
   <ItemGroup>

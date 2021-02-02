@@ -71,7 +71,7 @@ namespace HSMServer
             {
                 endpoints.MapGrpcService<Services.SensorsService>();
               
-                endpoints.MapGet("/protos/sensors_service.proto", async context =>
+                endpoints.MapGet("/Protos/sensors_service.proto", async context =>
                 {
                     await context.Response.WriteAsync(
                         await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
