@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
@@ -20,7 +21,8 @@ namespace HSMDataCollector.Bar
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
-            ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
+            //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
+            Task.Run(() => SendData(dataObject));
         }
 
         public override void AddValue(object value)
@@ -50,9 +52,9 @@ namespace HSMDataCollector.Bar
             lock (_syncRoot)
             {
                 result.Max = Max;
-                Max = 0.0;
+                Max = double.MinValue;
                 result.Min = Min;
-                Min = 0.0;
+                Min = double.MaxValue;
                 result.Mean = Mean;
                 Mean = 0.0;
                 result.Count = ValuesCount;
@@ -68,9 +70,18 @@ namespace HSMDataCollector.Bar
 
         protected override byte[] GetBytesData(object data)
         {
-            DoubleBarSensorValue typedData = (DoubleBarSensorValue) data;
-            string convertedString = JsonSerializer.Serialize(typedData);
-            return Encoding.UTF8.GetBytes(convertedString);
+            try
+            {
+                DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
+                string convertedString = JsonSerializer.Serialize(typedData);
+                return Encoding.UTF8.GetBytes(convertedString);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return new byte[1];
+            }
+            
         }
     }
 }

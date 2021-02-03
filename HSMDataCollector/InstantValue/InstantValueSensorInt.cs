@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
@@ -20,7 +21,8 @@ namespace HSMDataCollector.InstantValue
             }
 
             IntSensorValue data = GetDataObject();
-            SendData(data);
+            //SendData(data);
+            Task.Run(() => SendData(data));
         }
         private IntSensorValue GetDataObject()
         {
@@ -37,9 +39,18 @@ namespace HSMDataCollector.InstantValue
         }
         protected override byte[] GetBytesData(object data)
         {
-            IntSensorValue typedData = (IntSensorValue)data;
-            string convertedString = JsonSerializer.Serialize(typedData);
-            return Encoding.UTF8.GetBytes(convertedString);
+            try
+            {
+                IntSensorValue typedData = (IntSensorValue)data;
+                string convertedString = JsonSerializer.Serialize(typedData);
+                return Encoding.UTF8.GetBytes(convertedString);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return new byte[1];
+            }
+            
         }
     }
 }

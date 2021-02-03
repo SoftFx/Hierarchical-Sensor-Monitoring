@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
@@ -12,15 +13,16 @@ namespace HSMDataCollector.Bar
         public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 5000)
             : base(path, productKey, $"{serverAddress}/intBar", collectPeriod)
         {
-            Min = Int32.MaxValue;
-            Max = Int32.MinValue;
+            Min = int.MaxValue;
+            Max = int.MinValue;
             Mean = 0;
         }
 
         protected override void SendDataTimer(object state)
         {
             IntBarSensorValue dataObject = GetDataObject();
-            ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
+            //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
+            Task.Run(() => SendData(dataObject));
         }
 
         public override void AddValue(object value)
@@ -50,9 +52,9 @@ namespace HSMDataCollector.Bar
             lock (_syncRoot)
             {
                 result.Max = Max;
-                Max = 0;
+                Max = int.MinValue;
                 result.Min = Min;
-                Min = 0;
+                Min = int.MaxValue;
                 result.Mean = Mean;
                 Mean = 0;
                 result.Count = ValuesCount;
@@ -67,9 +69,18 @@ namespace HSMDataCollector.Bar
         }
         protected override byte[] GetBytesData(object data)
         {
-            IntBarSensorValue typedData = (IntBarSensorValue) data;
-            string convertedString = JsonSerializer.Serialize(typedData);
-            return Encoding.UTF8.GetBytes(convertedString);
+            try
+            {
+                IntBarSensorValue typedData = (IntBarSensorValue)data;
+                string convertedString = JsonSerializer.Serialize(typedData);
+                return Encoding.UTF8.GetBytes(convertedString);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return new byte[1];
+            }
+            
         }
     }
 }

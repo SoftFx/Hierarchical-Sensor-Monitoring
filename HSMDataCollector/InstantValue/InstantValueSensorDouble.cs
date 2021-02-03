@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
@@ -20,7 +21,8 @@ namespace HSMDataCollector.InstantValue
             }
 
             DoubleSensorValue data = GetDataObject();
-            SendData(data);
+            //SendData(data);
+            Task.Run(() => SendData(data));
         }
 
         private DoubleSensorValue GetDataObject()
@@ -39,9 +41,18 @@ namespace HSMDataCollector.InstantValue
 
         protected override byte[] GetBytesData(object data)
         {
-            DoubleSensorValue typedData = (DoubleSensorValue)data;
-            string convertedString = JsonSerializer.Serialize(typedData);
-            return Encoding.UTF8.GetBytes(convertedString);
+            try
+            {
+                DoubleSensorValue typedData = (DoubleSensorValue)data;
+                string convertedString = JsonSerializer.Serialize(typedData);
+                return Encoding.UTF8.GetBytes(convertedString);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return new byte[1];
+            }
+            
         }
     }
 }

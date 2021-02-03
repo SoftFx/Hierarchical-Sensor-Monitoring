@@ -13,13 +13,13 @@ namespace HSMDataCollector.Core
         private readonly string _connectionAddress;
         private readonly Dictionary<string, ISensor> _nameToSensor;
         private readonly object _syncRoot = new object();
-        private readonly InstantValueSensorInt _countSensor;
+        //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
             _connectionAddress = $"{address}:{port}/api/sensors";
             _productKey = productKey;
             _nameToSensor = new Dictionary<string, ISensor>();
-            _countSensor = new InstantValueSensorInt("CountSensor", productKey, address);
+            //_countSensor = new InstantValueSensorInt("CountSensor", productKey, address);
         }
         public void Initialize()
         {
@@ -89,7 +89,7 @@ namespace HSMDataCollector.Core
             lock (_syncRoot)
             {
                 _nameToSensor[path] = sensor;
-                _countSensor.AddValue(_nameToSensor.Count);
+                //_countSensor.AddValue(_nameToSensor.Count);
             }
         }
     }
