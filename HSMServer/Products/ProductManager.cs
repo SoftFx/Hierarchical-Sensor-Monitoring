@@ -134,14 +134,14 @@ namespace HSMServer.Products
                 _logger.Error(e, $"Failed to add new product, name = {product.Name}");
             }
         }
-        public bool IsSensorRegistered(string productName, string sensorName)
+        public bool IsSensorRegistered(string productName, string path)
         {
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                     return false;
 
-                return _productSensorsDictionary[productName].Contains(sensorName);
+                return _productSensorsDictionary[productName].Contains(path);
             }
         }
 

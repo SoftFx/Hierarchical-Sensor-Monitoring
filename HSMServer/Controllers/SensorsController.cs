@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Net.Mime;
+using System.Threading.Tasks;
 using HSMSensorDataObjects;
 using HSMServer.Model;
 using HSMServer.MonitoringServerCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 
@@ -56,6 +59,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("bool")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<BoolSensorValue> Post([FromBody] BoolSensorValue sensorValue)
         {
             try
@@ -76,6 +82,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("int")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<IntSensorValue> Post([FromBody] IntSensorValue sensorValue)
         {
             try
@@ -96,6 +105,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("double")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<DoubleSensorValue> Post([FromBody] DoubleSensorValue sensorValue)
         {
             try
@@ -116,6 +128,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("string")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<StringSensorValue> Post([FromBody] StringSensorValue sensorValue)
         {
             try
@@ -136,6 +151,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("doubleBar")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<DoubleBarSensorValue> Post([FromBody] DoubleBarSensorValue sensorValue)
         {
             try
@@ -156,6 +174,9 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("intBar")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<IntBarSensorValue> Post([FromBody] IntBarSensorValue sensorValue)
         {
             try

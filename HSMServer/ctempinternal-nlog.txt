@@ -393,3 +393,34 @@
 2021-02-03 14:22:02.8820 Info Adding target FileTarget(Name=errorfile)
 2021-02-03 14:22:02.8890 Info Adding target FileTarget(Name=allfile)
 2021-02-03 14:22:02.9151 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 16:34:08.3873 Info Message Template Auto Format enabled
+2021-02-03 16:34:08.4029 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-03 16:34:08.4506 Info Adding target FileTarget(Name=errorfile)
+2021-02-03 16:34:08.4601 Info Adding target FileTarget(Name=allfile)
+2021-02-03 16:34:08.4856 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 16:47:20.5751 Info Message Template Auto Format enabled
+2021-02-03 16:47:20.5917 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-03 16:47:20.6548 Info Adding target FileTarget(Name=errorfile)
+2021-02-03 16:47:20.6625 Info Adding target FileTarget(Name=allfile)
+2021-02-03 16:47:20.6899 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 16:56:06.7139 Info Message Template Auto Format enabled
+2021-02-03 16:56:06.7316 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-03 16:56:06.7878 Info Adding target FileTarget(Name=errorfile)
+2021-02-03 16:56:06.7878 Info Adding target FileTarget(Name=allfile)
+2021-02-03 16:56:06.8218 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 16:59:50.9452 Info Message Template Auto Format enabled
+2021-02-03 16:59:50.9613 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-03 16:59:51.0324 Info Adding target FileTarget(Name=errorfile)
+2021-02-03 16:59:51.0441 Info Adding target FileTarget(Name=allfile)
+2021-02-03 16:59:51.0963 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 17:06:59.8862 Info Message Template Auto Format enabled
+2021-02-03 17:06:59.9008 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-03 17:06:59.9532 Info Adding target FileTarget(Name=errorfile)
+2021-02-03 17:06:59.9603 Info Adding target FileTarget(Name=allfile)
+2021-02-03 17:06:59.9830 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-03 17:11:54.9642 Warn Exception in layout renderer. Exception: System.ObjectDisposedException: IFeatureCollection has been disposed.
+Object name: 'Collection'.
+   at Microsoft.AspNetCore.Http.Features.FeatureReferences`1.ThrowContextDisposed()
+   at Microsoft.AspNetCore.Http.DefaultHttpRequest.get_Scheme()
+   at NLog.Web.LayoutRenderers.AspNetRequestUrlRenderer.RenderUrl(HttpRequest httpRequest, StringBuilder builder)
+   at NLog.LayoutRenderers.LayoutRenderer.RenderAppendBuilder(LogEventInfo logEvent, StringBuilder builder)

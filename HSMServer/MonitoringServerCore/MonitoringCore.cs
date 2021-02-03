@@ -90,10 +90,9 @@ namespace HSMServer.MonitoringServerCore
         {
             SensorDataObject obj = Converter.ConvertToDatabase(updateMessage, originalTime);
 
-            string sensorName = updateMessage.Name;
-            if (!_productManager.IsSensorRegistered(productName, sensorName))
+            if (!_productManager.IsSensorRegistered(productName, obj.Path))
             {
-                _productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = sensorName });
+                _productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = updateMessage.Name });
             }
 
             //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName));
