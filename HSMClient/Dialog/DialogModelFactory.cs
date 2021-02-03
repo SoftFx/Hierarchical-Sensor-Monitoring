@@ -17,7 +17,7 @@ namespace HSMClient.Dialog
         {
             _connector = connector;
         }
-        public ISensorDialogModel ConstructModel(MonitoringSensorBaseViewModel sensor)
+        public ISensorDialogModel ConstructModel(MonitoringSensorViewModel sensor)
         {
             return Activator.CreateInstance(_modelType, _connector, sensor) as ISensorDialogModel;
         }

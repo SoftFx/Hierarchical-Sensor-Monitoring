@@ -107,9 +107,9 @@ namespace HSMClientWPFControls.ViewModel
         }
 
         private IMonitoringModel _model;
-        private ObservableCollection<MonitoringSensorBaseViewModel> _currentSensors;
+        private ObservableCollection<MonitoringSensorViewModel> _currentSensors;
         private MonitoringNodeBase _selectedNode;
-        private MonitoringSensorBaseViewModel _selectedSensor;
+        private MonitoringSensorViewModel _selectedSensor;
         public string ConnectionAddressText => _model.ConnectionAddress;
 
         public string ConnectionStatusText => _model.IsConnected
@@ -134,17 +134,17 @@ namespace HSMClientWPFControls.ViewModel
             set
             {
                 _selectedNode = value;
-                CurrentSensors = _selectedNode?.Sensors ?? new ObservableCollection<MonitoringSensorBaseViewModel>();
+                CurrentSensors = _selectedNode?.Sensors ?? new ObservableCollection<MonitoringSensorViewModel>();
             }
         }
 
-        public MonitoringSensorBaseViewModel SelectedSensor
+        public MonitoringSensorViewModel SelectedSensor
         {
             get => _selectedSensor;
             set { _selectedSensor = value; }
         }
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> CurrentSensors
+        public ObservableCollection<MonitoringSensorViewModel> CurrentSensors
         {
             get => _currentSensors;
             set
@@ -183,7 +183,7 @@ namespace HSMClientWPFControls.ViewModel
             get { return _model?.Nodes; }
         }
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> Sensors { get; set; }
+        public ObservableCollection<MonitoringSensorViewModel> Sensors { get; set; }
 
         private void ShowProducts()
         {

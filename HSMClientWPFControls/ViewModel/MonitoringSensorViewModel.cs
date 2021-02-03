@@ -9,7 +9,7 @@ using HSMClientWPFControls.Objects.TypedSensorData;
 
 namespace HSMClientWPFControls.ViewModel
 {
-    public class MonitoringSensorBaseViewModel : NotifyingBase
+    public class MonitoringSensorViewModel : NotifyingBase
     {
         public DateTime _lastStatusUpdate;
         private MonitoringNodeBase _parent;
@@ -19,7 +19,8 @@ namespace HSMClientWPFControls.ViewModel
         private object _dataObject;
         private string _message;
         private Dictionary<string, string> _validationParams;
-        public MonitoringSensorBaseViewModel(MonitoringSensorUpdate sensorUpdate, MonitoringNodeBase parent = null)
+        private string _path;
+        public MonitoringSensorViewModel(MonitoringSensorUpdate sensorUpdate, MonitoringNodeBase parent = null)
         {
             _lastStatusUpdate = DateTime.Now;
             Name = sensorUpdate.Name;
@@ -28,8 +29,9 @@ namespace HSMClientWPFControls.ViewModel
             _status = TextConstants.Error;
             _sensorType = sensorUpdate.SensorType;
             _dataObject = sensorUpdate.DataObject;
+            _path = ConvertPathToString(sensorUpdate.Path);
         }
-        public MonitoringSensorBaseViewModel(string name, MonitoringNodeBase parent = null)
+        public MonitoringSensorViewModel(string name, MonitoringNodeBase parent = null)
         {
             _lastStatusUpdate = DateTime.Now;
             Name = name;
@@ -112,6 +114,7 @@ namespace HSMClientWPFControls.ViewModel
         }
         public SensorTypes SensorType => _sensorType;
         public object DataObject => _dataObject;
+        public string Path => _path;
 
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
@@ -164,6 +167,17 @@ namespace HSMClientWPFControls.ViewModel
             }
 
             return string.Empty;
+        }
+
+        private string ConvertPathToString(List<string> path)
+        {
+            StringBuilder sb = new StringBuilder(path[0]);
+            for (int i = 1; i < path.Count; ++i)
+            {
+                sb.Append($"/{path[i]}");
+            }
+
+            return sb.ToString();
         }
     }
 }

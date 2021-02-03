@@ -73,7 +73,7 @@ namespace HSMClientWPFControls.Objects
         private string _status;
         private string _internalStatus = TextConstants.Ok;
         private DateTime _lastStatusUpdate;
-        private readonly Dictionary<string, MonitoringSensorBaseViewModel> _nameToSensor;
+        private readonly Dictionary<string, MonitoringSensorViewModel> _nameToSensor;
         private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
         public MonitoringNodeBase(MonitoringNodeBase parent = null)
         {
@@ -81,8 +81,8 @@ namespace HSMClientWPFControls.Objects
             _status = TextConstants.Ok;
             _lastStatusUpdate = DateTime.Now;
             SubNodes = new ObservableCollection<MonitoringNodeBase>();
-            Sensors = new ObservableCollection<MonitoringSensorBaseViewModel>();
-            _nameToSensor = new Dictionary<string, MonitoringSensorBaseViewModel>();
+            Sensors = new ObservableCollection<MonitoringSensorViewModel>();
+            _nameToSensor = new Dictionary<string, MonitoringSensorViewModel>();
             _nameToNode = new Dictionary<string, MonitoringNodeBase>();
             SubNodes.CollectionChanged += Content_CollectionChanged;
             Sensors.CollectionChanged += Content_CollectionChanged;
@@ -197,9 +197,9 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
-        private ObservableCollection<MonitoringSensorBaseViewModel> _sensors;
+        private ObservableCollection<MonitoringSensorViewModel> _sensors;
 
-        public ObservableCollection<MonitoringSensorBaseViewModel> Sensors
+        public ObservableCollection<MonitoringSensorViewModel> Sensors
         {
             get { return _sensors; }
             set
@@ -268,7 +268,7 @@ namespace HSMClientWPFControls.Objects
 
             if (!_nameToSensor.ContainsKey(sensorUpdate.Name))
             {
-                MonitoringSensorBaseViewModel sensor = new MonitoringSensorBaseViewModel(sensorUpdate, this);
+                MonitoringSensorViewModel sensor = new MonitoringSensorViewModel(sensorUpdate, this);
                 _nameToSensor[sensorUpdate.Name] = sensor;
                 Sensors.Add(sensor);
             }

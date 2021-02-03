@@ -13,17 +13,9 @@ namespace HSMClient.Dialog
         protected string _name;
         protected string _product;
 
-        public ClientDialogModelBase(ISensorHistoryConnector connector, MonitoringSensorBaseViewModel sensor)
+        public ClientDialogModelBase(ISensorHistoryConnector connector, MonitoringSensorViewModel sensor)
         {
-            string path = "/" + sensor.Name;
-            MonitoringNodeBase currentNode = sensor.Parent;
-            while (currentNode != null)
-            {
-                path = ("/" + currentNode.Name + path);
-                currentNode = currentNode.Parent;
-            }
-
-            _path = path;
+            _path = sensor.Path;
             _connector = connector;
             _name = sensor.Name;
             _product = sensor.Product;

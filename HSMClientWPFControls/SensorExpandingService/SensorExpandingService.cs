@@ -15,7 +15,7 @@ namespace HSMClientWPFControls.SensorExpandingService
         {
             _factory = factory;
         }
-        public void Expand(MonitoringSensorBaseViewModel sensor)
+        public void Expand(MonitoringSensorViewModel sensor)
         {
             SensorControl view = null;
             object viewObj = Activator.CreateInstance(typeof(DefaultValuesListSensorView));

@@ -94,9 +94,9 @@ namespace HSMClient.Connection
             return message.Result;
         }
 
-        public override List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n)
+        public override List<MonitoringSensorUpdate> GetSensorHistory(string product, string path, string name, long n)
         {
-            GetSensorHistoryMessage message = new GetSensorHistoryMessage { Product = product, Name = name, N = n };
+            GetSensorHistoryMessage message = new GetSensorHistoryMessage { Product = product, Path = path, Name = name, N = n };
             SensorsUpdateMessage sensorsUpdate = _sensorsClient.GetSensorHistory(message);
             var convertedList = sensorsUpdate.Sensors.Select(Converter.Convert).ToList();
             convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));

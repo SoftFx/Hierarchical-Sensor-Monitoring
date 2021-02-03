@@ -12,7 +12,7 @@ namespace HSMClient.Dialog
     class ClientDefaultValuesListSensorModel : ClientDialogModelBase, IDefaultValuesListModel
     {
         public ClientDefaultValuesListSensorModel(ISensorHistoryConnector connector,
-            MonitoringSensorBaseViewModel sensor) : base(connector, sensor)
+            MonitoringSensorViewModel sensor) : base(connector, sensor)
         {
             List = new ObservableCollection<DefaultSensorModel>();
             List.CollectionChanged += List_CollectionChanged;
@@ -27,7 +27,7 @@ namespace HSMClient.Dialog
         private void UpdateData()
         {
             List.Clear();
-            var sensorValues = _connector.GetSensorHistory(_product, _name, -1);
+            var sensorValues = _connector.GetSensorHistory(_product, _path, _name,-1);
             sensorValues.ForEach(v => List.Add(new DefaultSensorModel(v)));
             OnPropertyChanged(nameof(CountText));
         }

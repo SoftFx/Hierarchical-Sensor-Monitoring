@@ -2,7 +2,7 @@
 
 namespace HSMClientWPFControls.ViewModel
 {
-    public class SensorDataViewModel : MonitoringSensorBaseViewModel
+    public class SensorDataViewModel : MonitoringSensorViewModel
     {
         public SensorDataViewModel(string name, MonitoringNodeBase parent) : base(name, parent)
         {

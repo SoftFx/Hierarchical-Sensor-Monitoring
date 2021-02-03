@@ -10,7 +10,7 @@ namespace HSMClient.StatusHandlers
         private Dictionary<string, string> _validationParams;
 
 
-        public void UpdateStatus(MonitoringSensorBaseViewModel sensor)
+        public void UpdateStatus(MonitoringSensorViewModel sensor)
         {
             sensor.Status = TextConstants.Ok;
         }

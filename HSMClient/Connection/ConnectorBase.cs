@@ -22,7 +22,7 @@ namespace HSMClient.Connection
         public abstract List<ProductInfo> GetProductsList();
         public abstract ProductInfo AddNewProduct(string name);
         public abstract bool RemoveProduct(string name);
-        public abstract List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n);
+        public abstract List<MonitoringSensorUpdate> GetSensorHistory(string product, string path, string name, long n);
         public abstract X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model,
              out X509Certificate2 caCertificate);
 

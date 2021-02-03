@@ -5,6 +5,6 @@ namespace HSMClientWPFControls.ConnectorInterface
 {
     public interface ISensorHistoryConnector
     {
-        public List<MonitoringSensorUpdate> GetSensorHistory(string product, string name, long n);
+        public List<MonitoringSensorUpdate> GetSensorHistory(string product, string path, string name, long n);
     }
 }

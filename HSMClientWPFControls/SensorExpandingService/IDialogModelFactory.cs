@@ -7,7 +7,7 @@ namespace HSMClientWPFControls.SensorExpandingService
 {
     public interface IDialogModelFactory
     {
-        public ISensorDialogModel ConstructModel(MonitoringSensorBaseViewModel sensor);
+        public ISensorDialogModel ConstructModel(MonitoringSensorViewModel sensor);
         public void RegisterModel(SensorTypes sensorType, Type modelType);
     }
 }

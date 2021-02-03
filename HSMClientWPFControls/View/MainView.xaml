@@ -191,7 +191,7 @@
                 <DockPanel>
                     <ListView Name="CountersListView" ItemsSource="{Binding CurrentSensors}" SelectedItem="{Binding SelectedSensor}" BorderThickness="0,0,0,1" BorderBrush="LightSteelBlue" HorizontalContentAlignment="Stretch">
                         <ListView.Resources>
-                            <DataTemplate DataType="{x:Type viewModel:MonitoringSensorBaseViewModel}">
+                            <DataTemplate DataType="{x:Type viewModel:MonitoringSensorViewModel}">
                                 <Grid Width="Auto">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>

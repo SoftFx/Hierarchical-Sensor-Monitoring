@@ -4,6 +4,6 @@ namespace HSMClientWPFControls
 {
     public interface IMonitoringSensorStatusHandler
     {
-        void UpdateStatus(MonitoringSensorBaseViewModel sensor);
+        void UpdateStatus(MonitoringSensorViewModel sensor);
     }
 }

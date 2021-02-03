@@ -4,6 +4,6 @@ namespace HSMClientWPFControls.SensorExpandingService
 {
     public interface ISensorExpandingService
     {
-        public void Expand(MonitoringSensorBaseViewModel sensor);
+        public void Expand(MonitoringSensorViewModel sensor);
     }
 }

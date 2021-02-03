@@ -88,8 +88,9 @@ message RemoveProductResultMessage {
 
 message GetSensorHistoryMessage {
 	string name = 1;
-	string product = 2;
-	int64 n = 3;
+	string path = 2;
+	string product = 3;
+	int64 n = 4;
 }
 
 message ClientCertificateMessage {
