@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 using HSMCommon.Certificates;
 using HSMSensorDataObjects;
 using HSMServer.Authentication;
@@ -95,27 +96,28 @@ namespace HSMServer.MonitoringServerCore
                 _productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = sensorName });
             }
 
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
+            //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName));
+            Task.Run(() => DatabaseClass.Instance.WriteSensorData(obj, productName));
         }
-        public void AddSensorValue(JobResult value)
-        {
-            string productName = _productManager.GetProductNameByKey(value.Key);
+        //public void AddSensorValue(JobResult value)
+        //{
+        //    string productName = _productManager.GetProductNameByKey(value.Key);
 
-            DateTime timeCollected = DateTime.Now;
+        //    DateTime timeCollected = DateTime.Now;
 
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
+        //    SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+        //    _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject obj = Converter.ConvertToDatabase(value, timeCollected);
+        //    SensorDataObject obj = Converter.ConvertToDatabase(value, timeCollected);
 
-            string sensorName = updateMessage.Name;
-            if (!_productManager.IsSensorRegistered(productName, sensorName))
-            {
-                _productManager.AddSensor(new SensorInfo(){ Path = value.Path, ProductName = productName, SensorName = sensorName });
-            }
+        //    string sensorName = updateMessage.Name;
+        //    if (!_productManager.IsSensorRegistered(productName, sensorName))
+        //    {
+        //        _productManager.AddSensor(new SensorInfo(){ Path = value.Path, ProductName = productName, SensorName = sensorName });
+        //    }
 
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
-        }
+        //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
+        //}
 
         public void AddSensorValue(BoolSensorValue value)
         {
@@ -238,9 +240,9 @@ namespace HSMServer.MonitoringServerCore
             foreach (var product in productsList)
             {
                 var sensorsList = DatabaseClass.Instance.GetSensorsList(product);
-                foreach (var sensor in sensorsList)
+                foreach (var sensorPath in sensorsList)
                 {
-                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensor);
+                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensorPath);
                     if (lastVal != null)
                     {
                         sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product));
@@ -249,7 +251,6 @@ namespace HSMServer.MonitoringServerCore
             }
             return sensorsUpdateMessage;
         }
-
         public SensorsUpdateMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
         {
             _validator.Validate(clientCertificate);
@@ -258,7 +259,13 @@ namespace HSMServer.MonitoringServerCore
 
             SensorsUpdateMessage sensorsUpdate = new SensorsUpdateMessage();
             List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(getHistoryMessage.Product,
-                getHistoryMessage.Name, getHistoryMessage.N);
+                getHistoryMessage.Path, getHistoryMessage.N);
+            _logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getHistoryMessage.Path} at {DateTime.Now:F}");
+            dataList.Sort((a, b) => a.TimeCollected.CompareTo(b.TimeCollected));
+            if (getHistoryMessage.N != -1)
+            {
+                dataList = dataList.Take((int)getHistoryMessage.N).ToList();
+            }
             sensorsUpdate.Sensors.AddRange(dataList.Select(s => Converter.Convert(s, getHistoryMessage.Product)));
             return sensorsUpdate;
         }

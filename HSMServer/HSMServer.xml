@@ -138,6 +138,9 @@
         <member name="F:SensorsService.GetSensorHistoryMessage.NameFieldNumber">
             <summary>Field number for the "name" field.</summary>
         </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.PathFieldNumber">
+            <summary>Field number for the "path" field.</summary>
+        </member>
         <member name="F:SensorsService.GetSensorHistoryMessage.ProductFieldNumber">
             <summary>Field number for the "product" field.</summary>
         </member>

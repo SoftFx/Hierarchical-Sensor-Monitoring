@@ -158,7 +158,7 @@ namespace HSMServer.Products
 
             ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(sensorInfo));
             ThreadPool.QueueUserWorkItem(_ =>
-                DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.SensorName));
+                DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
         }
         public string GetProductKeyByName(string name)
         {
