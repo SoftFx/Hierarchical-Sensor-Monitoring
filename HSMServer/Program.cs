@@ -63,7 +63,7 @@ namespace HSMServer
                             listenOptions.UseHttps(portOptions =>
                             {
                                 portOptions.CheckCertificateRevocation = false;
-                                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls11 | SslProtocols.Tls12;
+                                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
                                 portOptions.ServerCertificate = Config.ServerCertificate;
                             });

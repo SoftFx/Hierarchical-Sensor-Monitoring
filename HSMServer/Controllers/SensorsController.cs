@@ -58,6 +58,24 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
+        //[HttpPost("bool")]
+        //[Consumes(MediaTypeNames.Application.Json)]
+        //[ProducesResponseType(StatusCodes.Status200OK)]
+        //[ProducesResponseType(StatusCodes.Status400BadRequest)]
+        //public async Task<IActionResult> Post([FromBody] BoolSensorValue sensorValue)
+        //{
+        //    try
+        //    {
+        //        await _monitoringCore.AddSensorValueAsync(sensorValue);
+        //        return Ok(sensorValue);
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        _logger.Error(e, "Failed to put data!");
+        //        return BadRequest(sensorValue);
+        //    }
+        //}
+
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]

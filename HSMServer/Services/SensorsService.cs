@@ -35,7 +35,7 @@ namespace HSMServer.Services
             return Task.FromResult(_monitoringCore.GetAllAvailableSensorsUpdates(httpContext.Connection.ClientCertificate));
         }
 
-        public override Task<SensorsUpdateMessage> GetSensorHistory(GetSensorHistoryMessage request, ServerCallContext context)
+        public override Task<SensorHistoryListMessage> GetSensorHistory(GetSensorHistoryMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
 

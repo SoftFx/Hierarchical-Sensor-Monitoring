@@ -86,37 +86,61 @@ namespace HSMServer.MonitoringServerCore
 
         #region Sensor saving
 
-        private void SaveSensorValue(SensorUpdateMessage updateMessage, string productName, DateTime originalTime)
+        private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
-            SensorDataObject obj = Converter.ConvertToDatabase(updateMessage, originalTime);
-
-            if (!_productManager.IsSensorRegistered(productName, obj.Path))
+            if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
             {
-                _productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = updateMessage.Name });
+                _productManager.AddSensor(productName, dataObject.Path);
             }
 
-            //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName));
-            Task.Run(() => DatabaseClass.Instance.WriteSensorData(obj, productName));
+            Task.Run(() => DatabaseClass.Instance.WriteSensorData(dataObject, productName));
         }
-        //public void AddSensorValue(JobResult value)
+
+        private async Task<bool> SaveSensorValueAsync(SensorDataObject dataObject, string productName)
+        {
+            try
+            {
+                if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
+                {
+                    _productManager.AddSensor(productName, dataObject.Path);
+                }
+
+                await Task.Run(() => DatabaseClass.Instance.WriteSensorData(dataObject, productName));
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+            
+        }
+        //private void SaveSensorValue(SensorUpdateMessage updateMessage, string productName, DateTime originalTime)
         //{
-        //    string productName = _productManager.GetProductNameByKey(value.Key);
+        //    SensorDataObject obj = Converter.ConvertToDatabase(updateMessage, originalTime);
 
-        //    DateTime timeCollected = DateTime.Now;
-
-        //    SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-        //    _queueManager.AddSensorData(updateMessage);
-
-        //    SensorDataObject obj = Converter.ConvertToDatabase(value, timeCollected);
-
-        //    string sensorName = updateMessage.Name;
-        //    if (!_productManager.IsSensorRegistered(productName, sensorName))
+        //    if (!_productManager.IsSensorRegistered(productName, obj.Path))
         //    {
-        //        _productManager.AddSensor(new SensorInfo(){ Path = value.Path, ProductName = productName, SensorName = sensorName });
+        //        //_productManager.AddSensor(new SensorInfo() { Path = updateMessage.Path, ProductName = productName, SensorName = updateMessage.Name });
+        //        _productManager.AddSensor(productName, obj.Path);
         //    }
 
-        //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName, sensorName));
+        //    //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.WriteSensorData(obj, productName));
+        //    Task.Run(() => DatabaseClass.Instance.WriteSensorData(obj, productName));
         //}
+
+ 
+
+        public async Task<bool> AddSensorValueAsync(BoolSensorValue value)
+        {
+            string productName = _productManager.GetProductNameByKey(value.Key);
+
+            DateTime timeCollected = DateTime.Now;
+            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+            _queueManager.AddSensorData(updateMessage);
+
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            return await SaveSensorValueAsync(dataObject, productName);
+        }
 
         public void AddSensorValue(BoolSensorValue value)
         {
@@ -126,9 +150,9 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
-
         public void AddSensorValue(IntSensorValue value)
         {
             string productName = _productManager.GetProductNameByKey(value.Key);
@@ -137,7 +161,8 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(DoubleSensorValue value)
@@ -148,7 +173,8 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(StringSensorValue value)
@@ -159,7 +185,8 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(IntBarSensorValue value)
@@ -170,7 +197,8 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(DoubleBarSensorValue value)
@@ -181,7 +209,8 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
-            SaveSensorValue(updateMessage, productName, value.Time);
+            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+            SaveSensorValue(dataObject, productName);
         }
 
 
@@ -250,13 +279,13 @@ namespace HSMServer.MonitoringServerCore
             }
             return sensorsUpdateMessage;
         }
-        public SensorsUpdateMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
+        public SensorHistoryListMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
         {
             _validator.Validate(clientCertificate);
 
             User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
 
-            SensorsUpdateMessage sensorsUpdate = new SensorsUpdateMessage();
+            SensorHistoryListMessage sensorsUpdate = new SensorHistoryListMessage();
             List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(getHistoryMessage.Product,
                 getHistoryMessage.Path, getHistoryMessage.N);
             _logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getHistoryMessage.Path} at {DateTime.Now:F}");
@@ -265,7 +294,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 dataList = dataList.Take((int)getHistoryMessage.N).ToList();
             }
-            sensorsUpdate.Sensors.AddRange(dataList.Select(s => Converter.Convert(s, getHistoryMessage.Product)));
+            sensorsUpdate.Sensors.AddRange(dataList.Select(Converter.Convert));
             return sensorsUpdate;
         }
 

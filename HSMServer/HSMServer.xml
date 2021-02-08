@@ -72,11 +72,13 @@
         <member name="P:SensorsService.SensorsServiceReflection.Descriptor">
             <summary>File descriptor for Protos/sensors_service.proto</summary>
         </member>
+        <member name="T:SensorsService.SensorsUpdateMessage">
+             <summary>
+            Sensor updates
+             </summary>
+        </member>
         <member name="F:SensorsService.SensorsUpdateMessage.SensorsFieldNumber">
             <summary>Field number for the "sensors" field.</summary>
-        </member>
-        <member name="F:SensorsService.SensorUpdateMessage.NameFieldNumber">
-            <summary>Field number for the "Name" field.</summary>
         </member>
         <member name="F:SensorsService.SensorUpdateMessage.PathFieldNumber">
             <summary>Field number for the "Path" field.</summary>
@@ -90,14 +92,48 @@
         <member name="F:SensorsService.SensorUpdateMessage.ObjectTypeFieldNumber">
             <summary>Field number for the "ObjectType" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.DataObjectFieldNumber">
-            <summary>Field number for the "dataObject" field.</summary>
-        </member>
         <member name="F:SensorsService.SensorUpdateMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
+        <member name="F:SensorsService.SensorUpdateMessage.ShortValueFieldNumber">
+            <summary>Field number for the "shortValue" field.</summary>
+        </member>
         <member name="T:SensorsService.SensorUpdateMessage.Types">
             <summary>Container for nested types declared in the SensorUpdateMessage message type.</summary>
+        </member>
+        <member name="T:SensorsService.GetSensorHistoryMessage">
+             <summary>
+            Sensors history
+             </summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.NameFieldNumber">
+            <summary>Field number for the "name" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.PathFieldNumber">
+            <summary>Field number for the "path" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.ProductFieldNumber">
+            <summary>Field number for the "product" field.</summary>
+        </member>
+        <member name="F:SensorsService.GetSensorHistoryMessage.NFieldNumber">
+            <summary>Field number for the "n" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorHistoryListMessage.SensorsFieldNumber">
+            <summary>Field number for the "sensors" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorHistoryMessage.TimeFieldNumber">
+            <summary>Field number for the "time" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorHistoryMessage.TypeFieldNumber">
+            <summary>Field number for the "type" field.</summary>
+        </member>
+        <member name="F:SensorsService.SensorHistoryMessage.TypedDataFieldNumber">
+            <summary>Field number for the "typedData" field.</summary>
+        </member>
+        <member name="T:SensorsService.ProductsListMessage">
+             <summary>
+            Products
+             </summary>
         </member>
         <member name="F:SensorsService.ProductsListMessage.ProductsFieldNumber">
             <summary>Field number for the "products" field.</summary>
@@ -135,17 +171,10 @@
         <member name="F:SensorsService.RemoveProductResultMessage.ProductDataFieldNumber">
             <summary>Field number for the "productData" field.</summary>
         </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.NameFieldNumber">
-            <summary>Field number for the "name" field.</summary>
-        </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.PathFieldNumber">
-            <summary>Field number for the "path" field.</summary>
-        </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.ProductFieldNumber">
-            <summary>Field number for the "product" field.</summary>
-        </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.NFieldNumber">
-            <summary>Field number for the "n" field.</summary>
+        <member name="T:SensorsService.ClientCertificateMessage">
+             <summary>
+            Admin methods
+             </summary>
         </member>
         <member name="F:SensorsService.ClientCertificateMessage.CertificateBytesFieldNumber">
             <summary>Field number for the "certificateBytes" field.</summary>
@@ -228,6 +257,14 @@
         <member name="M:SensorsService.Sensors.SensorsBase.GetMonitoringTree(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
              <summary>
             Sensors methods
+             </summary>
+             <param name="request">The request received from the client.</param>
+             <param name="context">The context of the server-side call handler being invoked.</param>
+             <returns>The response to send back to the client (wrapped by a task).</returns>
+        </member>
+        <member name="M:SensorsService.Sensors.SensorsBase.GetSensorHistory(SensorsService.GetSensorHistoryMessage,Grpc.Core.ServerCallContext)">
+             <summary>
+            rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
              </summary>
              <param name="request">The request received from the client.</param>
              <param name="context">The context of the server-side call handler being invoked.</param>

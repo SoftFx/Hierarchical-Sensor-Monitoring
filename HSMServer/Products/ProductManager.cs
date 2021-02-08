@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using HSMServer.Keys;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
@@ -145,6 +146,19 @@ namespace HSMServer.Products
             }
         }
 
+        public void AddSensor(string productName, string path)
+        {
+            lock (_dictionaryLock)
+            {
+                if (!_productSensorsDictionary.ContainsKey(productName))
+                {
+                    _productSensorsDictionary[productName] = new List<string>();
+                }
+                _productSensorsDictionary[productName].Add(path);
+            }
+
+            Task.Run(() => DatabaseClass.Instance.AddNewSensorToList(productName, path));
+        }
         public void AddSensor(SensorInfo sensorInfo)
         {
             lock (_dictionaryLock)
@@ -153,12 +167,13 @@ namespace HSMServer.Products
                 {
                     _productSensorsDictionary[sensorInfo.ProductName] = new List<string>();
                 }
-                _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo.SensorName);
+                _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo.Path);
             }
 
-            ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(sensorInfo));
-            ThreadPool.QueueUserWorkItem(_ =>
-                DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(sensorInfo));
+            //ThreadPool.QueueUserWorkItem(_ =>
+            //    DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            Task.Run(() => DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
         }
         public string GetProductKeyByName(string name)
         {
