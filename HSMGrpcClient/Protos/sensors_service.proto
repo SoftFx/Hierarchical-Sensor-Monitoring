@@ -12,7 +12,8 @@ service Sensors {
 	//Sensors methods
 	rpc GetMonitoringTree (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
-	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+	//rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
+	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorHistoryListMessage);
 
 	//Products methods
 	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
@@ -27,35 +28,56 @@ service Sensors {
 	rpc CheckServerAvailable (google.protobuf.Empty) returns (ServerAvailableMessage);
 }
 
+
+//Sensor updates
 message SensorsUpdateMessage {
 	repeated SensorUpdateMessage sensors = 1;
 }
 
+enum SensorObjectType {
+	OBJECT_TYPE_NONE = 0;
+	OBJECT_TYPE_BOOL_SENSOR = 1;
+	OBJECT_TYPE_INT_SENSOR = 2;
+	OBJECT_TYPE_DOUBLE_SENSOR = 3;
+	OBJECT_TYPE_STRING_SENSOR = 4;
+	OBJECT_TYPE_BAR_DOUBLE_SENSOR = 5;
+	OBJECT_TYPE_BAR_INT_SENSOR = 6;
+}
+
 message SensorUpdateMessage {
-	string Name = 1;
-	string Path = 2;
-	string Product = 3;
+	string Path = 1;
+	string Product = 2;
 	enum TransactionType {
 		TRANS_NONE = 0;
 		TRANS_ADD = 1;
 		TRANS_REMOVE = 2;
 		TRANS_UPDATE = 3;
 	}
-	TransactionType ActionType = 4;
-	enum SensorObjectType {
-		OBJECT_TYPE_NONE = 0;
-		OBJECT_TYPE_BOOL_SENSOR = 1;
-		OBJECT_TYPE_INT_SENSOR = 2;
-		OBJECT_TYPE_DOUBLE_SENSOR = 3;
-		OBJECT_TYPE_STRING_SENSOR = 4;
-		OBJECT_TYPE_BAR_DOUBLE_SENSOR = 5;
-		OBJECT_TYPE_BAR_INT_SENSOR = 6;
-	}
-	SensorObjectType ObjectType = 5;
-	bytes dataObject = 6;
-	google.protobuf.Timestamp time = 7;
+	TransactionType ActionType = 3;
+	SensorObjectType ObjectType = 4;
+	google.protobuf.Timestamp time = 5;
+	string shortValue = 6;
 }
 
+//Sensors history
+message GetSensorHistoryMessage {
+	string name = 1;
+	string path = 2;
+	string product = 3;
+	int64 n = 4;
+}
+
+message SensorHistoryListMessage {
+	repeated SensorHistoryMessage sensors = 1;
+}
+
+message SensorHistoryMessage {
+	google.protobuf.Timestamp time = 1;
+	SensorObjectType type = 2;
+	bytes typedData = 3; 
+}
+
+//Products
 message ProductsListMessage {
 	repeated ProductDataMessage products = 1;
 }
@@ -86,13 +108,8 @@ message RemoveProductResultMessage {
 	ProductDataMessage productData = 3;
 }
 
-message GetSensorHistoryMessage {
-	string name = 1;
-	string path = 2;
-	string product = 3;
-	int64 n = 4;
-}
 
+//Admin methods
 message ClientCertificateMessage {
 	bytes certificateBytes = 1;
 }
