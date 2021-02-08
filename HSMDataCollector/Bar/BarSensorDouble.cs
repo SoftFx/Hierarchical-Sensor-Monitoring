@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
@@ -9,20 +9,19 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorDouble : BarSensorBase<double>
     {
-        private double _sum = 0.0;
-        public BarSensorDouble(string path, string productKey, string serverAddress, int collectPeriod = 5000)
+        public BarSensorDouble(string path, string productKey, string serverAddress, int collectPeriod = 30000)
             : base(path, productKey, $"{serverAddress}/doubleBar", collectPeriod)
         {
             Max = double.MinValue;
             Min = double.MaxValue;
-            Mean = 0.0;
         }
 
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
             //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
-            Task.Run(() => SendData(dataObject));
+            //Task.Run(() => SendData(dataObject));
+            SendData(dataObject);
         }
 
         public override void AddValue(object value)
@@ -41,8 +40,7 @@ namespace HSMDataCollector.Bar
                 }
 
                 ++ValuesCount;
-                _sum += doubleValue;
-                Mean = _sum / ValuesCount;
+                ValuesList.Add(doubleValue);
             }
         }
 
@@ -55,11 +53,9 @@ namespace HSMDataCollector.Bar
                 Max = double.MinValue;
                 result.Min = Min;
                 Min = double.MaxValue;
-                result.Mean = Mean;
-                Mean = 0.0;
+                result.Mean = CountMean();
                 result.Count = ValuesCount;
-                ValuesCount = 0;
-                _sum = 0.0;
+                ValuesList.Clear();
             }
 
             result.Key = ProductKey;
@@ -82,6 +78,12 @@ namespace HSMDataCollector.Bar
                 return new byte[1];
             }
             
+        }
+
+        private double CountMean()
+        {
+            double sum = ValuesList.Sum();
+            return sum / ValuesCount;
         }
     }
 }

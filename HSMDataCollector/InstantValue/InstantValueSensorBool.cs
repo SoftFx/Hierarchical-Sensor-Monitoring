@@ -21,7 +21,8 @@ namespace HSMDataCollector.InstantValue
             }
 
             BoolSensorValue data = GetDataObject();
-            Task.Run(() => SendData(data));
+            //Task.Run(() => SendData(data));
+            SendData(data);
         }
 
         private BoolSensorValue GetDataObject()

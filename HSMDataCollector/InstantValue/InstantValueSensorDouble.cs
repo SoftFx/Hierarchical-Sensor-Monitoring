@@ -22,7 +22,8 @@ namespace HSMDataCollector.InstantValue
 
             DoubleSensorValue data = GetDataObject();
             //SendData(data);
-            Task.Run(() => SendData(data));
+            //Task.Run(() => SendData(data));
+            SendData(data);
         }
 
         private DoubleSensorValue GetDataObject()

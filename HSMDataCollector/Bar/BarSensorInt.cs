@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
 
@@ -9,20 +9,19 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorInt : BarSensorBase<int>
     {
-        private long _sum = 0;
-        public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 5000)
+        public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 30000)
             : base(path, productKey, $"{serverAddress}/intBar", collectPeriod)
         {
             Min = int.MaxValue;
             Max = int.MinValue;
-            Mean = 0;
         }
 
         protected override void SendDataTimer(object state)
         {
             IntBarSensorValue dataObject = GetDataObject();
             //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
-            Task.Run(() => SendData(dataObject));
+            //Task.Run(() => SendData(dataObject));
+            SendData(dataObject);
         }
 
         public override void AddValue(object value)
@@ -41,8 +40,7 @@ namespace HSMDataCollector.Bar
                 }
 
                 ++ValuesCount;
-                _sum += intValue;
-                Mean = (int) (_sum / ValuesCount);
+                ValuesList.Add(intValue);
             }
         }
 
@@ -55,11 +53,10 @@ namespace HSMDataCollector.Bar
                 Max = int.MinValue;
                 result.Min = Min;
                 Min = int.MaxValue;
-                result.Mean = Mean;
-                Mean = 0;
+                result.Mean = CountMean();
                 result.Count = ValuesCount;
                 ValuesCount = 0;
-                _sum = 0;
+                ValuesList.Clear();
             }
 
             result.Key = ProductKey;
@@ -67,6 +64,7 @@ namespace HSMDataCollector.Bar
             result.Time = DateTime.Now;
             return result;
         }
+
         protected override byte[] GetBytesData(object data)
         {
             try
@@ -81,6 +79,12 @@ namespace HSMDataCollector.Bar
                 return new byte[1];
             }
             
+        }
+
+        private int CountMean()
+        {
+            long sum = ValuesList.Sum();
+            return (int) (sum / ValuesCount);
         }
     }
 }
