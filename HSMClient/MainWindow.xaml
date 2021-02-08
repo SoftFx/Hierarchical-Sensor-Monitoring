@@ -25,7 +25,7 @@
                         </Style.Triggers>
                     </Style>
                 </DockPanel.Style>
-                <view:MainView   Margin="8,5,8,8" DataContext="{Binding MonitoringTree}" BorderBrush="Transparent" BorderThickness="0"></view:MainView>
+                <view:MainView Margin="8,5,8,8" DataContext="{Binding MonitoringTree}" BorderBrush="Transparent" BorderThickness="0"></view:MainView>
             </DockPanel>
 
             <DockPanel>

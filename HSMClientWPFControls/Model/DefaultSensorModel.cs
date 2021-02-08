@@ -8,20 +8,14 @@ namespace HSMClientWPFControls.Model
 {
     public class DefaultSensorModel : NotifyingBase
     {
-        private readonly MonitoringSensorUpdate _updateObj;
-        public DefaultSensorModel(MonitoringSensorUpdate update)
+        private readonly SensorHistoryItem _item;
+        public DefaultSensorModel(SensorHistoryItem item)
         {
-            _updateObj = update;
+            _item = item;
         }
 
-        public string TimeString
-        {
-            get => _updateObj.Time.ToString("G");
-        }
+        public string TimeString => _item.Time.ToString("G");
 
-        public string TypedValueString
-        {
-            get => Encoding.UTF8.GetString(_updateObj.DataObject);
-        }
+        public string TypedValueString => Encoding.UTF8.GetString(_item.SensorValue);
     }
 }

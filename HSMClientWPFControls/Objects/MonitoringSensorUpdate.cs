@@ -10,7 +10,7 @@ namespace HSMClientWPFControls.Objects
         public List<string> Path { get; set; }
         public ActionTypes ActionType { get; set; }
         public SensorTypes SensorType { get; set; }
-        public byte[] DataObject { get; set; }
         public DateTime Time { get; set; }
+        public string ShortValue { get; set; }
     }
 }

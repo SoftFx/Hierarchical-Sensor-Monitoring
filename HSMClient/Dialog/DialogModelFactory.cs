@@ -11,20 +11,27 @@ namespace HSMClient.Dialog
 {
     class DialogModelFactory : IDialogModelFactory
     {
-        private Type _modelType;
-        private ISensorHistoryConnector _connector;
+        private readonly ISensorHistoryConnector _connector;
+        private readonly Dictionary<SensorTypes, Type> _sensorModelType;
+
         public DialogModelFactory(ISensorHistoryConnector connector)
         {
             _connector = connector;
+            _sensorModelType = new Dictionary<SensorTypes, Type>();
         }
         public ISensorDialogModel ConstructModel(MonitoringSensorViewModel sensor)
         {
-            return Activator.CreateInstance(_modelType, _connector, sensor) as ISensorDialogModel;
+            if (_sensorModelType.ContainsKey(sensor.SensorType))
+            {
+                return Activator.CreateInstance(_sensorModelType[sensor.SensorType], _connector, sensor) as ISensorDialogModel;
+            }
+
+            return new ClientDefaultValuesListSensorModel(_connector, sensor);
         }
 
-        public void RegisterModel(SensorTypes sensorType, Type modelType)
+        public void RegisterModel(SensorTypes sensorType, Type viewModelType)
         {
-            _modelType = modelType;
+            _sensorModelType[sensorType] = viewModelType;
         }
     }
 }

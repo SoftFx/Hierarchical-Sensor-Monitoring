@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Text.Json;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
-using HSMClientWPFControls.Objects.TypedSensorData;
 
 namespace HSMClientWPFControls.ViewModel
 {
@@ -16,7 +14,6 @@ namespace HSMClientWPFControls.ViewModel
         private string _status;
         private string _shortValue;
         private SensorTypes _sensorType;
-        private object _dataObject;
         private string _message;
         private Dictionary<string, string> _validationParams;
         private string _path;
@@ -28,8 +25,8 @@ namespace HSMClientWPFControls.ViewModel
             Product = sensorUpdate.Product;
             _status = TextConstants.Error;
             _sensorType = sensorUpdate.SensorType;
-            _dataObject = sensorUpdate.DataObject;
             _path = ConvertPathToString(sensorUpdate.Path);
+            ShortValue = sensorUpdate.ShortValue;
         }
         public MonitoringSensorViewModel(string name, MonitoringNodeBase parent = null)
         {
@@ -113,60 +110,11 @@ namespace HSMClientWPFControls.ViewModel
             }
         }
         public SensorTypes SensorType => _sensorType;
-        public object DataObject => _dataObject;
         public string Path => _path;
 
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
-            ShortValue = $"{sensorUpdate.Time:F}. {GetSpecialTypedValue(sensorUpdate)}";
-        }
-
-        private string GetSpecialTypedValue(MonitoringSensorUpdate update)
-        {
-            string stringVal = Encoding.UTF8.GetString(update.DataObject);
-            switch (update.SensorType)
-            {
-                case SensorTypes.BoolSensor:
-                {
-                    BoolSensorData typedData = JsonSerializer.Deserialize<BoolSensorData>(stringVal);
-                    return $"Value = {typedData.BoolValue}";
-                }
-
-                case SensorTypes.DoubleSensor:
-                {
-                    DoubleSensorData typedData = JsonSerializer.Deserialize<DoubleSensorData>(stringVal);
-                    return $"Value = '{typedData.DoubleValue}'";
-                }
-
-                case SensorTypes.IntSensor:
-                {
-                    IntSensorData typedData = JsonSerializer.Deserialize<IntSensorData>(stringVal);
-                    return $"Value = '{typedData.IntValue}'";
-                }
-
-                case SensorTypes.StringSensor:
-                {
-                    StringSensorData typedData = JsonSerializer.Deserialize<StringSensorData>(stringVal);
-                    return $"Value = '{typedData.StringValue}'";
-                }
-
-                case SensorTypes.BarDoubleSensor:
-                {
-                    DoubleBarSensorData typedData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringVal);
-                    return
-                        $"Value: Min = {typedData.Min}, Max = {typedData.Max}, Mean = {typedData.Mean}, Count = {typedData.Count}";
-                }
-
-
-                case SensorTypes.BarIntSensor:
-                {
-                    IntBarSensorData typedData = JsonSerializer.Deserialize<IntBarSensorData>(stringVal);
-                    return
-                        $"Value: Min = {typedData.Min}, Max = {typedData.Max}, Mean = {typedData.Mean}, Count = {typedData.Count}";
-                }
-            }
-
-            return string.Empty;
+            ShortValue = sensorUpdate.ShortValue;
         }
 
         private string ConvertPathToString(List<string> path)

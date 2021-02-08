@@ -36,10 +36,7 @@ namespace HSMClient.Dialog
         public string CountText
         {
             get => $"Count = {List.Count}";
-            set
-            {
-                OnPropertyChanged(nameof(CountText));
-            }
+            set => OnPropertyChanged(nameof(CountText));
         }
         public void Refresh()
         {

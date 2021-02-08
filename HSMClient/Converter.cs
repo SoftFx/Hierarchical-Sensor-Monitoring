@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Windows.Documents;
 using Google.Protobuf;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
@@ -14,16 +15,24 @@ namespace HSMClient
 {
     public static class Converter
     {
+        public static SensorHistoryItem Convert(SensorHistoryMessage historyMessage)
+        {
+            SensorHistoryItem result = new SensorHistoryItem();
+            result.Time = historyMessage.Time.ToDateTime();
+            result.Type = Convert(historyMessage.Type);
+            result.SensorValue = historyMessage.ToByteArray();
+            return result;
+        }
         public static MonitoringSensorUpdate Convert(SensorUpdateMessage updateMessage)
         {
             MonitoringSensorUpdate result = new MonitoringSensorUpdate();
             result.Product = updateMessage.Product;
             result.ActionType = Convert(updateMessage.ActionType);
-            result.Name = updateMessage.Name;
-            result.Path = ConvertSensorPath(updateMessage.Path);
+            result.Path = ConvertSensorPath(updateMessage.Path, updateMessage.Product);
+            result.Name = result.Path[^1];
             result.SensorType = Convert(updateMessage.ObjectType);
-            result.DataObject = updateMessage.DataObject.ToByteArray();
-            result.Time = updateMessage.Time.ToDateTime();
+            //result.Time = updateMessage.Time.ToDateTime();
+            result.ShortValue = updateMessage.ShortValue;
             return result;
         }
 
@@ -52,21 +61,21 @@ namespace HSMClient
             throw new Exception($"Unknown transaction type: {transactionType}!");
         }
 
-        private static SensorTypes Convert(SensorUpdateMessage.Types.SensorObjectType type)
+        private static SensorTypes Convert(SensorObjectType type)
         {
             switch (type)
             {
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBoolSensor:
+                case SensorObjectType.ObjectTypeBoolSensor:
                     return SensorTypes.BoolSensor;
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeIntSensor:
+                case SensorObjectType.ObjectTypeIntSensor:
                     return SensorTypes.IntSensor;
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeDoubleSensor:
+                case SensorObjectType.ObjectTypeDoubleSensor:
                     return SensorTypes.DoubleSensor;
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeStringSensor:
+                case SensorObjectType.ObjectTypeStringSensor:
                     return SensorTypes.StringSensor;
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarDoubleSensor:
+                case SensorObjectType.ObjectTypeBarDoubleSensor:
                     return SensorTypes.BarDoubleSensor;
-                case SensorUpdateMessage.Types.SensorObjectType.ObjectTypeBarIntSensor:
+                case SensorObjectType.ObjectTypeBarIntSensor:
                     return SensorTypes.BarIntSensor;
                 default:
                     return SensorTypes.None;
@@ -74,8 +83,12 @@ namespace HSMClient
             throw new Exception($"Unknown sensor type: {type}!");
         }
 
-        public static List<string> ConvertSensorPath(string path)
+        public static List<string> ConvertSensorPath(string path, string productName)
         {
+            //var list = new List<string>();
+            //list.Add(productName);
+            //list.AddRange(path.Split(new[] {'/'}, StringSplitOptions.RemoveEmptyEntries));
+            //return list;
             return path.Split(new[] {'/'}, StringSplitOptions.RemoveEmptyEntries).ToList();
         }
 

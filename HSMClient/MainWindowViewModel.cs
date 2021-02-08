@@ -1,12 +1,9 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Windows;
-using HSMClient.Common;
-using HSMClient.Configuration;
 using HSMClient.Dialog;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
+using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
 
 namespace HSMClient
@@ -76,9 +73,22 @@ namespace HSMClient
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
             _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
-            DialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
-            factory.RegisterModel(SensorTypes.BoolSensor, typeof(ClientDefaultValuesListSensorModel));
-            SensorExpandingService expandingService = new SensorExpandingService(factory);
+            
+            IDialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
+            DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
+            expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.StringSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+
             _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
