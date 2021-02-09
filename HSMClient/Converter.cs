@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Windows.Documents;
 using Google.Protobuf;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
@@ -31,7 +28,7 @@ namespace HSMClient
             result.Path = ConvertSensorPath(updateMessage.Path, updateMessage.Product);
             result.Name = result.Path[^1];
             result.SensorType = Convert(updateMessage.ObjectType);
-            //result.Time = updateMessage.Time.ToDateTime();
+            result.Time = updateMessage.Time.ToDateTime();
             result.ShortValue = updateMessage.ShortValue;
             return result;
         }

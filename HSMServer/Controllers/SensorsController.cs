@@ -26,7 +26,7 @@ namespace HSMServer.Controllers
         /// 
         /// </summary>
         /// <param name="monitoringCore"></param>
-        public SensorsController(MonitoringCore monitoringCore)
+        public SensorsController(IMonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;

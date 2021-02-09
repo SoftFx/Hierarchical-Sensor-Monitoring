@@ -31,6 +31,7 @@ namespace HSMServer
 
             services.AddSingleton<DatabaseClass>();
             services.AddSingleton<MonitoringCore>();
+            services.AddScoped<IMonitoringCore, MonitoringCore>();
 
             services.AddHttpsRedirection(configureOptions =>
             {

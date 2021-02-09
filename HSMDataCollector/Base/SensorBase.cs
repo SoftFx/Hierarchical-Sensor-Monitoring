@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Globalization;
 using System.Net;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Base
 {
-    public abstract class SensorBase : ISensor
+    public abstract class SensorBase
     {
         protected readonly string Path;
         protected readonly string ProductKey;
@@ -17,9 +17,8 @@ namespace HSMDataCollector.Base
             ServerAddress = serverAddress;
         }
 
-        public abstract void AddValue(object value);
-        protected abstract byte[] GetBytesData(object data);
-        protected void SendData(object data)
+        protected abstract byte[] GetBytesData(SensorValueBase data);
+        protected void SendData(SensorValueBase value)
         {
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             try
@@ -32,7 +31,7 @@ namespace HSMDataCollector.Base
                 request.ContentType = "application/json";
                 request.Method = "POST";
                 request.KeepAlive = false;
-                byte[] dataBytes = GetBytesData(data);
+                byte[] dataBytes = GetBytesData(value);
                 using (var reqStream = request.GetRequestStream())
                 {
                     reqStream.Write(dataBytes, 0, dataBytes.Length);

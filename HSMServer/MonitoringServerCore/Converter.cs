@@ -264,66 +264,65 @@ namespace HSMServer.MonitoringServerCore
                 case SensorDataTypes.BoolSensor:
                 {
                     BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value = {boolData.BoolValue}";
+                    return $"Time: {timeCollected:G}. Value = {boolData.BoolValue}";
                 }
                 case SensorDataTypes.IntSensor:
                 {
                     IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value = {intData.IntValue}";
+                    return $"Time: {timeCollected:G}. Value = {intData.IntValue}";
                 }
                 case SensorDataTypes.DoubleSensor:
                 {
                     DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value = {doubleData.DoubleValue}";
+                    return $"Time: {timeCollected:G}. Value = {doubleData.DoubleValue}";
                 }
                 case SensorDataTypes.StringSensor:
                 {
                     StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value = '{stringTypedData.StringValue}'";
+                    return $"Time: {timeCollected:G}. Value = '{stringTypedData.StringValue}'";
                 }
                 case SensorDataTypes.BarIntSensor:
                 {
                     IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}";
+                    return $"Time: {timeCollected:G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}";
                 }
                 case SensorDataTypes.BarDoubleSensor:
                 {
                     DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                    return $"Time = {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}";
+                    return $"Time: {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}";
                 }
                 default:
                     throw new ApplicationException($"Unknown data type: {sensorType}!");
             }
         }
-
         private static string GetShortValue(BoolSensorValue value, DateTime timeCollected)
         {
-            return $"Time = {timeCollected:G}. Value = {value.BoolValue}";
+            return $"Time: {timeCollected:G}. Value = {value.BoolValue}";
         }
 
         private static string GetShortValue(IntSensorValue value, DateTime timeCollected)
         {
-            return $"Time = {timeCollected:G}. Value = {value.IntValue}";
+            return $"Time: {timeCollected:G}. Value = {value.IntValue}";
         }
 
         private static string GetShortValue(DoubleSensorValue value, DateTime timeCollected)
         {
-            return $"Time = {timeCollected:G}. Value = {value.DoubleValue}";
+            return $"Time: {timeCollected:G}. Value = {value.DoubleValue}";
         }
 
         private static string GetShortValue(StringSensorValue value, DateTime timeCollected)
         {
-            return $"Time = {timeCollected:G}. Value = {value.StringValue}";
+            return $"Time: {timeCollected:G}. Value = {value.StringValue}";
         }
 
         private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time = {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
+            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
         }
 
         private static string GetShortValue(DoubleBarSensorValue value, DateTime timeCollected)
         {
-            return $"Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
+            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
         }
         #endregion
 

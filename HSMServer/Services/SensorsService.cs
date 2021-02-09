@@ -13,7 +13,7 @@ namespace HSMServer.Services
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
 
-        public SensorsService(MonitoringCore monitoringCore)
+        public SensorsService(IMonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;

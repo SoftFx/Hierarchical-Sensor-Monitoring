@@ -3,11 +3,12 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
-    public class BarSensorInt : BarSensorBase<int>
+    public class BarSensorInt : BarSensorBase<int>, IIntBarSensor
     {
         public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 30000)
             : base(path, productKey, $"{serverAddress}/intBar", collectPeriod)
@@ -24,23 +25,22 @@ namespace HSMDataCollector.Bar
             SendData(dataObject);
         }
 
-        public override void AddValue(object value)
+        public void AddValue(int value)
         {
-            int intValue = (int) value;
             lock (_syncRoot)
             {
-                if (intValue < Min)
+                if (value < Min)
                 {
-                    Min = intValue;
+                    Min = value;
                 }
 
-                if (intValue > Max)
+                if (value > Max)
                 {
-                    Max = intValue;
+                    Max = value;
                 }
 
                 ++ValuesCount;
-                ValuesList.Add(intValue);
+                ValuesList.Add(value);
             }
         }
 
@@ -65,7 +65,7 @@ namespace HSMDataCollector.Bar
             return result;
         }
 
-        protected override byte[] GetBytesData(object data)
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {
