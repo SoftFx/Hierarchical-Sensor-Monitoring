@@ -2,22 +2,22 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
 {
-    class InstantValueSensorInt : InstantValueTypedSensorBase<int>
+    class InstantValueSensorInt : InstantValueTypedSensorBase<int>, IIntSensor
     {
         public InstantValueSensorInt(string path, string productKey, string address) : base(path, productKey, $"{address}/int")
         {
         }
 
-        public override void AddValue(object value)
+        public void AddValue(int value)
         {
-            int intValue = (int)value;
             lock (_syncRoot)
             {
-                Value = intValue;
+                Value = value;
             }
 
             IntSensorValue data = GetDataObject();
@@ -38,7 +38,7 @@ namespace HSMDataCollector.InstantValue
             result.Time = DateTime.Now;
             return result;
         }
-        protected override byte[] GetBytesData(object data)
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {

@@ -13,7 +13,7 @@ namespace HSMDataCollector.InstantValue
         {
         }
 
-        public override void AddValue(object value)
+        public void AddValue(object value)
         {
             string stringValue = (string)value;
             lock (_syncRoot)
@@ -39,7 +39,7 @@ namespace HSMDataCollector.InstantValue
             result.Time = DateTime.Now;
             return result;
         }
-        protected override byte[] GetBytesData(object data)
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {

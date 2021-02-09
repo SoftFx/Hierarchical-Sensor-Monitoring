@@ -2,22 +2,22 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
 {
-    class InstantValueSensorBool : InstantValueTypedSensorBase<bool>
+    class InstantValueSensorBool : InstantValueTypedSensorBase<bool>, IBoolSensor
     {
         public InstantValueSensorBool(string path, string productKey, string address) : base(path, productKey, $"{address}/bool")
         {
         }
 
-        public override void AddValue(object value)
+        public void AddValue(bool value)
         {
-            bool boolValue = (bool) value;
             lock (_syncRoot)
             {
-                Value = boolValue;
+                Value = value;
             }
 
             BoolSensorValue data = GetDataObject();
@@ -39,7 +39,7 @@ namespace HSMDataCollector.InstantValue
             return result;
         }
 
-        protected override byte[] GetBytesData(object data)
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {

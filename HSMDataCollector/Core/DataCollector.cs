@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
 using HSMDataCollector.InstantValue;
+using HSMDataCollector.PublicInterface;
 
 namespace HSMDataCollector.Core
 {
@@ -11,14 +11,14 @@ namespace HSMDataCollector.Core
     {
         private readonly string _productKey;
         private readonly string _connectionAddress;
-        private readonly Dictionary<string, ISensor> _nameToSensor;
+        private readonly Dictionary<string, SensorBase> _nameToSensor;
         private readonly object _syncRoot = new object();
         //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
             _connectionAddress = $"{address}:{port}/api/sensors";
             _productKey = productKey;
-            _nameToSensor = new Dictionary<string, ISensor>();
+            _nameToSensor = new Dictionary<string, SensorBase>();
             //_countSensor = new InstantValueSensorInt("CountSensor", productKey, address);
         }
         public void Initialize()
@@ -30,49 +30,31 @@ namespace HSMDataCollector.Core
         {
             throw new NotImplementedException();
         }
+        
+        //private ISensor CreateNewSensor(string path, SensorType type)
+        //{
+        //    switch (type)
+        //    {
+        //        case SensorType.BooleanValue:
+        //            return new InstantValueSensorBool(path, _productKey, _connectionAddress);
+        //        case SensorType.IntValue:
+        //            return new InstantValueSensorInt(path, _productKey, _connectionAddress);
+        //        case SensorType.DoubleValue:
+        //            return new InstantValueSensorDouble(path, _productKey, _connectionAddress);
+        //        case SensorType.StringValue:
+        //            return new InstantValueSensorString(path, _productKey, _connectionAddress);
+        //        case SensorType.IntegerBar:
+        //            return new BarSensorInt(path, _productKey, _connectionAddress);
+        //        case SensorType.DoubleBar:
+        //            return new BarSensorDouble(path, _productKey, _connectionAddress);
+        //        default:
+        //            throw new InvalidEnumArgumentException($"Invalid enum argument: {type}!");
+        //    }
+        //}
 
-        /// <summary>
-        /// Creates or returns an existing sensor object with same 'name' and 'path' values.
-        /// </summary>
-        /// <param name="path"></param>
-        /// <param name="type"></param>
-        /// <exception cref="InvalidEnumArgumentException">The exception is thrown when an unknown SensorType value is used.</exception>
-        /// <returns>ISensor derived class instance.</returns>
-        public ISensor CreateSensor(string path, SensorType type)
+        private SensorBase GetExistingSensor(string path)
         {
-            ISensor result = GetExistingSensor(path);
-            if (result != null)
-                return result;
-
-            result = CreateNewSensor(path, type);
-            AddNewSensor(result, path);
-            return result;
-        }
-
-        private ISensor CreateNewSensor(string path, SensorType type)
-        {
-            switch (type)
-            {
-                case SensorType.BooleanValue:
-                    return new InstantValueSensorBool(path, _productKey, _connectionAddress);
-                case SensorType.IntValue:
-                    return new InstantValueSensorInt(path, _productKey, _connectionAddress);
-                case SensorType.DoubleValue:
-                    return new InstantValueSensorDouble(path, _productKey, _connectionAddress);
-                case SensorType.StringValue:
-                    return new InstantValueSensorString(path, _productKey, _connectionAddress);
-                case SensorType.IntegerBar:
-                    return new BarSensorInt(path, _productKey, _connectionAddress);
-                case SensorType.DoubleBar:
-                    return new BarSensorDouble(path, _productKey, _connectionAddress);
-                default:
-                    throw new InvalidEnumArgumentException($"Invalid enum argument: {type}!");
-            }
-        }
-
-        private ISensor GetExistingSensor(string path)
-        {
-            ISensor sensor = null;
+            SensorBase sensor = null;
             lock (_syncRoot)
             {
                 if (_nameToSensor.ContainsKey(path))
@@ -84,13 +66,99 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
-        private void AddNewSensor(ISensor sensor, string path)
+        private void AddNewSensor(SensorBase sensor, string path)
         {
             lock (_syncRoot)
             {
                 _nameToSensor[path] = sensor;
                 //_countSensor.AddValue(_nameToSensor.Count);
             }
+        }
+
+        public IBoolSensor CreateBoolSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var boolSensor = existingSensor as IBoolSensor;
+            if (boolSensor != null)
+            {
+                return boolSensor;
+            }
+            
+            InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _connectionAddress);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IDoubleSensor CreateDoubleSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var doubleSensor = existingSensor as IDoubleSensor;
+            if (doubleSensor != null)
+            {
+                return doubleSensor;
+            }
+
+            InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _connectionAddress);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IIntSensor CreateIntSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var intSensor = existingSensor as IIntSensor;
+            if (intSensor != null)
+            {
+                return intSensor;
+            }
+
+            InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _connectionAddress);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IDoubleBarSensor CreateDoubleBarSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var doubleBarSensor = existingSensor as IDoubleBarSensor;
+            if (doubleBarSensor != null)
+            {
+                return doubleBarSensor;
+            }
+
+            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _connectionAddress);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IIntBarSensor CreateIntBarSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var intBarSensor = existingSensor as IIntBarSensor;
+            if (intBarSensor != null)
+            {
+                return intBarSensor;
+            }
+
+            BarSensorInt sensor = new BarSensorInt(path, _productKey, _connectionAddress);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public int GetSensorCount()
+        {
+            return GetCount();
+        }
+
+        private int GetCount()
+        {
+            int count = 0;
+            lock (_syncRoot)
+            {
+                count = _nameToSensor.Count;
+            }
+
+            return count;
         }
     }
 }
