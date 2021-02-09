@@ -12,7 +12,7 @@
              
              </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.#ctor(HSMServer.MonitoringServerCore.MonitoringCore)">
+        <member name="M:HSMServer.Controllers.SensorsController.#ctor(HSMServer.MonitoringServerCore.IMonitoringCore)">
             <summary>
             
             </summary>

@@ -15,7 +15,7 @@ namespace HSMServer.Controllers
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
-        public ValuesController(MonitoringCore monitoringCore)
+        public ValuesController(IMonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;

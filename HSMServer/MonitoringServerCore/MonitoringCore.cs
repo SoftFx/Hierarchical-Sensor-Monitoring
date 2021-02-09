@@ -151,7 +151,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
         public void AddSensorValue(IntSensorValue value)
         {
@@ -162,7 +163,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(DoubleSensorValue value)
@@ -174,7 +176,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(StringSensorValue value)
@@ -186,7 +189,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(IntBarSensorValue value)
@@ -198,7 +202,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
 
         public void AddSensorValue(DoubleBarSensorValue value)
@@ -210,7 +215,8 @@ namespace HSMServer.MonitoringServerCore
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            SaveSensorValue(dataObject, productName);
+            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            //SaveSensorValue(dataObject, productName);
         }
 
 

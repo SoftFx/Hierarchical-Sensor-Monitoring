@@ -515,3 +515,18 @@ Object name: 'Collection'.
 2021-02-08 17:58:43.6442 Info Adding target FileTarget(Name=errorfile)
 2021-02-08 17:58:43.6520 Info Adding target FileTarget(Name=allfile)
 2021-02-08 17:58:43.7031 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 15:25:47.3669 Info Message Template Auto Format enabled
+2021-02-09 15:25:47.3912 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 15:25:47.4507 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 15:25:47.4586 Info Adding target FileTarget(Name=allfile)
+2021-02-09 15:25:47.4968 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 15:30:11.0919 Info Message Template Auto Format enabled
+2021-02-09 15:30:11.1171 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 15:30:11.1943 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 15:30:11.2038 Info Adding target FileTarget(Name=allfile)
+2021-02-09 15:30:11.2388 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 15:32:00.1087 Info Message Template Auto Format enabled
+2021-02-09 15:32:00.1310 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 15:32:00.2065 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 15:32:00.2065 Info Adding target FileTarget(Name=allfile)
+2021-02-09 15:32:00.2425 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
