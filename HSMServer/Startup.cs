@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
+using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.DataLayer;
+using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -16,6 +19,15 @@ namespace HSMServer
     {
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "CertificateValidationScheme";
+
+                options.DefaultForbidScheme = "CertificateValidationScheme";
+
+                options.AddScheme<CertificateSchemeHandler>("CertificateValidationScheme", "CertificateValidationScheme");
+            });
+
             services.AddHsts(options =>
             {
                 options.Preload = true;
@@ -30,8 +42,11 @@ namespace HSMServer
             services.AddCors();
 
             services.AddSingleton<DatabaseClass>();
-            services.AddSingleton<MonitoringCore>();
-            services.AddScoped<IMonitoringCore, MonitoringCore>();
+            services.AddSingleton<CertificateManager>();
+            services.AddSingleton<UserManager>();
+            services.AddSingleton<IMonitoringCore, MonitoringCore>();
+            services.AddSingleton<ClientCertificateValidator>();
+            services.AddSingleton<Services.SensorsService>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
@@ -49,6 +64,8 @@ namespace HSMServer
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)
         {
+            app.UseCertificateValidator();
+
             app.UseSwagger(c =>
             {
                 //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";

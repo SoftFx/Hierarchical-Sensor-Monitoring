@@ -18,52 +18,52 @@ using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore, IDisposable
+    public class MonitoringCore : IMonitoringCore
     {
-        #region IDisposable implementation
+        //#region IDisposable implementation
 
-        private bool _disposed;
+        //private bool _disposed;
 
-        // Implement IDisposable.
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+        //// Implement IDisposable.
+        //public void Dispose()
+        //{
+        //    Dispose(true);
+        //    GC.SuppressFinalize(this);
+        //}
 
-        protected virtual void Dispose(bool disposingManagedResources)
-        {
-            // The idea here is that Dispose(Boolean) knows whether it is 
-            // being called to do explicit cleanup (the Boolean is true) 
-            // versus being called due to a garbage collection (the Boolean 
-            // is false). This distinction is useful because, when being 
-            // disposed explicitly, the Dispose(Boolean) method can safely 
-            // execute code using reference type fields that refer to other 
-            // objects knowing for sure that these other objects have not been 
-            // finalized or disposed of yet. When the Boolean is false, 
-            // the Dispose(Boolean) method should not execute code that 
-            // refer to reference type fields because those objects may 
-            // have already been finalized."
+        //protected virtual void Dispose(bool disposingManagedResources)
+        //{
+        //    // The idea here is that Dispose(Boolean) knows whether it is 
+        //    // being called to do explicit cleanup (the Boolean is true) 
+        //    // versus being called due to a garbage collection (the Boolean 
+        //    // is false). This distinction is useful because, when being 
+        //    // disposed explicitly, the Dispose(Boolean) method can safely 
+        //    // execute code using reference type fields that refer to other 
+        //    // objects knowing for sure that these other objects have not been 
+        //    // finalized or disposed of yet. When the Boolean is false, 
+        //    // the Dispose(Boolean) method should not execute code that 
+        //    // refer to reference type fields because those objects may 
+        //    // have already been finalized."
 
-            if (!_disposed)
-            {
-                if (disposingManagedResources)
-                {
+        //    if (!_disposed)
+        //    {
+        //        if (disposingManagedResources)
+        //        {
 
-                }
+        //        }
 
-                _disposed = true;
-            }
-        }
+        //        _disposed = true;
+        //    }
+        //}
 
-        // Use C# destructor syntax for finalization code.
-        ~MonitoringCore()
-        {
-            // Simply call Dispose(false).
-            Dispose(false);
-        }
+        //// Use C# destructor syntax for finalization code.
+        //~MonitoringCore()
+        //{
+        //    // Simply call Dispose(false).
+        //    Dispose(false);
+        //}
 
-        #endregion
+        //#endregion
 
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
@@ -73,12 +73,12 @@ namespace HSMServer.MonitoringServerCore
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore()
+        public MonitoringCore(UserManager userManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _certificateManager = new CertificateManager();
             _validator = new ClientCertificateValidator(_certificateManager);
-            _userManager = new UserManager(_certificateManager);
+            _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
             _productManager = new ProductManager();
             _logger.Debug("Monitoring core initialized");
@@ -402,6 +402,115 @@ namespace HSMServer.MonitoringServerCore
         {
             _validator.Validate(clientCertificate);
 
+            var rsa = RSA.Create(Converter.Convert(request.RSAParameters));
+
+            X509Certificate2 clientCert =
+                CertificatesProcessor.CreateAndSignCertificate(request.Subject, rsa, Config.CACertificate);
+
+            string fileName = $"{request.CommonName}.crt";
+            _certificateManager.InstallClientCertificate(clientCert);
+            _certificateManager.SaveClientCertificate(clientCert, fileName);
+            _userManager.AddNewUser(request.CommonName, clientCert.Thumbprint, fileName);
+            return Converter.Convert(clientCert, Config.CACertificate);
+        }
+
+        public SensorsUpdateMessage GetSensorUpdates(User user)
+        {
+            SensorsUpdateMessage updateMessage = new SensorsUpdateMessage();
+            updateMessage.Sensors.AddRange(_queueManager.GetUserUpdates(user));
+            return updateMessage;
+        }
+
+        public SensorsUpdateMessage GetSensorsTree(User user)
+        {
+            if (!_queueManager.IsUserRegistered(user))
+            {
+                _queueManager.AddUserSession(user);
+            }
+
+            SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
+            var productsList = _productManager.Products.Select(p => p.Name);
+            foreach (var product in productsList)
+            {
+                var sensorsList = DatabaseClass.Instance.GetSensorsList(product);
+                foreach (var sensorPath in sensorsList)
+                {
+                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensorPath);
+                    if (lastVal != null)
+                    {
+                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product));
+                    }
+                }
+            }
+            return sensorsUpdateMessage;
+        }
+
+        public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product,
+            long n = -1)
+        {
+            SensorHistoryListMessage sensorsUpdate = new SensorHistoryListMessage();
+            List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(product, path, n);
+            //_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
+            dataList.Sort((a, b) => a.TimeCollected.CompareTo(b.TimeCollected));
+            if (n != -1)
+            {
+                dataList = dataList.Take((int)n).ToList();
+            }
+            sensorsUpdate.Sensors.AddRange(dataList.Select(Converter.Convert));
+            return sensorsUpdate;
+        }
+
+        public ProductsListMessage GetProductsList(User user)
+        {
+            var products = _productManager.Products;
+
+            ProductsListMessage message = new ProductsListMessage();
+            message.Products.AddRange(products.Select(Converter.Convert));
+            return message;
+        }
+
+        public AddProductResultMessage AddProduct(User user, string productName)
+        {
+            AddProductResultMessage result = new AddProductResultMessage();
+            try
+            {
+                _productManager.AddProduct(productName);
+                Product product = _productManager.GetProductByName(productName);
+
+                result.Result = true;
+                result.ProductData = Converter.Convert(product);
+            }
+            catch (Exception e)
+            {
+                result.Result = false;
+                result.Error = e.Message;
+                _logger.Error(e, $"Failed to add new product name = {productName}, user = {user.UserName}");
+            }
+
+            return result;
+        }
+
+        public RemoveProductResultMessage RemoveProduct(User user, string productName)
+        {
+            RemoveProductResultMessage result = new RemoveProductResultMessage();
+            try
+            {
+                result.ProductData = Converter.Convert(_productManager.GetProductByName(productName));
+                _productManager.RemoveProduct(productName);
+                result.Result = true;
+            }
+            catch (Exception e)
+            {
+                result.Result = false;
+                result.Error = e.Message;
+                _logger.Error(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
+            }
+
+            return result;
+        }
+
+        public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request)
+        {
             var rsa = RSA.Create(Converter.Convert(request.RSAParameters));
 
             X509Certificate2 clientCert =
