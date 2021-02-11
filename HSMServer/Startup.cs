@@ -2,6 +2,7 @@
 using System.IO;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
+using HSMServer.Controllers;
 using HSMServer.DataLayer;
 using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
@@ -47,6 +48,8 @@ namespace HSMServer
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<Services.SensorsService>();
+            services.AddSingleton<SensorsController>();
+            services.AddSingleton<ValuesController>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
