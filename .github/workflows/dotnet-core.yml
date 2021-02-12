@@ -33,7 +33,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         path: ${{ github.workspace }}\Release
-        name: Release-${{ github.run-number }}
+        name: Release-${{ github.run_number }}
       
   publish:
     runs-on: ubuntu-latest
