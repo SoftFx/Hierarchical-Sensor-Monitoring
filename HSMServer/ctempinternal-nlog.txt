@@ -1,0 +1,192 @@
+2021-02-09 15:49:37.4417 Info Message Template Auto Format enabled
+2021-02-09 15:49:37.4573 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 15:49:37.5461 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 15:49:37.5574 Info Adding target FileTarget(Name=allfile)
+2021-02-09 15:49:37.6061 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 15:52:35.1890 Info Message Template Auto Format enabled
+2021-02-09 15:52:35.2057 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 15:52:35.2684 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 15:52:35.2777 Info Adding target FileTarget(Name=allfile)
+2021-02-09 15:52:35.3121 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 16:00:45.0596 Info Message Template Auto Format enabled
+2021-02-09 16:00:45.0826 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 16:00:45.1472 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 16:00:45.1472 Info Adding target FileTarget(Name=allfile)
+2021-02-09 16:00:45.1924 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 18:20:20.0086 Info Message Template Auto Format enabled
+2021-02-09 18:20:20.0421 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 18:20:20.1112 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 18:20:20.1207 Info Adding target FileTarget(Name=allfile)
+2021-02-09 18:20:20.1511 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 18:21:55.2868 Info Message Template Auto Format enabled
+2021-02-09 18:21:55.3031 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 18:21:55.3756 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 18:21:55.3820 Info Adding target FileTarget(Name=allfile)
+2021-02-09 18:21:55.4045 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-09 18:24:04.3780 Info Message Template Auto Format enabled
+2021-02-09 18:24:04.3976 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-09 18:24:04.4740 Info Adding target FileTarget(Name=errorfile)
+2021-02-09 18:24:04.4822 Info Adding target FileTarget(Name=allfile)
+2021-02-09 18:24:04.5134 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 12:01:25.5808 Info Message Template Auto Format enabled
+2021-02-10 12:01:25.6078 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 12:01:25.6574 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 12:01:25.6660 Info Adding target FileTarget(Name=allfile)
+2021-02-10 12:01:25.6944 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 12:11:23.5129 Info Message Template Auto Format enabled
+2021-02-10 12:11:23.5301 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 12:11:23.6109 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 12:11:23.6202 Info Adding target FileTarget(Name=allfile)
+2021-02-10 12:11:23.6559 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 12:18:59.5284 Info Message Template Auto Format enabled
+2021-02-10 12:18:59.5448 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 12:18:59.6071 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 12:18:59.6071 Info Adding target FileTarget(Name=allfile)
+2021-02-10 12:18:59.6417 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 12:30:46.0150 Info Message Template Auto Format enabled
+2021-02-10 12:30:46.0299 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 12:30:46.0956 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 12:30:46.1064 Info Adding target FileTarget(Name=allfile)
+2021-02-10 12:30:46.1625 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 12:41:09.4992 Info Message Template Auto Format enabled
+2021-02-10 12:41:09.5145 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 12:41:09.5917 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 12:41:09.6077 Info Adding target FileTarget(Name=allfile)
+2021-02-10 12:41:09.6395 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:26:05.2671 Info Message Template Auto Format enabled
+2021-02-10 13:26:05.2856 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:26:05.3450 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:26:05.3551 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:26:05.3899 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:27:23.3951 Info Message Template Auto Format enabled
+2021-02-10 13:27:23.4134 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:27:23.4737 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:27:23.4813 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:27:23.5085 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:30:48.7972 Info Message Template Auto Format enabled
+2021-02-10 13:30:48.8287 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:30:48.9145 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:30:48.9223 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:30:48.9504 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:35:38.9456 Info Message Template Auto Format enabled
+2021-02-10 13:35:38.9595 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:35:39.0264 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:35:39.0386 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:35:39.0750 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:41:48.8249 Info Message Template Auto Format enabled
+2021-02-10 13:41:48.8402 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:41:48.8978 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:41:48.9072 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:41:48.9396 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:42:28.9804 Info Message Template Auto Format enabled
+2021-02-10 13:42:28.9931 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:42:29.0372 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:42:29.0465 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:42:29.0711 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:42:49.7619 Info Message Template Auto Format enabled
+2021-02-10 13:42:49.7762 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:42:49.8347 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:42:49.8421 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:42:49.8880 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:45:19.3270 Info Message Template Auto Format enabled
+2021-02-10 13:45:19.3409 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:45:19.4003 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:45:19.4065 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:45:19.4332 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 13:55:56.0155 Info Message Template Auto Format enabled
+2021-02-10 13:55:56.0313 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 13:55:56.0784 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 13:55:56.0784 Info Adding target FileTarget(Name=allfile)
+2021-02-10 13:55:56.1134 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 14:05:57.7343 Info Message Template Auto Format enabled
+2021-02-10 14:05:57.7476 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 14:05:57.7903 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 14:05:57.7978 Info Adding target FileTarget(Name=allfile)
+2021-02-10 14:05:57.8227 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 14:41:29.9563 Info Message Template Auto Format enabled
+2021-02-10 14:41:29.9712 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 14:41:30.0177 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 14:41:30.0177 Info Adding target FileTarget(Name=allfile)
+2021-02-10 14:41:30.0549 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 14:44:26.6492 Info Message Template Auto Format enabled
+2021-02-10 14:44:26.6648 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 14:44:26.7176 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 14:44:26.7259 Info Adding target FileTarget(Name=allfile)
+2021-02-10 14:44:26.7576 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 14:49:02.9845 Info Message Template Auto Format enabled
+2021-02-10 14:49:03.0048 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 14:49:03.0683 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 14:49:03.0785 Info Adding target FileTarget(Name=allfile)
+2021-02-10 14:49:03.1173 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:02:28.0764 Info Message Template Auto Format enabled
+2021-02-10 15:02:28.0915 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:02:28.1486 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:02:28.1563 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:02:28.1900 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:03:08.9110 Info Message Template Auto Format enabled
+2021-02-10 15:03:08.9249 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:03:08.9797 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:03:08.9866 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:03:09.0146 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:05:43.2320 Info Message Template Auto Format enabled
+2021-02-10 15:05:43.2465 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:05:43.3006 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:05:43.3079 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:05:43.3352 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:07:34.3944 Info Message Template Auto Format enabled
+2021-02-10 15:07:34.4102 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:07:34.4668 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:07:34.4668 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:07:34.5006 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:10:38.7175 Info Message Template Auto Format enabled
+2021-02-10 15:10:38.7312 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:10:38.7941 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:10:38.8023 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:10:38.8286 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 15:12:33.5628 Info Message Template Auto Format enabled
+2021-02-10 15:12:33.5764 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 15:12:33.6261 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 15:12:33.6366 Info Adding target FileTarget(Name=allfile)
+2021-02-10 15:12:33.6625 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 16:22:14.9908 Info Message Template Auto Format enabled
+2021-02-10 16:22:15.0152 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 16:22:15.0675 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 16:22:15.0764 Info Adding target FileTarget(Name=allfile)
+2021-02-10 16:22:15.1034 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 16:23:07.2163 Info Message Template Auto Format enabled
+2021-02-10 16:23:07.2285 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 16:23:07.2815 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 16:23:07.2898 Info Adding target FileTarget(Name=allfile)
+2021-02-10 16:23:07.3229 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 16:50:28.2008 Info Message Template Auto Format enabled
+2021-02-10 16:50:28.2145 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 16:50:28.2567 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 16:50:28.2567 Info Adding target FileTarget(Name=allfile)
+2021-02-10 16:50:28.2894 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-10 17:12:27.1892 Info Message Template Auto Format enabled
+2021-02-10 17:12:27.2024 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-10 17:12:27.2558 Info Adding target FileTarget(Name=errorfile)
+2021-02-10 17:12:27.2638 Info Adding target FileTarget(Name=allfile)
+2021-02-10 17:12:27.2928 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=45, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-11 11:31:20.8534 Info Message Template Auto Format enabled
+2021-02-11 11:31:20.8670 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-11 11:31:20.9283 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-11 11:31:20.9506 Info Adding target FileTarget(Name=errorfile)
+2021-02-11 11:31:20.9624 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-11 11:31:20.9691 Info Adding target FileTarget(Name=allfile)
+2021-02-11 11:31:20.9941 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-11 11:44:33.7327 Info Message Template Auto Format enabled
+2021-02-11 11:44:33.7493 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-11 11:44:33.8245 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-11 11:44:33.8472 Info Adding target FileTarget(Name=errorfile)
+2021-02-11 11:44:33.8616 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-11 11:44:33.8682 Info Adding target FileTarget(Name=allfile)
+2021-02-11 11:44:33.8966 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config

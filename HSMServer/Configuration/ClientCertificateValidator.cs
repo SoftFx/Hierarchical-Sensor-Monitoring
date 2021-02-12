@@ -11,14 +11,21 @@ namespace HSMServer.Configuration
     {
         private readonly Logger _logger;
         private readonly CertificateManager _certificateManager;
-        private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(20);
-        private readonly List<string> _certificateThumbprints = new List<string>();
+        private readonly TimeSpan _updateInterval;
+        private readonly List<string> _certificateThumbprints;
         private DateTime _lastUpdate;
+        private object _syncRoot;
         public ClientCertificateValidator(CertificateManager certificateManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
+            _syncRoot = new object();
             _lastUpdate = DateTime.MinValue;
+            _updateInterval = TimeSpan.FromSeconds(20);
             _certificateManager = certificateManager;
+            lock (_syncRoot)
+            {
+                _certificateThumbprints = new List<string>();
+            }
             _logger.Info("ClientCertificateValidator initialized");
 
             //UpdateCertificates();
@@ -26,11 +33,30 @@ namespace HSMServer.Configuration
 
         private void UpdateCertificates()
         {
-            _certificateThumbprints.Clear();
+            lock (_syncRoot)
+            {
+                _certificateThumbprints.Clear();
 
-            _certificateThumbprints.AddRange(_certificateManager.GetUserCertificates().Select(d => d.Certificate.Thumbprint));
+                _certificateThumbprints.AddRange(_certificateManager.GetUserCertificates().Select(d => d.Certificate.Thumbprint));
+            }
         }
 
+        public bool IsValid(X509Certificate2 clientCertificate)
+        {
+            if (DateTime.Now - _lastUpdate > _updateInterval)
+            {
+                UpdateCertificates();
+                _lastUpdate = DateTime.Now;
+            }
+
+            bool isValid;
+            lock (_syncRoot)
+            {
+                isValid = _certificateThumbprints.Contains(clientCertificate.Thumbprint);
+            }
+
+            return isValid;
+        }
         public void Validate(X509Certificate2 clientCertificate)
         {
             try
@@ -51,7 +77,13 @@ namespace HSMServer.Configuration
                     _lastUpdate = DateTime.Now;
                 }
 
-                if (_certificateThumbprints.Contains(clientCertificate.Thumbprint))
+                bool isCert;
+                lock (_syncRoot)
+                {
+                    isCert = _certificateThumbprints.Contains(clientCertificate.Thumbprint);
+                }
+
+                if (isCert)
                 {
                     return;
                 }
