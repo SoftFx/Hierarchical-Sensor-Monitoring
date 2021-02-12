@@ -48,8 +48,8 @@ namespace HSMServer
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<Services.SensorsService>();
-            services.AddSingleton<SensorsController>();
-            services.AddSingleton<ValuesController>();
+            //services.AddSingleton<SensorsController>();
+            //services.AddSingleton<ValuesController>();
 
             services.AddHttpsRedirection(configureOptions =>
             {

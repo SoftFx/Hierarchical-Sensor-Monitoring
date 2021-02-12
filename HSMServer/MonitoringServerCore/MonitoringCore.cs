@@ -88,6 +88,8 @@ namespace HSMServer.MonitoringServerCore
 
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
+
+
             if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
             {
                 _productManager.AddSensor(productName, dataObject.Path);
@@ -524,6 +526,8 @@ namespace HSMServer.MonitoringServerCore
         }
 
         #region Sub-methods
+
+
 
         #endregion
     }
