@@ -11,30 +11,45 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 3.1.301
+    
     - name: Install dependencies
       run: dotnet restore HSMServer/HSMServer.sln
+      
     - name: Build
       run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+      
     - name: Install Client Dependencies
       run: dotnet restore HSMClient/HSMClient.sln
+      
     - name: Build Client
       run: dotnet build HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
-    - name: Create Artifact Folder
-      run: New-Item -Path '${{ github.workspace }}' -Name "Artifacts" -ItemType "directory"
-      shell: powershell
-    - name: Copy Artifacts
-      run: Copy-Item -Path '${{ github.workspace }}\Release' -Destination ${{ github.workspace }}\Artifacts -Recurse
-      shell: powershell
-    - name: Publish Artifact
+      
+    - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-       path: ${{ github.workspace }}\Artifacts
-       name: ${{ github.run_number }}
-    - name: Download Artifacts
-      uses: actions/download-artifact@v2
-    - name: Display structure of downloaded files
-      run: ls -R      
+        path: ${{ github.workspace }}\Release
+        name: Release-${{ github.run-number }}
+      
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with: 
+          name: Release-${{ github.run_number }}
+        
+      - name: Publish to DockerHub
+        uses: elgohr/Publish-Docker-Github-Action@master
+        with:
+          name: softfx/HSM
+          username: ${{ secrets.DOCKERHUBUSENAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+          #tags: "latest"
