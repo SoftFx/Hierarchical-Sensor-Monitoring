@@ -8,6 +8,7 @@ using HSMServer.Authentication;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
+using Microsoft.AspNetCore.Mvc.Razor;
 using NLog;
 using SensorsService;
 
@@ -69,15 +70,21 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
+        private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        private FirstLoginInfo _firstLoginInfo;
+        private readonly object _historyAccessLock = new object();
         public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
             lock (_accessLock)
             {
                 _currentSessions = new Dictionary<User, ClientMonitoringQueue>();
+            }
+            
+            lock (_historyAccessLock)
+            {
+                _historySessions = new Dictionary<UserSensorKey, HistoryMonitoringQueue>(new UserSensorKey.EqualityComparer());
             }
 
             _logger.Info("Monitoring queue manager initialized");
@@ -100,7 +107,6 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddUserSession(User user, IPAddress address, int port)
         {
-            _firstLoginInfo = new FirstLoginInfo() {Address = address, Port = port, Time = DateTime.Now};
             AddUserSession(user);
         }
         public void AddUserSession(User user)
@@ -181,8 +187,54 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
+        public void AddHistoryItem(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
         #endregion
 
+        #region Sensor history queue
+
+        public bool ISensorHistoryStarted(User user, string productName, string path)
+        {
+            bool isRegistered;
+            lock (_historyAccessLock)
+            {
+                isRegistered = _historySessions.ContainsKey(new UserSensorKey(user.UserName, productName, path));
+            }
+
+            return isRegistered;
+        }
+
+        public void StartSensorHistory(User user, string productName, string path)
+        {
+            HistoryMonitoringQueue queue = new HistoryMonitoringQueue();
+            lock (_historyAccessLock)
+            {
+                _historySessions[new UserSensorKey(user.UserName, productName, path)] = queue;
+            }
+        }
+
+        public List<SensorHistoryMessage> GetHistoryUpdates(User user, string productName, string path, int n)
+        {
+            var queue = GetHistoryQueue(user, productName, path);
+            return queue.GetHistoryMessages(n);
+        }
+
+        #endregion
+
+        private HistoryMonitoringQueue GetHistoryQueue(User user, string productName, string path)
+        {
+            UserSensorKey key = new UserSensorKey(user.UserName, productName, path);
+            HistoryMonitoringQueue res;
+            lock (_historyAccessLock)
+            {
+                _historySessions.TryGetValue(key, out res);
+            }
+
+            return res;
+        }
         private ClientMonitoringQueue GetUserQueue(User user)
         {
             lock (_accessLock)
@@ -191,6 +243,5 @@ namespace HSMServer.MonitoringServerCore
                 return corresponding.Value ?? null;
             }
         }
-
     }
 }

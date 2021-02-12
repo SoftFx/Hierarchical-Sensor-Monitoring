@@ -9,14 +9,15 @@ using HSMClientWPFControls.ViewModel;
 
 namespace HSMClient.Dialog
 {
-    class ClientDefaultValuesListSensorModel : ClientDialogModelBase, IDefaultValuesListModel
+    class ClientDefaultValuesListSensorModel : ClientDialogTimerModel, IDefaultValuesListModel
     {
+        public int Count { get; set; }
         public ClientDefaultValuesListSensorModel(ISensorHistoryConnector connector,
             MonitoringSensorViewModel sensor) : base(connector, sensor)
         {
             List = new ObservableCollection<DefaultSensorModel>();
             List.CollectionChanged += List_CollectionChanged;
-            UpdateData();
+            //UpdateData();
         }
 
         private void List_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -31,7 +32,18 @@ namespace HSMClient.Dialog
             sensorValues.ForEach(v => List.Add(new DefaultSensorModel(v)));
             OnPropertyChanged(nameof(CountText));
         }
-        public ObservableCollection<DefaultSensorModel> List { get; set; }
+
+        private ObservableCollection<DefaultSensorModel> _list;
+
+        public ObservableCollection<DefaultSensorModel> List
+        {
+            get => _list;
+            set
+            {
+                _list = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string CountText
         {
@@ -41,6 +53,18 @@ namespace HSMClient.Dialog
         public void Refresh()
         {
             UpdateData();
+        }
+
+        protected override void OnTimerTick()
+        {
+            var list = _connector.GetSensorHistory(_product, _path, _name, Count);
+            var sensorModelList = list.Select(i => new DefaultSensorModel(i)).ToList();
+            var observable = new ObservableCollection<DefaultSensorModel>();
+            foreach (var sensor in sensorModelList)
+            {
+                observable.Add(sensor);
+            }
+            List = observable;
         }
     }
 }

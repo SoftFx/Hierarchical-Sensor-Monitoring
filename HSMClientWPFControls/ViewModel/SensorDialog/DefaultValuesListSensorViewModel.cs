@@ -10,11 +10,22 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
 {
     public class DefaultValuesListSensorViewModel : DialogViewModel
     {
+        private int _amount;
         public DefaultValuesListSensorViewModel(ISensorDialogModel model) : base(model)
         {
             RefreshCommand = new MultipleDelegateCommand(Refresh, CanRefresh);
         }
         public ICommand RefreshCommand { get; private set; }
+
+        public string AmountText
+        {
+            get => _amount.ToString();
+            set
+            {
+                _amount = int.Parse(value);
+                OnPropertyChanged(nameof(AmountText));
+            }
+        }
         public ObservableCollection<DefaultSensorModel> List
         {
             get

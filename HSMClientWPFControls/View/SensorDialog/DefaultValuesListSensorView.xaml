@@ -13,8 +13,10 @@
             <TextBlock HorizontalAlignment="Right" Text="{Binding CountText}"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="10,10,10,0">
-            <TextBlock Margin="5" Height="20" Text="{Binding DescriptionText}"/>
-            <Button Height="20" Margin="10,0,5,0" Command="{Binding RefreshCommand}">Refresh</Button>
+            <!--<TextBlock Margin="5" Height="20" Text="{Binding DescriptionText}"/>
+            <Button Height="20" Margin="10,0,5,0" Command="{Binding RefreshCommand}">Refresh</Button>-->
+            <TextBox>Items amount:</TextBox>
+            <TextBlock Margin="5,0,0,0" Text="{Binding }"></TextBlock>
         </StackPanel>
         <ListView DockPanel.Dock="Bottom" Margin="10" ItemsSource="{Binding List}">
             <ListView.Resources>
