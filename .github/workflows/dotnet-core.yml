@@ -49,7 +49,7 @@ jobs:
       - name: Publish to DockerHub
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
-          name: softfx/HSM
-          username: ${{ secrets.DOCKERHUBUSENAME }}
+          name: softfx/hierarchical_sensor_monitoring
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
           #tags: "latest"
