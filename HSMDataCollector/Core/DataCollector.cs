@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
 using HSMDataCollector.InstantValue;
@@ -13,12 +17,15 @@ namespace HSMDataCollector.Core
         private readonly string _connectionAddress;
         private readonly Dictionary<string, SensorBase> _nameToSensor;
         private readonly object _syncRoot = new object();
+        private readonly HttpClient _client;
         //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
             _connectionAddress = $"{address}:{port}/api/sensors";
             _productKey = productKey;
             _nameToSensor = new Dictionary<string, SensorBase>();
+            _client = new HttpClient();
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             //_countSensor = new InstantValueSensorInt("CountSensor", productKey, address);
         }
         public void Initialize()
@@ -84,7 +91,7 @@ namespace HSMDataCollector.Core
                 return boolSensor;
             }
             
-            InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _connectionAddress);
+            InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _connectionAddress, _client);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -98,7 +105,7 @@ namespace HSMDataCollector.Core
                 return doubleSensor;
             }
 
-            InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _connectionAddress);
+            InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _connectionAddress, _client);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -112,12 +119,12 @@ namespace HSMDataCollector.Core
                 return intSensor;
             }
 
-            InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _connectionAddress);
+            InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _connectionAddress, _client);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        public IDoubleBarSensor CreateDoubleBarSensor(string path)
+        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000)
         {
             var existingSensor = GetExistingSensor(path);
             var doubleBarSensor = existingSensor as IDoubleBarSensor;
@@ -126,12 +133,12 @@ namespace HSMDataCollector.Core
                 return doubleBarSensor;
             }
 
-            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _connectionAddress);
+            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _connectionAddress, _client, timeout);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        public IIntBarSensor CreateIntBarSensor(string path)
+        public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000)
         {
             var existingSensor = GetExistingSensor(path);
             var intBarSensor = existingSensor as IIntBarSensor;
@@ -140,7 +147,7 @@ namespace HSMDataCollector.Core
                 return intBarSensor;
             }
 
-            BarSensorInt sensor = new BarSensorInt(path, _productKey, _connectionAddress);
+            BarSensorInt sensor = new BarSensorInt(path, _productKey, _connectionAddress, _client, timeout);
             AddNewSensor(sensor, path);
             return sensor;
         }

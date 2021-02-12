@@ -11,8 +11,8 @@ namespace HSMDataCollector.Core
         public IBoolSensor CreateBoolSensor(string path);
         public IDoubleSensor CreateDoubleSensor(string path);
         public IIntSensor CreateIntSensor(string path);
-        public IDoubleBarSensor CreateDoubleBarSensor(string path);
-        public IIntBarSensor CreateIntBarSensor(string path);
+        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000);
+        public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000);
         public int GetSensorCount();
     }
 }
