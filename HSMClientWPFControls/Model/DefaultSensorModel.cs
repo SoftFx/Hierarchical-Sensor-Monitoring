@@ -16,6 +16,6 @@ namespace HSMClientWPFControls.Model
 
         public string TimeString => _item.Time.ToString("G");
 
-        public string TypedValueString => Encoding.UTF8.GetString(_item.SensorValue);
+        public string TypedValueString => _item.SensorValue;
     }
 }

@@ -4,22 +4,22 @@ using OxyPlot;
 
 namespace HSMClientWPFControls.ViewModel.SensorDialog
 {
-    public class NumericSensorViewModel : DialogViewModel
+    public class BoolSensorViewModel : DialogViewModel
     {
-        public NumericSensorViewModel(ISensorDialogModel model) : base(model)
+        public BoolSensorViewModel(ISensorDialogModel model) : base(model)
         {
         }
 
-        public Collection<DataPoint> Data
+        public ObservableCollection<DataPoint> Data
         {
             get
             {
-                var model = Model as INumericTimeValueModel;
+                var model = Model as IBoolSensorModel;
                 return model?.Data;
             }
             set
             {
-                var model = Model as INumericTimeValueModel;
+                var model = Model as IBoolSensorModel;
                 if (model != null)
                 {
                     model.Data = value;
@@ -32,14 +32,16 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
         {
             get
             {
-                var model = Model as INumericTimeValueModel;
+                var model = Model as IBoolSensorModel;
                 return model?.Count.ToString();
             }
             set
             {
-                var model = Model as INumericTimeValueModel;
+                var model = Model as IBoolSensorModel;
                 if (model != null)
+                {
                     model.Count = int.Parse(value);
+                }
                 OnPropertyChanged(nameof(CountText));
             }
         }

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Text;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Model.SensorDialog;
@@ -10,20 +7,25 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
 {
     public class DefaultValuesListSensorViewModel : DialogViewModel
     {
-        private int _amount;
         public DefaultValuesListSensorViewModel(ISensorDialogModel model) : base(model)
         {
             RefreshCommand = new MultipleDelegateCommand(Refresh, CanRefresh);
         }
         public ICommand RefreshCommand { get; private set; }
 
-        public string AmountText
+        public string CountText
         {
-            get => _amount.ToString();
+            get
+            {
+                var model = Model as IDefaultValuesListModel;
+                return model?.Count.ToString();
+            }
             set
             {
-                _amount = int.Parse(value);
-                OnPropertyChanged(nameof(AmountText));
+                var model = Model as IDefaultValuesListModel;
+                if (model != null)
+                    model.Count = int.Parse(value);
+                OnPropertyChanged(nameof(CountText));
             }
         }
         public ObservableCollection<DefaultSensorModel> List
@@ -35,32 +37,10 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
             }
             set
             {
-                if (Model == null)
-                {
-                    var model = Model as IDefaultValuesListModel;
-                    if (model == null)
-                        model.List = value;
-                }
-                OnPropertyChanged(nameof(List));
-            }
-        }
-
-        public string CountText
-        {
-            get
-            {
                 var model = Model as IDefaultValuesListModel;
-                return model?.CountText;
-            }
-            set
-            {
-                if (Model == null)
-                {
-                    var model = Model as IDefaultValuesListModel;
-                    if (model == null)
-                        model.CountText = value;
-                }
-                OnPropertyChanged(nameof(CountText));
+                if (model != null)
+                    model.List = value;
+                OnPropertyChanged(nameof(List));
             }
         }
 

@@ -4,18 +4,18 @@ using HSMClientWPFControls.ViewModel.SensorDialog;
 namespace HSMClientWPFControls.View.SensorDialog
 {
     /// <summary>
-    /// Interaction logic for NumericSensorView.xaml
+    /// Interaction logic for BoolSensorView.xaml
     /// </summary>
-    public partial class NumericSensorView : SensorControl
+    public partial class BoolSensorView : SensorControl
     {
-        public NumericSensorView()
+        public BoolSensorView()
         {
             InitializeComponent();
         }
 
         public override DialogViewModel ConstructDefaultViewModel(ISensorDialogModel model)
         {
-            return new NumericSensorViewModel(model);
+            return new BoolSensorViewModel(model);
         }
     }
 }

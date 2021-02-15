@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using HSMClientWPFControls.ConnectorInterface;
@@ -17,7 +16,7 @@ namespace HSMClient.Dialog
         {
             List = new ObservableCollection<DefaultSensorModel>();
             List.CollectionChanged += List_CollectionChanged;
-            //UpdateData();
+            Count = 10;
         }
 
         private void List_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)

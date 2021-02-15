@@ -456,7 +456,7 @@ namespace HSMServer.MonitoringServerCore
             dataList.Sort((a, b) => a.TimeCollected.CompareTo(b.TimeCollected));
             if (n != -1)
             {
-                dataList = dataList.Take((int)n).ToList();
+                dataList = dataList.TakeLast((int)n).ToList();
             }
             sensorsUpdate.Sensors.AddRange(dataList.Select(Converter.Convert));
             return sensorsUpdate;

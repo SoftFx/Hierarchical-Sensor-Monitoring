@@ -9,14 +9,14 @@
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="400" MaxHeight="600" MinHeight="300" MinWidth="400" Width="Auto">
     <DockPanel>
-        <StackPanel DockPanel.Dock="Bottom" Margin="10">
+        <!--<StackPanel DockPanel.Dock="Bottom" Margin="10">
             <TextBlock HorizontalAlignment="Right" Text="{Binding CountText}"/>
-        </StackPanel>
+        </StackPanel>-->
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="10,10,10,0">
             <!--<TextBlock Margin="5" Height="20" Text="{Binding DescriptionText}"/>
             <Button Height="20" Margin="10,0,5,0" Command="{Binding RefreshCommand}">Refresh</Button>-->
-            <TextBox>Items amount:</TextBox>
-            <TextBlock Margin="5,0,0,0" Text="{Binding }"></TextBlock>
+            <TextBlock>Items amount:</TextBlock>
+            <TextBox Margin="5,0,0,0" Text="{Binding CountText}"></TextBox>
         </StackPanel>
         <ListView DockPanel.Dock="Bottom" Margin="10" ItemsSource="{Binding List}">
             <ListView.Resources>
