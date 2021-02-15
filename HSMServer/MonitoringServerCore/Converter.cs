@@ -36,7 +36,7 @@ namespace HSMServer.MonitoringServerCore
             SensorHistoryMessage result = new SensorHistoryMessage();
             try
             {
-                result.TypedData = ByteString.CopyFrom(Encoding.UTF8.GetBytes(dataObject.TypedData));
+                result.TypedData = dataObject.TypedData;
                 result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
                 result.Type = Convert(dataObject.DataType);
             }

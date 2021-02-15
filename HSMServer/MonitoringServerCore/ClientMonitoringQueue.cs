@@ -58,13 +58,13 @@ namespace HSMServer.MonitoringServerCore
 
         public List<SensorUpdateMessage> GetSensorUpdateMessages()
         {
+            if (!HasData)
+            {
+                return _emptyQueue;
+            }
+            List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
             lock (_lockObj)
             {
-                if (!HasData)
-                {
-                    return _emptyQueue;
-                }
-                List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
                 for (int i = 0; i < UpdateListCapacity; i++)
                 {
                     if (_elementsCount > 0)
@@ -78,8 +78,22 @@ namespace HSMServer.MonitoringServerCore
                     }
                 }
 
-                return updateList;
             }
+            return updateList;
+        }
+
+        public List<SensorUpdateMessage> GetSensorUpdateMessages(int n)
+        {
+            if (!HasData)
+            {
+                return _emptyQueue;
+            }
+            List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
+            lock (_lockObj)
+            {
+                int loopStepCount = n > UpdateListCapacity ? UpdateListCapacity : n;
+            }
+            return updateList;
         }
 
         public void Clear()

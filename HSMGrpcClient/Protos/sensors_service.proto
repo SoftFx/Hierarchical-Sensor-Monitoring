@@ -74,7 +74,7 @@ message SensorHistoryListMessage {
 message SensorHistoryMessage {
 	google.protobuf.Timestamp time = 1;
 	SensorObjectType type = 2;
-	bytes typedData = 3; 
+	string typedData = 3; 
 }
 
 //Products

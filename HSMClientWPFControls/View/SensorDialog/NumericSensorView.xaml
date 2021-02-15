@@ -5,9 +5,25 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:HSMClientWPFControls.View.SensorDialog"
+             xmlns:oxy="clr-namespace:OxyPlot.Wpf;assembly=OxyPlot.Wpf"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
-    <Grid>
-            
-    </Grid>
+    <DockPanel MinWidth="600" MinHeight="450">
+        <StackPanel DockPanel.Dock="Top" Margin="5" Orientation="Horizontal">
+            <TextBlock>Values count:</TextBlock>
+            <TextBox Margin="5,0,0,0" Text="{Binding CountText}"></TextBox>
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom">
+            <oxy:Plot>
+                <oxy:Plot.Axes>
+                    <oxy:DateTimeAxis Title="Time" StringFormat="MM/dd/yyyy\n HH:mm:ss" Position="Bottom"></oxy:DateTimeAxis>
+                    <oxy:LinearAxis Title="Values" Position="Left"></oxy:LinearAxis>
+                </oxy:Plot.Axes>
+                <oxy:Plot.Series>
+                    <oxy:LineSeries ItemsSource="{Binding Data}" Visibility="Visible"></oxy:LineSeries>
+                </oxy:Plot.Series>
+            </oxy:Plot>
+        </DockPanel>
+        <!--<WrapPanel/>-->
+    </DockPanel>
 </src:SensorControl>

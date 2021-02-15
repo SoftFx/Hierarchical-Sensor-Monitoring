@@ -76,12 +76,12 @@ namespace HSMClient
             
             IDialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
             DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
-            expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
-            expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
-            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(BoolSensorView),
+                typeof(ClientBoolSensorModel));
+            expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(NumericSensorView),
+                typeof(ClientNumericTimeValueModel));
+            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(NumericSensorView),
+                typeof(ClientNumericTimeValueModel));
             expandingService.RegisterDialog(SensorTypes.StringSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(DefaultValuesListSensorView),
