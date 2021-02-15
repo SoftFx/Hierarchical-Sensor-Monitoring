@@ -50,6 +50,6 @@ jobs:
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
           name: softfx/hierarchical_sensor_monitoring
-          username: ${{ secrets.DOCKERHUBUSER }}
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
           #tags: "latest"
