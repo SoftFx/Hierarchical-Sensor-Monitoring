@@ -26,32 +26,12 @@ namespace HSMServer.Controllers
         /// 
         /// </summary>
         /// <param name="monitoringCore"></param>
-        public SensorsController(MonitoringCore monitoringCore)
+        public SensorsController(IMonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
             _logger.Info("Sensors controller started");
         }
-
-        ///// <summary>
-        ///// Method receives data of simple type, which has boolean result and string comment
-        ///// </summary>
-        ///// <param name="jobResult"></param>
-        ///// <returns></returns>
-        //[HttpPost("")]
-        //public ActionResult<JobResult> Post([FromBody] JobResult jobResult)
-        //{
-        //    try
-        //    {
-        //        //_monitoringCore.AddSensorInfo(jobResult);
-        //        return Ok(jobResult);
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        _logger.Error(e, "Failed to put data!");
-        //        return BadRequest(jobResult);
-        //    }
-        //}
 
         /// <summary>
         /// Receives value of bool sensor

@@ -1,13 +1,15 @@
-﻿using HSMDataCollector.Base;
+﻿using System.Net.Http;
+using HSMDataCollector.Base;
 
 namespace HSMDataCollector.InstantValue
 {
     abstract class InstantValueSensorBase : SensorBase
     {
-        protected object _syncRoot;
-        protected InstantValueSensorBase(string path, string productKey, string serverAddress) : base(path, productKey, serverAddress)
+        protected object _syncObject;
+        protected InstantValueSensorBase(string path, string productKey, string serverAddress, HttpClient client) :
+            base(path, productKey, serverAddress, client)
         {
-            _syncRoot = new object();
+            _syncObject = new object();
         }
     }
 }

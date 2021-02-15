@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using HSMClient.Common.Logging;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model.SensorDialog;
 using HSMClientWPFControls.Objects;
@@ -21,11 +22,17 @@ namespace HSMClient.Dialog
         }
         public ISensorDialogModel ConstructModel(MonitoringSensorViewModel sensor)
         {
-            if (_sensorModelType.ContainsKey(sensor.SensorType))
+            try
             {
-                return Activator.CreateInstance(_sensorModelType[sensor.SensorType], _connector, sensor) as ISensorDialogModel;
+                if (_sensorModelType.ContainsKey(sensor.SensorType))
+                {
+                    return Activator.CreateInstance(_sensorModelType[sensor.SensorType], _connector, sensor) as ISensorDialogModel;
+                }
             }
-
+            catch (Exception e)
+            {
+                Logger.Error($"Failed to create model instance: {e}");
+            }
             return new ClientDefaultValuesListSensorModel(_connector, sensor);
         }
 

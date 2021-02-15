@@ -1,16 +1,18 @@
 ﻿using System;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
-    public class BarSensorInt : BarSensorBase<int>
+    public class BarSensorInt : BarSensorBase<int>, IIntBarSensor
     {
-        public BarSensorInt(string path, string productKey, string serverAddress, int collectPeriod = 30000)
-            : base(path, productKey, $"{serverAddress}/intBar", collectPeriod)
+        public BarSensorInt(string path, string productKey, string serverAddress, HttpClient client, int collectPeriod = 30000)
+            : base(path, productKey, $"{serverAddress}/intBar", client, collectPeriod)
         {
             Min = int.MaxValue;
             Max = int.MinValue;
@@ -21,33 +23,33 @@ namespace HSMDataCollector.Bar
             IntBarSensorValue dataObject = GetDataObject();
             //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
             //Task.Run(() => SendData(dataObject));
-            SendData(dataObject);
+            string serializedValue = GetStringData(dataObject);
+            SendData(serializedValue);
         }
 
-        public override void AddValue(object value)
+        public void AddValue(int value)
         {
-            int intValue = (int) value;
-            lock (_syncRoot)
+            lock (_syncObject)
             {
-                if (intValue < Min)
+                if (value < Min)
                 {
-                    Min = intValue;
+                    Min = value;
                 }
 
-                if (intValue > Max)
+                if (value > Max)
                 {
-                    Max = intValue;
+                    Max = value;
                 }
 
                 ++ValuesCount;
-                ValuesList.Add(intValue);
+                ValuesList.Add(value);
             }
         }
 
         private IntBarSensorValue GetDataObject()
         {
             IntBarSensorValue result = new IntBarSensorValue();
-            lock (_syncRoot)
+            lock (_syncObject)
             {
                 result.Max = Max;
                 Max = int.MinValue;
@@ -65,7 +67,21 @@ namespace HSMDataCollector.Bar
             return result;
         }
 
-        protected override byte[] GetBytesData(object data)
+        protected override string GetStringData(SensorValueBase data)
+        {
+            try
+            {
+                IntBarSensorValue typedData = (IntBarSensorValue)data;
+                return JsonSerializer.Serialize(typedData);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return string.Empty;
+            }
+        }
+
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {
@@ -84,7 +100,17 @@ namespace HSMDataCollector.Bar
         private int CountMean()
         {
             long sum = ValuesList.Sum();
-            return (int) (sum / ValuesCount);
+            int mean = 0;
+            try
+            {
+                mean = (int)(sum / ValuesCount);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+
+            return mean;
         }
     }
 }

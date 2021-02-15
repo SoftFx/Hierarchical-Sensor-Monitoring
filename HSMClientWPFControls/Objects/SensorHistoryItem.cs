@@ -6,6 +6,6 @@ namespace HSMClientWPFControls.Objects
     {
         public DateTime Time { get; set; }
         public SensorTypes Type { get; set; }
-        public byte[] SensorValue { get; set; }
+        public string SensorValue { get; set; }
     }
 }

@@ -10,12 +10,20 @@ namespace HSMServer.Configuration
     public class CertificateManager
     {
         private readonly Logger _logger;
-        private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(10);
-        private readonly List<CertificateDescriptor> _certificates = new List<CertificateDescriptor>();
-        private DateTime _lastUpdate = DateTime.MinValue;
+        private readonly TimeSpan _updateInterval;
+        private readonly List<CertificateDescriptor> _certificates;
+        private DateTime _lastUpdate;
+        private object _syncRoot;
 
         public CertificateManager()
         {
+            _updateInterval = TimeSpan.FromSeconds(10);
+            _lastUpdate = DateTime.MinValue;
+            _syncRoot = new object();
+            lock (_syncRoot)
+            {
+                _certificates = new List<CertificateDescriptor>();
+            }
             _logger = LogManager.GetCurrentClassLogger();
             _logger.Info("Certificate manager initialized");
         }
@@ -50,8 +58,11 @@ namespace HSMServer.Configuration
         {
             if (DateTime.Now - _lastUpdate > _updateInterval)
             {
-                _certificates.Clear();
-                _certificates.AddRange(ReadUserCertificates());
+                lock (_syncRoot)
+                {
+                    _certificates.Clear();
+                    _certificates.AddRange(ReadUserCertificates());
+                }
                 _lastUpdate = DateTime.Now;
             }
         }
@@ -59,14 +70,27 @@ namespace HSMServer.Configuration
         {
             UpdateCertificates();
 
-            return _certificates;
+            List<CertificateDescriptor> result = new List<CertificateDescriptor>();
+            lock (_syncRoot)
+            {
+                result.AddRange(_certificates);
+            }
+
+            return result;
         }
 
         public X509Certificate2 GetCertificateByFileName(string fileName)
         {
             UpdateCertificates();
 
-            return _certificates.FirstOrDefault(d => d.FileName.Equals(fileName))?.Certificate;
+            X509Certificate2 result;
+
+            lock (_syncRoot)
+            {
+                result = _certificates.FirstOrDefault(d => d.FileName.Equals(fileName))?.Certificate;
+            }
+
+            return result;
         }
 
         private List<X509Certificate2> GetCertificatesFromStore()

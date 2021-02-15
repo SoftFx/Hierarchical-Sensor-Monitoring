@@ -1,16 +1,19 @@
 ﻿using System;
+using System.ComponentModel.Design;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
-    public class BarSensorDouble : BarSensorBase<double>
+    public class BarSensorDouble : BarSensorBase<double>, IDoubleBarSensor
     {
-        public BarSensorDouble(string path, string productKey, string serverAddress, int collectPeriod = 30000)
-            : base(path, productKey, $"{serverAddress}/doubleBar", collectPeriod)
+        public BarSensorDouble(string path, string productKey, string serverAddress, HttpClient client, int collectPeriod = 30000)
+            : base(path, productKey, $"{serverAddress}/doubleBar", client, collectPeriod)
         {
             Max = double.MinValue;
             Min = double.MaxValue;
@@ -21,33 +24,33 @@ namespace HSMDataCollector.Bar
             DoubleBarSensorValue dataObject = GetDataObject();
             //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
             //Task.Run(() => SendData(dataObject));
-            SendData(dataObject);
+            string serializedValue = GetStringData(dataObject);
+            SendData(serializedValue);
         }
 
-        public override void AddValue(object value)
+        public void AddValue(double value)
         {
-            double doubleValue = (double) value;
-            lock (_syncRoot)
+            lock (_syncObject)
             {
-                if (doubleValue > Max)
+                if (value > Max)
                 {
-                    Max = doubleValue;
+                    Max = value;
                 }
 
-                if (doubleValue < Min)
+                if (value < Min)
                 {
-                    Min = doubleValue;
+                    Min = value;
                 }
 
                 ++ValuesCount;
-                ValuesList.Add(doubleValue);
+                ValuesList.Add(value);
             }
         }
 
         private DoubleBarSensorValue GetDataObject()
         {
             DoubleBarSensorValue result = new DoubleBarSensorValue();
-            lock (_syncRoot)
+            lock (_syncObject)
             {
                 result.Max = Max;
                 Max = double.MinValue;
@@ -64,7 +67,21 @@ namespace HSMDataCollector.Bar
             return result;
         }
 
-        protected override byte[] GetBytesData(object data)
+        protected override string GetStringData(SensorValueBase data)
+        {
+            try
+            {
+                DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
+                return JsonSerializer.Serialize(typedData);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return string.Empty;
+            }
+        }
+
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {
@@ -83,7 +100,16 @@ namespace HSMDataCollector.Bar
         private double CountMean()
         {
             double sum = ValuesList.Sum();
-            return sum / ValuesCount;
+            double mean = 0.0;
+            try
+            {
+                mean = sum / ValuesCount;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            return mean;
         }
     }
 }

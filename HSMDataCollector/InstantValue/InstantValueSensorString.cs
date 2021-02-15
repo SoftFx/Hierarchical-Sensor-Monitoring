@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,27 +10,23 @@ namespace HSMDataCollector.InstantValue
     class InstantValueSensorString : InstantValueSensorBase
     {
         private string _value;
-        public InstantValueSensorString(string path, string productKey, string address) : base(path, productKey, $"{address}/string")
+        public InstantValueSensorString(string path, string productKey, string address, HttpClient client) 
+            : base(path, productKey, $"{address}/string", client)
         {
         }
 
-        public override void AddValue(object value)
+        public void AddValue(string value)
         {
-            string stringValue = (string)value;
-            lock (_syncRoot)
-            {
-                _value = stringValue;
-            }
-
-            StringSensorValue data = GetDataObject();
+            StringSensorValue data = new StringSensorValue(){StringValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
             //SendData(data);
             //Task.Run(() => SendData(data));
-            SendData(data);
+            string serializedValue = GetStringData(data);
+            SendData(serializedValue);
         }
         private StringSensorValue GetDataObject()
         {
             StringSensorValue result = new StringSensorValue();
-            lock (_syncRoot)
+            lock (_syncObject)
             {
                 result.StringValue = _value;
             }
@@ -39,7 +36,22 @@ namespace HSMDataCollector.InstantValue
             result.Time = DateTime.Now;
             return result;
         }
-        protected override byte[] GetBytesData(object data)
+
+        protected override string GetStringData(SensorValueBase data)
+        {
+            try
+            {
+                StringSensorValue typedData = (StringSensorValue)data;
+                return JsonSerializer.Serialize(typedData);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return string.Empty;
+            }
+        }
+
+        protected override byte[] GetBytesData(SensorValueBase data)
         {
             try
             {

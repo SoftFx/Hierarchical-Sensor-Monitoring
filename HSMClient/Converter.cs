@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Windows.Documents;
 using Google.Protobuf;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
@@ -20,7 +17,7 @@ namespace HSMClient
             SensorHistoryItem result = new SensorHistoryItem();
             result.Time = historyMessage.Time.ToDateTime();
             result.Type = Convert(historyMessage.Type);
-            result.SensorValue = historyMessage.ToByteArray();
+            result.SensorValue = historyMessage.TypedData;
             return result;
         }
         public static MonitoringSensorUpdate Convert(SensorUpdateMessage updateMessage)
@@ -31,7 +28,7 @@ namespace HSMClient
             result.Path = ConvertSensorPath(updateMessage.Path, updateMessage.Product);
             result.Name = result.Path[^1];
             result.SensorType = Convert(updateMessage.ObjectType);
-            //result.Time = updateMessage.Time.ToDateTime();
+            result.Time = updateMessage.Time.ToDateTime();
             result.ShortValue = updateMessage.ShortValue;
             return result;
         }
