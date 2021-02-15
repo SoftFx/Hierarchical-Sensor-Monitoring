@@ -4,7 +4,6 @@ RUN apt-get update && apt-get install -y \
 	liblmdb0 \
 	lmdb-utils \
 	liblmdb-dev 
-RUN apt-get upgrade
 WORKDIR /app
 COPY ./Release .
 EXPOSE 44330
