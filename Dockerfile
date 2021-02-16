@@ -6,9 +6,9 @@ RUN apt-get update && apt-get install -y \
 	liblmdb-dev 
 COPY . ./
 RUN dotnet restore HSMServer/HSMServer.sln
-RUN dotnet publish HSMServer/HSMServer.sln -c Release -o Release
+RUN dotnet build HSMServer/HSMServer.sln -c Release --no-restore -o Release
 RUN dotnet restore HSMClient/HSMClient.sln
-RUN dotnet publish HSMClient/HSMClient.sln -c Release -o Release/Client
+RUN dotnet build HSMClient/HSMClient.sln -c Release --no-restore -o Release/Client
 WORKDIR /app
 COPY ./Release .
 EXPOSE 44330
