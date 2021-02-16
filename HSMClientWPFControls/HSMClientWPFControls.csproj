@@ -11,6 +11,7 @@
     <None Remove="View\MainView.xaml" />
     <None Remove="View\ProductsView.xaml" />
     <None Remove="View\SensorDialog\BarSensorView.xaml" />
+    <None Remove="View\SensorDialog\BoolSensorView.xaml" />
     <None Remove="View\SensorDialog\DefaultValuesListSensorView.xaml" />
     <None Remove="View\SensorDialog\NumericSensorView.xaml" />
     <None Remove="View\SettingsView.xaml" />
@@ -37,6 +38,9 @@
     </Page>
     <Page Include="View\MainView.xaml" />
     <Page Include="View\ProductsView.xaml" />
+    <Page Include="View\SensorDialog\BoolSensorView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="View\SensorDialog\DefaultValuesListSensorView.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -50,14 +54,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HSMClient.Common\HSMClient.Common.csproj">
-      <!--<Project>{c242e7ad-f24a-433e-a1ef-007bf6ac5148}</Project>
-      <Name>MAMSClient.Common</Name>-->
     </ProjectReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="View\SensorDialog\BoolSensorView.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
   </ItemGroup>
 </Project>

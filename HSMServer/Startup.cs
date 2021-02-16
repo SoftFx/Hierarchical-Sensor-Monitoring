@@ -105,7 +105,7 @@ namespace HSMServer
 
             app.UseHttpsRedirection();
 
-            app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
             lifetime.ApplicationStopping.Register(OnShutdown);
         }
