@@ -278,3 +278,14 @@
    at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
 2021-02-16 13:47:03.5570 Info Adding target FileTarget(Name=allfile)
 2021-02-16 13:47:03.6078 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-02-16 14:33:28.6925 Info Message Template Auto Format enabled
+2021-02-16 14:33:28.7068 Info Loading assembly: NLog.Web.AspNetCore
+2021-02-16 14:33:28.7606 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-16 14:33:28.7873 Info Adding target FileTarget(Name=errorfile)
+2021-02-16 14:33:28.8027 Error Error parsing layout request will be ignored. Exception: System.ArgumentException: LayoutRenderer cannot be found: 'request'
+   at NLog.Config.Factory`2.CreateInstance(String itemName)
+   at NLog.Layouts.LayoutParser.GetLayoutRenderer(ConfigurationItemFactory configurationItemFactory, String name, Nullable`1 throwConfigExceptions)
+2021-02-16 14:33:28.8102 Info Adding target FileTarget(Name=allfile)
+2021-02-16 14:33:28.8411 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
