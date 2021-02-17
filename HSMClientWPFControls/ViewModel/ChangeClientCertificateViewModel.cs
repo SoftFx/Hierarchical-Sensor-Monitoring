@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Windows.Input;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
@@ -15,6 +16,13 @@ namespace HSMClientWPFControls.ViewModel
             ShowGenerateCertificateWindowCommand = new MultipleDelegateCommand(ShowGenerateCertificateWindow,
                 CanShowGenerateCertificateWindow);
             _monitoringModel.ConnectionStatusChanged += monitoringModel_ConnectionStatusChanged;
+            _monitoringModel.PropertyChanged += MonitoringModel_PropertyChanged;
+        }
+
+        private void MonitoringModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(ConnectionStatusText));
+            OnPropertyChanged(nameof(IsGenerateEnabled));
         }
 
         private void monitoringModel_ConnectionStatusChanged(object sender, EventArgs e)

@@ -150,6 +150,7 @@ namespace HSMClient
         {
             get
             {
+                //Logger.Info($"IsConnected in ClientMonitoringModel changing, new value = {_connectionStatus != ConnectionStatus.Error}");
                 if (_connectionStatus == ConnectionStatus.Error)
                     return false;
                 return _connectionStatus == ConnectionStatus.Ok;

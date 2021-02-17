@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMClientWPFControls", "..\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMCommon", "..\HSMCommon\HSMCommon.csproj", "{F8ACEF22-31D8-45BA-86C0-38EDAA3236CC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMGrpcClient", "..\HSMgRPCClient\HSMGrpcClient.csproj", "{96FEFD75-29FA-45FB-93E5-0D005A9634DD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMGrpcClient", "..\HSMGrpcClient\HSMGrpcClient.csproj", "{96FEFD75-29FA-45FB-93E5-0D005A9634DD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

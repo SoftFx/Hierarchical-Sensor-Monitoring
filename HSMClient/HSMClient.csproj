@@ -31,18 +31,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HSMClient.Common\HSMClient.Common.csproj">
-      <!--<Project>{c242e7ad-f24a-433e-a1ef-007bf6ac5148}</Project>
-      <Name>MAMSClient.Common</Name>-->
     </ProjectReference>
     <ProjectReference Include="..\HSMClientWPFControls\HSMClientWPFControls.csproj">
-      <!--<Project>{48bfd56e-a908-4add-bd70-6e6e16d96805}</Project>
-      <Name>MAMSClientWPFControls</Name>-->
     </ProjectReference>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj">
-      <!--<Project>{5659e5dd-ff94-4992-8ce3-08ed6eaa2586}</Project>
-      <Name>MAMSCommon</Name>-->
     </ProjectReference>
-    <ProjectReference Include="..\HSMgRPCClient\HSMGrpcClient.csproj" />
+    <ProjectReference Include="..\HSMGrpcClient\HSMGrpcClient.csproj" />
   </ItemGroup>
 
   <ItemGroup>

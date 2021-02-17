@@ -16,7 +16,7 @@
             <!--<TextBlock Margin="5" Height="20" Text="{Binding DescriptionText}"/>
             <Button Height="20" Margin="10,0,5,0" Command="{Binding RefreshCommand}">Refresh</Button>-->
             <TextBlock>Items amount:</TextBlock>
-            <TextBox Margin="5,0,0,0" Text="{Binding CountText}"></TextBox>
+            <TextBlock Margin="5,0,0,0" Text="{Binding CountText}"></TextBlock>
         </StackPanel>
         <ListView DockPanel.Dock="Bottom" Margin="10" ItemsSource="{Binding List}">
             <ListView.Resources>

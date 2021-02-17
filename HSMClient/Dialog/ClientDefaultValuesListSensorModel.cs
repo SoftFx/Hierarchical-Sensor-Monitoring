@@ -16,7 +16,6 @@ namespace HSMClient.Dialog
         {
             List = new ObservableCollection<DefaultSensorModel>();
             List.CollectionChanged += List_CollectionChanged;
-            Count = 10;
         }
 
         private void List_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -56,7 +55,7 @@ namespace HSMClient.Dialog
 
         protected override void OnTimerTick()
         {
-            var list = _connector.GetSensorHistory(_product, _path, _name, Count);
+            var list = _connector.GetSensorHistory(_product, _path, _name, -1);
             var sensorModelList = list.Select(i => new DefaultSensorModel(i)).ToList();
             var observable = new ObservableCollection<DefaultSensorModel>();
             foreach (var sensor in sensorModelList)
@@ -64,6 +63,8 @@ namespace HSMClient.Dialog
                 observable.Add(sensor);
             }
             List = observable;
+            Count = observable.Count;
+            OnPropertyChanged(nameof(CountText));
         }
     }
 }
