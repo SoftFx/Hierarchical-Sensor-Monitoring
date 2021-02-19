@@ -175,7 +175,7 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                Console.WriteLine($"Sending {values.Count} values at {DateTime.Now:G}");
+                //Console.WriteLine($"Sending {values.Count} values at {DateTime.Now:G}");
                 string jsonString = JsonSerializer.Serialize(values);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
                 _client.PostAsync(_listSendingAddress, data);

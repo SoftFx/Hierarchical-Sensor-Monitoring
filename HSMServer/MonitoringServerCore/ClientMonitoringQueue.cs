@@ -9,7 +9,7 @@ namespace HSMServer.MonitoringServerCore
     {
         private readonly object _lockObj = new object();
         private readonly string _userName;
-        private readonly Timer _timer;
+        //private readonly Timer _timer;
         private readonly Queue<SensorUpdateMessage> _monitoringQueue;
         private readonly List<SensorUpdateMessage> _emptyQueue = new List<SensorUpdateMessage>();
         private int _elementsCount;
@@ -38,10 +38,10 @@ namespace HSMServer.MonitoringServerCore
             _userName = userName;
             _monitoringQueue = new Queue<SensorUpdateMessage>();
             _elementsCount = 0;
-            _timer = new Timer(15000);
-            _timer.Elapsed += DisconnectedTimer_Elapsed;
-            _timer.Start();
-            _timer.Enabled = true;
+            //_timer = new Timer(15000);
+            //_timer.Elapsed += DisconnectedTimer_Elapsed;
+            //_timer.Start();
+            //_timer.Enabled = true;
         }
 
         public void AddUpdate(SensorUpdateMessage message)
@@ -86,8 +86,8 @@ namespace HSMServer.MonitoringServerCore
                 }
 
             }
-            _timer.Stop();
-            _timer.Start();
+            //_timer.Stop();
+            //_timer.Start();
             return updateList;
         }
 
