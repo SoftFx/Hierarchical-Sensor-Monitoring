@@ -1,17 +1,17 @@
 ﻿using System;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
+using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorBool : InstantValueTypedSensorBase<bool>, IBoolSensor
     {
-        public InstantValueSensorBool(string path, string productKey, string address, HttpClient client) 
-            : base(path, productKey, $"{address}/bool", client)
+        public InstantValueSensorBool(string path, string productKey, string address, IValuesQueue queue) 
+            : base(path, productKey, $"{address}/bool", queue)
         {
         }
 
@@ -19,8 +19,10 @@ namespace HSMDataCollector.InstantValue
         {
             BoolSensorValue data = new BoolSensorValue() {BoolValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
             string serializedValue = GetStringData(data);
-            Task.Run(() => SendData(serializedValue));
-            //SendData(data);
+            CommonSensorValue commonValue = new CommonSensorValue();
+            commonValue.TypedValue = serializedValue;
+            commonValue.SensorType = SensorType.BooleanSensor;
+            SendData(commonValue);
         }
 
         private BoolSensorValue GetDataObject()

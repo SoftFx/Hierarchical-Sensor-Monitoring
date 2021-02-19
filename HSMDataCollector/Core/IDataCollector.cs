@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Base;
+﻿using System;
+using HSMDataCollector.Base;
 using HSMDataCollector.PublicInterface;
 
 namespace HSMDataCollector.Core
@@ -14,5 +15,7 @@ namespace HSMDataCollector.Core
         public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000);
         public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000);
         public int GetSensorCount();
+
+        event EventHandler ValuesQueueOverflow;
     }
 }

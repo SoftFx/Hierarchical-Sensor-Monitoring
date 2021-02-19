@@ -1,17 +1,17 @@
 ﻿using System;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
+using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorDouble : InstantValueTypedSensorBase<double>, IDoubleSensor
     {
-        public InstantValueSensorDouble(string path, string productKey, string address, HttpClient client)
-            : base(path, productKey, $"{address}/double", client)
+        public InstantValueSensorDouble(string path, string productKey, string address, IValuesQueue queue)
+            : base(path, productKey, $"{address}/double", queue)
         {
         }
 
@@ -19,8 +19,10 @@ namespace HSMDataCollector.InstantValue
         {
             DoubleSensorValue data = new DoubleSensorValue() {DoubleValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
             string serializedValue = GetStringData(data);
-            Task.Run(() => SendData(serializedValue));
-            //SendData(data);
+            CommonSensorValue commonValue = new CommonSensorValue();
+            commonValue.TypedValue = serializedValue;
+            commonValue.SensorType = SensorType.DoubleSensor;
+            SendData(commonValue);
         }
 
         private DoubleSensorValue GetDataObject()

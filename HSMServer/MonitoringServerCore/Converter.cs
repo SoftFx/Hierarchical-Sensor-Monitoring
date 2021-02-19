@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 using HSMServer.DataLayer.Model;
 using HSMServer.DataLayer.Model.TypedDataObjects;
@@ -28,6 +29,39 @@ namespace HSMServer.MonitoringServerCore
             message.SignedCertificateBytes = ByteString.CopyFrom(signedCertificate.Export(X509ContentType.Pfx));
             return message;
         }
+
+        #region Deserialize
+
+        public static BoolSensorValue GetBoolSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<BoolSensorValue>(json);
+        }
+
+        public static IntSensorValue GetIntSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<IntSensorValue>(json);
+        }
+
+        public static DoubleSensorValue GetDoubleSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<DoubleSensorValue>(json);
+        }
+
+        public static StringSensorValue GetStringSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<StringSensorValue>(json);
+        }
+        public static IntBarSensorValue GetIntBarSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<IntBarSensorValue>(json);
+        }
+
+        public static DoubleBarSensorValue GetDoubleBarSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<DoubleBarSensorValue>(json);
+        }
+
+        #endregion
 
         #region Convert to history items
 
