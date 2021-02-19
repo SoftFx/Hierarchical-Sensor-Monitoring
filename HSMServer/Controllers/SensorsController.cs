@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net.Mime;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
@@ -186,6 +187,29 @@ namespace HSMServer.Controllers
             {
                 _logger.Error(e, "Failed to put data!");
                 return BadRequest(sensorValue);
+            }
+        }
+
+        /// <summary>
+        /// Endpoint used by HSMDataCollector services, which sends data in portions
+        /// </summary>
+        /// <param name="values"></param>
+        /// <returns></returns>
+        [HttpPost("list")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<List<CommonSensorValue>> Post([FromBody] IEnumerable<CommonSensorValue> values)
+        {
+            try
+            {
+                _monitoringCore.AddSensorsValues(values);
+                return Ok(values);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to put data");
+                return BadRequest(values);
             }
         }
         //[HttpPost("nokey")]

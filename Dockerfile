@@ -8,6 +8,7 @@ RUN dotnet publish HSMServer/HSMServer.sln -c Release --no-restore -o Release
 #RUN dotnet restore HSMClient/HSMClient.sln
 #RUN dotnet publish HSMClient/HSMClient.sln -c Release --no-restore -o Client
 
+
 FROM mcr.microsoft.com/dotnet/core/sdk:3.1
 RUN apt-get update && apt-get install -y \
 	nuget \
@@ -16,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 	liblmdb-dev 
 WORKDIR /app
 COPY --from=build-env /Release .
-#COPY --from=win-build /app/Client .
+#COPY --from=win-build /Client /Client
 EXPOSE 44330
 EXPOSE 22900
 ENTRYPOINT ["dotnet", "HSMServer.dll"]

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Timers;
 using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
@@ -8,15 +9,17 @@ namespace HSMServer.MonitoringServerCore
     {
         private readonly object _lockObj = new object();
         private readonly string _userName;
+        private readonly Timer _timer;
         private readonly Queue<SensorUpdateMessage> _monitoringQueue;
         private readonly List<SensorUpdateMessage> _emptyQueue = new List<SensorUpdateMessage>();
+        private int _elementsCount;
         private const int ErrorCapacity = 10000;
         private const int WarningCapacity = 5000;
         private const int UpdateListCapacity = 1000;
         public event EventHandler<ClientMonitoringQueue> QueueOverflow;
         public event EventHandler QueueOverflowWarning;
-        public event EventHandler UserDisconnected;
-        private int _elementsCount;
+        public event EventHandler<string> UserDisconnected;
+        
 
         private bool HasData
         {
@@ -35,6 +38,10 @@ namespace HSMServer.MonitoringServerCore
             _userName = userName;
             _monitoringQueue = new Queue<SensorUpdateMessage>();
             _elementsCount = 0;
+            _timer = new Timer(15000);
+            _timer.Elapsed += DisconnectedTimer_Elapsed;
+            _timer.Start();
+            _timer.Enabled = true;
         }
 
         public void AddUpdate(SensorUpdateMessage message)
@@ -79,6 +86,8 @@ namespace HSMServer.MonitoringServerCore
                 }
 
             }
+            _timer.Stop();
+            _timer.Start();
             return updateList;
         }
 
@@ -108,6 +117,11 @@ namespace HSMServer.MonitoringServerCore
 
             _elementsCount = 0;
         }
+
+        private void DisconnectedTimer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            OnUserDisconnected();
+        }
         private void OnQueueOverflow()
         {
             QueueOverflow?.Invoke(this, this);
@@ -120,7 +134,7 @@ namespace HSMServer.MonitoringServerCore
 
         private void OnUserDisconnected()
         {
-            UserDisconnected?.Invoke(this, EventArgs.Empty);
+            UserDisconnected?.Invoke(this, _userName);
         }
 
         public string GetUserName()

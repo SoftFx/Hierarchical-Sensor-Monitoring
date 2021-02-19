@@ -78,8 +78,9 @@ namespace HSMServer.Services
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(
-                _monitoringCore.SignClientCertificate(httpContext.Connection.ClientCertificate, request));
+            User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate
+                .Thumbprint);
+            return Task.FromResult(_monitoringCore.SignClientCertificate(user, request));
         }
 
         public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)

@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography.X509Certificates;
+﻿using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
 using HSMServer.Authentication;
@@ -10,6 +11,7 @@ namespace HSMServer.MonitoringServerCore
     public interface IMonitoringCore
     {
         //public void AddSensorValue(JobResult value);
+        public void AddSensorsValues(IEnumerable<CommonSensorValue> values);
         Task<bool> AddSensorValueAsync(BoolSensorValue value);
         public void AddSensorValue(BoolSensorValue value);
         public void AddSensorValue(IntSensorValue value);
@@ -20,17 +22,6 @@ namespace HSMServer.MonitoringServerCore
         //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);
-        public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate);
-        public SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate);
-        public ProductsListMessage GetProductsList(X509Certificate2 clientCertificate);
-        public AddProductResultMessage AddNewProduct(X509Certificate2 clientCertificate, AddProductMessage message);
-        public RemoveProductResultMessage RemoveProduct(X509Certificate2 clientCertificate,
-            RemoveProductMessage message);
-        public SensorHistoryListMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage);
-
-        public SignedCertificateMessage SignClientCertificate(X509Certificate2 clientCertificate,
-            CertificateSignRequestMessage request);
-
         public SensorsUpdateMessage GetSensorUpdates(User user);
         public SensorsUpdateMessage GetSensorsTree(User user);
         public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
