@@ -2,7 +2,7 @@
 
 namespace HSMSensorDataObjects
 {
-    public class SensorValueBase
+    public abstract class SensorValueBase
     {
         public string Key { get; set; }
         public string Path { get; set; }

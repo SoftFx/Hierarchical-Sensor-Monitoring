@@ -5,15 +5,17 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
     public class BarSensorDouble : BarSensorBase<double>, IDoubleBarSensor
     {
-        public BarSensorDouble(string path, string productKey, string serverAddress, HttpClient client, int collectPeriod = 30000)
-            : base(path, productKey, $"{serverAddress}/doubleBar", client, collectPeriod)
+        public BarSensorDouble(string path, string productKey, string serverAddress, IValuesQueue queue, int collectPeriod = 30000)
+            : base(path, productKey, $"{serverAddress}/doubleBar", queue, collectPeriod)
         {
             Max = double.MinValue;
             Min = double.MaxValue;
@@ -22,10 +24,11 @@ namespace HSMDataCollector.Bar
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
-            //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
-            //Task.Run(() => SendData(dataObject));
             string serializedValue = GetStringData(dataObject);
-            SendData(serializedValue);
+            CommonSensorValue commonValue = new CommonSensorValue();
+            commonValue.TypedValue = serializedValue;
+            commonValue.SensorType = SensorType.DoubleBarSensor;
+            SendData(commonValue);
         }
 
         public void AddValue(double value)

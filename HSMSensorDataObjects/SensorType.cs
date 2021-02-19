@@ -1,26 +1,26 @@
-﻿namespace HSMDataCollector
+﻿namespace HSMDSensorDataObjects
 {
     public enum SensorType
     {
         /// <summary>
         /// Simple sensor which collects data of boolean type and sends the collected data instantly
         /// </summary>
-        BooleanValue,
+        BooleanSensor = 0,
 
         /// <summary>
         /// Simple sensor which collects data of integer type and sends the collected data instantly
         /// </summary>
-        IntValue,
+        IntSensor = 1,
 
         /// <summary>
         /// Simple sensor which collects data of double type and sends the collected data instantly
         /// </summary>
-        DoubleValue,
+        DoubleSensor = 2,
 
         /// <summary>
         /// Simple sensor which collects data of string type and sends the collected data instantly
         /// </summary>
-        StringValue,
+        StringSensor = 3,
 
         /// <summary>
         /// The sensor collects integer values during the 5-minute period and creates the object with
@@ -28,7 +28,7 @@
         /// Once the 5-minute period is over, the data is sent to the server and sensor starts collecting new bar.
         /// All values must be integers
         /// </summary>
-        IntegerBar,
+        IntegerBarSensor = 4,
 
         /// <summary>
         /// The sensor collects integer values during the 5-minute period and creates the object with
@@ -36,6 +36,6 @@
         /// Once the 5-minute period is over, the data is sent to the server and sensor starts collecting new bar.
         /// All values must have type double
         /// </summary>
-        DoubleBar
+        DoubleBarSensor = 5
     }
 }

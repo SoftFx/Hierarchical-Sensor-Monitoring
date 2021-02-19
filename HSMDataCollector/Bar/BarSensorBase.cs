@@ -2,6 +2,7 @@
 using System.Net.Http;
 using System.Threading;
 using HSMDataCollector.Base;
+using HSMDataCollector.Core;
 
 namespace HSMDataCollector.Bar
 {
@@ -20,8 +21,8 @@ namespace HSMDataCollector.Bar
         /// <param name="productKey"></param>
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds</param>
         protected BarSensorBase(string path, string productKey, string serverAddress,
-            HttpClient client, int collectPeriod)
-            : base(path, productKey, serverAddress, client)
+            IValuesQueue queue, int collectPeriod)
+            : base(path, productKey, serverAddress, queue)
         {
             _syncObject = new object();
             ValuesList = new List<T>();
