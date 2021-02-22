@@ -1,11 +1,18 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Reflection.PortableExecutable;
+using System.Windows;
+using System.Windows.Input;
+using HSMClient.Common;
+using HSMClient.Configuration;
 using HSMClient.Dialog;
 using HSMClientWPFControls.Bases;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
+using HSMCommon.Model;
 
 namespace HSMClient
 {
@@ -64,8 +71,10 @@ namespace HSMClient
 
         #endregion
 
+        private string _title;
         private MonitoringTreeViewModel _monitoringTree;
         private readonly ClientMonitoringModel _monitoringModel;
+        private DownloadUpdateModel _updateModel;
         private ChangeClientCertificateViewModel _changeCertificateModel;
         public MainWindowViewModel()
         {
@@ -96,9 +105,14 @@ namespace HSMClient
             _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
             //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
+            DownloadUpdateCommand = new SingleDelegateCommand(DownloadVersion);
         }
 
+        public ICommand DownloadUpdateCommand { get; private set; }
+        public ClientVersionModel CurrentVersion => ConfigProvider.Instance.CurrentVersion;
+            
         public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
+        public ClientVersionModel LastAvailableVersion => _monitoringModel.LastAvailableVersion;
 
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {
@@ -134,6 +148,31 @@ namespace HSMClient
         {
             get => _changeCertificateModel;
             set => _changeCertificateModel = value;
+        }
+
+        public string Title
+        {
+            get => $"{TextConstants.AppName}. Version: {CurrentVersion}";
+            set
+            {
+                _title = value;
+                OnPropertyChanged(nameof(Title));
+            }
+        }
+
+        public string UpdateButtonText => $"Install version {LastAvailableVersion}";
+
+        public bool IsClientUpdateAvailable => CurrentVersion < LastAvailableVersion;
+        public bool IsUpdateDownloading => _updateModel != null;
+        public int UpdateDownloadProgress => _updateModel.DownloadProgress;
+        private bool DownloadVersion(object o, bool isCheckOnly)
+        {
+            if (isCheckOnly)
+                return true;
+
+            _updateModel = new DownloadUpdateModel(_monitoringModel);
+            OnPropertyChanged(nameof(IsUpdateDownloading));
+            return true;
         }
     }
 }

@@ -55,5 +55,6 @@
   <ItemGroup>
     <ProjectReference Include="..\HSMClient.Common\HSMClient.Common.csproj">
     </ProjectReference>
+    <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
   </ItemGroup>
 </Project>

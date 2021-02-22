@@ -26,6 +26,7 @@ service Sensors {
 
 	//Admin methods
 	rpc CheckServerAvailable (google.protobuf.Empty) returns (ServerAvailableMessage);
+	rpc GetLastAvailableClientVersion (google.protobuf.Empty) returns (ClientVersionMessage);
 }
 
 
@@ -110,6 +111,14 @@ message RemoveProductResultMessage {
 
 
 //Admin methods
+
+message ClientVersionMessage {
+	int32 mainVersion = 1;
+	int32 subVersion = 2;
+	int32 extraVersion = 3;
+	string postfix = 4;
+}
+
 message ClientCertificateMessage {
 	bytes certificateBytes = 1;
 }

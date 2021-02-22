@@ -178,10 +178,17 @@
         <member name="F:SensorsService.RemoveProductResultMessage.ProductDataFieldNumber">
             <summary>Field number for the "productData" field.</summary>
         </member>
-        <member name="T:SensorsService.ClientCertificateMessage">
-             <summary>
-            Admin methods
-             </summary>
+        <member name="F:SensorsService.ClientVersionMessage.MainVersionFieldNumber">
+            <summary>Field number for the "mainVersion" field.</summary>
+        </member>
+        <member name="F:SensorsService.ClientVersionMessage.SubVersionFieldNumber">
+            <summary>Field number for the "subVersion" field.</summary>
+        </member>
+        <member name="F:SensorsService.ClientVersionMessage.ExtraVersionFieldNumber">
+            <summary>Field number for the "extraVersion" field.</summary>
+        </member>
+        <member name="F:SensorsService.ClientVersionMessage.PostfixFieldNumber">
+            <summary>Field number for the "postfix" field.</summary>
         </member>
         <member name="F:SensorsService.ClientCertificateMessage.CertificateBytesFieldNumber">
             <summary>Field number for the "certificateBytes" field.</summary>
@@ -316,6 +323,24 @@
         </member>
         <member name="P:AdminService.AdminServiceReflection.Descriptor">
             <summary>File descriptor for Protos/admin_service.proto</summary>
+        </member>
+        <member name="F:AdminService.UpdateInfoMessage.FilesCountFieldNumber">
+            <summary>Field number for the "filesCount" field.</summary>
+        </member>
+        <member name="F:AdminService.UpdateInfoMessage.SizeFieldNumber">
+            <summary>Field number for the "size" field.</summary>
+        </member>
+        <member name="F:AdminService.UpdateStreamMessage.BlockIndexFieldNumber">
+            <summary>Field number for the "blockIndex" field.</summary>
+        </member>
+        <member name="F:AdminService.UpdateStreamMessage.BlockSizeFieldNumber">
+            <summary>Field number for the "blockSize" field.</summary>
+        </member>
+        <member name="F:AdminService.UpdateStreamMessage.BytesDataFieldNumber">
+            <summary>Field number for the "bytesData" field.</summary>
+        </member>
+        <member name="F:AdminService.UpdateStreamRequestMessage.FileIndexFieldNumber">
+            <summary>Field number for the "fileIndex" field.</summary>
         </member>
         <member name="P:AdminService.Admin.Descriptor">
             <summary>Service descriptor</summary>

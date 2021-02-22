@@ -92,5 +92,14 @@ namespace HSMServer.Services
         {
             return Task.FromResult(new ServerAvailableMessage() {Time = Timestamp.FromDateTime(DateTime.Now.ToUniversalTime())});
         }
+
+        public override Task<ClientVersionMessage> GetLastAvailableClientVersion(Empty request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate
+                .Thumbprint);
+            return Task.FromResult(_monitoringCore.GetLastAvailableClientVersion(user));
+        }
     }
 }

@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using HSMCommon.Model;
 using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 using HSMServer.DataLayer.Model;
@@ -28,6 +29,16 @@ namespace HSMServer.MonitoringServerCore
             message.CaCertificateBytes = ByteString.CopyFrom(caCertificate.Export(X509ContentType.Cert));
             message.SignedCertificateBytes = ByteString.CopyFrom(signedCertificate.Export(X509ContentType.Pfx));
             return message;
+        }
+
+        public static ClientVersionMessage Convert(ClientVersionModel versionModel)
+        {
+            ClientVersionMessage result = new ClientVersionMessage();
+            result.MainVersion = versionModel.MainVersion;
+            result.SubVersion = versionModel.SubVersion;
+            result.ExtraVersion = versionModel.ExtraVersion;
+            result.Postfix = versionModel.Postfix;
+            return result;
         }
 
         #region Deserialize

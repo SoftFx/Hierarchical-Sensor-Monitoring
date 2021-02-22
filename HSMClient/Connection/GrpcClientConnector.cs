@@ -14,6 +14,7 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using SensorsService;
 using HSMCommon.Certificates;
+using HSMCommon.Model;
 
 namespace HSMClient.Connection
 {
@@ -102,7 +103,18 @@ namespace HSMClient.Connection
             convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));
             return convertedList;
         }
-
+        public override ClientVersionModel GetLastAvailableVersion()
+        {
+            try
+            {
+                ClientVersionMessage message = _sensorsClient.GetLastAvailableClientVersion(new Empty());
+                return Converter.Convert(message);
+            }
+            catch (Exception e)
+            {
+                return new ClientVersionModel() {MainVersion = 0,SubVersion = 0,ExtraVersion = 0};
+            }
+        }
         public override X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model,
             out X509Certificate2 caCertificate)
         {
@@ -126,7 +138,6 @@ namespace HSMClient.Connection
         {
             InitializeSensorsClient(_address, certificate);
         }
-
         private static bool ValidateServerCertificate(Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
             return true;

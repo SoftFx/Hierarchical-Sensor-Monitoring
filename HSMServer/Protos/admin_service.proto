@@ -9,5 +9,21 @@ import "Protos/timestamp.proto";
 package admin;
 
 service Admin {
-	rpc GenerateClientCertificate (google.protobuf.Empty) returns (.google.protobuf.Empty); 
+	rpc GetUpdateInfo (google.protobuf.Empty) returns (UpdateInfoMessage);
+	rpc GetUpdateStream (UpdateStreamRequestMessage) returns (stream UpdateStreamMessage);
+}
+
+message UpdateInfoMessage {
+	int32 filesCount = 1;
+	double size = 2;
+}
+
+message UpdateStreamMessage {
+	int32 blockIndex = 1;
+	int32 blockSize = 2;
+	bytes bytesData = 3;
+}
+
+message UpdateStreamRequestMessage {
+	int32 fileIndex = 1;
 }

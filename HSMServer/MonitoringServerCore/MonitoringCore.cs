@@ -391,6 +391,11 @@ namespace HSMServer.MonitoringServerCore
             return Converter.Convert(clientCert, Config.CACertificate);
         }
 
+        public ClientVersionMessage GetLastAvailableClientVersion(User user)
+        {
+            return Converter.Convert(Config.LastAvailableClientVersion);
+        }
+
         #region Sub-methods
 
 

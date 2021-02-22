@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
+using HSMCommon.Model;
 
 namespace HSMClient.Connection
 {
@@ -27,5 +28,6 @@ namespace HSMClient.Connection
              out X509Certificate2 caCertificate);
 
         public abstract void ReplaceClientCertificate(X509Certificate2 certificate);
+        public abstract ClientVersionModel GetLastAvailableVersion();
     }
 }

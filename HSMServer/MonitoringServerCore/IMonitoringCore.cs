@@ -29,6 +29,7 @@ namespace HSMServer.MonitoringServerCore
         public AddProductResultMessage AddProduct(User user, string productName);
         public RemoveProductResultMessage RemoveProduct(User user, string productName);
         public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request);
+        public ClientVersionMessage GetLastAvailableClientVersion(User user);
 
     }
 }
