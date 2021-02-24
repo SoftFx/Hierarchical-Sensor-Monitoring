@@ -1,4 +1,4 @@
-﻿using AdminService;
+﻿using HSMService;
 
 namespace HSMServer.ClientUpdateService
 {

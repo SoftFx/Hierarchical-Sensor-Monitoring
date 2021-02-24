@@ -2,15 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
-using HSMCommon;
 using HSMServer.Authentication;
-using HSMServer.DataLayer;
-using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
-using Microsoft.AspNetCore.Mvc.Razor;
+using HSMService;
 using NLog;
-using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {

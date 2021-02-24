@@ -1,18 +1,16 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using HSMCommon.Model;
-using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 using HSMServer.DataLayer.Model;
 using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Model;
+using HSMService;
 using NLog;
-using SensorsService;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 using Timestamp = Google.Protobuf.WellKnownTypes.Timestamp;
 
@@ -409,7 +407,7 @@ namespace HSMServer.MonitoringServerCore
             return model;
         }
 
-        public static RSAParameters Convert(SensorsService.RSAParameters rsaParameters)
+        public static RSAParameters Convert(HSMService.RSAParameters rsaParameters)
         {
             RSAParameters result = new RSAParameters();
             result.D = rsaParameters.D.ToByteArray();

@@ -1,13 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using AdminService;
 using HSMServer.Configuration;
 using HSMServer.Model;
+using HSMServer.MonitoringServerCore;
+using HSMService;
 using Microsoft.Extensions.Logging;
-using NLog;
 
 namespace HSMServer.ClientUpdateService
 {
@@ -16,7 +14,7 @@ namespace HSMServer.ClientUpdateService
         private readonly ILogger<UpdateServiceCore> _logger;
         private string _updatePath;
         private ClientUpdateInfo _updateInfo;
-        private string[] _filesList;
+        private List<string> _filesList;
         public UpdateServiceCore(ILogger<UpdateServiceCore> logger)
         {
             _logger = logger;
@@ -29,7 +27,7 @@ namespace HSMServer.ClientUpdateService
         {
             UpdateInfoMessage message = new UpdateInfoMessage();
             message.Size = _updateInfo.Size;
-            message.FilesCount = _updateInfo.FilesCount;
+            message.Files.AddRange(_filesList);
             return message;
         }
 
@@ -47,7 +45,7 @@ namespace HSMServer.ClientUpdateService
                 return new byte[1];
             }
 
-            byte[] bytes = File.ReadAllBytes(fileName);
+            byte[] bytes = File.ReadAllBytes(Path.Combine(_updatePath, fileName));
             return bytes;
         }
 
@@ -55,10 +53,9 @@ namespace HSMServer.ClientUpdateService
         private ClientUpdateInfo ReadUpdateInfo()
         {
             ClientUpdateInfo result = new ClientUpdateInfo();
-            _filesList = Directory.GetFiles(_updatePath);
-            result.FilesCount = _filesList.Length;
-            double size = _filesList.Aggregate<string, double>(0, (current, file) => current + new FileInfo(file).Length);
-            result.Size = size;
+            _filesList = Directory.GetFiles(_updatePath).ToList().Select(Path.GetFileName).ToList();
+            result.FilesCount = _filesList.Count;
+            result.Size = 0;
             return result;
         }
     }

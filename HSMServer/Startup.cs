@@ -47,7 +47,7 @@ namespace HSMServer
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<IUpdateService, UpdateServiceCore>();
-            services.AddSingleton<Services.SensorsService>();
+            services.AddSingleton<Services.HSMService>();
             services.AddSingleton<Services.AdminService>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
@@ -91,7 +91,7 @@ namespace HSMServer
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapGrpcService<Services.SensorsService>();
+                endpoints.MapGrpcService<Services.HSMService>();
                 endpoints.MapGrpcService<Services.AdminService>();
               
                 endpoints.MapGet("/Protos/sensors_service.proto", async context =>

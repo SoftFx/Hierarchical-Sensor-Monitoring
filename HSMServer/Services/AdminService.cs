@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using AdminService;
+﻿using System.Threading.Tasks;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.ClientUpdateService;
+using HSMService;
 using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Services
@@ -30,19 +27,31 @@ namespace HSMServer.Services
 
         public override async Task GetUpdateStream(UpdateStreamRequestMessage request, IServerStreamWriter<UpdateStreamMessage> responseStream, ServerCallContext context)
         {
-            byte[] bytes = _updateService.GetUpdateFile(request.FileIndex);
+            byte[] bytes = _updateService.GetFileContents(request.FileName);
             int count = 0;
             int currentIndex = 0;
-            while (!context.CancellationToken.IsCancellationRequested || currentIndex <= bytes.Length)
+            int bytesLeft = bytes.Length;
+            while (currentIndex < bytesLeft)
             {
                 UpdateStreamMessage message = new UpdateStreamMessage();
-                message.BlockSize = BLOCK_SIZE;
-                message.BlockIndex = count;
-                message.BytesData = ByteString.CopyFrom(bytes.Skip(count * BLOCK_SIZE).Take(BLOCK_SIZE).ToArray());
+                if (bytesLeft <= BLOCK_SIZE)
+                {
+                    message.BytesData = ByteString.CopyFrom(bytes);
+                    message.BlockSize = bytesLeft;
+                    message.BlockIndex = count;
+                    currentIndex = bytesLeft;
+                }
+                else
+                {
+                    message.BytesData = ByteString.CopyFrom(bytes[currentIndex..(BLOCK_SIZE+currentIndex)]);
+                    message.BlockIndex = count;
+                    message.BlockSize = BLOCK_SIZE;
+                    bytesLeft = bytesLeft - BLOCK_SIZE;
+                    currentIndex = currentIndex + BLOCK_SIZE;
+                }
 
                 await responseStream.WriteAsync(message);
 
-                currentIndex = currentIndex + BLOCK_SIZE;
                 ++count;
             }
         }

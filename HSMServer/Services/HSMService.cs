@@ -4,18 +4,18 @@ using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.Authentication;
 using HSMServer.MonitoringServerCore;
-using SensorsService;
+using HSMService;
 using NLog;
 
 namespace HSMServer.Services
 {
-    public class SensorsService : Sensors.SensorsBase
+    public class HSMService : Sensors.SensorsBase
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
         private readonly UserManager _userManager;
 
-        public SensorsService(IMonitoringCore monitoringCore, UserManager userManager)
+        public HSMService(IMonitoringCore monitoringCore, UserManager userManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
@@ -95,11 +95,7 @@ namespace HSMServer.Services
 
         public override Task<ClientVersionMessage> GetLastAvailableClientVersion(Empty request, ServerCallContext context)
         {
-            var httpContext = context.GetHttpContext();
-
-            User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate
-                .Thumbprint);
-            return Task.FromResult(_monitoringCore.GetLastAvailableClientVersion(user));
+            return Task.FromResult(_monitoringCore.GetLastAvailableClientVersion());
         }
     }
 }
