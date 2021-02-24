@@ -15,6 +15,7 @@
     <None Remove="View\SensorDialog\DefaultValuesListSensorView.xaml" />
     <None Remove="View\SensorDialog\NumericSensorView.xaml" />
     <None Remove="View\SettingsView.xaml" />
+    <None Remove="View\UpdateClientView.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Page Include="View\SensorDialog\BarSensorView.xaml">
@@ -48,6 +49,9 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="View\SettingsView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="View\UpdateClientView.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

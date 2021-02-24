@@ -10,6 +10,7 @@ using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
+using HSMClientWPFControls.View;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon.Model;
@@ -74,8 +75,9 @@ namespace HSMClient
         private string _title;
         private MonitoringTreeViewModel _monitoringTree;
         private readonly ClientMonitoringModel _monitoringModel;
-        private DownloadUpdateModel _updateModel;
+        private UpdateClientModel _updateModel;
         private ChangeClientCertificateViewModel _changeCertificateModel;
+        private UpdateClientViewModel _updateClientViewModel;
         public MainWindowViewModel()
         {
             //CheckConfiguration();
@@ -83,6 +85,8 @@ namespace HSMClient
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
             _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
+            _updateModel = new UpdateClientModel(_monitoringModel);
+            _updateClientViewModel = new UpdateClientViewModel(_updateModel);
             
             IDialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
             DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
@@ -105,10 +109,8 @@ namespace HSMClient
             _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
             //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
-            DownloadUpdateCommand = new SingleDelegateCommand(DownloadVersion);
         }
 
-        public ICommand DownloadUpdateCommand { get; private set; }
         public ClientVersionModel CurrentVersion => ConfigProvider.Instance.CurrentVersion;
             
         public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
@@ -150,6 +152,11 @@ namespace HSMClient
             set => _changeCertificateModel = value;
         }
 
+        public UpdateClientViewModel UpdateClientModel
+        {
+            get => _updateClientViewModel;
+            set => _updateClientViewModel = value;
+        }
         public string Title
         {
             get => $"{TextConstants.AppName}. Version: {CurrentVersion}";
@@ -158,21 +165,6 @@ namespace HSMClient
                 _title = value;
                 OnPropertyChanged(nameof(Title));
             }
-        }
-
-        public string UpdateButtonText => $"Install version {LastAvailableVersion}";
-
-        public bool IsClientUpdateAvailable => CurrentVersion < LastAvailableVersion;
-        public bool IsUpdateDownloading => _updateModel != null;
-        public int UpdateDownloadProgress => _updateModel.DownloadProgress;
-        private bool DownloadVersion(object o, bool isCheckOnly)
-        {
-            if (isCheckOnly)
-                return true;
-
-            _updateModel = new DownloadUpdateModel(_monitoringModel);
-            OnPropertyChanged(nameof(IsUpdateDownloading));
-            return true;
         }
     }
 }

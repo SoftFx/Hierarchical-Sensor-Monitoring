@@ -12,9 +12,9 @@ using HSMClient.Common.Logging;
 using HSMClient.Configuration;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
-using SensorsService;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
+using HSMService;
 
 namespace HSMClient.Connection
 {
@@ -103,6 +103,7 @@ namespace HSMClient.Connection
             convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));
             return convertedList;
         }
+
         public override ClientVersionModel GetLastAvailableVersion()
         {
             try

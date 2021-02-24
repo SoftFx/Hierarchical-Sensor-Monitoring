@@ -66,8 +66,8 @@
             if (left < right)
                 return false;
 
-            return left.MainVersion != right.MainVersion && left.SubVersion != right.SubVersion
-                                                         && left.ExtraVersion != right.ExtraVersion &&
+            return left.MainVersion > right.MainVersion || left.SubVersion > right.SubVersion
+                || left.ExtraVersion > right.ExtraVersion ||
                                                          !left.Postfix.Equals(right.Postfix);
         }
     }

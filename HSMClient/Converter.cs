@@ -6,8 +6,8 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
-using SensorsService;
-using RSAParameters = SensorsService.RSAParameters;
+using HSMService;
+using RSAParameters = HSMService.RSAParameters;
 
 namespace HSMClient
 {
