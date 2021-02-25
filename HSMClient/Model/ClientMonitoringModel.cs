@@ -17,7 +17,7 @@ using HSMCommon;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
 
-namespace HSMClient
+namespace HSMClient.Model
 {
     public class ClientMonitoringModel : ModelBase, IMonitoringModel
     {

@@ -1,13 +1,16 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using HSMClient.Common;
 using HSMClient.Common.Logging;
 using HSMClient.Connection;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
+using HSMCommon;
 using HSMCommon.Model;
 
-namespace HSMClient
+namespace HSMClient.Model
 {
     public class UpdateClientModel : ModelBase, IUpdateClientModel
     {
@@ -22,6 +25,7 @@ namespace HSMClient
         private Thread _downloadThread;
         private ClientVersionModel _currentVersion;
         private ClientVersionModel _latestVersion;
+        private string _updaterFileName = "HSMClientUpdater.exe";
         public UpdateClientModel(ClientMonitoringModel model)
         {
             _admin = new AdminConnector(model.ConnectionAddress);
@@ -91,6 +95,59 @@ namespace HSMClient
             IsUpdating = true;
             _admin.Initialize();
             StartDownloadThread();
+        }
+
+        public void InstallUpdate()
+        {
+            try
+            {
+                UpdateUpdater();
+                LaunchUpdater();
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"{e}");
+                return;
+            }
+            
+            OnUpdateClient();            
+        }
+        
+        public event EventHandler UpdateClient;
+
+        private void LaunchUpdater()
+        {
+            try
+            {
+                Process.Start(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.UpdateFileName));
+            }
+            catch (Exception exception)
+            {
+                Logger.Error($"Failed to launch HSMClient updater, error = {exception}");
+                throw;
+            }
+        }
+        private void UpdateUpdater()
+        {
+            string oldFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Old");
+            if (!Directory.Exists(oldFolderPath))
+                Directory.CreateDirectory(oldFolderPath);
+
+            string oldUpdaterPath = Path.Combine(oldFolderPath, _updaterFileName);
+            if (File.Exists(oldUpdaterPath))
+                FileManager.SafeDelete(oldUpdaterPath);
+
+            string newUpdaterPath = Path.Combine(_updateDirectory, _updaterFileName);
+            if (!File.Exists(newUpdaterPath))
+            {
+                throw new Exception($"Update files did not load correctly!");
+            }
+
+            FileManager.SafeMove(newUpdaterPath, oldUpdaterPath);
+        }
+        private void OnUpdateClient()
+        {
+            UpdateClient?.Invoke(this, EventArgs.Empty);
         }
         private void FillUpdateInfo()
         {

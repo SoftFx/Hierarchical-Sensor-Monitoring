@@ -12,5 +12,6 @@ namespace HSMClientWPFControls.Model
         ClientUpdateInfoModel UpdateInfo { get; }
         ClientVersionModel UpdateVersion { get; }
         void DownloadUpdate();
+        void InstallUpdate();
     }
 }

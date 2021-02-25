@@ -1,6 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
+using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Model;
 
@@ -60,7 +62,12 @@ namespace HSMClientWPFControls.ViewModel
             if (isCheckOnly)
                 return true;
 
-            //
+            var result = MessageBox.Show(Application.Current.MainWindow, "Are you sure want to install?",
+                TextConstants.AppName, MessageBoxButton.YesNo);
+            if (result == MessageBoxResult.Yes)
+            {
+                _updateClientModel.InstallUpdate();
+            }
             return true;
         }
 

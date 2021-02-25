@@ -1,16 +1,11 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Reflection.PortableExecutable;
-using System.Windows;
-using System.Windows.Input;
 using HSMClient.Common;
 using HSMClient.Configuration;
 using HSMClient.Dialog;
+using HSMClient.Model;
 using HSMClientWPFControls.Bases;
-using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
-using HSMClientWPFControls.View;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon.Model;
@@ -72,7 +67,6 @@ namespace HSMClient
 
         #endregion
 
-        private string _title;
         private MonitoringTreeViewModel _monitoringTree;
         private readonly ClientMonitoringModel _monitoringModel;
         private UpdateClientModel _updateModel;
@@ -86,8 +80,9 @@ namespace HSMClient
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
             _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
             _updateModel = new UpdateClientModel(_monitoringModel);
+            _updateModel.UpdateClient += UpdateModel_UpdateClient;
             _updateClientViewModel = new UpdateClientViewModel(_updateModel);
-            
+
             IDialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
             DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
             expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(DefaultValuesListSensorView),
@@ -111,11 +106,21 @@ namespace HSMClient
             //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
         }
 
+
+        public event EventHandler UpdateClient;
         public ClientVersionModel CurrentVersion => ConfigProvider.Instance.CurrentVersion;
             
         public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
         public ClientVersionModel LastAvailableVersion => _monitoringModel.LastAvailableVersion;
+        private void UpdateModel_UpdateClient(object sender, EventArgs e)
+        {
+            OnUpdateClient();
+        }
 
+        private void OnUpdateClient()
+        {
+            UpdateClient?.Invoke(this, EventArgs.Empty);
+        }
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {
             ProductsWindow window = new ProductsWindow(_monitoringModel.ProductsConnector);
@@ -157,14 +162,6 @@ namespace HSMClient
             get => _updateClientViewModel;
             set => _updateClientViewModel = value;
         }
-        public string Title
-        {
-            get => $"{TextConstants.AppName}. Version: {CurrentVersion}";
-            set
-            {
-                _title = value;
-                OnPropertyChanged(nameof(Title));
-            }
-        }
+        public string Title => $"{TextConstants.AppName}. Version: {CurrentVersion}";
     }
 }
