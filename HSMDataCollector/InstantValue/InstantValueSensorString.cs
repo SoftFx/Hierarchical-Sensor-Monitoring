@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
+using HSMDataCollector.Core;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
@@ -10,18 +10,19 @@ namespace HSMDataCollector.InstantValue
     class InstantValueSensorString : InstantValueSensorBase
     {
         private string _value;
-        public InstantValueSensorString(string path, string productKey, string address, HttpClient client) 
-            : base(path, productKey, $"{address}/string", client)
+        public InstantValueSensorString(string path, string productKey, string address, IValuesQueue queue) 
+            : base(path, productKey, $"{address}/string", queue)
         {
         }
 
         public void AddValue(string value)
         {
             StringSensorValue data = new StringSensorValue(){StringValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
-            //SendData(data);
-            //Task.Run(() => SendData(data));
             string serializedValue = GetStringData(data);
-            SendData(serializedValue);
+            CommonSensorValue commonValue = new CommonSensorValue();
+            commonValue.TypedValue = serializedValue;
+            commonValue.SensorType = SensorType.StringSensor;
+            SendData(commonValue);
         }
         private StringSensorValue GetDataObject()
         {

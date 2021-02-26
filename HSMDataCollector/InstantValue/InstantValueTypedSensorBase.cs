@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using HSMDataCollector.Core;
 
 namespace HSMDataCollector.InstantValue
 {
@@ -6,8 +7,8 @@ namespace HSMDataCollector.InstantValue
     {
         protected T Value;
         
-        protected InstantValueTypedSensorBase(string path, string productKey, string address, HttpClient client)
-            : base(path, productKey, address, client)
+        protected InstantValueTypedSensorBase(string path, string productKey, string address, IValuesQueue queue)
+            : base(path, productKey, address, queue)
         {
         }
     }

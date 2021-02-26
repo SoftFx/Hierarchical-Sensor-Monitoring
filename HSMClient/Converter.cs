@@ -5,13 +5,23 @@ using Google.Protobuf;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMCommon.Certificates;
-using SensorsService;
-using RSAParameters = SensorsService.RSAParameters;
+using HSMCommon.Model;
+using HSMService;
+using RSAParameters = HSMService.RSAParameters;
 
 namespace HSMClient
 {
     public static class Converter
     {
+        public static ClientVersionModel Convert(ClientVersionMessage versionMessage)
+        {
+            ClientVersionModel result = new ClientVersionModel();
+            result.ExtraVersion = versionMessage.ExtraVersion;
+            result.MainVersion = versionMessage.MainVersion;
+            result.SubVersion = versionMessage.SubVersion;
+            result.Postfix = versionMessage.Postfix;
+            return result;
+        }
         public static SensorHistoryItem Convert(SensorHistoryMessage historyMessage)
         {
             SensorHistoryItem result = new SensorHistoryItem();

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows;
 using HSMClient.Common;
+using HSMClient.Model;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.ViewModel;

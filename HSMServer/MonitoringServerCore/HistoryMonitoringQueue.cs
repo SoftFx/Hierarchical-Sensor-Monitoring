@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using SensorsService;
+using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {

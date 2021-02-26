@@ -60,201 +60,238 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.IEnumerable{HSMSensorDataObjects.CommonSensorValue})">
+            <summary>
+            Endpoint used by HSMDataCollector services, which sends data in portions
+            </summary>
+            <param name="values"></param>
+            <returns></returns>
+        </member>
         <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
         <member name="T:HSMServer.DataLayer.Model.FirstLoginInfo">
             <summary>
             Info about the first client connection from a particular address
             </summary>
         </member>
-        <member name="T:SensorsService.SensorsServiceReflection">
-            <summary>Holder for reflection information generated from Protos/sensors_service.proto</summary>
+        <member name="T:HSMService.HSMserviceReflection">
+            <summary>Holder for reflection information generated from Protos/HSMservice.proto</summary>
         </member>
-        <member name="P:SensorsService.SensorsServiceReflection.Descriptor">
-            <summary>File descriptor for Protos/sensors_service.proto</summary>
+        <member name="P:HSMService.HSMserviceReflection.Descriptor">
+            <summary>File descriptor for Protos/HSMservice.proto</summary>
         </member>
-        <member name="T:SensorsService.SensorsUpdateMessage">
+        <member name="T:HSMService.UpdateInfoMessage">
+             <summary>
+            Admin messages
+             </summary>
+        </member>
+        <member name="F:HSMService.UpdateInfoMessage.FilesFieldNumber">
+            <summary>Field number for the "files" field.</summary>
+        </member>
+        <member name="F:HSMService.UpdateInfoMessage.SizeFieldNumber">
+            <summary>Field number for the "size" field.</summary>
+        </member>
+        <member name="F:HSMService.UpdateStreamMessage.BlockIndexFieldNumber">
+            <summary>Field number for the "blockIndex" field.</summary>
+        </member>
+        <member name="F:HSMService.UpdateStreamMessage.BlockSizeFieldNumber">
+            <summary>Field number for the "blockSize" field.</summary>
+        </member>
+        <member name="F:HSMService.UpdateStreamMessage.BytesDataFieldNumber">
+            <summary>Field number for the "bytesData" field.</summary>
+        </member>
+        <member name="F:HSMService.UpdateStreamRequestMessage.FileNameFieldNumber">
+            <summary>Field number for the "fileName" field.</summary>
+        </member>
+        <member name="T:HSMService.SensorsUpdateMessage">
              <summary>
             Sensor updates
              </summary>
         </member>
-        <member name="F:SensorsService.SensorsUpdateMessage.SensorsFieldNumber">
+        <member name="F:HSMService.SensorsUpdateMessage.SensorsFieldNumber">
             <summary>Field number for the "sensors" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.PathFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.PathFieldNumber">
             <summary>Field number for the "Path" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.ProductFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.ProductFieldNumber">
             <summary>Field number for the "Product" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.ActionTypeFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.ActionTypeFieldNumber">
             <summary>Field number for the "ActionType" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.ObjectTypeFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.ObjectTypeFieldNumber">
             <summary>Field number for the "ObjectType" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.TimeFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorUpdateMessage.ShortValueFieldNumber">
+        <member name="F:HSMService.SensorUpdateMessage.ShortValueFieldNumber">
             <summary>Field number for the "shortValue" field.</summary>
         </member>
-        <member name="T:SensorsService.SensorUpdateMessage.Types">
+        <member name="T:HSMService.SensorUpdateMessage.Types">
             <summary>Container for nested types declared in the SensorUpdateMessage message type.</summary>
         </member>
-        <member name="T:SensorsService.GetSensorHistoryMessage">
+        <member name="T:HSMService.GetSensorHistoryMessage">
              <summary>
             Sensors history
              </summary>
         </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.NameFieldNumber">
+        <member name="F:HSMService.GetSensorHistoryMessage.NameFieldNumber">
             <summary>Field number for the "name" field.</summary>
         </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.PathFieldNumber">
+        <member name="F:HSMService.GetSensorHistoryMessage.PathFieldNumber">
             <summary>Field number for the "path" field.</summary>
         </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.ProductFieldNumber">
+        <member name="F:HSMService.GetSensorHistoryMessage.ProductFieldNumber">
             <summary>Field number for the "product" field.</summary>
         </member>
-        <member name="F:SensorsService.GetSensorHistoryMessage.NFieldNumber">
+        <member name="F:HSMService.GetSensorHistoryMessage.NFieldNumber">
             <summary>Field number for the "n" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorHistoryListMessage.SensorsFieldNumber">
+        <member name="F:HSMService.SensorHistoryListMessage.SensorsFieldNumber">
             <summary>Field number for the "sensors" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorHistoryMessage.TimeFieldNumber">
+        <member name="F:HSMService.SensorHistoryMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorHistoryMessage.TypeFieldNumber">
+        <member name="F:HSMService.SensorHistoryMessage.TypeFieldNumber">
             <summary>Field number for the "type" field.</summary>
         </member>
-        <member name="F:SensorsService.SensorHistoryMessage.TypedDataFieldNumber">
+        <member name="F:HSMService.SensorHistoryMessage.TypedDataFieldNumber">
             <summary>Field number for the "typedData" field.</summary>
         </member>
-        <member name="T:SensorsService.ProductsListMessage">
+        <member name="T:HSMService.ProductsListMessage">
              <summary>
             Products
              </summary>
         </member>
-        <member name="F:SensorsService.ProductsListMessage.ProductsFieldNumber">
+        <member name="F:HSMService.ProductsListMessage.ProductsFieldNumber">
             <summary>Field number for the "products" field.</summary>
         </member>
-        <member name="F:SensorsService.ProductDataMessage.NameFieldNumber">
+        <member name="F:HSMService.ProductDataMessage.NameFieldNumber">
             <summary>Field number for the "Name" field.</summary>
         </member>
-        <member name="F:SensorsService.ProductDataMessage.KeyFieldNumber">
+        <member name="F:HSMService.ProductDataMessage.KeyFieldNumber">
             <summary>Field number for the "Key" field.</summary>
         </member>
-        <member name="F:SensorsService.ProductDataMessage.DateAddedFieldNumber">
+        <member name="F:HSMService.ProductDataMessage.DateAddedFieldNumber">
             <summary>Field number for the "DateAdded" field.</summary>
         </member>
-        <member name="F:SensorsService.AddProductMessage.NameFieldNumber">
+        <member name="F:HSMService.AddProductMessage.NameFieldNumber">
             <summary>Field number for the "name" field.</summary>
         </member>
-        <member name="F:SensorsService.AddProductResultMessage.ResultFieldNumber">
+        <member name="F:HSMService.AddProductResultMessage.ResultFieldNumber">
             <summary>Field number for the "result" field.</summary>
         </member>
-        <member name="F:SensorsService.AddProductResultMessage.ErrorFieldNumber">
+        <member name="F:HSMService.AddProductResultMessage.ErrorFieldNumber">
             <summary>Field number for the "error" field.</summary>
         </member>
-        <member name="F:SensorsService.AddProductResultMessage.ProductDataFieldNumber">
+        <member name="F:HSMService.AddProductResultMessage.ProductDataFieldNumber">
             <summary>Field number for the "productData" field.</summary>
         </member>
-        <member name="F:SensorsService.RemoveProductMessage.NameFieldNumber">
+        <member name="F:HSMService.RemoveProductMessage.NameFieldNumber">
             <summary>Field number for the "name" field.</summary>
         </member>
-        <member name="F:SensorsService.RemoveProductResultMessage.ResultFieldNumber">
+        <member name="F:HSMService.RemoveProductResultMessage.ResultFieldNumber">
             <summary>Field number for the "result" field.</summary>
         </member>
-        <member name="F:SensorsService.RemoveProductResultMessage.ErrorFieldNumber">
+        <member name="F:HSMService.RemoveProductResultMessage.ErrorFieldNumber">
             <summary>Field number for the "error" field.</summary>
         </member>
-        <member name="F:SensorsService.RemoveProductResultMessage.ProductDataFieldNumber">
+        <member name="F:HSMService.RemoveProductResultMessage.ProductDataFieldNumber">
             <summary>Field number for the "productData" field.</summary>
         </member>
-        <member name="T:SensorsService.ClientCertificateMessage">
-             <summary>
-            Admin methods
-             </summary>
+        <member name="F:HSMService.ClientVersionMessage.MainVersionFieldNumber">
+            <summary>Field number for the "mainVersion" field.</summary>
         </member>
-        <member name="F:SensorsService.ClientCertificateMessage.CertificateBytesFieldNumber">
+        <member name="F:HSMService.ClientVersionMessage.SubVersionFieldNumber">
+            <summary>Field number for the "subVersion" field.</summary>
+        </member>
+        <member name="F:HSMService.ClientVersionMessage.ExtraVersionFieldNumber">
+            <summary>Field number for the "extraVersion" field.</summary>
+        </member>
+        <member name="F:HSMService.ClientVersionMessage.PostfixFieldNumber">
+            <summary>Field number for the "postfix" field.</summary>
+        </member>
+        <member name="F:HSMService.ClientCertificateMessage.CertificateBytesFieldNumber">
             <summary>Field number for the "certificateBytes" field.</summary>
         </member>
-        <member name="F:SensorsService.GenerateServerCertificateResulMessage.ResultFieldNumber">
+        <member name="F:HSMService.GenerateServerCertificateResulMessage.ResultFieldNumber">
             <summary>Field number for the "result" field.</summary>
         </member>
-        <member name="F:SensorsService.GenerateServerCertificateResulMessage.ErrorFieldNumber">
+        <member name="F:HSMService.GenerateServerCertificateResulMessage.ErrorFieldNumber">
             <summary>Field number for the "error" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.CountryNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.CountryNameFieldNumber">
             <summary>Field number for the "countryName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.StateOrProvinceNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.StateOrProvinceNameFieldNumber">
             <summary>Field number for the "stateOrProvinceName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.LocalityNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.LocalityNameFieldNumber">
             <summary>Field number for the "localityName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.OrganizationNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.OrganizationNameFieldNumber">
             <summary>Field number for the "OrganizationName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.OrganizationUnitNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.OrganizationUnitNameFieldNumber">
             <summary>Field number for the "OrganizationUnitName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.CommonNameFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.CommonNameFieldNumber">
             <summary>Field number for the "CommonName" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateRequestMessage.EmailAddressFieldNumber">
+        <member name="F:HSMService.CertificateRequestMessage.EmailAddressFieldNumber">
             <summary>Field number for the "EmailAddress" field.</summary>
         </member>
-        <member name="F:SensorsService.ServerAvailableMessage.TimeFieldNumber">
+        <member name="F:HSMService.ServerAvailableMessage.TimeFieldNumber">
             <summary>Field number for the "time" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateSignRequestMessage.SubjectFieldNumber">
+        <member name="F:HSMService.CertificateSignRequestMessage.SubjectFieldNumber">
             <summary>Field number for the "subject" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateSignRequestMessage.RSAParametersFieldNumber">
+        <member name="F:HSMService.CertificateSignRequestMessage.RSAParametersFieldNumber">
             <summary>Field number for the "RSAParameters" field.</summary>
         </member>
-        <member name="F:SensorsService.CertificateSignRequestMessage.CommonNameFieldNumber">
+        <member name="F:HSMService.CertificateSignRequestMessage.CommonNameFieldNumber">
             <summary>Field number for the "CommonName" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.InverseQFieldNumber">
+        <member name="F:HSMService.RSAParameters.InverseQFieldNumber">
             <summary>Field number for the "inverseQ" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.DFieldNumber">
+        <member name="F:HSMService.RSAParameters.DFieldNumber">
             <summary>Field number for the "D" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.DPFieldNumber">
+        <member name="F:HSMService.RSAParameters.DPFieldNumber">
             <summary>Field number for the "DP" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.DQFieldNumber">
+        <member name="F:HSMService.RSAParameters.DQFieldNumber">
             <summary>Field number for the "DQ" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.ExponentFieldNumber">
+        <member name="F:HSMService.RSAParameters.ExponentFieldNumber">
             <summary>Field number for the "exponent" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.ModulusFieldNumber">
+        <member name="F:HSMService.RSAParameters.ModulusFieldNumber">
             <summary>Field number for the "modulus" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.PFieldNumber">
+        <member name="F:HSMService.RSAParameters.PFieldNumber">
             <summary>Field number for the "P" field.</summary>
         </member>
-        <member name="F:SensorsService.RSAParameters.QFieldNumber">
+        <member name="F:HSMService.RSAParameters.QFieldNumber">
             <summary>Field number for the "Q" field.</summary>
         </member>
-        <member name="F:SensorsService.SignedCertificateMessage.SignedCertificateBytesFieldNumber">
+        <member name="F:HSMService.SignedCertificateMessage.SignedCertificateBytesFieldNumber">
             <summary>Field number for the "signedCertificateBytes" field.</summary>
         </member>
-        <member name="F:SensorsService.SignedCertificateMessage.CaCertificateBytesFieldNumber">
+        <member name="F:HSMService.SignedCertificateMessage.CaCertificateBytesFieldNumber">
             <summary>Field number for the "caCertificateBytes" field.</summary>
         </member>
-        <member name="P:SensorsService.Sensors.Descriptor">
+        <member name="P:HSMService.Sensors.Descriptor">
             <summary>Service descriptor</summary>
         </member>
-        <member name="T:SensorsService.Sensors.SensorsBase">
+        <member name="T:HSMService.Sensors.SensorsBase">
             <summary>Base class for server-side implementations of Sensors</summary>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GetMonitoringTree(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+        <member name="M:HSMService.Sensors.SensorsBase.GetMonitoringTree(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
              <summary>
             Sensors methods
              </summary>
@@ -262,7 +299,7 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GetSensorHistory(SensorsService.GetSensorHistoryMessage,Grpc.Core.ServerCallContext)">
+        <member name="M:HSMService.Sensors.SensorsBase.GetSensorHistory(HSMService.GetSensorHistoryMessage,Grpc.Core.ServerCallContext)">
              <summary>
             rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
              </summary>
@@ -270,7 +307,7 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GetProductsList(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+        <member name="M:HSMService.Sensors.SensorsBase.GetProductsList(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
              <summary>
             Products methods
              </summary>
@@ -278,7 +315,7 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.GenerateServerCertificate(SensorsService.CertificateRequestMessage,Grpc.Core.ServerCallContext)">
+        <member name="M:HSMService.Sensors.SensorsBase.GenerateServerCertificate(HSMService.CertificateRequestMessage,Grpc.Core.ServerCallContext)">
              <summary>
             Certificates
              </summary>
@@ -286,7 +323,7 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.SensorsBase.CheckServerAvailable(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
+        <member name="M:HSMService.Sensors.SensorsBase.CheckServerAvailable(Google.Protobuf.WellKnownTypes.Empty,Grpc.Core.ServerCallContext)">
              <summary>
             Admin methods
              </summary>
@@ -294,33 +331,27 @@
              <param name="context">The context of the server-side call handler being invoked.</param>
              <returns>The response to send back to the client (wrapped by a task).</returns>
         </member>
-        <member name="M:SensorsService.Sensors.BindService(SensorsService.Sensors.SensorsBase)">
+        <member name="M:HSMService.Sensors.BindService(HSMService.Sensors.SensorsBase)">
             <summary>Creates service definition that can be registered with a server</summary>
             <param name="serviceImpl">An object implementing the server-side handling logic.</param>
         </member>
-        <member name="M:SensorsService.Sensors.BindService(Grpc.Core.ServiceBinderBase,SensorsService.Sensors.SensorsBase)">
+        <member name="M:HSMService.Sensors.BindService(Grpc.Core.ServiceBinderBase,HSMService.Sensors.SensorsBase)">
             <summary>Register service method with a service binder with or without implementation. Useful when customizing the  service binding logic.
             Note: this method is part of an experimental API that can change or be removed without any prior notice.</summary>
             <param name="serviceBinder">Service methods will be bound by calling <c>AddMethod</c> on this object.</param>
             <param name="serviceImpl">An object implementing the server-side handling logic.</param>
         </member>
-        <member name="T:AdminService.AdminServiceReflection">
-            <summary>Holder for reflection information generated from Protos/admin_service.proto</summary>
-        </member>
-        <member name="P:AdminService.AdminServiceReflection.Descriptor">
-            <summary>File descriptor for Protos/admin_service.proto</summary>
-        </member>
-        <member name="P:AdminService.Admin.Descriptor">
+        <member name="P:HSMService.Admin.Descriptor">
             <summary>Service descriptor</summary>
         </member>
-        <member name="T:AdminService.Admin.AdminBase">
+        <member name="T:HSMService.Admin.AdminBase">
             <summary>Base class for server-side implementations of Admin</summary>
         </member>
-        <member name="M:AdminService.Admin.BindService(AdminService.Admin.AdminBase)">
+        <member name="M:HSMService.Admin.BindService(HSMService.Admin.AdminBase)">
             <summary>Creates service definition that can be registered with a server</summary>
             <param name="serviceImpl">An object implementing the server-side handling logic.</param>
         </member>
-        <member name="M:AdminService.Admin.BindService(Grpc.Core.ServiceBinderBase,AdminService.Admin.AdminBase)">
+        <member name="M:HSMService.Admin.BindService(Grpc.Core.ServiceBinderBase,HSMService.Admin.AdminBase)">
             <summary>Register service method with a service binder with or without implementation. Useful when customizing the  service binding logic.
             Note: this method is part of an experimental API that can change or be removed without any prior notice.</summary>
             <param name="serviceBinder">Service methods will be bound by calling <c>AddMethod</c> on this object.</param>

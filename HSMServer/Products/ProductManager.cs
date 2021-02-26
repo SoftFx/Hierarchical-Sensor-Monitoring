@@ -206,5 +206,16 @@ namespace HSMServer.Products
             return product;
         }
 
+        public List<string> GetProductSensors(string productName)
+        {
+            List<string> result = new List<string>();
+            lock (_dictionaryLock)
+            {
+                var pair = _productSensorsDictionary.FirstOrDefault(p => p.Key == productName);
+                result.AddRange(pair.Value);
+            }
+
+            return result;
+        }
     }
 }

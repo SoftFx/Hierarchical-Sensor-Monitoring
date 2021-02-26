@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-option csharp_namespace = "SensorsService";
+option csharp_namespace = "HSMService";
 
 import "Protos/empty.proto";
 import "Protos/any.proto";
 import "Protos/timestamp.proto";
 
-package sensors;
+package HSMService;
 
 service Sensors {
 	//Sensors methods
@@ -26,8 +26,29 @@ service Sensors {
 
 	//Admin methods
 	rpc CheckServerAvailable (google.protobuf.Empty) returns (ServerAvailableMessage);
+	rpc GetLastAvailableClientVersion (google.protobuf.Empty) returns (ClientVersionMessage);
 }
 
+service Admin {
+	rpc GetUpdateInfo (google.protobuf.Empty) returns (UpdateInfoMessage);
+	rpc GetUpdateStream (UpdateStreamRequestMessage) returns (stream UpdateStreamMessage);
+}
+
+//Admin messages
+message UpdateInfoMessage {
+	repeated string files = 1;
+	double size = 2;
+}
+
+message UpdateStreamMessage {
+	int32 blockIndex = 1;
+	int32 blockSize = 2;
+	bytes bytesData = 3;
+}
+
+message UpdateStreamRequestMessage {
+	string fileName = 1;
+}
 
 //Sensor updates
 message SensorsUpdateMessage {
@@ -110,6 +131,14 @@ message RemoveProductResultMessage {
 
 
 //Admin methods
+
+message ClientVersionMessage {
+	int32 mainVersion = 1;
+	int32 subVersion = 2;
+	int32 extraVersion = 3;
+	string postfix = 4;
+}
+
 message ClientCertificateMessage {
 	bytes certificateBytes = 1;
 }

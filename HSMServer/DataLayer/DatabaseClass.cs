@@ -487,13 +487,14 @@ namespace HSMServer.DataLayer
         {
             try
             {
+                string stringVal = JsonSerializer.Serialize(info);
+                string key = GetSensorInfoKey(info);
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
-                    string stringVal = JsonSerializer.Serialize(info);
-                    var code = tx.Put(db, Encoding.UTF8.GetBytes(GetSensorInfoKey(info)),
+                    var code = tx.Put(db, Encoding.UTF8.GetBytes(key),
                         Encoding.UTF8.GetBytes(stringVal));
                     tx.Commit();
 
@@ -513,15 +514,13 @@ namespace HSMServer.DataLayer
         {
             try
             {
+                var keyString = GetSensorWriteValueKey(productName, dataObject.Path, dataObject.TimeCollected);
+                string json = JsonSerializer.Serialize(dataObject);
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-                    //dataObject.TimeCollected = DateTime.Now;
 
-                    string json = JsonSerializer.Serialize(dataObject);
-
-                    var keyString = GetSensorWriteValueKey(productName, dataObject.Path, dataObject.TimeCollected);
                     var code = tx.Put(db, Encoding.UTF8.GetBytes(keyString), Encoding.UTF8.GetBytes(json));
                     tx.Commit();
 
@@ -533,7 +532,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Failed to add object {dataObject.ToShortString()}");
+                _logger.Error(ex, $"Failed to add object for {productName}/{dataObject.Path}");
             }
         }
 
@@ -542,12 +541,15 @@ namespace HSMServer.DataLayer
             SensorDataObject sensorDataObject = null;
             try
             {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
+                DateTime lastDateTime = DateTime.MinValue;
+                byte[] bytesValue = new byte[0];
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
                     using var cursor = tx.CreateCursor(db);
-                    byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
+                    
                     var rangeCode = cursor.SetRange(searchKey);
 
                     if (rangeCode != MDBResultCode.Success)
@@ -555,8 +557,6 @@ namespace HSMServer.DataLayer
                         throw new ServerDatabaseException("Set range failed", rangeCode);
                     }
                     
-                    DateTime lastDateTime = DateTime.MinValue;
-                    byte[] bytesValue = new byte[0];
                     do
                     {
                         var (code, key, value) = cursor.GetCurrent();
@@ -579,9 +579,9 @@ namespace HSMServer.DataLayer
                     } while (cursor.Next() == MDBResultCode.Success);
                     cursor.Dispose();
                     tx.Commit();
-                    string stringValue = Encoding.UTF8.GetString(bytesValue);
-                    sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
                 }
+                string stringValue = Encoding.UTF8.GetString(bytesValue);
+                sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
             }
             catch (Exception e)
             {
@@ -596,12 +596,13 @@ namespace HSMServer.DataLayer
             List<SensorDataObject> result = new List<SensorDataObject>();
             try
             {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
                     using var cursor = tx.CreateCursor(db);
-                    byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
+                    
                     var rangeCode = cursor.First();
 
                     if (rangeCode != MDBResultCode.Success)
@@ -609,6 +610,7 @@ namespace HSMServer.DataLayer
                         throw new ServerDatabaseException("Set range failed", rangeCode);
                     }
 
+                    var count = tx.GetEntriesCount(db);
                     //long count = 0;
                     do
                     {
@@ -653,11 +655,12 @@ namespace HSMServer.DataLayer
             List<string> result = new List<string>();
             try
             {
+                byte[] bytesKey = Encoding.UTF8.GetBytes(GetSensorsListKey(productName));
                 lock (_accessLock)
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
-                    byte[] bytesKey = Encoding.UTF8.GetBytes(GetSensorsListKey(productName));
+                    
                     var (code, key, value) = tx.Get(db, bytesKey);
                     tx.Commit();
                     if (code != MDBResultCode.Success)
@@ -666,7 +669,6 @@ namespace HSMServer.DataLayer
                     }
 
                     result = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value.CopyToNewArray()));
-
                 }
             }
             catch (Exception e)
@@ -840,7 +842,7 @@ namespace HSMServer.DataLayer
         private string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
             return
-                $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:F}";
+                $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:G}_{putTime.Ticks}";
         }
         private string GetSensorInfoKey(SensorInfo info)
         {
@@ -854,7 +856,7 @@ namespace HSMServer.DataLayer
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)
         {
             string str = Encoding.UTF8.GetString(keyBytes);
-            str = str.Split(_keysSeparator).Last();
+            str = str.Split(_keysSeparator)[^2];
             try
             {
                 return DateTime.Parse(str);

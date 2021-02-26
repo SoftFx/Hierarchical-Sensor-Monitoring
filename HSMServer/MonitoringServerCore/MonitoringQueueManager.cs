@@ -2,15 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
-using HSMCommon;
 using HSMServer.Authentication;
-using HSMServer.DataLayer;
-using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
-using Microsoft.AspNetCore.Mvc.Razor;
+using HSMService;
 using NLog;
-using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -124,9 +119,15 @@ namespace HSMServer.MonitoringServerCore
                 {
                     ClientMonitoringQueue queue = new ClientMonitoringQueue(user.UserName);
                     queue.QueueOverflow += QueueOverflow;
+                    //queue.UserDisconnected += Queue_UserDisconnected;
                     _currentSessions[user] = queue;
                 }
             }
+        }
+
+        private void Queue_UserDisconnected(object sender, string e)
+        {
+            RemoveQueue(e);
         }
 
         private void QueueOverflow(object sender, ClientMonitoringQueue e)
@@ -141,6 +142,17 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
+        private void RemoveQueue(string userName)
+        {
+            lock (_accessLock)
+            {
+                var pair = _currentSessions.FirstOrDefault(p => p.Key.UserName == userName);
+                pair.Value.Clear();
+                pair.Value.UserDisconnected -= Queue_UserDisconnected;
+                pair.Value.QueueOverflow -= QueueOverflow;
+                _currentSessions.Remove(pair.Key);
+            }
+        }
         public void RemoveUserSession(User user)
         {
             lock (_accessLock)

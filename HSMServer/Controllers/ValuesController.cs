@@ -2,7 +2,9 @@
 using HSMServer.Model;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using NLog;
+using ILogger = NLog.ILogger;
 
 namespace HSMServer.Controllers
 {
@@ -13,25 +15,25 @@ namespace HSMServer.Controllers
     [ApiController]
     public class ValuesController : ControllerBase
     {
-        private readonly Logger _logger;
+        private readonly ILogger<ValuesController> _logger;
         private readonly IMonitoringCore _monitoringCore;
-        public ValuesController(IMonitoringCore monitoringCore)
+        public ValuesController(IMonitoringCore monitoringCore, ILogger<ValuesController> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _monitoringCore = monitoringCore;
         }
 
         [HttpGet]
         public ActionResult<string> Get()
         {
-            _logger.Info($"ValuesController: GET at {DateTime.Now.ToShortTimeString()}");
-            return $"string {DateTime.Now.ToShortDateString()} : {DateTime.Now.ToShortTimeString()}";
+            _logger.LogInformation($"ValuesController: GET at {DateTime.Now:F}");
+            return $"Now is {DateTime.Now:F}";
         }
 
         [HttpPost]
         public ActionResult<string> Post([FromBody]SampleData input)
         {
-            _logger.Info($"Received string {input.Data}");
+            _logger.LogInformation($"Received string {input.Data}");
             return Ok(input);
         }
     }

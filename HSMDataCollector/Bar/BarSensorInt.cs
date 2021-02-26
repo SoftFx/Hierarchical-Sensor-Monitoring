@@ -4,15 +4,17 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
     public class BarSensorInt : BarSensorBase<int>, IIntBarSensor
     {
-        public BarSensorInt(string path, string productKey, string serverAddress, HttpClient client, int collectPeriod = 30000)
-            : base(path, productKey, $"{serverAddress}/intBar", client, collectPeriod)
+        public BarSensorInt(string path, string productKey, string serverAddress, IValuesQueue queue, int collectPeriod = 30000)
+            : base(path, productKey, $"{serverAddress}/intBar", queue, collectPeriod)
         {
             Min = int.MaxValue;
             Max = int.MinValue;
@@ -21,10 +23,11 @@ namespace HSMDataCollector.Bar
         protected override void SendDataTimer(object state)
         {
             IntBarSensorValue dataObject = GetDataObject();
-            //ThreadPool.QueueUserWorkItem(_ => SendData(dataObject));
-            //Task.Run(() => SendData(dataObject));
             string serializedValue = GetStringData(dataObject);
-            SendData(serializedValue);
+            CommonSensorValue commonValue = new CommonSensorValue();
+            commonValue.TypedValue = serializedValue;
+            commonValue.SensorType = SensorType.IntegerBarSensor;
+            SendData(commonValue);
         }
 
         public void AddValue(int value)

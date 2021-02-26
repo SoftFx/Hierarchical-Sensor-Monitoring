@@ -5,8 +5,23 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:view="clr-namespace:HSMClientWPFControls.View;assembly=HSMClientWPFControls"
         mc:Ignorable="d" 
-        Height="450" Width="800">
+        Height="450" Width="800" Title="{Binding Title}">
     <DockPanel>
+        <DockPanel DockPanel.Dock="Top">
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"></Setter>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsClientCertificateDefault, UpdateSourceTrigger=PropertyChanged}" Value="False">
+                            <Setter Property="Visibility" Value="Visible"></Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
+            <view:UpdateClientView DataContext="{Binding UpdateClientModel}"></view:UpdateClientView>
+        </DockPanel>
         <Grid>
             <DockPanel>
                 <DockPanel.Style>

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
+using HSMCommon.Model;
 
 namespace HSMClientWPFControls.Model
 {
@@ -19,6 +20,7 @@ namespace HSMClientWPFControls.Model
         public ISettingsConnector SettingsConnector { get; }
         ObservableCollection<MonitoringNodeBase> Nodes { get; }
         ObservableCollection<ProductViewModel> Products { get; set; }
+        public ClientVersionModel LastAvailableVersion { get; set; }
         void Dispose();
         void ShowProducts();
         void ShowSettingsWindow();

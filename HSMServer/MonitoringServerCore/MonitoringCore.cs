@@ -6,15 +6,16 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Certificates;
+using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
-using HSMServer.Model;
+using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Products;
+using HSMService;
 using NLog;
-using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -88,8 +89,6 @@ namespace HSMServer.MonitoringServerCore
 
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
-
-
             if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
             {
                 _productManager.AddSensor(productName, dataObject.Path);
@@ -142,6 +141,53 @@ namespace HSMServer.MonitoringServerCore
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
             return await SaveSensorValueAsync(dataObject, productName);
+        }
+
+        public void AddSensorsValues(IEnumerable<CommonSensorValue> values)
+        {
+            var commonSensorValues = values.ToList();
+            foreach (var value in commonSensorValues)
+            {
+                switch (value.SensorType)
+                {
+                    case SensorType.IntegerBarSensor:
+                    {
+                        var typedValue = Converter.GetIntBarSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.DoubleBarSensor:
+                    {
+                        var typedValue = Converter.GetDoubleBarSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.DoubleSensor:
+                    {
+                        var typedValue = Converter.GetDoubleSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.IntSensor:
+                    {
+                        var typedValue = Converter.GetIntSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.BooleanSensor:
+                    {
+                        var typedValue = Converter.GetBoolSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.StringSensor:
+                    {
+                        var typedValue = Converter.GetStringSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                }
+            }
         }
 
         public void AddSensorValue(BoolSensorValue value)
@@ -236,186 +282,6 @@ namespace HSMServer.MonitoringServerCore
 
         #endregion
 
-        #region SensorRequests
-
-        public SensorsUpdateMessage GetSensorUpdates(X509Certificate2 clientCertificate)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
-            sensorsUpdateMessage.Sensors.AddRange(_queueManager.GetUserUpdates(user));
-            return sensorsUpdateMessage;
-        }
-
-        public SensorsUpdateMessage GetAllAvailableSensorsUpdates(X509Certificate2 clientCertificate)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            if (!_queueManager.IsUserRegistered(user))
-            {
-                _queueManager.AddUserSession(user);
-            }
-            SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
-            //TODO: use products permissions later
-            //foreach (var permission in user.UserPermissions)
-            //{
-            //    var sensorsList = DatabaseClass.Instance.GetSensorsList(permission.ProductName);
-            //    foreach (var sensor in sensorsList)
-            //    {
-            //        var lastVal = DatabaseClass.Instance.GetLastSensorValue(permission.ProductName, sensor);
-            //        if (lastVal != null)
-            //        {
-            //            sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, permission.ProductName));
-            //        }
-            //    }
-            //}
-            //Let client see all available products by default
-            var productsList = _productManager.Products.Select(p => p.Name);
-            foreach (var product in productsList)
-            {
-                var sensorsList = DatabaseClass.Instance.GetSensorsList(product);
-                foreach (var sensorPath in sensorsList)
-                {
-                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensorPath);
-                    if (lastVal != null)
-                    {
-                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product));
-                    }
-                }
-            }
-            return sensorsUpdateMessage;
-        }
-        public SensorHistoryListMessage GetSensorHistory(X509Certificate2 clientCertificate, GetSensorHistoryMessage getHistoryMessage)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-
-            SensorHistoryListMessage sensorsUpdate = new SensorHistoryListMessage();
-            List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(getHistoryMessage.Product,
-                getHistoryMessage.Path, getHistoryMessage.N);
-            _logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getHistoryMessage.Path} at {DateTime.Now:F}");
-            dataList.Sort((a, b) => a.TimeCollected.CompareTo(b.TimeCollected));
-            if (getHistoryMessage.N != -1)
-            {
-                dataList = dataList.Take((int)getHistoryMessage.N).ToList();
-            }
-            sensorsUpdate.Sensors.AddRange(dataList.Select(Converter.Convert));
-            return sensorsUpdate;
-        }
-
-        #endregion
-
-        #region Products
-
-        public ProductsListMessage GetProductsList(X509Certificate2 clientCertificate)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            var products = _productManager.Products;
-            //TODO: Add filtering list according to User permissions
-
-            ProductsListMessage message = new ProductsListMessage();
-            message.Products.AddRange(products.Select(Converter.Convert));
-            return message;
-        }
-
-
-        public AddProductResultMessage AddNewProduct(X509Certificate2 clientCertificate, AddProductMessage message)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            //TODO: check whether user can add products
-
-            AddProductResultMessage result = new AddProductResultMessage();
-            try
-            {
-                _productManager.AddProduct(message.Name);
-
-                Product product = _productManager.GetProductByName(message.Name);
-
-                result.Result = true;
-                result.ProductData = Converter.Convert(product);
-            }
-            catch (Exception e)
-            {
-                result.Result = false;
-                result.Error = e.Message;
-                _logger.Error(e, $"Failed to add new product name = {message.Name}, user = {user.UserName}");
-            }
-
-            return result;
-        }
-
-        public RemoveProductResultMessage RemoveProduct(X509Certificate2 clientCertificate,
-            RemoveProductMessage message)
-        {
-            _validator.Validate(clientCertificate);
-
-            User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-            //TODO: check whether user can add products and is the product available for user
-
-            RemoveProductResultMessage result = new RemoveProductResultMessage();
-            try
-            {
-                result.ProductData = Converter.Convert(_productManager.GetProductByName(message.Name));
-                _productManager.RemoveProduct(message.Name);
-                result.Result = true;
-            }
-            catch (Exception e)
-            {
-                result.Result = false;
-                result.Error = e.Message;
-                _logger.Error(e, $"Failed to remove product name = {message.Name}, user = {user.UserName}");
-            }
-
-            return result;
-        }
-
-        #endregion
-
-        //public SignedCertificateMessage SignClientCertificate(X509Certificate2 clientCertificate,
-        //    CertificateSignRequestMessage request)
-        //{
-        //    _validator.Validate(clientCertificate);
-
-        //    User user = _userManager.GetUserByCertificateThumbprint(clientCertificate.Thumbprint);
-        //    var bytes = request.RequestBytes.ToByteArray();
-
-        //    Pkcs10CertificationRequest certRequest = new Pkcs10CertificationRequest(bytes);
-        //    Org.BouncyCastle.X509.X509Certificate signedCertificate =
-        //        CertificatesProcessor.SignCertificate(certRequest, Config.CACertificate, Config.CAKeyFilePath);
-
-        //    X509Certificate certV1 = DotNetUtilities.ToX509Certificate(signedCertificate);
-        //    X509Certificate2 certV2 = new X509Certificate2(certV1);
-        //    //TODO: add new certificate & user
-        //    string fileName = $"{request.CommonName}.crt";
-        //    _certificateManager.InstallClientCertificate(certV2);
-        //    _certificateManager.SaveClientCertificate(certV2, fileName);
-        //    _userManager.AddNewUser(request.CommonName, certV2.Thumbprint, fileName);
-        //    return Converter.Convert(certV2, Config.CACertificate);
-        //}
-        public SignedCertificateMessage SignClientCertificate(X509Certificate2 clientCertificate,
-            CertificateSignRequestMessage request)
-        {
-            _validator.Validate(clientCertificate);
-
-            var rsa = RSA.Create(Converter.Convert(request.RSAParameters));
-
-            X509Certificate2 clientCert =
-                CertificatesProcessor.CreateAndSignCertificate(request.Subject, rsa, Config.CACertificate);
-
-            string fileName = $"{request.CommonName}.crt";
-            _certificateManager.InstallClientCertificate(clientCert);
-            _certificateManager.SaveClientCertificate(clientCert, fileName);
-            _userManager.AddNewUser(request.CommonName, clientCert.Thumbprint, fileName);
-            return Converter.Convert(clientCert, Config.CACertificate);
-        }
-
         public SensorsUpdateMessage GetSensorUpdates(User user)
         {
             SensorsUpdateMessage updateMessage = new SensorsUpdateMessage();
@@ -431,16 +297,16 @@ namespace HSMServer.MonitoringServerCore
             }
 
             SensorsUpdateMessage sensorsUpdateMessage = new SensorsUpdateMessage();
-            var productsList = _productManager.Products.Select(p => p.Name);
+            var productsList = _productManager.Products;
             foreach (var product in productsList)
             {
-                var sensorsList = DatabaseClass.Instance.GetSensorsList(product);
+                var sensorsList = _productManager.GetProductSensors(product.Name);
                 foreach (var sensorPath in sensorsList)
                 {
-                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product, sensorPath);
+                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product.Name, sensorPath);
                     if (lastVal != null)
                     {
-                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product));
+                        sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product.Name));
                     }
                 }
             }
@@ -525,8 +391,12 @@ namespace HSMServer.MonitoringServerCore
             return Converter.Convert(clientCert, Config.CACertificate);
         }
 
-        #region Sub-methods
+        public ClientVersionMessage GetLastAvailableClientVersion()
+        {
+            return Converter.Convert(Config.LastAvailableClientVersion);
+        }
 
+        #region Sub-methods
 
 
         #endregion

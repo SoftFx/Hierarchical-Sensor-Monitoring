@@ -4,18 +4,18 @@ using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.Authentication;
 using HSMServer.MonitoringServerCore;
-using SensorsService;
+using HSMService;
 using NLog;
 
 namespace HSMServer.Services
 {
-    public class SensorsService : Sensors.SensorsBase
+    public class HSMService : Sensors.SensorsBase
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
         private readonly UserManager _userManager;
 
-        public SensorsService(IMonitoringCore monitoringCore, UserManager userManager)
+        public HSMService(IMonitoringCore monitoringCore, UserManager userManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
@@ -78,8 +78,9 @@ namespace HSMServer.Services
         {
             var httpContext = context.GetHttpContext();
 
-            return Task.FromResult(
-                _monitoringCore.SignClientCertificate(httpContext.Connection.ClientCertificate, request));
+            User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate
+                .Thumbprint);
+            return Task.FromResult(_monitoringCore.SignClientCertificate(user, request));
         }
 
         public override Task<GenerateServerCertificateResulMessage> GenerateServerCertificate(CertificateRequestMessage request, ServerCallContext context)
@@ -90,6 +91,11 @@ namespace HSMServer.Services
         public override Task<ServerAvailableMessage> CheckServerAvailable(Empty request, ServerCallContext context)
         {
             return Task.FromResult(new ServerAvailableMessage() {Time = Timestamp.FromDateTime(DateTime.Now.ToUniversalTime())});
+        }
+
+        public override Task<ClientVersionMessage> GetLastAvailableClientVersion(Empty request, ServerCallContext context)
+        {
+            return Task.FromResult(_monitoringCore.GetLastAvailableClientVersion());
         }
     }
 }

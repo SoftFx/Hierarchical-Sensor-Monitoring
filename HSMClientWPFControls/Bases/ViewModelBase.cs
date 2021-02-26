@@ -78,7 +78,10 @@ namespace HSMClientWPFControls.Bases
 
         protected Dictionary<string, string> _modelPropertyToProperty;
 
-        public Dictionary<string, string> ModelPropertyToProperty => _modelPropertyToProperty;
+        protected void RegisterProperty(string modelProperty, string viewModelProperty)
+        {
+            _modelPropertyToProperty[modelProperty] = viewModelProperty;
+        }
 
         private void model_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {

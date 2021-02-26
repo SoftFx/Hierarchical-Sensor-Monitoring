@@ -14,8 +14,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="nlog.config" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="HSMServer.xml" />
-    <None Remove="Protos\admin_service.proto" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,8 +55,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\sensors_service.proto" GrpcServices="Server" />
-    <Protobuf Include="Protos\admin_service.proto" GrpcServices="Server" />
+    <None Include="nlog.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\HSMservice.proto" GrpcServices="Server" />
   </ItemGroup>
 
   <ItemGroup>
