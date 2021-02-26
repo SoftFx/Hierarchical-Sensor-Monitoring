@@ -7,6 +7,7 @@ using System.Threading;
 using System.Xml;
 using HSMCommon;
 using HSMCommon.Certificates;
+using HSMCommon.Model;
 using NLog;
 
 namespace HSMServer.Configuration
@@ -21,6 +22,7 @@ namespace HSMServer.Configuration
 
         #region Private fields
 
+        private static ClientVersionModel _lastAvailableClientVersion;
         private static bool _isFirstLaunch = false;
         private static Logger _logger;
         private static string _configFolderPath;
@@ -36,6 +38,8 @@ namespace HSMServer.Configuration
         private const string _configFolderName = "Config";
         private const string _certificatesFolderName = "Certificates";
         private const string _CAFolderName = "CA";
+        private const string _clientAppFolderName = "Client";
+        private const string _clientVersionFileName = "version.txt";
         private static string ServerCertName
         {
             get
@@ -69,6 +73,20 @@ namespace HSMServer.Configuration
         public static string CAKeyFilePath => _caKeyFilePath;
         public static string CertificatesFolderPath => _certificatesFolderPath;
         public static string ConfigFolderPath => _configFolderPath;
+        public static string ClientAppFolderPath;
+
+        public static ClientVersionModel LastAvailableClientVersion
+        {
+            get
+            {
+                if (_lastAvailableClientVersion == null)
+                {
+                    _lastAvailableClientVersion = ReadClientVersion();
+                }
+
+                return _lastAvailableClientVersion;
+            }
+        }
 
         #endregion
 
@@ -106,6 +124,7 @@ namespace HSMServer.Configuration
                 CreateCertificateAuthority();
             }
 
+            ClientAppFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _clientAppFolderName);
             _logger.Info("Config initialized, config file created/exists");
 
             if (_isFirstLaunch)
@@ -189,6 +208,11 @@ namespace HSMServer.Configuration
             return serverCert;
         }
 
+        private static ClientVersionModel ReadClientVersion()
+        {
+            string text = File.ReadAllText(Path.Combine(ClientAppFolderPath, _clientVersionFileName));
+            return ClientVersionModel.Parse(text);
+        }
         private static X509Certificate2 ReadCACertificate()
         {
             return CertificatesProcessor.ReadCertificate(CACertificatePath, CAKeyFilePath);

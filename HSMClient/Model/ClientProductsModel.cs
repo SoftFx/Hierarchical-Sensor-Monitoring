@@ -8,7 +8,7 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 
-namespace HSMClient
+namespace HSMClient.Model
 {
     public class ClientProductsModel : ModelBase, IProductsMonitoringModel
     {

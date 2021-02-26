@@ -5,7 +5,9 @@ using System.Text;
 using System.Windows;
 using System.Xml;
 using HSMClient.Common.Logging;
+using HSMClientWPFControls.Model;
 using HSMCommon;
+using HSMCommon.Model;
 
 namespace HSMClient.Configuration
 {
@@ -42,17 +44,34 @@ namespace HSMClient.Configuration
         private const string _configFolderName = "Config";
         private const string _certificatesFolderName = "Certificates";
         private const string _configFileName = "config.xml";
+        private const string _versionFileName = "version.txt";
         private string _certFileName;
         private readonly string _configFilePath;
         private readonly string _configFolderPath;
         private readonly string _certificatesFolderPath;
         private readonly object _configLock = new object();
         private bool _isFirstLaunch = false;
+        private ClientVersionModel _currentVersion;
 
         public string CertificatesFolderPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName,
             _certificatesFolderName);
 
         #endregion
+
+        public ClientVersionModel CurrentVersion
+        {
+            get
+            {
+                if (_currentVersion == null)
+                {
+                    _currentVersion = ReadCurrentVersion();
+                }
+
+                return _currentVersion;
+            }
+        }
+
+        
 
         public bool IsClientCertificateDefault
         {
@@ -81,7 +100,11 @@ namespace HSMClient.Configuration
 
             ReadConnectionInfo();
         }
-
+        private ClientVersionModel ReadCurrentVersion()
+        {
+            string text = File.ReadAllText(_versionFileName);
+            return ClientVersionModel.Parse(text);
+        }
         private void ReplaceClientCertificateFile(X509Certificate2 newCertificate, string fileName)
         {
             string fullFileName = $"{fileName}.pfx";

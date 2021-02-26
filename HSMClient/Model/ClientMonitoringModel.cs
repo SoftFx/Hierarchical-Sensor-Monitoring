@@ -15,8 +15,9 @@ using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon;
 using HSMCommon.Certificates;
+using HSMCommon.Model;
 
-namespace HSMClient
+namespace HSMClient.Model
 {
     public class ClientMonitoringModel : ModelBase, IMonitoringModel
     {
@@ -33,12 +34,22 @@ namespace HSMClient
         private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
         private readonly SynchronizationContext _uiContext;
         private readonly string _connectionAddress;
+        private ClientVersionModel _lastAvailableVersion;
         private bool _isClientCertificateDefault;
 
         #endregion
 
         #region Fields with notify
 
+        public ClientVersionModel LastAvailableVersion
+        {
+            get => _sensorsClient.GetLastAvailableVersion();
+            set
+            {
+                _lastAvailableVersion = value;
+                OnPropertyChanged(nameof(LastAvailableVersion));
+            }
+        }
         private ConnectionStatus connectionStatus
         {
             get => _connectionStatus;
@@ -68,6 +79,9 @@ namespace HSMClient
                 OnPropertyChanged(nameof(IsClientCertificateDefault));
             }
         }
+
+        public ClientVersionModel CurrentVersion => ConfigProvider.Instance.CurrentVersion;
+        
         #endregion
 
         #region TODO Functionality with connector
@@ -257,6 +271,7 @@ namespace HSMClient
                     lastUpdate = DateTime.Now;
                     Update(responseObj);
                 }
+                OnPropertyChanged(nameof(LastAvailableVersion));
             }
             catch (Exception e)
             {

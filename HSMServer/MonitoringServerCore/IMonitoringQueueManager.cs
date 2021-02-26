@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Net;
 using HSMServer.Authentication;
-using SensorsService;
+using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {

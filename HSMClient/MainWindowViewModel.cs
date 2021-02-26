@@ -1,11 +1,14 @@
 ﻿using System;
-using System.ComponentModel;
+using HSMClient.Common;
+using HSMClient.Configuration;
 using HSMClient.Dialog;
+using HSMClient.Model;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
+using HSMCommon.Model;
 
 namespace HSMClient
 {
@@ -66,7 +69,9 @@ namespace HSMClient
 
         private MonitoringTreeViewModel _monitoringTree;
         private readonly ClientMonitoringModel _monitoringModel;
+        private UpdateClientModel _updateModel;
         private ChangeClientCertificateViewModel _changeCertificateModel;
+        private UpdateClientViewModel _updateClientViewModel;
         public MainWindowViewModel()
         {
             //CheckConfiguration();
@@ -74,7 +79,10 @@ namespace HSMClient
             Model = _monitoringModel;
             _monitoringTree = new MonitoringTreeViewModel(_monitoringModel);
             _changeCertificateModel = new ChangeClientCertificateViewModel(_monitoringModel);
-            
+            _updateModel = new UpdateClientModel(_monitoringModel);
+            _updateModel.UpdateClient += UpdateModel_UpdateClient;
+            _updateClientViewModel = new UpdateClientViewModel(_updateModel);
+
             IDialogModelFactory factory = new DialogModelFactory(_monitoringModel.SensorHistoryConnector);
             DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
             expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(DefaultValuesListSensorView),
@@ -98,8 +106,21 @@ namespace HSMClient
             //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
         }
 
-        public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
 
+        public event EventHandler UpdateClient;
+        public ClientVersionModel CurrentVersion => ConfigProvider.Instance.CurrentVersion;
+            
+        public bool IsClientCertificateDefault => _monitoringModel.IsClientCertificateDefault;
+        public ClientVersionModel LastAvailableVersion => _monitoringModel.LastAvailableVersion;
+        private void UpdateModel_UpdateClient(object sender, EventArgs e)
+        {
+            OnUpdateClient();
+        }
+
+        private void OnUpdateClient()
+        {
+            UpdateClient?.Invoke(this, EventArgs.Empty);
+        }
         private void monitoringModel_ShowProductsEvent(object sender, EventArgs e)
         {
             ProductsWindow window = new ProductsWindow(_monitoringModel.ProductsConnector);
@@ -135,5 +156,12 @@ namespace HSMClient
             get => _changeCertificateModel;
             set => _changeCertificateModel = value;
         }
+
+        public UpdateClientViewModel UpdateClientModel
+        {
+            get => _updateClientViewModel;
+            set => _updateClientViewModel = value;
+        }
+        public string Title => $"{TextConstants.AppName}. Version: {CurrentVersion}";
     }
 }

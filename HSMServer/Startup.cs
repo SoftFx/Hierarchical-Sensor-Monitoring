@@ -1,8 +1,8 @@
 ﻿using System;
 using System.IO;
 using HSMServer.Authentication;
+using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
-using HSMServer.Controllers;
 using HSMServer.DataLayer;
 using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
@@ -11,9 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.PlatformAbstractions;
-using NLog;
 
 namespace HSMServer
 {
@@ -48,7 +46,9 @@ namespace HSMServer
             services.AddSingleton<UserManager>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
-            services.AddSingleton<Services.SensorsService>();
+            services.AddSingleton<IUpdateService, UpdateServiceCore>();
+            services.AddSingleton<Services.HSMService>();
+            services.AddSingleton<Services.AdminService>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
 
@@ -91,7 +91,8 @@ namespace HSMServer
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapGrpcService<Services.SensorsService>();
+                endpoints.MapGrpcService<Services.HSMService>();
+                endpoints.MapGrpcService<Services.AdminService>();
               
                 endpoints.MapGet("/Protos/sensors_service.proto", async context =>
                 {

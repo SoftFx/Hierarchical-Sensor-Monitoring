@@ -14,8 +14,8 @@ using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.DataLayer.Model.TypedDataObjects;
 using HSMServer.Products;
+using HSMService;
 using NLog;
-using SensorsService;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -389,6 +389,11 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddNewUser(request.CommonName, clientCert.Thumbprint, fileName);
             return Converter.Convert(clientCert, Config.CACertificate);
+        }
+
+        public ClientVersionMessage GetLastAvailableClientVersion()
+        {
+            return Converter.Convert(Config.LastAvailableClientVersion);
         }
 
         #region Sub-methods

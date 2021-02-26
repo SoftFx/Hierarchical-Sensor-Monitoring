@@ -1,10 +1,8 @@
 ﻿using System.Collections.Generic;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
 using HSMServer.Authentication;
-using HSMServer.DataLayer.Model;
-using SensorsService;
+using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -29,6 +27,7 @@ namespace HSMServer.MonitoringServerCore
         public AddProductResultMessage AddProduct(User user, string productName);
         public RemoveProductResultMessage RemoveProduct(User user, string productName);
         public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request);
+        public ClientVersionMessage GetLastAvailableClientVersion();
 
     }
 }

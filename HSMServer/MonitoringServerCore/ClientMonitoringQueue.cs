@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Timers;
-using SensorsService;
+using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -21,17 +21,7 @@ namespace HSMServer.MonitoringServerCore
         public event EventHandler<string> UserDisconnected;
         
 
-        private bool HasData
-        {
-            get
-            {
-                //lock (_lockObj)
-                //{
-                //    return _monitoringQueue.Count > 0;
-                //}
-                return _elementsCount > 0;
-            }
-        }
+        private bool HasData => _elementsCount > 0;
 
         public ClientMonitoringQueue(string userName)
         {
