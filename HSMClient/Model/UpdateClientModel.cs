@@ -119,7 +119,10 @@ namespace HSMClient.Model
         {
             try
             {
-                Process.Start(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.UpdateFileName));
+                string updaterFilePath =
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.UpdateFileName);
+                string argumentsString = TextConstants.GetUpdaterLaunchArgs(AppDomain.CurrentDomain.BaseDirectory, _updateDirectory);
+                var p = Process.Start(updaterFilePath, argumentsString);
             }
             catch (Exception exception)
             {

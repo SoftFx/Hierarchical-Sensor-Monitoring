@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "HSMClientUpdater": {
+      "commandName": "Project",
+      "commandLineArgs": "-client HSMClient -upd HSMClientUpdater.exe -clientExe HSMClient.exe -appDir D:\\HSM\\HSMClient\\bin\\Debug\\netcoreapp3.1\\ -updDir C:\\Users\\vitali.vasilevich\\AppData\\Local\\Temp\\HSMClientUpdate"
+    }
+  }
+}

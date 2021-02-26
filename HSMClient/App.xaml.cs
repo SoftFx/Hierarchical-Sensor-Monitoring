@@ -12,6 +12,7 @@ namespace HSMClient
         private Mutex _appMutex;
         protected override void OnStartup(StartupEventArgs e)
         {
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
             bool isOnlyInstance = false;
             _appMutex = new Mutex(true, TextConstants.AppName, out isOnlyInstance);
             if (!isOnlyInstance)
@@ -22,7 +23,6 @@ namespace HSMClient
 
 
             base.OnStartup(e);
-            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
             MainWindow mainWindow = new MainWindow();
             this.MainWindow = mainWindow;
