@@ -38,6 +38,7 @@
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj">
     </ProjectReference>
     <ProjectReference Include="..\HSMGrpcClient\HSMGrpcClient.csproj" />
+    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 
   <ItemGroup>
