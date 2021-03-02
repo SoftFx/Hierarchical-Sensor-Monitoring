@@ -1,4 +1,4 @@
-﻿namespace HSMSensorDataObjects
+﻿namespace HSMSensorDataObjects.FullDataObject
 {
     public class StringSensorValue : SensorValueBase
     {
