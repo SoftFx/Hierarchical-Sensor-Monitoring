@@ -1,4 +1,4 @@
-﻿namespace HSMClientWPFControls.Objects.TypedSensorData
+﻿namespace HSMSensorDataObjects.TypedDataObject
 {
     public class DoubleSensorData
     {

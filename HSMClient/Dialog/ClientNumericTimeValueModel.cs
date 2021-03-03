@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
-using System.Windows.Threading;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model.SensorDialog;
 using HSMClientWPFControls.Objects;
-using HSMClientWPFControls.Objects.TypedSensorData;
 using HSMClientWPFControls.ViewModel;
+using HSMSensorDataObjects.TypedDataObject;
 using OxyPlot;
 using OxyPlot.Axes;
 

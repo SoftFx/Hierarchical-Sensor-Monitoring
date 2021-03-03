@@ -1,6 +1,6 @@
 ﻿using HSMDataCollector.Core;
-using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Base
 {

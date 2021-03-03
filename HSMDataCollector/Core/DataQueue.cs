@@ -9,7 +9,7 @@ namespace HSMDataCollector.Core
     {
         private readonly Queue<CommonSensorValue> _valuesQueue;
         private readonly List<CommonSensorValue> _failedList; 
-        private const int MAX_VALUES_MESSAGE_CAPACITY = 50;
+        private const int MAX_VALUES_MESSAGE_CAPACITY = 200;
         private const int MAX_QUEUE_CAPACITY = 1000;
         private int _internalCount = 0;
         private readonly object _lockObj;
@@ -22,8 +22,6 @@ namespace HSMDataCollector.Core
             _failedList = new List<CommonSensorValue>();
             _lockObj = new object();
             _listLock = new object();
-            TimeSpan timerTime = TimeSpan.FromSeconds(15);
-            _sendTimer = new Timer(OnTimerTick, null, timerTime, timerTime);
         }
         
         public event EventHandler<List<CommonSensorValue>> SendData;
@@ -36,6 +34,33 @@ namespace HSMDataCollector.Core
             }
 
             _hasFailedData = true;
+        }
+
+        public List<CommonSensorValue> GetAllCollectedData()
+        {
+            List<CommonSensorValue> values = new List<CommonSensorValue>();
+            if (_hasFailedData)
+            {
+                values.AddRange(DequeueData());
+            }
+            values.AddRange(DequeueData());
+            return values;
+        }
+
+        public void InitializeTimer()
+        {
+            TimeSpan timerTime = TimeSpan.FromSeconds(20);
+            _sendTimer = new Timer(OnTimerTick, null, timerTime, timerTime);
+        }
+
+        public void Stop()
+        {
+            _sendTimer.Dispose();
+        }
+
+        public void Clear()
+        {
+            //TODO: add clear code
         }
 
         private void EnqueueValue(CommonSensorValue value)
@@ -62,6 +87,13 @@ namespace HSMDataCollector.Core
             OnSendData(data);
         }
 
+        private void ClearData()
+        {
+            if (_hasFailedData)
+            {
+                _failedList.Clear();
+            }
+        }
         private List<CommonSensorValue> DequeueData()
         {
             List<CommonSensorValue> dataList = new List<CommonSensorValue>();

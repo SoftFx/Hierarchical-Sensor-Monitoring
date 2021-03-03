@@ -1,4 +1,4 @@
-﻿namespace HSMDSensorDataObjects
+﻿namespace HSMSensorDataObjects
 {
     public enum SensorType
     {

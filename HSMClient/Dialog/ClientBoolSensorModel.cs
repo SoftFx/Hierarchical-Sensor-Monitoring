@@ -1,10 +1,9 @@
 ﻿using System.Collections.ObjectModel;
-using System.Text;
 using System.Text.Json;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model.SensorDialog;
-using HSMClientWPFControls.Objects.TypedSensorData;
 using HSMClientWPFControls.ViewModel;
+using HSMSensorDataObjects.TypedDataObject;
 using OxyPlot;
 using OxyPlot.Axes;
 

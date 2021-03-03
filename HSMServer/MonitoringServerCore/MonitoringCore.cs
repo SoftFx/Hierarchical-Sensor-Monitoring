@@ -6,13 +6,13 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Certificates;
-using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
-using HSMServer.DataLayer.Model.TypedDataObjects;
+using HSMServer.Model;
 using HSMServer.Products;
 using HSMService;
 using NLog;
@@ -66,19 +66,20 @@ namespace HSMServer.MonitoringServerCore
 
         //#endregion
 
+        private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
-        private readonly ClientCertificateValidator _validator;
         private readonly ProductManager _productManager;
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore(UserManager userManager)
+        public MonitoringCore(UserManager userManager, IBarSensorsStorage barsStorage)
         {
             _logger = LogManager.GetCurrentClassLogger();
+            _barsStorage = barsStorage;
+            _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
             _certificateManager = new CertificateManager();
-            _validator = new ClientCertificateValidator(_certificateManager);
             _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
             _productManager = new ProductManager();
@@ -86,7 +87,28 @@ namespace HSMServer.MonitoringServerCore
         }
 
         #region Sensor saving
-
+        private void BarsStorage_IncompleteBarOutdated(object sender, ExtendedBarSensorData e)
+        {
+            switch (e.ValueType)
+            {
+                case SensorType.IntegerBarSensor:
+                {
+                    var typedValue = e.Value as IntBarSensorValue;
+                    typedValue.EndTime = DateTime.Now;
+                    SensorDataObject obj = Converter.ConvertToDatabase(typedValue, e.TimeCollected);
+                    SaveSensorValue(obj, e.ProductName);
+                    break;
+                }
+                case SensorType.DoubleBarSensor:
+                {
+                    var typedValue = e.Value as DoubleBarSensorValue;
+                    typedValue.EndTime = DateTime.Now;
+                    SensorDataObject obj = Converter.ConvertToDatabase(typedValue, e.TimeCollected);
+                    SaveSensorValue(obj, e.ProductName);
+                    break;
+                }
+            }
+        }
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
             if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
@@ -249,6 +271,13 @@ namespace HSMServer.MonitoringServerCore
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
 
+            //Skip 
+            if (value.EndTime == DateTime.MinValue)
+            {
+                _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                return;
+            }
+
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
             ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
             //SaveSensorValue(dataObject, productName);
@@ -261,6 +290,12 @@ namespace HSMServer.MonitoringServerCore
             DateTime timeCollected = DateTime.Now;
             SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
             _queueManager.AddSensorData(updateMessage);
+
+            if (value.EndTime == DateTime.MinValue)
+            {
+                _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                return;
+            }
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
             ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));

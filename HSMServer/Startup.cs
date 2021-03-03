@@ -44,6 +44,7 @@ namespace HSMServer
             services.AddSingleton<DatabaseClass>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<UserManager>();
+            services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<IUpdateService, UpdateServiceCore>();

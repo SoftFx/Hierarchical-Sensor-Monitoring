@@ -1,5 +1,4 @@
-﻿using System.Net.Http;
-using HSMDataCollector.Base;
+﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 
 namespace HSMDataCollector.InstantValue

@@ -10,5 +10,9 @@ namespace HSMDataCollector.Core
         event EventHandler<List<CommonSensorValue>> SendData;
         event EventHandler<DateTime> QueueOverflow;
         void ReturnFailedData(List<CommonSensorValue> values);
+        List<CommonSensorValue> GetAllCollectedData();
+        void InitializeTimer();
+        void Stop();
+        void Clear();
     }
 }

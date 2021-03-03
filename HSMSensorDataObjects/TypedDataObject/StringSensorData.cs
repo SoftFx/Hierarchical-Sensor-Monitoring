@@ -1,4 +1,4 @@
-﻿namespace HSMServer.DataLayer.Model.TypedDataObjects
+﻿namespace HSMSensorDataObjects.TypedDataObject
 {
     public class StringSensorData
     {
