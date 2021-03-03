@@ -43,8 +43,6 @@ namespace HSMClientUpdater
 
             RunUpdate();
             Console.WriteLine($"Update finished at {DateTime.Now:G}");
-            Console.WriteLine("Press enter to continue");
-            Console.ReadLine();
         }
 
 
@@ -156,12 +154,17 @@ namespace HSMClientUpdater
                 catch (Exception e)
                 {
                     Console.WriteLine($"Failed to start client: {e}");
+                    Console.WriteLine("Press enter to continue");
+                    Console.ReadLine();
                 }
 
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Error: {e}");
+                Console.WriteLine("Press enter to continue");
+                Console.ReadLine();
+
             }
         }
         private static bool ReplaceFiles(string appDirectory)
