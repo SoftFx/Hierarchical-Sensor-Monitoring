@@ -7,7 +7,7 @@
              xmlns:local="clr-namespace:HSMClientWPFControls.View.SensorDialog"
              xmlns:model="clr-namespace:HSMClientWPFControls.Model"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="400" MaxHeight="600" MinHeight="300" MinWidth="400" Width="Auto">
+             d:DesignHeight="450" d:DesignWidth="400" MaxHeight="600" MinHeight="300" MinWidth="400" Width="Auto" MaxWidth="800">
     <DockPanel>
         <!--<StackPanel DockPanel.Dock="Bottom" Margin="10">
             <TextBlock HorizontalAlignment="Right" Text="{Binding CountText}"/>
