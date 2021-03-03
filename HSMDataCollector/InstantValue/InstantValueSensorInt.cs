@@ -3,8 +3,8 @@ using System.Text;
 using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDSensorDataObjects;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.InstantValue
 {

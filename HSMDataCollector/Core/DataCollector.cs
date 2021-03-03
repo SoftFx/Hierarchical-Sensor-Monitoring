@@ -12,7 +12,7 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Core
 {
-    public class DataCollector : IDataCollector
+    public class DataCollector : IDataCollector, IDisposable
     {
         private readonly string _productKey;
         private readonly string _connectionAddress;
@@ -21,6 +21,8 @@ namespace HSMDataCollector.Core
         private readonly object _syncRoot = new object();
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
+
+        private readonly List<BarSensorBase> _barSensors;
         //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
@@ -28,6 +30,7 @@ namespace HSMDataCollector.Core
             _listSendingAddress = $"{_connectionAddress}/list";
             _productKey = productKey;
             _nameToSensor = new Dictionary<string, SensorBase>();
+            _barSensors = new List<BarSensorBase>();
             _client = new HttpClient();
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             _dataQueue = new DataQueue();
@@ -58,6 +61,24 @@ namespace HSMDataCollector.Core
         //}
 
         public event EventHandler ValuesQueueOverflow;
+        public void Initialize()
+        {
+            _dataQueue.InitializeTimer();
+        }
+
+        public void Stop()
+        {
+            var allData = _dataQueue.GetAllCollectedData();
+            _dataQueue.Stop();
+            foreach (var barSensor in _barSensors)
+            {
+                allData.Add(barSensor.GetLastValue());
+                barSensor.Dispose();
+            }
+            SendData(allData);
+            _client.Dispose();
+        }
+
         public IBoolSensor CreateBoolSensor(string path)
         {
             var existingSensor = GetExistingSensor(path);
@@ -100,33 +121,105 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
-        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000)
+        public IStringSensor CreateStringSensor(string path)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var stringSensor = existingSensor as IStringSensor;
+            if (stringSensor != null)
+            {
+                return stringSensor;
+            }
+            
+            InstantValueSensorString sensor = new InstantValueSensorString(path, _productKey, _connectionAddress, _dataQueue as IValuesQueue);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        #region Bar sensors
+
+        public IDoubleBarSensor Create1HrDoubleBarSensor(string path)
+        {
+            return CreateDoubleBarSensor(path, 3600000);
+        }
+
+        public IDoubleBarSensor Create30MinDoubleBarSensor(string path)
+        {
+            return CreateDoubleBarSensor(path, 1800000);
+        }
+
+        public IDoubleBarSensor Create10MinDoubleBarSensor(string path)
+        {
+            return CreateDoubleBarSensor(path, 600000);
+        }
+
+        public IDoubleBarSensor Create5MinDoubleBarSensor(string path)
+        {
+            return CreateDoubleBarSensor(path, 300000);
+        }
+
+        public IDoubleBarSensor Create1MinDoubleBarSensor(string path)
+        {
+            return CreateDoubleBarSensor(path, 60000);
+        }
+        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000, int smallPeriod = 15000)
         {
             var existingSensor = GetExistingSensor(path);
             var doubleBarSensor = existingSensor as IDoubleBarSensor;
             if (doubleBarSensor != null)
             {
+                (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
                 return doubleBarSensor;
             }
 
-            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _connectionAddress, _dataQueue as IValuesQueue, timeout);
+            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _connectionAddress, _dataQueue as IValuesQueue, timeout, smallPeriod);
+            _barSensors.Add(sensor);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000)
+        public IIntBarSensor Create1HrIntBarSensor(string path)
+        {
+            return CreateIntBarSensor(path, 3600000);
+        }
+
+        public IIntBarSensor Create30MinIntBarSensor(string path)
+        {
+            return CreateIntBarSensor(path, 1800000);
+        }
+
+        public IIntBarSensor Create10MinIntBarSensor(string path)
+        {
+            return CreateIntBarSensor(path, 600000);
+        }
+
+        public IIntBarSensor Create5MinIntBarSensor(string path)
+        {
+            return CreateIntBarSensor(path, 300000);
+        }
+
+        public IIntBarSensor Create1MinIntBarSensor(string path)
+        {
+            return CreateIntBarSensor(path, 60000);
+        }
+
+        public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000, int smallPeriod = 15000)
         {
             var existingSensor = GetExistingSensor(path);
             var intBarSensor = existingSensor as IIntBarSensor;
             if (intBarSensor != null)
             {
+                (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
                 return intBarSensor;
             }
 
-            BarSensorInt sensor = new BarSensorInt(path, _productKey, _connectionAddress, _dataQueue as IValuesQueue, timeout);
+            BarSensorInt sensor = new BarSensorInt(path, _productKey, _connectionAddress, _dataQueue as IValuesQueue, timeout, smallPeriod);
+            _barSensors.Add(sensor);
             AddNewSensor(sensor, path);
             return sensor;
         }
+
+        #endregion
+
 
         public int GetSensorCount()
         {
@@ -194,6 +287,11 @@ namespace HSMDataCollector.Core
         private void OnValuesQueueOverflow()
         {
             ValuesQueueOverflow?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void Dispose()
+        {
+            Stop();
         }
     }
 }

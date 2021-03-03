@@ -2,12 +2,13 @@
 using System.Text;
 using System.Text.Json;
 using HSMDataCollector.Core;
-using HSMDSensorDataObjects;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.InstantValue
 {
-    class InstantValueSensorString : InstantValueSensorBase
+    class InstantValueSensorString : InstantValueSensorBase, IStringSensor
     {
         private string _value;
         public InstantValueSensorString(string path, string productKey, string address, IValuesQueue queue) 
