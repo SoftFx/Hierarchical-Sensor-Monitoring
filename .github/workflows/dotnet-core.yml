@@ -50,6 +50,6 @@ jobs:
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
           name: hsmonitoring/hierarchical_sensor_monitoring
-          username: ${{ secrets.DOCKERHUBUSERNAME }}
-          password: ${{ secrets.DOCKERHUBTOKEN }}
+          username: "${{ secrets.DOCKERHUBUSERNAME }}"
+          password: "${{ secrets.DOCKERHUBTOKEN }}"
           #tags: "latest"
