@@ -46,11 +46,11 @@ jobs:
         with: 
           name: Release-${{ github.run_number }}
         
-      - name: Publish to DockerHub
-        uses: elgohr/Publish-Docker-Github-Action@master
-        env:
+      - name: Push to Docker Hub
+        uses: docker/build-push-action@v1
+        with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
-          name: hsmonitoring/hierarchical_sensor_monitoring
+          repository: hsmonitoring/hierarchical_sensor_monitoring
           
           #tags: "latest"
