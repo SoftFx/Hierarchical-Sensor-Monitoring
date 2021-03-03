@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace HSMSensorDataObjects
+namespace HSMSensorDataObjects.FullDataObject
 {
-    public interface ISensorValue
+    public abstract class SensorValueBase
     {
         public string Key { get; set; }
         public string Path { get; set; }

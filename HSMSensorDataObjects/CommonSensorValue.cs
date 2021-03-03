@@ -1,6 +1,4 @@
-﻿using HSMDSensorDataObjects;
-
-namespace HSMSensorDataObjects
+﻿namespace HSMSensorDataObjects
 {
     public class CommonSensorValue
     {
