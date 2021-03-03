@@ -18,42 +18,42 @@
             </summary>
             <param name="monitoringCore"></param>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.BoolSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.BoolSensorValue)">
             <summary>
             Receives value of bool sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.IntSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntSensorValue)">
             <summary>
             Receives value of int sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.DoubleSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleSensorValue)">
             <summary>
             Receives value of double sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.StringSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.StringSensorValue)">
             <summary>
             Receives value of string sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.DoubleBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.IntBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntBarSensorValue)">
             <summary>
             Receives value of integer bar sensor
             </summary>
@@ -68,11 +68,6 @@
             <returns></returns>
         </member>
         <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
-        <member name="T:HSMServer.DataLayer.Model.FirstLoginInfo">
-            <summary>
-            Info about the first client connection from a particular address
-            </summary>
-        </member>
         <member name="T:HSMService.HSMserviceReflection">
             <summary>Holder for reflection information generated from Protos/HSMservice.proto</summary>
         </member>

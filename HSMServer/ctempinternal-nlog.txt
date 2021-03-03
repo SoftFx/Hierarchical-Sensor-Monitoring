@@ -345,3 +345,59 @@
    --- End of inner exception stack trace ---
 2021-02-25 12:15:38.7585 Info Validating config: TargetNames=allfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
 2021-02-25 12:15:38.7681 Warn Unused target detected. Add a rule for this target to the configuration. TargetName: errorfile
+2021-03-01 15:11:55.1473 Info Message Template Auto Format enabled
+2021-03-01 15:11:55.1823 Info Loading assembly: NLog.Web.AspNetCore
+2021-03-01 15:11:55.2450 Info Adding target FileTarget(Name=errorfile)
+2021-03-01 15:11:55.2540 Info Adding target FileTarget(Name=allfile)
+2021-03-01 15:11:55.2792 Error Exception when parsing /mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config.  Exception: System.ArgumentException: Unknown log level: *
+   at NLog.LogLevel.FromString(String levelName)
+   at NLog.Config.LoggingConfigurationParser.LogLevelFromString(String text)
+   at NLog.Config.LoggingConfigurationParser.EnableLevelsForRule(LoggingRule rule, String enableLevels, String minLevel, String maxLevel)
+   at NLog.Config.LoggingConfigurationParser.ParseRuleElement(ILoggingConfigurationElement loggerElement)
+   at NLog.Config.LoggingConfigurationParser.ParseRulesElement(ILoggingConfigurationElement rulesElement, IList`1 rulesCollection)
+   at NLog.Config.LoggingConfigurationParser.LoadConfig(ILoggingConfigurationElement nlogConfig, String basePath)
+   at NLog.Config.XmlLoggingConfiguration.ParseNLogElement(ILoggingConfigurationElement nlogElement, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.ParseTopLevel(NLogXmlElement content, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.Initialize(XmlReader reader, String fileName, Boolean ignoreErrors)
+2021-03-01 15:11:55.2939 Warn Error has been raised. Exception: NLog.NLogConfigurationException: Exception when parsing /mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config. 
+ ---> System.ArgumentException: Unknown log level: *
+   at NLog.LogLevel.FromString(String levelName)
+   at NLog.Config.LoggingConfigurationParser.LogLevelFromString(String text)
+   at NLog.Config.LoggingConfigurationParser.EnableLevelsForRule(LoggingRule rule, String enableLevels, String minLevel, String maxLevel)
+   at NLog.Config.LoggingConfigurationParser.ParseRuleElement(ILoggingConfigurationElement loggerElement)
+   at NLog.Config.LoggingConfigurationParser.ParseRulesElement(ILoggingConfigurationElement rulesElement, IList`1 rulesCollection)
+   at NLog.Config.LoggingConfigurationParser.LoadConfig(ILoggingConfigurationElement nlogConfig, String basePath)
+   at NLog.Config.XmlLoggingConfiguration.ParseNLogElement(ILoggingConfigurationElement nlogElement, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.ParseTopLevel(NLogXmlElement content, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.Initialize(XmlReader reader, String fileName, Boolean ignoreErrors)
+   --- End of inner exception stack trace ---
+2021-03-01 15:11:55.3162 Info Validating config: TargetNames=allfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-03-01 15:11:55.3289 Warn Unused target detected. Add a rule for this target to the configuration. TargetName: errorfile
+2021-03-01 16:57:23.1439 Info Message Template Auto Format enabled
+2021-03-01 16:57:23.1595 Info Loading assembly: NLog.Web.AspNetCore
+2021-03-01 16:57:23.2195 Info Adding target FileTarget(Name=errorfile)
+2021-03-01 16:57:23.2265 Info Adding target FileTarget(Name=allfile)
+2021-03-01 16:57:23.2448 Error Exception when parsing /mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config.  Exception: System.ArgumentException: Unknown log level: *
+   at NLog.LogLevel.FromString(String levelName)
+   at NLog.Config.LoggingConfigurationParser.LogLevelFromString(String text)
+   at NLog.Config.LoggingConfigurationParser.EnableLevelsForRule(LoggingRule rule, String enableLevels, String minLevel, String maxLevel)
+   at NLog.Config.LoggingConfigurationParser.ParseRuleElement(ILoggingConfigurationElement loggerElement)
+   at NLog.Config.LoggingConfigurationParser.ParseRulesElement(ILoggingConfigurationElement rulesElement, IList`1 rulesCollection)
+   at NLog.Config.LoggingConfigurationParser.LoadConfig(ILoggingConfigurationElement nlogConfig, String basePath)
+   at NLog.Config.XmlLoggingConfiguration.ParseNLogElement(ILoggingConfigurationElement nlogElement, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.ParseTopLevel(NLogXmlElement content, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.Initialize(XmlReader reader, String fileName, Boolean ignoreErrors)
+2021-03-01 16:57:23.2623 Warn Error has been raised. Exception: NLog.NLogConfigurationException: Exception when parsing /mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config. 
+ ---> System.ArgumentException: Unknown log level: *
+   at NLog.LogLevel.FromString(String levelName)
+   at NLog.Config.LoggingConfigurationParser.LogLevelFromString(String text)
+   at NLog.Config.LoggingConfigurationParser.EnableLevelsForRule(LoggingRule rule, String enableLevels, String minLevel, String maxLevel)
+   at NLog.Config.LoggingConfigurationParser.ParseRuleElement(ILoggingConfigurationElement loggerElement)
+   at NLog.Config.LoggingConfigurationParser.ParseRulesElement(ILoggingConfigurationElement rulesElement, IList`1 rulesCollection)
+   at NLog.Config.LoggingConfigurationParser.LoadConfig(ILoggingConfigurationElement nlogConfig, String basePath)
+   at NLog.Config.XmlLoggingConfiguration.ParseNLogElement(ILoggingConfigurationElement nlogElement, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.ParseTopLevel(NLogXmlElement content, String filePath, Boolean autoReloadDefault)
+   at NLog.Config.XmlLoggingConfiguration.Initialize(XmlReader reader, String fileName, Boolean ignoreErrors)
+   --- End of inner exception stack trace ---
+2021-03-01 16:57:23.2914 Info Validating config: TargetNames=allfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
+2021-03-01 16:57:23.3001 Warn Unused target detected. Add a rule for this target to the configuration. TargetName: errorfile

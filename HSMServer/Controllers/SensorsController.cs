@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Mime;
-using System.Threading.Tasks;
 using HSMSensorDataObjects;
-using HSMServer.Model;
+using HSMSensorDataObjects.FullDataObject;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

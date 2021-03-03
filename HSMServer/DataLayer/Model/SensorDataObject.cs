@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMSensorDataObjects;
 
 namespace HSMServer.DataLayer.Model
 {
@@ -7,7 +8,7 @@ namespace HSMServer.DataLayer.Model
         public DateTime Time { get; set; }
         public long Timestamp { get; set; }
         public string Path { get; set; }
-        public SensorDataTypes DataType { get; set; }
+        public SensorType DataType { get; set; }
         public string TypedData { get; set; }
         public DateTime TimeCollected { get; set; }
     }
