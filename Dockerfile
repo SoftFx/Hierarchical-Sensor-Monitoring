@@ -1,7 +1,7 @@
-FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-env
-COPY . ./
-RUN dotnet restore HSMServer/HSMServer.sln
-RUN dotnet publish HSMServer/HSMServer.sln -c Release --no-restore -o Release
+#FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-env
+#COPY . ./
+#RUN dotnet restore HSMServer/HSMServer.sln
+#RUN dotnet publish HSMServer/HSMServer.sln -c Release --no-restore -o Release
 
 #FROM mcr.microsoft.com/dotnet/core/sdk:3.1-nanoserver-1909 AS win-build
 #COPY [".",  "./"]
