@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y \
 	liblmdb-dev 
 WORKDIR /app
 COPY ./Release .
-COPY ./Client /Client
+COPY ./Client ./Client
 EXPOSE 44330
 EXPOSE 22900
 ENTRYPOINT ["dotnet", "HSMServer.dll"]
