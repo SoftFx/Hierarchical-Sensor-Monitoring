@@ -38,6 +38,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: build
+    environment: DockerHub
     steps:
       - uses: actions/checkout@v2
       
@@ -46,10 +47,10 @@ jobs:
         with: 
           name: Release-${{ github.run_number }}
         
-      - name: Publish to DockerHub
-        uses: elgohr/Publish-Docker-Github-Action@master
+      - name: Push to Docker Hub
+        uses: elgohr/Publish-Docker-Github-Action@master              
         with:
-          name: softfx/hierarchical_sensor_monitoring
-          username: ${{ secrets.DOCKERHUBUSERNAM }}
-          password: ${{ secrets.DOCKERHUBTOKEN }}
-          #tags: "latest"
+          name: hsmonitoring/hierarchical_sensor_monitoring
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}      
+          tags: "latest"
