@@ -47,6 +47,10 @@ jobs:
         with: 
           name: Release
           path: ${{ github.workspace }}/Release
+          
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: ${{ github.workspace }}/Release
         
       - name: Push to Docker Hub
         uses: elgohr/Publish-Docker-Github-Action@master              
