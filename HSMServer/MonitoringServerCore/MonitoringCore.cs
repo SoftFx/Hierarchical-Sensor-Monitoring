@@ -174,7 +174,7 @@ namespace HSMServer.MonitoringServerCore
                 {
                     case SensorType.IntegerBarSensor:
                     {
-                        var typedValue = Converter.GetIntBarSensorValue(value.TypedValue);
+                        var typedValue = Converter.GetIntBarSensorValue(value.TypedValue.Replace("\\", ""));
                         AddSensorValue(typedValue);
                         break;
                     }
@@ -198,7 +198,7 @@ namespace HSMServer.MonitoringServerCore
                     }
                     case SensorType.BooleanSensor:
                     {
-                        var typedValue = Converter.GetBoolSensorValue(value.TypedValue);
+                        var typedValue = Converter.GetBoolSensorValue(value.TypedValue.Replace("\\", ""));
                         AddSensorValue(typedValue);
                         break;
                     }

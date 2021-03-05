@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -8,6 +9,7 @@ using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Core
@@ -68,14 +70,31 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
-            var allData = _dataQueue.GetAllCollectedData();
-            _dataQueue.Stop();
-            foreach (var barSensor in _barSensors)
+            List<CommonSensorValue> allData = new List<CommonSensorValue>();
+            if (_dataQueue != null)
             {
-                allData.Add(barSensor.GetLastValue());
-                barSensor.Dispose();
+                allData.AddRange(_dataQueue.GetAllCollectedData());
+                _dataQueue.Stop();
             }
-            SendData(allData);
+
+            if (_barSensors != null && _barSensors.Any())
+            {
+                foreach (var barSensor in _barSensors)
+                {
+                    allData.Add(barSensor.GetLastValue());
+                }
+
+                foreach (var barSensor in _barSensors)
+                {
+                    barSensor.Dispose();
+                }
+            }
+
+            if (allData.Any())
+            {
+                SendData(allData);
+            }
+            
             _client.Dispose();
         }
 
@@ -268,14 +287,25 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                //Console.WriteLine($"Sending {values.Count} values at {DateTime.Now:G}");
                 string jsonString = JsonSerializer.Serialize(values);
+                //string jsonString = Serializer.Serialize(values);
+                //byte[] bytesData = Encoding.UTF8.GetBytes(jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                _client.PostAsync(_listSendingAddress, data);
+                var res = _client.PostAsync(_listSendingAddress, data).Result;
+                //HttpWebRequest request = (HttpWebRequest) WebRequest.Create(_listSendingAddress);
+                //request.Method = "POST";
+                //request.ContentType = "application/json";
+                //using (var stream = request.GetRequestStream())
+                //{
+                //    stream.Write(bytesData, 0, bytesData.Length);
+                //}
+
+                //request.GetResponse();
             }
             catch (Exception e)
             {
                 _dataQueue.ReturnFailedData(values);
+                Console.WriteLine($"Failed to send: {e}");
             }
             
         }

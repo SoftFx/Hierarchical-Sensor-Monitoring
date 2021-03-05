@@ -3,6 +3,7 @@ using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.BarData
 {
+    [DataContract]
     public class PercentileValueDouble
     {
         public PercentileValueDouble()
@@ -15,9 +16,9 @@ namespace HSMSensorDataObjects.BarData
             Value = value;
             Percentile = percentile;
         }
-
+        [DataMember]
         public double Value { get; set; }
-
+        [DataMember]
         public double Percentile { get; set; }
         //public void GetObjectData(SerializationInfo info, StreamingContext context)
         //{
