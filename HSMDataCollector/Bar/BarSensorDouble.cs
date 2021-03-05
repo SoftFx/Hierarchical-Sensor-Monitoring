@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
@@ -95,7 +96,7 @@ namespace HSMDataCollector.Bar
 
             FillNumericData(result, currentValues);
             FillCommonData(result);
-            result.EndTime = DateTime.MinValue;
+            result.EndTime = DateTime.MinValue.ToUniversalTime();
 
             return result;
         }
@@ -143,6 +144,7 @@ namespace HSMDataCollector.Bar
             {
                 DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
                 return JsonSerializer.Serialize(typedData);
+                //return Serializer.Serialize(typedData);
             }
             catch (Exception e)
             {
@@ -157,6 +159,7 @@ namespace HSMDataCollector.Bar
             {
                 DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
                 string convertedString = JsonSerializer.Serialize(typedData);
+                //string convertedString = Serializer.Serialize(typedData);
                 return Encoding.UTF8.GetBytes(convertedString);
             }
             catch (Exception e)
