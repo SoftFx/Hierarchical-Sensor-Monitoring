@@ -22,10 +22,10 @@ RUN apt-get update && apt-get install -y \
 	lmdb-utils \
 	liblmdb-dev 
 WORKDIR /app
-ADD /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release .
-RUN unzip /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release/Release.zip
-#COPY ./Release .
-#COPY ./Client ./Client
+#ADD /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release .
+#RUN unzip /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release/Release.zip
+COPY ./Release .
+COPY ./Client ./Client
 EXPOSE 44330
 EXPOSE 22900
 ENTRYPOINT ["dotnet", "HSMServer.dll"]
