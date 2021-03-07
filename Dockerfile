@@ -25,7 +25,7 @@ WORKDIR /app
 #ADD /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release .
 #RUN unzip /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/Release/Release.zip
 COPY ./Release .
-COPY ./Client ./Client
+COPY ./Release/Client ./Client
 EXPOSE 44330
 EXPOSE 22900
 ENTRYPOINT ["dotnet", "HSMServer.dll"]
