@@ -794,7 +794,8 @@ namespace HSMServer.DataLayer
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)
         {
             string str = Encoding.UTF8.GetString(keyBytes);
-            str = str.Split(_keysSeparator)[^2];
+            var splitRes = str.Split(_keysSeparator);
+            str = splitRes[^2];
             try
             {
                 return DateTime.Parse(str);
@@ -802,6 +803,16 @@ namespace HSMServer.DataLayer
             catch (Exception e)
             {
                 _logger.Error(e, $"Error parsing datetime: {str}");
+            }
+            //Back compatibility
+            str = splitRes.Last();
+            try
+            {
+                return DateTime.Parse(str);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Error parsing datetime from prev version: {str}");
                 return DateTime.MinValue;
             }
         }
