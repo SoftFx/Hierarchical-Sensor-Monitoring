@@ -3,45 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
-using Google.Protobuf;
 using HSMCommon.Extensions;
 using LightningDB;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
-using HSMServer.Extensions;
 using NLog;
 
 namespace HSMServer.DataLayer
 {
-    public class DatabaseClass : IDisposable
+    public class DatabaseClass : IDisposable, IDatabaseClass
     {
-        #region Singleton
-
-        private static volatile DatabaseClass _instance;
-        private static readonly object _syncRoot = new object();
-
-        //Multithread singleton
-        public static DatabaseClass Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_syncRoot)
-                    {
-                        if (_instance == null)
-                            _instance = new DatabaseClass();
-                    }
-                }
-
-                return _instance;
-            }
-        }
-
-        #endregion
-
         #region IDisposable implementation
 
         private bool _disposed;

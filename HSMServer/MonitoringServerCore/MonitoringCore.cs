@@ -66,6 +66,7 @@ namespace HSMServer.MonitoringServerCore
 
         //#endregion
 
+        private readonly IDatabaseClass _database;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
@@ -74,15 +75,16 @@ namespace HSMServer.MonitoringServerCore
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore(UserManager userManager, IBarSensorsStorage barsStorage)
+        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage)
         {
             _logger = LogManager.GetCurrentClassLogger();
+            _database = database;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
             _certificateManager = new CertificateManager();
             _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
-            _productManager = new ProductManager();
+            _productManager = new ProductManager(_database);
             _logger.Debug("Monitoring core initialized");
         }
 
@@ -116,7 +118,7 @@ namespace HSMServer.MonitoringServerCore
                 _productManager.AddSensor(productName, dataObject.Path);
             }
 
-            Task.Run(() => DatabaseClass.Instance.WriteSensorData(dataObject, productName));
+            Task.Run(() => _database.WriteSensorData(dataObject, productName));
         }
 
         private async Task<bool> SaveSensorValueAsync(SensorDataObject dataObject, string productName)
@@ -128,7 +130,7 @@ namespace HSMServer.MonitoringServerCore
                     _productManager.AddSensor(productName, dataObject.Path);
                 }
 
-                await Task.Run(() => DatabaseClass.Instance.WriteSensorData(dataObject, productName));
+                await Task.Run(() => _database.WriteSensorData(dataObject, productName));
                 return true;
             }
             catch (Exception e)
@@ -338,7 +340,7 @@ namespace HSMServer.MonitoringServerCore
                 var sensorsList = _productManager.GetProductSensors(product.Name);
                 foreach (var sensorPath in sensorsList)
                 {
-                    var lastVal = DatabaseClass.Instance.GetLastSensorValue(product.Name, sensorPath);
+                    var lastVal = _database.GetLastSensorValue(product.Name, sensorPath);
                     if (lastVal != null)
                     {
                         sensorsUpdateMessage.Sensors.Add(Converter.Convert(lastVal, product.Name));
@@ -352,7 +354,7 @@ namespace HSMServer.MonitoringServerCore
             long n = -1)
         {
             SensorHistoryListMessage sensorsUpdate = new SensorHistoryListMessage();
-            List<SensorDataObject> dataList = DatabaseClass.Instance.GetSensorDataHistory(product, path, n);
+            List<SensorDataObject> dataList = _database.GetSensorDataHistory(product, path, n);
             //_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
             dataList.Sort((a, b) => a.TimeCollected.CompareTo(b.TimeCollected));
             if (n != -1)

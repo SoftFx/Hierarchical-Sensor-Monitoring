@@ -13,14 +13,16 @@ namespace HSMServer.Products
 {
     public class ProductManager
     {
+        private readonly IDatabaseClass _database;
         private readonly Logger _logger;
         private readonly List<Product> _products;
         private readonly Dictionary<string, List<string>> _productSensorsDictionary = new Dictionary<string, List<string>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager()
+        public ProductManager(IDatabaseClass database)
         {
             _logger = LogManager.GetCurrentClassLogger();
+            _database = database;
             _products = new List<Product>();
             InitializeProducts();
         }
@@ -39,11 +41,11 @@ namespace HSMServer.Products
 
         private void InitializeProducts()
         {
-            List<string> productNames = DatabaseClass.Instance.GetProductsList();
+            List<string> productNames = _database.GetProductsList();
             foreach (var productName in productNames)
             {
-                var info = DatabaseClass.Instance.GetProductInfo(productName);
-                var sensors = DatabaseClass.Instance.GetSensorsList(productName);
+                var info = _database.GetProductInfo(productName);
+                var sensors = _database.GetSensorsList(productName);
                 if (info != null)
                 {
                     lock (_productsLock)
@@ -84,8 +86,8 @@ namespace HSMServer.Products
         {
             try
             {
-                DatabaseClass.Instance.RemoveProductFromList(name);
-                DatabaseClass.Instance.RemoveProductInfo(name);
+                _database.RemoveProductFromList(name);
+                _database.RemoveProductInfo(name);
                 var product = GetProductByName(name);
                 if (product != null)
                 {
@@ -118,8 +120,8 @@ namespace HSMServer.Products
         {
             try
             {
-                DatabaseClass.Instance.AddProductToList(product.Name);
-                DatabaseClass.Instance.PutProductInfo(product);
+                _database.AddProductToList(product.Name);
+                _database.PutProductInfo(product);
                 lock (_productsLock)
                 {
                     _products.Add(product);
@@ -157,7 +159,7 @@ namespace HSMServer.Products
                 _productSensorsDictionary[productName].Add(path);
             }
 
-            Task.Run(() => DatabaseClass.Instance.AddNewSensorToList(productName, path));
+            Task.Run(() => _database.AddNewSensorToList(productName, path));
         }
         public void AddSensor(SensorInfo sensorInfo)
         {
@@ -170,10 +172,10 @@ namespace HSMServer.Products
                 _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo.Path);
             }
 
-            //ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(sensorInfo));
+            //ThreadPool.QueueUserWorkItem(_ => _database.AddSensor(sensorInfo));
             //ThreadPool.QueueUserWorkItem(_ =>
-            //    DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
-            Task.Run(() => DatabaseClass.Instance.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            //    _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            Task.Run(() => _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
         }
         public string GetProductKeyByName(string name)
         {
