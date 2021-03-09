@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 
 namespace HSMClientUpdater
@@ -19,29 +20,36 @@ namespace HSMClientUpdater
         const int _waitTime = 5000;
         private static List<string> _notTouchedDirectories = new List<string> { "Config", "Logs" };
         private static List<string> _skipFiles = new List<string> { "HSMClientUpdater.dll"};
+        private static string _logsFileName;
+        private static bool _isLogFileCreated = false;
+        private static string _logsFilePath;
         static void Main(string[] args)
         {
             _appName = "HSMClientUpdater";
             Console.WriteLine($"HSMClient updater started at {DateTime.Now:G}");
             ParseArgs(args);
+            _logsFileName =
+                $"HSMClient-update-log-{DateTime.Now.Day}:{DateTime.Now.Month}.{DateTime.Now.Year}-{DateTime.Now.Hour}:{DateTime.Now.Minute}:{DateTime.Now.Second}.txt";
+            _logsFilePath = Path.Combine(_appDirectory, _logsFileName);
             _skipFiles.Add(_updaterExeFileName);
             if (IsRunningAlready())
             {
                 Console.WriteLine($"Updater is already running!{Environment.NewLine}Shutting down...");
-                Console.WriteLine("Press enter to continue");
-                Console.ReadLine();
+                WriteLog("Updater is already running!");
+                Console.WriteLine($"Update log at {_logsFilePath}");
                 return;
             }
 
             if (IsClientRunning())
             {
                 Console.WriteLine($"Client app is already running!{Environment.NewLine}Shutting down...");
-                Console.WriteLine("Press enter to continue");
-                Console.ReadLine();
+                WriteLog("Client app is already running!");
+                Console.WriteLine($"Update log at {_logsFilePath}");
                 return;
             }
 
             RunUpdate();
+            WriteLog("Update finished.");
             Console.WriteLine($"Update finished at {DateTime.Now:G}");
         }
 
@@ -129,6 +137,7 @@ namespace HSMClientUpdater
         private static void RunUpdate()
         {
             Console.WriteLine($"Starting client update at {DateTime.Now:G}");
+            WriteLog("Client update started");
             try
             {
                 string clientFile = Path.Combine(_appDirectory, _clientExeFileName);
@@ -154,16 +163,14 @@ namespace HSMClientUpdater
                 catch (Exception e)
                 {
                     Console.WriteLine($"Failed to start client: {e}");
-                    Console.WriteLine("Press enter to continue");
-                    Console.ReadLine();
+                    WriteLog("Failed to launch client app!");
                 }
 
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Error: {e}");
-                Console.WriteLine("Press enter to continue");
-                Console.ReadLine();
+                WriteLog(e, "Update error");
 
             }
         }
@@ -183,6 +190,7 @@ namespace HSMClientUpdater
                     Directory.CreateDirectory(oldFolder);
 
                 Console.WriteLine($"Update files will be moved from {_updateDirectory} to {appDirectory}");
+                WriteLog($"Update files will be moved from {_updateDirectory} to {appDirectory}");
                 CopyFolder(_updateDirectory, appDirectory);
 
                 return true;
@@ -190,6 +198,7 @@ namespace HSMClientUpdater
             catch (Exception e)
             {
                 Console.WriteLine($"Copy files error: {e}");
+                WriteLog(e, "Failed to copy client files");
                 return false;
             }
         }
@@ -304,6 +313,37 @@ namespace HSMClientUpdater
 
                 }
             }
+        }
+
+        private static void WriteLog(Exception ex, string message = "")
+        {
+            CheckCreateFile(_logsFilePath);
+            byte[] logBytes = Encoding.UTF8.GetBytes($"{DateTime.Now:G}{Environment.NewLine}{message}{Environment.NewLine}{ex}{Environment.NewLine}");
+            WriteBytes(logBytes);
+        }
+        private static void WriteLog(string message)
+        {
+            CheckCreateFile(_logsFilePath);
+            byte[] bytesToWrite = Encoding.UTF8.GetBytes($"{DateTime.Now:G}{Environment.NewLine}{message}{Environment.NewLine}");
+            WriteBytes(bytesToWrite);
+        }
+
+        private static void WriteBytes(byte[] bytesToWrite)
+        {
+            using (FileStream fs = new FileStream(_logsFilePath, FileMode.Append))
+            {
+                fs.Write(bytesToWrite, 0, bytesToWrite.Length);
+                fs.Flush();
+                fs.Close();
+            }
+        }
+
+        private static void CheckCreateFile(string filePath)
+        {
+            if (!_isLogFileCreated)
+            {
+                File.Create(filePath);
+            }   
         }
     }
 }
