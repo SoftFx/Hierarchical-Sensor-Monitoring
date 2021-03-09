@@ -8,13 +8,13 @@
 [Setup]
 AppId={{8FB93B9E-B78C-4B1F-9C19-4BD0663B985C}
 AppName=HSMClient
-AppVerName=HSMClient 0.91
+AppVerName=HSMClient 1.0.1
 DefaultDirName={pf}\HSMClient
 DefaultGroupName=HSMClient
 AppPublisher=Soft-FX
 
 ;InfoBeforeFile=
-OutputBaseFilename=HSMClient_setup_0.91
+OutputBaseFilename=HSMClient_setup_1.0.1
 ;SetupIconFile=
 ;UninstallDisplayIcon=
 DisableProgramGroupPage=yes
@@ -73,7 +73,7 @@ Type: dirifempty; Name: "{app}"
 Name: "{userdesktop}\{#AppShortcutName}"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
 
 [Run]
-Filename: "{app}\{#AppExeFile}"; Description: "Launch client application"; Flags: nowait postinstall
+;Filename: "{app}\{#AppExeFile}"; Description: "Launch client application"; Flags: nowait postinstall
 ;
  
 
