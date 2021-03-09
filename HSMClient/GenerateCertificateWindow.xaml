@@ -25,7 +25,7 @@
             </Button.Style>
         </Button>
         <StackPanel Margin="10">
-            <TextBlock>Country name (required):</TextBlock>
+            <TextBlock>2 letters country code (required):</TextBlock>
             <TextBox Margin="0,5,0,5" Name="textCountry" MaxLength="2" Text="{Binding CountryName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" MinWidth="100"></TextBox>
             <TextBlock>State or province name:</TextBlock>
             <TextBox Margin="0,5,0,5" MaxLength="32" Text="{Binding StateOrProvinceName, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"></TextBox>
