@@ -306,6 +306,7 @@ namespace HSMClient.Model
         {
             if (_treeThread != null)
             {
+                _continue = false;
                 try
                 {
                     _treeThread.Interrupt();
@@ -316,7 +317,10 @@ namespace HSMClient.Model
                 {
                     Logger.Error($"Failed to stop working tree thread, error = {e}");
                 }
+                Thread.Sleep(UPDATE_TIMEOUT);
+                _continue = true;
             }
+            
             connectionStatus = ConnectionStatus.Init;
             _treeThread = new Thread(MonitoringLoopStep);
             _treeThread.Name = $"Thread_{DateTime.Now.ToLongTimeString()}";

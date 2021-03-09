@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Grpc.Net.Client;
 using HSMClient.Common.Logging;
 using HSMClient.Configuration;
@@ -21,6 +22,7 @@ namespace HSMClient.Connection
     public class GrpcClientConnector : ConnectorBase
     {
         private Sensors.SensorsClient _sensorsClient;
+        private GrpcChannel _channel;
         public GrpcClientConnector(string sensorsUrl) : base(sensorsUrl)
         {
             AppContext.SetSwitch(
@@ -30,24 +32,32 @@ namespace HSMClient.Connection
 
         private void InitializeSensorsClient(string sensorsUrl, X509Certificate2 clientCertificate)
         {
-            if (_sensorsClient != null)
+            if (_channel != null)
             {
-                _sensorsClient = null;
+                _channel.ShutdownAsync();
+                _channel.Dispose();
+                _channel = null;
             }
+
+            var handler = CreateHandler(sensorsUrl, clientCertificate);
+            _channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
+            {
+                HttpHandler = handler,
+                
+            });
+
+            _sensorsClient = new Sensors.SensorsClient(_channel);
+        }
+
+        private HttpClientHandler CreateHandler(string sensorsUrl, X509Certificate2 clientCertificate)
+        {
             HttpClientHandler handler = new HttpClientHandler();
             handler.ClientCertificateOptions = ClientCertificateOption.Manual;
             handler.ClientCertificates.Add(clientCertificate);
             handler.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
             handler.AllowAutoRedirect = true;
             handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
-
-            var channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
-            {
-                HttpHandler = handler,
-                
-            });
-
-            _sensorsClient = new Sensors.SensorsClient(channel);
+            return handler;
         }
         public override bool CheckServerAvailable()
         {
