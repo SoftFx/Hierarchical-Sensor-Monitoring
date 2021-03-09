@@ -11,9 +11,15 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Images\Icon.ico" />
+    <None Remove="version.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Images\Icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="version.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
