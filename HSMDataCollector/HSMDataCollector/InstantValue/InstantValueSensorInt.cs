@@ -19,6 +19,17 @@ namespace HSMDataCollector.InstantValue
         public void AddValue(int value)
         {
             IntSensorValue data = new IntSensorValue() {IntValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
+            SendValue(data);   
+        }
+
+        public void AddValue(int value, string comment)
+        {
+            IntSensorValue data = new IntSensorValue() { IntValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey, Comment = comment};
+            SendValue(data);
+        }
+
+        private void SendValue(IntSensorValue data)
+        {
             string serializedValue = GetStringData(data);
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
