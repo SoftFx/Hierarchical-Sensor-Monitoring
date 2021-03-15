@@ -48,18 +48,28 @@
     <Compile Include="Bar\BarSensorBase.cs" />
     <Compile Include="Bar\BarSensorDouble.cs" />
     <Compile Include="Bar\BarSensorInt.cs" />
+    <Compile Include="Base\ISensor.cs" />
     <Compile Include="Base\SensorBase.cs" />
     <Compile Include="Core\DataCollector.cs" />
     <Compile Include="Core\DataQueue.cs" />
     <Compile Include="Core\IDataCollector.cs" />
     <Compile Include="Core\IDataQueue.cs" />
     <Compile Include="Core\IValuesQueue.cs" />
+    <Compile Include="Exceptions\InvalidSensorPathException.cs" />
     <Compile Include="InstantValue\InstantValueSensorBase.cs" />
     <Compile Include="InstantValue\InstantValueSensorBool.cs" />
     <Compile Include="InstantValue\InstantValueSensorDouble.cs" />
     <Compile Include="InstantValue\InstantValueSensorInt.cs" />
     <Compile Include="InstantValue\InstantValueSensorString.cs" />
     <Compile Include="InstantValue\InstantValueTypedSensorBase.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\CPUSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\FreeDiskSpaceSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\FreeMemorySensor.cs" />
+    <Compile Include="PerformanceSensor\Base\IPerformanceSensor.cs" />
+    <Compile Include="PerformanceSensor\Base\PerformanceSensorBase.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessMemorySensor.cs" />
+    <Compile Include="PerformanceSensor\StandardSensor\StandardPerformanceSensorBase.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PublicInterface\IBoolSensor.cs" />
     <Compile Include="PublicInterface\IDoubleBarSensor.cs" />
@@ -68,6 +78,7 @@
     <Compile Include="PublicInterface\IIntSensor.cs" />
     <Compile Include="PublicInterface\IStringSensor.cs" />
     <Compile Include="Serialization\Serializer.cs" />
+    <Compile Include="TextConstants.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="NuGet.CommandLine">
@@ -84,6 +95,9 @@
       <Project>{56418540-b151-4ff4-ac7f-05d5c4e3d07a}</Project>
       <Name>HSMSensorDataObjects</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="PerformanceSensor\CustomFuncSensor\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

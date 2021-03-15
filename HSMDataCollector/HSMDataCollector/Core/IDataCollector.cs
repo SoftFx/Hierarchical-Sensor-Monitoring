@@ -14,6 +14,10 @@ namespace HSMDataCollector.Core
         /// The method also disposes the HttpClient.
         /// </summary>
         void Stop();
+
+        void InitializeSystemMonitoring();
+        void InitializeProcessMonitoring();
+        void InitializeProcessMonitoring(string processName);
         IBoolSensor CreateBoolSensor(string path);
         IDoubleSensor CreateDoubleSensor(string path);
         IIntSensor CreateIntSensor(string path);
