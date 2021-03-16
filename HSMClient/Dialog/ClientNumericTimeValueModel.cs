@@ -10,12 +10,12 @@ using HSMClientWPFControls.ViewModel;
 using HSMSensorDataObjects.TypedDataObject;
 using OxyPlot;
 using OxyPlot.Axes;
+using OxyPlot.Series;
 
 namespace HSMClient.Dialog
 {
     class ClientNumericTimeValueModel : ClientDialogTimerModel, INumericTimeValueModel
     {
-        private readonly DateTime _unixOrigin = new DateTime(1970,1,1);
         private Collection<DataPoint> _data;
         private SynchronizationContext _context;
         public Collection<DataPoint> Data
@@ -58,10 +58,6 @@ namespace HSMClient.Dialog
                     {
                         IntSensorData typedData = JsonSerializer.Deserialize<IntSensorData>(item.SensorValue);
                         var point = DateTimeAxis.CreateDataPoint(item.Time, typedData.IntValue);
-                        //if (Data.Count == 0  || point.X > Data.Last().X)
-                        //{
-                        //    _context.Send(_ => Data.Add(point), null);
-                        //}
                         points.Add(point);
                     }
                     break;
@@ -80,7 +76,7 @@ namespace HSMClient.Dialog
                     
             }
 
-            _data = points;
+            Data = points;
         }
     }
 }
