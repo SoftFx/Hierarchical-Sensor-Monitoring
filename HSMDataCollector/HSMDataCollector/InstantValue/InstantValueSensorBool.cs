@@ -36,19 +36,6 @@ namespace HSMDataCollector.InstantValue
             commonValue.SensorType = SensorType.BooleanSensor;
             SendData(commonValue);
         }
-        private BoolSensorValue GetDataObject()
-        {
-            BoolSensorValue result = new BoolSensorValue();
-            lock (_syncObject)
-            {
-                result.BoolValue = Value;
-            }
-
-            result.Path = Path;
-            result.Key = ProductKey;
-            result.Time = DateTime.Now;
-            return result;
-        }
 
         protected override string GetStringData(SensorValueBase data)
         {

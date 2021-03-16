@@ -36,19 +36,6 @@ namespace HSMDataCollector.InstantValue
             commonValue.SensorType = SensorType.DoubleSensor;
             SendData(commonValue);
         }
-        private DoubleSensorValue GetDataObject()
-        {
-            DoubleSensorValue result = new DoubleSensorValue();
-            lock (_syncObject)
-            {
-                result.DoubleValue = Value;
-            }
-
-            result.Path = Path;
-            result.Key = ProductKey;
-            result.Time = DateTime.Now;
-            return result;
-        }
 
         protected override string GetStringData(SensorValueBase data)
         {

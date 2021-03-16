@@ -4,14 +4,14 @@ using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
 
-namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
+namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
-    internal class CPUSensor : StandardPerformanceSensorBase
+    internal class ProcessThreadCountSensor : StandardPerformanceSensorBase
     {
         private readonly BarSensorInt _valuesSensor;
-        private const string _sensorName = "CPU usage";
-        public CPUSensor(string productKey, string serverAddress, IValuesQueue queue)
-            : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
+        private const string _sensorName = "Process thread count";
+        public ProcessThreadCountSensor(string productKey, string serverAddress, IValuesQueue queue, string processName)
+            : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Process", "Thread Count", processName)
         {
             _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, serverAddress, queue);
         }
@@ -24,7 +24,6 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             }
             catch (Exception e)
             { }
-            
         }
 
         public override void Dispose()

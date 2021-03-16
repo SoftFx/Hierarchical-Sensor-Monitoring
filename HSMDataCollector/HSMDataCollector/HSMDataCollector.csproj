@@ -62,7 +62,9 @@
     <Compile Include="InstantValue\InstantValueSensorInt.cs" />
     <Compile Include="InstantValue\InstantValueSensorString.cs" />
     <Compile Include="InstantValue\InstantValueTypedSensorBase.cs" />
+    <Compile Include="PerformanceSensor\CustomFuncSensor\FuncSensorBase.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\CPUSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\FreeDiskSpaceSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\FreeMemorySensor.cs" />
@@ -96,8 +98,6 @@
       <Name>HSMSensorDataObjects</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="PerformanceSensor\CustomFuncSensor\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

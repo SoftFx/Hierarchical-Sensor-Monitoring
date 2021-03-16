@@ -36,20 +36,7 @@ namespace HSMDataCollector.InstantValue
             commonValue.SensorType = SensorType.IntSensor;
             SendData(commonValue);
         }
-        private IntSensorValue GetDataObject()
-        {
-            IntSensorValue result = new IntSensorValue();
-            lock (_syncObject)
-            {
-                result.IntValue = Value;
-            }
-
-            result.Path = Path;
-            result.Key = ProductKey;
-            result.Time = DateTime.Now;
-            return result;
-        }
-
+        
         protected override string GetStringData(SensorValueBase data)
         {
             try

@@ -295,8 +295,13 @@ namespace HSMDataCollector.Core
             Process currentProcess = Process.GetCurrentProcess();
             ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
             AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
+            ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+            AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
+            ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+            AddNewSensor(currentThreadCount, currentThreadCount.Path);
             _performanceSensors.Add(currentCpuSensor);
-
+            _performanceSensors.Add(currentMemorySensor);
+            _performanceSensors.Add(currentThreadCount);
         }
         private void StartProcessMonitoring(string processFileName)
         {
