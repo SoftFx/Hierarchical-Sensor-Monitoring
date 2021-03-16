@@ -27,12 +27,12 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="3*"/>
+            <RowDefinition Height="3.5*"/>
             <RowDefinition Height="1*"/>
         </Grid.RowDefinitions>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="1.2*"/>
             <ColumnDefinition Width="3*"/>
         </Grid.ColumnDefinitions>
         
