@@ -226,25 +226,25 @@ namespace HSMCommon.Certificates
             }
         }
 
-        //public static X509Certificate2 ReadCertificate(string crtFilePath, string keyFilePath)
-        //{
-        //    X509Certificate2 cert = new X509Certificate2(crtFilePath, "",
-        //        X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
+        public static X509Certificate2 ReadCertificate(string crtFilePath, string keyFilePath)
+        {
+            X509Certificate2 cert = new X509Certificate2(crtFilePath, "",
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet);
 
-        //    AsymmetricKeyParameter keyParam = ImportPrivateKey(keyFilePath);
-        //    var store = new Pkcs12Store();
-        //    string friendlyName = cert.Subject.ToString();
-        //    var entry = new X509CertificateEntry(Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(cert));
-        //    store.SetCertificateEntry(friendlyName, entry);
-        //    store.SetKeyEntry(friendlyName, new AsymmetricKeyEntry(keyParam),new []{entry} );
+            AsymmetricKeyParameter keyParam = ImportPrivateKey(keyFilePath);
+            var store = new Pkcs12Store();
+            string friendlyName = cert.Subject.ToString();
+            var entry = new X509CertificateEntry(Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(cert));
+            store.SetCertificateEntry(friendlyName, entry);
+            store.SetKeyEntry(friendlyName, new AsymmetricKeyEntry(keyParam), new[] { entry });
 
-        //    var stream = new MemoryStream();
-        //    store.Save(stream, "".ToArray(), new SecureRandom());
+            var stream = new MemoryStream();
+            store.Save(stream, "".ToArray(), new SecureRandom());
 
-        //    var convertedCertificate = new X509Certificate2(stream.ToArray(), "", X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+            var convertedCertificate = new X509Certificate2(stream.ToArray(), "", X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
 
-        //    return convertedCertificate;
-        //}
+            return convertedCertificate;
+        }
 
         #region Store methods
 
@@ -326,25 +326,25 @@ namespace HSMCommon.Certificates
             return new X509Name(orderedList, attributes);
         }
 
-        //private static AsymmetricKeyParameter ImportPrivateKey(string filePath)
-        //{
-        //    StreamReader streamReader = new StreamReader(filePath);
-        //    PemReader pemReader = new PemReader(streamReader);
-        //    var keyPair = pemReader.ReadObject();
+        private static AsymmetricKeyParameter ImportPrivateKey(string filePath)
+        {
+            StreamReader streamReader = new StreamReader(filePath);
+            PemReader pemReader = new PemReader(streamReader);
+            var keyPair = pemReader.ReadObject();
 
-        //    AsymmetricKeyParameter keyParameter;
-        //    AsymmetricCipherKeyPair cipherKeyPair = keyPair as AsymmetricCipherKeyPair;
-        //    if (cipherKeyPair != null)
-        //    {
-        //        keyParameter = cipherKeyPair.Private;
-        //    }
-        //    else
-        //    {
-        //        keyParameter = keyPair as AsymmetricKeyParameter;
-        //    }
+            AsymmetricKeyParameter keyParameter;
+            AsymmetricCipherKeyPair cipherKeyPair = keyPair as AsymmetricCipherKeyPair;
+            if (cipherKeyPair != null)
+            {
+                keyParameter = cipherKeyPair.Private;
+            }
+            else
+            {
+                keyParameter = keyPair as AsymmetricKeyParameter;
+            }
 
-        //    return keyParameter;
-        //}
+            return keyParameter;
+        }
 
         public static string GetSubjectString(CertificateData data)
         {
