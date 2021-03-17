@@ -38,7 +38,7 @@ namespace HSMDataCollector.Bar
             {
                 dataObject = GetPartialDataObject();
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 return;
             }
@@ -146,7 +146,7 @@ namespace HSMDataCollector.Bar
                 return JsonSerializer.Serialize(typedData);
                 //return Serializer.Serialize(typedData);
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 Console.WriteLine(e);
                 return string.Empty;

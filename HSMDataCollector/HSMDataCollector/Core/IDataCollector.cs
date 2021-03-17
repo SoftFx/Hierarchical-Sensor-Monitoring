@@ -14,6 +14,23 @@ namespace HSMDataCollector.Core
         /// The method also disposes the HttpClient.
         /// </summary>
         void Stop();
+
+        /// <summary>
+        /// Creates and initializes sensors, which automatically monitor CPU and RAM usage of the current machine.
+        /// Sensors will be placed at Product/System Monitoring node
+        /// </summary>
+        void InitializeSystemMonitoring();
+        /// <summary>
+        /// Creates and initializes sensors, which automatically monitor current working process. RAM and CPU usage, and threads amount are monitored.
+        /// Sensors will be placed at Product/System Monitoring node
+        /// </summary>
+        void InitializeProcessMonitoring();
+        /// <summary>
+        /// Creates and initializes sensors, which automatically monitor the specified process. RAM and CPU usage, and threads amount are monitored.
+        /// Sensors will be placed at Product/System Monitoring node
+        /// </summary>
+        /// <param name="processName"></param>
+        void InitializeProcessMonitoring(string processName);
         IBoolSensor CreateBoolSensor(string path);
         IDoubleSensor CreateDoubleSensor(string path);
         IIntSensor CreateIntSensor(string path);

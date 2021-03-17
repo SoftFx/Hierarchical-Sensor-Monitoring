@@ -4,7 +4,7 @@ using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Base
 {
-    public abstract class SensorBase
+    public abstract class SensorBase : ISensor
     {
         protected readonly string Path;
         protected readonly string ProductKey;

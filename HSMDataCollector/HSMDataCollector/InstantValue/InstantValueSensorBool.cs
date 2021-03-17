@@ -19,25 +19,22 @@ namespace HSMDataCollector.InstantValue
         public void AddValue(bool value)
         {
             BoolSensorValue data = new BoolSensorValue() {BoolValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
+            SendValue(data);
+        }
+
+        public void AddValue(bool value, string comment)
+        {
+            BoolSensorValue data = new BoolSensorValue() {BoolValue = value, Comment = comment, Path = Path, Time = DateTime.Now, Key = ProductKey};
+            SendValue(data);
+        }
+
+        private void SendValue(BoolSensorValue data)
+        {
             string serializedValue = GetStringData(data);
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.BooleanSensor;
             SendData(commonValue);
-        }
-
-        private BoolSensorValue GetDataObject()
-        {
-            BoolSensorValue result = new BoolSensorValue();
-            lock (_syncObject)
-            {
-                result.BoolValue = Value;
-            }
-
-            result.Path = Path;
-            result.Key = ProductKey;
-            result.Time = DateTime.Now;
-            return result;
         }
 
         protected override string GetStringData(SensorValueBase data)

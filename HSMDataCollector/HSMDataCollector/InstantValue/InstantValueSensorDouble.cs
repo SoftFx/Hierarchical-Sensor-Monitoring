@@ -19,25 +19,22 @@ namespace HSMDataCollector.InstantValue
         public void AddValue(double value)
         {
             DoubleSensorValue data = new DoubleSensorValue() {DoubleValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey};
+            SendValue(data);
+        }
+
+        public void AddValue(double value, string comment)
+        {
+            DoubleSensorValue data = new DoubleSensorValue() { DoubleValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey, Comment = comment};
+            SendValue(data);
+        }
+
+        private void SendValue(DoubleSensorValue data)
+        {
             string serializedValue = GetStringData(data);
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.DoubleSensor;
             SendData(commonValue);
-        }
-
-        private DoubleSensorValue GetDataObject()
-        {
-            DoubleSensorValue result = new DoubleSensorValue();
-            lock (_syncObject)
-            {
-                result.DoubleValue = Value;
-            }
-
-            result.Path = Path;
-            result.Key = ProductKey;
-            result.Time = DateTime.Now;
-            return result;
         }
 
         protected override string GetStringData(SensorValueBase data)

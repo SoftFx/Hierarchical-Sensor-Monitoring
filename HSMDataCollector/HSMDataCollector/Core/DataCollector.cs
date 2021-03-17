@@ -1,38 +1,46 @@
-﻿using System;
+﻿using HSMDataCollector.Bar;
+using HSMDataCollector.Base;
+using HSMDataCollector.Exceptions;
+using HSMDataCollector.InstantValue;
+using HSMDataCollector.PerformanceSensor.Base;
+using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using HSMDataCollector.Bar;
-using HSMDataCollector.Base;
-using HSMDataCollector.InstantValue;
-using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
-using HSMSensorDataObjects;
+using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
+using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 
 namespace HSMDataCollector.Core
 {
-    public class DataCollector : IDataCollector, IDisposable
+    public class DataCollector : IDataCollector
     {
         private readonly string _productKey;
         private readonly string _connectionAddress;
         private readonly string _listSendingAddress;
-        private readonly Dictionary<string, SensorBase> _nameToSensor;
+        private readonly Dictionary<string, ISensor> _nameToSensor;
         private readonly object _syncRoot = new object();
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
 
         private readonly List<BarSensorBase> _barSensors;
+        private readonly List<IPerformanceSensor> _performanceSensors;
+        //private readonly List<>
         //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
             _connectionAddress = $"{address}:{port}/api/sensors";
             _listSendingAddress = $"{_connectionAddress}/list";
             _productKey = productKey;
-            _nameToSensor = new Dictionary<string, SensorBase>();
+            _nameToSensor = new Dictionary<string, ISensor>();
             _barSensors = new List<BarSensorBase>();
+            _performanceSensors = new List<IPerformanceSensor>();
             _client = new HttpClient();
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             _dataQueue = new DataQueue();
@@ -90,6 +98,19 @@ namespace HSMDataCollector.Core
                 }
             }
 
+            if (_performanceSensors != null && _performanceSensors.Any())
+            {
+                foreach (var perfSensor in _performanceSensors)
+                {
+                    allData.Add(perfSensor.GetLastValue());
+                }
+
+                foreach (var perfSensor in _performanceSensors)
+                {
+                    perfSensor.Dispose();
+                }
+            }
+
             if (allData.Any())
             {
                 SendData(allData);
@@ -97,7 +118,20 @@ namespace HSMDataCollector.Core
             
             _client.Dispose();
         }
+        public void InitializeSystemMonitoring()
+        {
+            StartSystemMonitoring();   
+        }
 
+        public void InitializeProcessMonitoring()
+        {
+            StartCurrentProcessMonitoring();
+        }
+
+        public void InitializeProcessMonitoring(string processName)
+        {
+            
+        }
         public IBoolSensor CreateBoolSensor(string path)
         {
             var existingSensor = GetExistingSensor(path);
@@ -245,6 +279,64 @@ namespace HSMDataCollector.Core
             return GetCount();
         }
 
+        private void StartSystemMonitoring()
+        {
+            CPUSensor cpuSensor = new CPUSensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue);
+            AddNewSensor(cpuSensor, cpuSensor.Path);
+            FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue);
+            AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
+            _performanceSensors.Add(cpuSensor);
+            _performanceSensors.Add(freeMemorySensor);
+            //FreeDiskSpaceSensor freeDiskSpaceSensor = new FreeDiskSpaceSensor();
+        }
+
+        private void StartCurrentProcessMonitoring()
+        {
+            Process currentProcess = Process.GetCurrentProcess();
+            ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+            AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
+            ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+            AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
+            ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _connectionAddress, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+            AddNewSensor(currentThreadCount, currentThreadCount.Path);
+            _performanceSensors.Add(currentCpuSensor);
+            _performanceSensors.Add(currentMemorySensor);
+            _performanceSensors.Add(currentThreadCount);
+        }
+        private void StartProcessMonitoring(string processFileName)
+        {
+            string instanceName = BuildInstanceName(processFileName);
+        }
+
+        private string BuildInstanceName(string processFileName)
+        {
+            string processName = Path.GetFileNameWithoutExtension(processFileName);
+
+            if (string.IsNullOrEmpty(processName))
+            {
+                return string.Empty;
+            }
+
+            Process[] instances = Process.GetProcessesByName(processName);
+            if (!instances.Any())
+            {
+                return string.Empty;
+            }
+
+            for (int i = 0; i < instances.Length; i++)
+            {
+                if (processFileName.Equals(instances[i].MainModule.FileName))
+                {
+                    if (i.Equals(0))
+                        return processName;
+
+                    return $"{processName}#{i}";
+                }
+            }
+
+            return string.Empty;
+        }
+
         private SensorBase GetExistingSensor(string path)
         {
             SensorBase sensor = null;
@@ -252,14 +344,18 @@ namespace HSMDataCollector.Core
             {
                 if (_nameToSensor.ContainsKey(path))
                 {
-                    sensor = _nameToSensor[path];
+                    sensor = _nameToSensor[path] as SensorBase;
                 }
             }
 
+            if (sensor == null && sensor as IPerformanceSensor != null)
+            {
+                throw new InvalidSensorPathException($"Path {path} is used by standard performance sensor!");
+            }
             return sensor;
         }
 
-        private void AddNewSensor(SensorBase sensor, string path)
+        private void AddNewSensor(ISensor sensor, string path)
         {
             lock (_syncRoot)
             {
@@ -302,7 +398,7 @@ namespace HSMDataCollector.Core
 
                 //request.GetResponse();
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 _dataQueue.ReturnFailedData(values);
                 Console.WriteLine($"Failed to send: {e}");
