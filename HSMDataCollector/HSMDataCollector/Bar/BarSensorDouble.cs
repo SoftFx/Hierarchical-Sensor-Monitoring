@@ -15,17 +15,17 @@ namespace HSMDataCollector.Bar
     public class BarSensorDouble : BarSensorBase, IDoubleBarSensor
     {
         private readonly SortedSet<double> ValuesList;
-        public BarSensorDouble(string path, string productKey, string serverAddress, IValuesQueue queue, int collectPeriod = 300000,
+        public BarSensorDouble(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
             int smallPeriod = 15000)
-            : this(path, productKey, $"{serverAddress}/doubleBar", queue, TimeSpan.FromMilliseconds(collectPeriod),
+            : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
                 TimeSpan.FromMilliseconds(smallPeriod))
         {
             
         }
 
-        public BarSensorDouble(string path, string productKey, string serverAddress, IValuesQueue queue,
+        public BarSensorDouble(string path, string productKey, IValuesQueue queue,
             TimeSpan collectPeriod,
-            TimeSpan smallPeriod) : base(path, productKey, $"{serverAddress}/doubleBar", queue, collectPeriod,
+            TimeSpan smallPeriod) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
             ValuesList = new SortedSet<double>();

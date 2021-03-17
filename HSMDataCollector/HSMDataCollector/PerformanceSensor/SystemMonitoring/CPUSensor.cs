@@ -10,10 +10,10 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     {
         private readonly BarSensorInt _valuesSensor;
         private const string _sensorName = "CPU usage";
-        public CPUSensor(string productKey, string serverAddress, IValuesQueue queue)
+        public CPUSensor(string productKey, IValuesQueue queue)
             : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
         {
-            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, serverAddress, queue);
+            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
         }
 
         protected override void OnMonitoringTimerTick(object state)

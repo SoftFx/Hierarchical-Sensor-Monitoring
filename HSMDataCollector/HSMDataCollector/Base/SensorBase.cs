@@ -8,15 +8,17 @@ namespace HSMDataCollector.Base
     {
         protected readonly string Path;
         protected readonly string ProductKey;
-        protected readonly string ServerAddress;
         private readonly IValuesQueue _queue;
-        protected SensorBase(string path, string productKey, string serverAddress, IValuesQueue queue)
+
+        protected SensorBase(string path, string productKey, IValuesQueue queue)
         {
             _queue = queue;
             Path = path;
             ProductKey = productKey;
-            ServerAddress = serverAddress;
         }
+        public abstract bool HasLastValue { get; }
+        public abstract CommonSensorValue GetLastValue();
+        public abstract void Dispose();
 
         protected abstract byte[] GetBytesData(SensorValueBase data);
         protected abstract string GetStringData(SensorValueBase data);

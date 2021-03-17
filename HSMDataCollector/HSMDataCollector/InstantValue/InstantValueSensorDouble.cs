@@ -11,8 +11,8 @@ namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorDouble : InstantValueTypedSensorBase<double>, IDoubleSensor
     {
-        public InstantValueSensorDouble(string path, string productKey, string address, IValuesQueue queue)
-            : base(path, productKey, $"{address}/double", queue)
+        public InstantValueSensorDouble(string path, string productKey, IValuesQueue queue)
+            : base(path, productKey, queue)
         {
         }
 

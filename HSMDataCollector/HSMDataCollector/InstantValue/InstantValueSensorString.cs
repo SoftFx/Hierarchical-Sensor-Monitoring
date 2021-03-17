@@ -12,8 +12,8 @@ namespace HSMDataCollector.InstantValue
     class InstantValueSensorString : InstantValueSensorBase, IStringSensor
     {
         private string _value;
-        public InstantValueSensorString(string path, string productKey, string address, IValuesQueue queue) 
-            : base(path, productKey, $"{address}/string", queue)
+        public InstantValueSensorString(string path, string productKey, IValuesQueue queue) 
+            : base(path, productKey, queue)
         {
         }
 

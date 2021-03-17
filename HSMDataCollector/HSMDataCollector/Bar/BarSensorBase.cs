@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using HSMDataCollector.Base;
 using HSMDataCollector.Core;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Bar
 {
@@ -21,17 +20,15 @@ namespace HSMDataCollector.Bar
         /// <param name="productKey"></param>
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds.</param>
         /// <param name="smallPeriod">The sensor sends intermediate bar data every smallPeriod time.</param>
-        protected BarSensorBase(string path, string productKey, string serverAddress,
+        protected BarSensorBase(string path, string productKey,
             IValuesQueue queue, TimeSpan barTimerPeriod, TimeSpan smallTimerPeriod)
-            : base(path, productKey, serverAddress, queue)
+            : base(path, productKey, queue)
         {
             _syncObject = new object();
             _barTimerSpan = barTimerPeriod;
             _smallTimerSpan = smallTimerPeriod;
             StartTimer(_barTimerSpan, _smallTimerSpan);
         }
-
-        public abstract CommonSensorValue GetLastValue();
         protected abstract void SendDataTimer(object state);
         protected abstract void SmallTimerTick(object state);
 
@@ -96,7 +93,9 @@ namespace HSMDataCollector.Bar
             return values[index];
         }
 
-        public void Dispose()
+        public override bool HasLastValue => true;
+
+        public override void Dispose()
         {
             _barTimer?.Dispose();
             _smallTimer?.Dispose();

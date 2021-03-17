@@ -35,6 +35,8 @@ namespace HSMDataCollector.Core
         IDoubleSensor CreateDoubleSensor(string path);
         IIntSensor CreateIntSensor(string path);
         IStringSensor CreateStringSensor(string path);
+        IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue);
+        IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue);
 
         #region Bar sensors
 

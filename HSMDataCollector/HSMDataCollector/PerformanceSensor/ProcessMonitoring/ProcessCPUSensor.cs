@@ -10,10 +10,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     {
         private const string _sensorName = "Process CPU";
         private readonly BarSensorDouble _valuesSensor;
-        public ProcessCPUSensor(string productKey, string serverAddress, IValuesQueue queue, string processName) 
+        public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName) 
             : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Process", "% Processor Time", processName)
         {
-            _valuesSensor = new BarSensorDouble($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, serverAddress, queue);
+            _valuesSensor = new BarSensorDouble($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
         }
 
         protected override void OnMonitoringTimerTick(object state)
