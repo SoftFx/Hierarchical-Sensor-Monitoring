@@ -94,14 +94,16 @@ namespace HSMClient
             //    typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(NumericSensorView),
                 typeof(ClientNumericTimeValueModel));
-            //expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
-            //    typeof(ClientDefaultValuesListSensorModel));
-            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(NumericSensorView),
-                typeof(ClientNumericTimeValueModel));
+            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
+                typeof(ClientDefaultValuesListSensorModel));
+            //expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(NumericSensorView),
+            //    typeof(ClientNumericTimeValueModel));
             expandingService.RegisterDialog(SensorTypes.StringSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
+            //expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(BarSensorView),
+            //    typeof(ClientBarSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
 
