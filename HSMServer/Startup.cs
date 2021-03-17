@@ -41,7 +41,7 @@ namespace HSMServer
 
             services.AddCors();
 
-            services.AddSingleton<DatabaseClass>();
+            services.AddSingleton<IDatabaseClass, DatabaseClass>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<UserManager>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
