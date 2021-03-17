@@ -11,7 +11,7 @@
     <DockPanel MinWidth="600" MinHeight="450">
         <StackPanel DockPanel.Dock="Top" Margin="5" Orientation="Horizontal">
             <TextBlock>Values count:</TextBlock>
-            <TextBox Margin="5,0,0,0" Text="{Binding Count}"></TextBox>
+            <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}"></TextBox>
         </StackPanel>
         <DockPanel DockPanel.Dock="Bottom">
             <oxy:Plot>
