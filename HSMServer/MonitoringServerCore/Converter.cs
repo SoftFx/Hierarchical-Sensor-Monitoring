@@ -83,7 +83,7 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 result.TypedData = dataObject.TypedData;
-                result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
+                result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
                 result.Type = Convert(dataObject.DataType);
             }
             catch (Exception e)

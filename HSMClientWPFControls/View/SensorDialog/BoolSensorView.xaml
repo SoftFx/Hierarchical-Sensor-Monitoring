@@ -11,16 +11,23 @@
     <DockPanel MinWidth="600" MinHeight="450">
         <StackPanel DockPanel.Dock="Top" Margin="5" Orientation="Horizontal">
             <TextBlock>Values count:</TextBlock>
-            <TextBox Margin="5,0,0,0" Text="{Binding CountText}"></TextBox>
+            <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=Explicit}"></TextBox>
         </StackPanel>
         <DockPanel DockPanel.Dock="Bottom">
-            <oxy:Plot>
-                <oxy:Plot.Axes>
+            <oxy:Plot IsManipulationEnabled="False">
+                <!--<oxy:Plot.Axes>
                     <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom"></oxy:DateTimeAxis>
                     <oxy:LinearAxis Title="Values" Position="Left" Minimum="0" Maximum="1"></oxy:LinearAxis>
                 </oxy:Plot.Axes>
                 <oxy:Plot.Series>
                     <oxy:LineSeries ItemsSource="{Binding Data}" Visibility="Visible"></oxy:LineSeries>
+                </oxy:Plot.Series>-->
+                <oxy:Plot.Axes>
+                    <oxy:CategoryAxis Title="1 is for true, 0 for false" StringFormat="HH:mm::ss" Position="Bottom" ItemsSource="{Binding Times}" IsManipulationEnabled="False" IsZoomEnabled="False" />
+                    <oxy:LinearAxis Position="Left" AbsoluteMinimum="0" AbsoluteMaximum="1" IsZoomEnabled="False" IsManipulationEnabled="False"/>
+                </oxy:Plot.Axes>
+                <oxy:Plot.Series>
+                    <oxy:ColumnSeries LabelPlacement="Outside" ItemsSource="{Binding Data}" />
                 </oxy:Plot.Series>
             </oxy:Plot>
         </DockPanel>

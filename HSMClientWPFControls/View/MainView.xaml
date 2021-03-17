@@ -27,12 +27,12 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="3*"/>
+            <RowDefinition Height="3.5*"/>
             <RowDefinition Height="1*"/>
         </Grid.RowDefinitions>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="1.2*"/>
             <ColumnDefinition Width="3*"/>
         </Grid.ColumnDefinitions>
         
@@ -87,7 +87,7 @@
                                 </Canvas>
                                 <StackPanel Orientation="Vertical" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Name}" FontSize="15" Height="18"/>
+                                        <TextBlock Text="{Binding Name}" FontSize="15" MinHeight="18"/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                                         <TextBlock Text="       " FontSize="8"/>
@@ -222,7 +222,8 @@
                                             <MouseBinding Gesture="LeftDoubleClick" Command="{Binding Path=DataContext.SensorDoubleClickCommand, ElementName=TreeControl}" CommandParameter="{Binding Path=DataContext.SelectedSensor, ElementName=TreeControl}"></MouseBinding>
                                         </StackPanel.InputBindings>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                            <TextBlock Text="{Binding Name}" Width="100"></TextBlock>
+                                            <TextBlock Text="{Binding Name}" ToolTip="{Binding Name}" MinWidth="100">
+                                            </TextBlock>
                                             <TextBlock Text="      "></TextBlock>
                                             <TextBlock Text="{Binding ShortValue}"></TextBlock>
                                         </StackPanel>

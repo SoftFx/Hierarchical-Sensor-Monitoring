@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:view="clr-namespace:HSMClientWPFControls.View;assembly=HSMClientWPFControls"
         mc:Ignorable="d" 
-        Height="450" Width="800" Title="{Binding Title}">
+        Height="550" Width="950" Title="{Binding Title}">
     <DockPanel>
         <DockPanel DockPanel.Dock="Top">
             <DockPanel.Style>
