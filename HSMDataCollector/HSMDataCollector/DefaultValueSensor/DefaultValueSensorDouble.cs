@@ -1,10 +1,11 @@
 ﻿using System;
-using System.Text.Json;
+//using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.DefaultValueSensor
 {
@@ -18,7 +19,7 @@ namespace HSMDataCollector.DefaultValueSensor
         {
             CommonSensorValue commonSensorValue = new CommonSensorValue();
             commonSensorValue.SensorType = SensorType.IntSensor;
-            commonSensorValue.TypedValue = JsonSerializer.Serialize(GetValue());
+            commonSensorValue.TypedValue = JsonConvert.SerializeObject(GetValue());
             return commonSensorValue;
         }
 

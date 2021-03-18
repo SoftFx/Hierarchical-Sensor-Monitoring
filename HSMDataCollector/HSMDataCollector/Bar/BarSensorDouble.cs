@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
+//using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.Bar
 {
@@ -143,7 +144,7 @@ namespace HSMDataCollector.Bar
             try
             {
                 DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
-                return JsonSerializer.Serialize(typedData);
+                return JsonConvert.SerializeObject(typedData);
                 //return Serializer.Serialize(typedData);
             }
             catch (System.Exception e)
@@ -158,7 +159,7 @@ namespace HSMDataCollector.Bar
             try
             {
                 DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
-                string convertedString = JsonSerializer.Serialize(typedData);
+                string convertedString = JsonConvert.SerializeObject(typedData);
                 //string convertedString = Serializer.Serialize(typedData);
                 return Encoding.UTF8.GetBytes(convertedString);
             }
