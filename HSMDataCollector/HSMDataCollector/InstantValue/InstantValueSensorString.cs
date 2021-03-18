@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Text;
-using System.Text.Json;
+//using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.InstantValue
 {
@@ -56,7 +57,7 @@ namespace HSMDataCollector.InstantValue
             try
             {
                 StringSensorValue typedData = (StringSensorValue)data;
-                return JsonSerializer.Serialize(typedData);
+                return JsonConvert.SerializeObject(typedData);
                 //return Serializer.Serialize(typedData);
             }
             catch (Exception e)
@@ -71,7 +72,7 @@ namespace HSMDataCollector.InstantValue
             try
             {
                 StringSensorValue typedData = (StringSensorValue)data;
-                string convertedString = JsonSerializer.Serialize(typedData);
+                string convertedString = JsonConvert.SerializeObject(typedData);
                 //string convertedString = Serializer.Serialize(typedData);
                 return Encoding.UTF8.GetBytes(convertedString);
             }

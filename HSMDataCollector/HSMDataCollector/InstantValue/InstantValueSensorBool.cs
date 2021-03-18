@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Text;
-using System.Text.Json;
+//using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.InstantValue
 {
@@ -42,7 +43,7 @@ namespace HSMDataCollector.InstantValue
             try
             {
                 BoolSensorValue typedData = (BoolSensorValue)data;
-                return JsonSerializer.Serialize(typedData);
+                return JsonConvert.SerializeObject(typedData);
                 //return Serializer.Serialize(typedData);
             }
             catch (Exception e)

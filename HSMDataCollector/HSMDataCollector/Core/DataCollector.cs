@@ -13,10 +13,11 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
-using System.Text.Json;
+//using System.Text.Json;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.Core
 {
@@ -393,7 +394,7 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                string jsonString = JsonSerializer.Serialize(values);
+                string jsonString = JsonConvert.SerializeObject(values);
                 //string jsonString = Serializer.Serialize(values);
                 //byte[] bytesData = Encoding.UTF8.GetBytes(jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
