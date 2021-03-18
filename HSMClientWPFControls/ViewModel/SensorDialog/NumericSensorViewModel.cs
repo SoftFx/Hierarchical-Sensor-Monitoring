@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using HSMClientWPFControls.Model.SensorDialog;
 using OxyPlot;
+using OxyPlot.Series;
 
 namespace HSMClientWPFControls.ViewModel.SensorDialog
 {
@@ -28,7 +29,7 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
             }
         }
 
-        public string CountText
+        public string Count
         {
             get
             {
@@ -40,7 +41,9 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
                 var model = Model as INumericTimeValueModel;
                 if (model != null)
                     model.Count = int.Parse(value);
-                OnPropertyChanged(nameof(CountText));
+
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Count));
             }
         }
     }

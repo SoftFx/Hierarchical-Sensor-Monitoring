@@ -1,0 +1,114 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{83C0F461-62FC-49D6-941B-B225007B3834}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>HSMDataCollector</RootNamespace>
+    <AssemblyName>HSMDataCollector</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+	<PackageId>HSMDataCollector.HSMDataCollector</PackageId>
+	<Authors>vitali.vasilevich</Authors>
+	<Company>SoftFX</Company>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <Target Name="Pack" Condition="'$(Configuration)' == 'Release' ">
+	<Exec WorkingDirectory="$(BaseDir)" Command="$(NuGetExePath) pack -OutputDirectory $(OutDir) -Symbols -Prop Configuration=$(Configuration);TargetPath=$(OutDir)$(AssemblyName)$(TargetExt)" />
+  </Target>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Bar\BarSensorBase.cs" />
+    <Compile Include="Bar\BarSensorDouble.cs" />
+    <Compile Include="Bar\BarSensorInt.cs" />
+    <Compile Include="Base\ISensor.cs" />
+    <Compile Include="Base\SensorBase.cs" />
+    <Compile Include="Core\DataCollector.cs" />
+    <Compile Include="Core\DataQueue.cs" />
+    <Compile Include="Core\IDataCollector.cs" />
+    <Compile Include="Core\IDataQueue.cs" />
+    <Compile Include="Core\IValuesQueue.cs" />
+    <Compile Include="DefaultValueSensor\DefaultValueSensorBase.cs" />
+    <Compile Include="DefaultValueSensor\DefaultValueSensorDouble.cs" />
+    <Compile Include="DefaultValueSensor\DefaultValueSensorInt.cs" />
+    <Compile Include="Exceptions\InvalidSensorPathException.cs" />
+    <Compile Include="InstantValue\InstantValueSensorBase.cs" />
+    <Compile Include="InstantValue\InstantValueSensorBool.cs" />
+    <Compile Include="InstantValue\InstantValueSensorDouble.cs" />
+    <Compile Include="InstantValue\InstantValueSensorInt.cs" />
+    <Compile Include="InstantValue\InstantValueSensorString.cs" />
+    <Compile Include="InstantValue\InstantValueTypedSensorBase.cs" />
+    <Compile Include="PerformanceSensor\CustomFuncSensor\FuncSensorBase.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\CPUSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\FreeDiskSpaceSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\FreeMemorySensor.cs" />
+    <Compile Include="PerformanceSensor\Base\IPerformanceSensor.cs" />
+    <Compile Include="PerformanceSensor\Base\PerformanceSensorBase.cs" />
+    <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessMemorySensor.cs" />
+    <Compile Include="PerformanceSensor\StandardSensor\StandardPerformanceSensorBase.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PublicInterface\IBoolSensor.cs" />
+    <Compile Include="PublicInterface\IDefaultValueSensorDouble.cs" />
+    <Compile Include="PublicInterface\IDefaultValueSensorInt.cs" />
+    <Compile Include="PublicInterface\IDoubleBarSensor.cs" />
+    <Compile Include="PublicInterface\IDoubleSensor.cs" />
+    <Compile Include="PublicInterface\IIntBarSensor.cs" />
+    <Compile Include="PublicInterface\IIntSensor.cs" />
+    <Compile Include="PublicInterface\IStringSensor.cs" />
+    <Compile Include="Serialization\Serializer.cs" />
+    <Compile Include="TextConstants.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NuGet.CommandLine">
+      <Version>5.8.1</Version>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="System.Text.Json">
+      <Version>5.0.1</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\HSMSensorDataObjects\HSMSensorDataObjects.csproj">
+      <Project>{56418540-b151-4ff4-ac7f-05d5c4e3d07a}</Project>
+      <Name>HSMSensorDataObjects</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

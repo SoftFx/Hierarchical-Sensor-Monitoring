@@ -2,6 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 #define AppIcon "Icon.ico"
 #define AppExeFile "HSMClient.exe"
+#define AppName "HSMClient"
 #define AppShortcutName "HSM"
 #define ReleaseFilesPath "..\..\HSM Installing\publish"
 
@@ -9,7 +10,7 @@
 AppId={{8FB93B9E-B78C-4B1F-9C19-4BD0663B985C}
 AppName=HSMClient
 AppVerName=HSMClient 1.0.1
-DefaultDirName={pf}\HSMClient
+DefaultDirName={pf64}\HSMClient
 DefaultGroupName=HSMClient
 AppPublisher=Soft-FX
 
@@ -23,7 +24,7 @@ Compression=lzma
 SolidCompression=yes
 ;WizardImageFile=
 ;WizardSmallImageFile=
-UsePreviousAppDir=false
+UsePreviousAppDir=no
 
 [Languages]
 ;
@@ -64,6 +65,8 @@ Source: "{#AppIcon}"; DestDir: "{app}"; Flags: ignoreversion
 
 
 [UninstallDelete]
+Type: filesandordirs; Name: "{group}\*"
+Type: dirifempty; Name: "{group}"
 Type: filesandordirs; Name: "{app}\*"
 Type: dirifempty; Name: "{app}"
 
@@ -71,6 +74,8 @@ Type: dirifempty; Name: "{app}"
 ;
 ;Name: "{app}\HSMClient"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
 Name: "{userdesktop}\{#AppShortcutName}"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"; Tasks: desktopicon 
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeFile}"; IconFilename: "{app}\{#AppIcon}"
+Name: "{group}\{cm:UninstallProgram, {#AppName}}"; Filename: "{uninstallexe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppIcon}";
 
 [Run]
 ;Filename: "{app}\{#AppExeFile}"; Description: "Launch client application"; Flags: nowait postinstall

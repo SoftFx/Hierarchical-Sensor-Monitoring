@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using OxyPlot;
+using OxyPlot.Series;
 
 namespace HSMClientWPFControls.Model.SensorDialog
 {

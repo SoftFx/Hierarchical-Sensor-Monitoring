@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using HSMClientWPFControls.Model.SensorDialog;
 using OxyPlot;
+using OxyPlot.Series;
 
 namespace HSMClientWPFControls.ViewModel.SensorDialog
 {
@@ -10,7 +11,24 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
         {
         }
 
-        public ObservableCollection<DataPoint> Data
+        public ObservableCollection<string> Times
+        {
+            get
+            {
+                var model = Model as IBoolSensorModel;
+                return model?.Times;
+            }
+            set
+            {
+                var model = Model as IBoolSensorModel;
+                if (model != null)
+                {
+                    model.Times = value;
+                }
+                OnPropertyChanged(nameof(Times));
+            }
+        }
+        public ObservableCollection<ColumnItem> Data
         {
             get
             {
@@ -28,7 +46,7 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
             }
         }
 
-        public string CountText
+        public string Count
         {
             get
             {
@@ -42,7 +60,8 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
                 {
                     model.Count = int.Parse(value);
                 }
-                OnPropertyChanged(nameof(CountText));
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Count));
             }
         }
     }

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
@@ -7,7 +6,6 @@ using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using HSMCommon.Model;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
@@ -83,7 +81,7 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 result.TypedData = dataObject.TypedData;
-                result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
+                result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
                 result.Type = Convert(dataObject.DataType);
             }
             catch (Exception e)

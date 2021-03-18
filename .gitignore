@@ -100,3 +100,11 @@ HSMServerInstaller/Output
 
 # Publish profiles
 *.pubxml
+
+# Nuget files
+*.nuspec
+*.nupkg
+
+# Nuget build folder
+HSMDataCollector/lib
+
