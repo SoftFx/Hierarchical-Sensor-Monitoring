@@ -42,9 +42,11 @@ jobs:
     environment: Nuget
     steps:
       - uses: actions/checkout@v2
+      
       - uses: nuget/setup-nuget@v1
         with: 
           nuget-api-key: ${{ secrets.NUGETKEY }}
+          
       - name: publish data collector
       - uses: rohith/publish-nuget@v2
         with:
