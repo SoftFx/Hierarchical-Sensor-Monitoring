@@ -48,12 +48,18 @@ jobs:
         with: 
           nuget-api-key: ${{ secrets.NUGETKEY }}
           
-      - name: Publish data collector
-        uses: rohith/publish-nuget@v2
-        with:
-          PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
-          NUGET_KEY: ${{ secrets.NUGETKEY }}
-          VERSION_STATIC: 1.0.5
+      #- name: Publish data collector
+      #  uses: rohith/publish-nuget@v2
+      #  with:
+      #    PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      #    NUGET_KEY: ${{ secrets.NUGETKEY }}
+      #    VERSION_STATIC: 1.0.5
+      - name: build package one
+        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -configuration Release
+      - name: Run pack
+        run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output nuget-packages --configuration Release
+      - name: Push
+        run: dotnet nuget push nuget-packages/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
   publish:
     runs-on: ubuntu-latest
