@@ -12,6 +12,9 @@
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+	<PackageId>HSMDataCollector.HSMDataCollector</PackageId>
+	<Authors>vitali.vasilevich</Authors>
+	<Company>SoftFX</Company>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,6 +36,9 @@
   <PropertyGroup>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
+  <Target Name="Pack" Condition="'$(Configuration)' == 'Release' ">
+	<Exec WorkingDirectory="$(BaseDir)" Command="$(NuGetExePath) pack -OutputDirectory $(OutDir) -Symbols -Prop Configuration=$(Configuration);TargetPath=$(OutDir)$(AssemblyName)$(TargetExt)" />
+  </Target>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
