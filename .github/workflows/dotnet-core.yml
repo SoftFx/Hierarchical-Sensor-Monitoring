@@ -43,8 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       
-      - name: Setup MSBuild Path
-        uses: warrenbuckley/Setup-MSBuild@v1
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+      
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
         with: 
