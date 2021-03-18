@@ -1,13 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
-using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.PerformanceSensor.Base
@@ -29,5 +23,6 @@ namespace HSMDataCollector.PerformanceSensor.Base
         public abstract CommonSensorValue GetLastValue();
 
         public string Path => _path;
+        public bool HasLastValue => true;
     }
 }

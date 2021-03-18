@@ -10,10 +10,10 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     {
         private readonly BarSensorInt _valuesSensor;
         private const string _sensorName = "Free memory MB";
-        public FreeMemorySensor(string productKey, string serverAddress, IValuesQueue queue) : base($"{TextConstants.PerformanceNodeName}/{_sensorName}",
+        public FreeMemorySensor(string productKey, IValuesQueue queue) : base($"{TextConstants.PerformanceNodeName}/{_sensorName}",
             "Memory", "Available MBytes", string.Empty)
         {
-            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, serverAddress, queue);
+            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
         }
 
         protected override void OnMonitoringTimerTick(object state)

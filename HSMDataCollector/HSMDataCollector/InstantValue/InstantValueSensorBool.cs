@@ -11,8 +11,8 @@ namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensorBool : InstantValueTypedSensorBase<bool>, IBoolSensor
     {
-        public InstantValueSensorBool(string path, string productKey, string address, IValuesQueue queue) 
-            : base(path, productKey, $"{address}/bool", queue)
+        public InstantValueSensorBool(string path, string productKey, IValuesQueue queue) 
+            : base(path, productKey, queue)
         {
         }
 
@@ -51,7 +51,7 @@ namespace HSMDataCollector.InstantValue
                 return string.Empty;
             }
         }
-
+        
         protected override byte[] GetBytesData(SensorValueBase data)
         {
             try

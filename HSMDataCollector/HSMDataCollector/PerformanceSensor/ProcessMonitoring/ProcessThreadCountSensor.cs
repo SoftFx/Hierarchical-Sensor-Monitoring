@@ -10,10 +10,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     {
         private readonly BarSensorInt _valuesSensor;
         private const string _sensorName = "Process thread count";
-        public ProcessThreadCountSensor(string productKey, string serverAddress, IValuesQueue queue, string processName)
+        public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName)
             : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Process", "Thread Count", processName)
         {
-            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, serverAddress, queue);
+            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
         }
 
         protected override void OnMonitoringTimerTick(object state)
