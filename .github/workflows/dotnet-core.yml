@@ -54,6 +54,8 @@ jobs:
       #    PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5
+      - name: Install nuget package dependencies
+        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       - name: build package one
         run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
       - name: Run pack
