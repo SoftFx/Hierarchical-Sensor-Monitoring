@@ -52,6 +52,8 @@ jobs:
         uses: rohith/publish-nuget@v2
         with:
           PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+          NUGET_KEY: ${{ secrets.NUGETKEY }}
+          VERSION_STATIC: 1.0.5
 
   publish:
     runs-on: ubuntu-latest
