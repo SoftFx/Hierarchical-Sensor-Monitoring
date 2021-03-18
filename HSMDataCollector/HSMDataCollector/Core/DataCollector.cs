@@ -94,7 +94,7 @@ namespace HSMDataCollector.Core
             lock (_syncRoot)
             {
                 foreach (var pair in _nameToSensor)
-                {
+                { 
                     pair.Value.Dispose();
                 }
             }

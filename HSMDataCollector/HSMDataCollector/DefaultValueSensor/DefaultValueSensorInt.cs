@@ -1,7 +1,9 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 
 namespace HSMDataCollector.DefaultValueSensor
@@ -28,7 +30,7 @@ namespace HSMDataCollector.DefaultValueSensor
             }
         }
 
-        private IntSensorData GetValue()
+        private IntSensorValue GetValue()
         {
             int val;
             lock (_syncRoot)
@@ -36,7 +38,7 @@ namespace HSMDataCollector.DefaultValueSensor
                 val = _currentValue;
             }
 
-            IntSensorData result = new IntSensorData { IntValue = val };
+            IntSensorValue result = new IntSensorValue() { IntValue = val, Path = Path, Key = ProductKey, Time = DateTime.Now };
             return result;
         }
     }

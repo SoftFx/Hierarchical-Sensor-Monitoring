@@ -3,6 +3,7 @@ using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 
 namespace HSMDataCollector.DefaultValueSensor
@@ -23,10 +24,13 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public void AddValue(double value)
         {
-            throw new NotImplementedException();
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+            }
         }
 
-        private DoubleSensorData GetValue()
+        private DoubleSensorValue GetValue()
         {
             double val;
             lock (_syncRoot)
@@ -34,7 +38,7 @@ namespace HSMDataCollector.DefaultValueSensor
                 val = _currentValue;
             }
 
-            DoubleSensorData result = new DoubleSensorData { DoubleValue = val };
+            DoubleSensorValue result = new DoubleSensorValue() { DoubleValue = val, Key = ProductKey, Path = Path, Time = DateTime.Now };
             return result;
         }
     }
