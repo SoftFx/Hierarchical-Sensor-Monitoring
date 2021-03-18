@@ -37,7 +37,7 @@ jobs:
         path: ${{ github.workspace }}\Release
         name: Release
   
-  build NuGet:
+  build_NuGet:
     runs-on: ubuntu-latest
     environment: Nuget  
     steps:
