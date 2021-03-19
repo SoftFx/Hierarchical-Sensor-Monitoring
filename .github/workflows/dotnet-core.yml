@@ -65,7 +65,7 @@ jobs:
       - name: install xml editor
         run: sudo apt install  xmlstarlet
       - name: edit nuspec config
-        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -s "//package/metadata" -t elem -n license -v "MIT" -i "//package/metadata/license" -t attr -n type -v "expression" Package.nuspec
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" Package.nuspec
       - name: display files
         run: ls -R
       - name: show nuspec file contents
