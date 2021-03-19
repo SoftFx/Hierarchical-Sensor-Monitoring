@@ -66,9 +66,11 @@ jobs:
       - name: build package one
         run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
       - name: Run pack
-        run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output nuget-packages --configuration Release -p:PackageVersion=1.0.5
+        run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output nugetFolder --configuration Release -p:PackageVersion=1.0.5
+      - name: Show packed structure
+        run: Tree nugetFolder
       - name: Push
-        run: dotnet nuget push nuget-packages/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push nugetFolder/HSMDataCollector.1.0.5.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
   publish:
     runs-on: ubuntu-latest
