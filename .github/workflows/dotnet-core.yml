@@ -59,15 +59,27 @@ jobs:
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5
       - name: Install nuget package dependencies
-        run: dotnet restore HSMDataCollector/HSMDataCollector.sln
-      - name: build package one
-        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
-      - name: Run pack
-        run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output . --configuration Release -p:PackageVersion=1.0.5
-      - name: Show packed structure
-        run: Tree /F ${{ github.workspace }}
-      - name: Push
-        run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      - name: Create nuspec file
+        run: nuget spec
+      - name: install xml editor
+        run: sudo apt install  xmlstarlet
+      - name: edit nuspec config
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -s "//package/metadata" -t elem -n license -v "MIT" -i "//package/metadata/license" -t attr -n type -v "expression" HSMDataCollector.nuspec
+      - name: build nuspec file
+        run: nuget pack HSMDataCollector.nuspec
+      - name: display files
+        run: ls -R
+      - name: show nuspec file contents
+        run: cat HSMDataCollector.nuspec
+      #- name: build package one
+      #  run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
+      #- name: Run pack
+      #  run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output . --configuration Release -p:PackageVersion=1.0.5
+      #- name: Show packed structure
+      #  run: Tree /F ${{ github.workspace }}
+      #- name: Push
+      #  run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
   publish:
     runs-on: ubuntu-latest
