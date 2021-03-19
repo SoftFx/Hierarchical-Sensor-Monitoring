@@ -38,7 +38,7 @@ jobs:
         name: Release
   
   build_NuGet:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment: Nuget  
     steps:
       - uses: actions/checkout@v2
