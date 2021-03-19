@@ -42,7 +42,11 @@ jobs:
     environment: Nuget  
     steps:
       - uses: actions/checkout@v2
-      
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 5.1.101
+          
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v1
       
