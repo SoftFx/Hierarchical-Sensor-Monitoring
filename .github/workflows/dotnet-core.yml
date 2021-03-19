@@ -69,7 +69,7 @@ jobs:
       - name: display files
         run: ls -R
       - name: show nuspec file contents
-        run: cat HSMDataCollector.nuspec
+        run: cat Package.nuspec
       - name: build nuspec file
         run: nuget pack Package.nuspec
       
