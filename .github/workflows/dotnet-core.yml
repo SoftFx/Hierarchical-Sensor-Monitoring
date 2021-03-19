@@ -68,7 +68,7 @@ jobs:
       - name: Run pack
         run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output ${{ github.workspace }}\nugetFolder\ --configuration Release -p:PackageVersion=1.0.5
       - name: Show packed structure
-        run: Tree ${{ github.workspace }}\nugetFolder
+        run: Tree /F ${{ github.workspace }}
       - name: Push
         run: dotnet nuget push ${{ github.workspace }}\nugetFolder\*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
