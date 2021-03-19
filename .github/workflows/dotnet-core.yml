@@ -45,10 +45,7 @@ jobs:
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: 3.1.101
-          
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
+          dotnet-version: 3.1.101        
       
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
