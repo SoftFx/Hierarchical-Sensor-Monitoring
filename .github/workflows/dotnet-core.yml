@@ -42,6 +42,13 @@ jobs:
     environment: Nuget  
     steps:
       - uses: actions/checkout@v2
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 5.0
+          
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
       
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
@@ -55,7 +62,7 @@ jobs:
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5
       - name: Install nuget package dependencies
-        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+        run: dotnet restore HSMDataCollector/HSMDataCollector.sln
       - name: build package one
         run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
       - name: Run pack
