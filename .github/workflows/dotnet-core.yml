@@ -11,8 +11,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    #- name: print tag
-      #run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV            
+    - name: print tag
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV            
       
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
@@ -65,9 +65,9 @@ jobs:
       - name: install xml editor
         run: sudo apt install  xmlstarlet
       - name: edit nuspec config
-        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" Package.nuspec
-      - name: display files
-        run: ls -R
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" Package.nuspec
+      - name: Add package dependency to nuspec file
+        run: xmlstarlet ed -L -s "//package/metadata" -t elem -n files -s "//package/metadata/files" -t elem -n file -i "//package/metadata/files/file" -t attr -n src -v "HSMDataCollector\HSMDataCollector\bin\release\HSMDataCollector.dll" -i "//package/metadata/files/file" -t attr -n target -v "lib\net461"
       - name: show nuspec file contents
         run: cat Package.nuspec
       - name: build nuspec file
