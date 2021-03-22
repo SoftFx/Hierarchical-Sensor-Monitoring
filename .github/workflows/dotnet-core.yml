@@ -11,8 +11,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    #- name: print tag
-      #run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV            
+    - name: print tag
+      run: echo "RELEASE_VERSION=${GITHUB_REF##*/}"
       
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
@@ -38,17 +38,14 @@ jobs:
         name: Release
   
   build_NuGet:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment: Nuget  
     steps:
       - uses: actions/checkout@v2
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: 3.1.101
-          
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
+          dotnet-version: 3.1.101        
       
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
@@ -62,13 +59,30 @@ jobs:
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5
       - name: Install nuget package dependencies
-        run: dotnet restore HSMDataCollector/HSMDataCollector.sln
-      - name: build package one
+        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      - name: Build DataCollector
         run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
-      - name: Run pack
-        run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output nuget-packages --configuration Release -p:PackageVersion=1.0.5
-      - name: Push
-        run: dotnet nuget push nuget-packages/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+      - name: Create nuspec file
+        run: nuget spec
+      - name: install xml editor
+        run: sudo apt install  xmlstarlet
+      - name: edit nuspec config
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" Package.nuspec
+      - name: Add package dependency to nuspec file
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "HSMDataCollector\HSMDataCollector\bin\release\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
+      - name: show nuspec file contents
+        run: cat Package.nuspec
+      - name: build nuspec file
+        run: nuget pack Package.nuspec
+      
+      #- name: build package one
+      #  run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
+      #- name: Run pack
+      #  run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output . --configuration Release -p:PackageVersion=1.0.5
+      #- name: Show packed structure
+      #  run: Tree /F ${{ github.workspace }}
+      #- name: Push
+      #  run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
   publish:
     runs-on: ubuntu-latest
