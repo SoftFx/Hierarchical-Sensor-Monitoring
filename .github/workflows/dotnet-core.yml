@@ -58,6 +58,10 @@ jobs:
       #    PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5
+      - name: Save version to a variable
+        run: version_var = ${GITHUB_REF#refs/*/}
+      - name: Print version
+        run: echo version_var
       - name: Install nuget package dependencies
         run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       - name: Build DataCollector
@@ -67,7 +71,7 @@ jobs:
       - name: install xml editor
         run: sudo apt install  xmlstarlet
       - name: edit nuspec config
-        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v version_var -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
       - name: Add package dependency to nuspec file
         run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
       - name: show nuspec file contents
@@ -78,7 +82,7 @@ jobs:
       - name: Create nuspec file
         run: nuget spec HSMSensorDataObjects/HSMSensorDataObjects.csproj
       - name: Edit data objects spec file
-        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMSensorDataObjects' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" HSMSensorDataObjects/HSMSensorDataObjects.nuspec
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMSensorDataObjects' -u "//package/metadata/version" -v version_var -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" HSMSensorDataObjects/HSMSensorDataObjects.nuspec
       - name: Add package to nuspec file
         run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" HSMSensorDataObjects/HSMSensorDataObjects.nuspec
       - name: Show nuspec file contents
