@@ -52,9 +52,13 @@ jobs:
         with: 
           nuget-api-key: ${{ secrets.NUGETKEY }}
           
+      - name: Set output
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+              
       - name: Print version
         env: 
-          version: ${GITHUB_REF#refs/*/}
+          version: ${{ steps.vars.outputs.tag }}
         run: echo "version = $version"
       #- name: Publish data collector
       #  uses: rohith/publish-nuget@v2
