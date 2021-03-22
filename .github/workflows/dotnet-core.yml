@@ -1,11 +1,11 @@
 name: .NET Core
 
 on:
-  #push:
-    #branches: [master]  
   push:
-    tags:
-      - '*'
+    branches: [master]  
+  #push:
+  #  tags:
+  #    - '*'
 
 jobs:
   build:
