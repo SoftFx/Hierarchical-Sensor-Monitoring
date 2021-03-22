@@ -67,11 +67,13 @@ jobs:
       - name: install xml editor
         run: sudo apt install  xmlstarlet
       - name: edit nuspec config
-        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" Package.nuspec
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
       - name: Add package dependency to nuspec file
         run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "HSMDataCollector\HSMDataCollector\bin\release\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
       - name: show nuspec file contents
         run: cat Package.nuspec
+      - name: Show files
+        run: ls -R
       - name: build nuspec file
         run: nuget pack Package.nuspec
       
