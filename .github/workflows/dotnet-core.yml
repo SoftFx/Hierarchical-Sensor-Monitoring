@@ -16,10 +16,7 @@ jobs:
       
     - name: Set env
       run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-    - name: Test
-      run: |
-          echo $RELEASE_VERSION
-          echo ${{ env.RELEASE_VERSION }}
+      
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
@@ -56,7 +53,13 @@ jobs:
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
         with: 
-          nuget-api-key: ${{ secrets.NUGETKEY }}                                    
+          nuget-api-key: ${{ secrets.NUGETKEY }}        
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $RELEASE_VERSION
+          echo ${{ env.RELEASE_VERSION }}
       #- name: Publish data collector
       #  uses: rohith/publish-nuget@v2
       #  with:
@@ -113,12 +116,26 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $RELEASE_VERSION
+          echo ${{ env.RELEASE_VERSION }}
+          
       - name: Download artifact
         uses: actions/download-artifact@v2
         with: 
           name: Release
           path: ${{ github.workspace }}/Release
           
+      - name: Add client version file
+        uses: DamianReeves/write-file-action@master
+        with: 
+           path: ${{ github.workspace }}/Release/Client/version.txt
+           contents: |
+             echo $RELEASE_VERSION
+           write-mode: overwrite    
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: ${{ github.workspace }}/Release
