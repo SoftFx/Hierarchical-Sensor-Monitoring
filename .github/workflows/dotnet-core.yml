@@ -60,6 +60,8 @@ jobs:
       #    VERSION_STATIC: 1.0.5
       - name: Install nuget package dependencies
         run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      - name: Build DataCollector
+        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
       - name: Create nuspec file
         run: nuget spec
       - name: install xml editor
