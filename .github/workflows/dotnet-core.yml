@@ -50,15 +50,11 @@ jobs:
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
         with: 
-          nuget-api-key: ${{ secrets.NUGETKEY }}
-          
-      - name: Set output
-        id: vars
-        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+          nuget-api-key: ${{ secrets.NUGETKEY }}                
               
       - name: Print version
         env: 
-          version: ${{ steps.vars.outputs.tag }}
+          version: "$GITHUB_REF#refs/*/"
         run: echo "version = $version"
       #- name: Publish data collector
       #  uses: rohith/publish-nuget@v2
