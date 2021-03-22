@@ -61,7 +61,7 @@ jobs:
       - name: Install nuget package dependencies
         run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       - name: Build DataCollector
-        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
+        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild
       - name: Create nuspec file
         run: nuget spec
       - name: install xml editor
@@ -69,7 +69,7 @@ jobs:
       - name: edit nuspec config
         run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v '${GITHUB_REF#refs/*/}' -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.' -u "//package/metadata/version" -v 1.0.5 	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
       - name: Add package dependency to nuspec file
-        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "HSMDataCollector\HSMDataCollector\bin\release\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
       - name: show nuspec file contents
         run: cat Package.nuspec
       - name: Show files
