@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMSensorDataObjects;
 
 namespace HSMClientWPFControls.Objects
 {
@@ -12,5 +13,6 @@ namespace HSMClientWPFControls.Objects
         public SensorTypes SensorType { get; set; }
         public DateTime Time { get; set; }
         public string ShortValue { get; set; }
+        public SensorStatus Status { get; set; }
     }
 }

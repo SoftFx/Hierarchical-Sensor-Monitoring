@@ -60,5 +60,6 @@
     <ProjectReference Include="..\HSMClient.Common\HSMClient.Common.csproj">
     </ProjectReference>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 </Project>

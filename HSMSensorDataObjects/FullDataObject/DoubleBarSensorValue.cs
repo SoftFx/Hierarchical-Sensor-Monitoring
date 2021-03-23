@@ -8,6 +8,8 @@ namespace HSMSensorDataObjects.FullDataObject
     public class DoubleBarSensorValue : BarSensorValueBase
     {
         [DataMember]
+        public double LastValue { get; set; }
+        [DataMember]
         public double Min { get; set; }
         [DataMember]
         public double Max { get; set; }
