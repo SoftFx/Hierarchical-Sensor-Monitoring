@@ -93,7 +93,7 @@ jobs:
       - name: Restore nuget
         run: dotnet restore HSMSensorDataObjects/HSMSensorDataObjects.csproj
       - name: Create nuspec file
-        run: nuget spec -Force
+        run: nuget spec Force
       - name: Edit data objects spec file
         env:
           version: ${GITHUB_REF#refs/*/}
