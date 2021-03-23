@@ -146,8 +146,7 @@ jobs:
         uses: DamianReeves/write-file-action@master
         with: 
            path: ${{ github.workspace }}/Release/Client/version.txt
-           contents: |
-             echo $RELEASE_VERSION
+           contents: "${{ env.RELEASE_VERSION }}"
            write-mode: overwrite    
       - name: Display structure of downloaded files
         run: ls -R
