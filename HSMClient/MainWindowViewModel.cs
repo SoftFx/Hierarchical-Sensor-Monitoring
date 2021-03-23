@@ -110,7 +110,7 @@ namespace HSMClient
             _monitoringTree.SensorExpandingService = expandingService;
 
             _monitoringModel.ShowProductsEvent += monitoringModel_ShowProductsEvent;
-            //_monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
+            _monitoringModel.ShowSettingsWindowEvent += monitoringModel_ShowSettingsWindowEvent;
             _monitoringModel.ShowGenerateCertificateWindowEvent += monitoringModel_ShowGenerateCertificateWindowEvent;
             //_monitoringModel.DefaultCertificateReplacedEvent += monitoringModel_DefaultCertificateReplacedEvent;
         }
