@@ -1,4 +1,6 @@
-﻿namespace HSMCommon.Model
+﻿using System;
+
+namespace HSMCommon.Model
 {
     public class ClientVersionModel
     {
@@ -11,10 +13,29 @@
         {
             var splitRes = text.Split('.');
             ClientVersionModel result = new ClientVersionModel();
-            result.MainVersion = int.Parse(splitRes[0]);
-            result.SubVersion = int.Parse(splitRes[1]);
-            result.ExtraVersion = int.Parse(splitRes[2]);
-            result.Postfix = splitRes[3];
+            try
+            {
+                result.MainVersion = int.Parse(splitRes[0]);
+                result.SubVersion = int.Parse(splitRes[1]);
+                result.ExtraVersion = int.Parse(splitRes[2]);
+            }
+            catch (Exception e)
+            {
+                result.MainVersion = int.MaxValue;
+                result.SubVersion = int.MaxValue;
+                result.ExtraVersion = int.MaxValue;
+                result.Postfix = $"Version parsing error, initial value = {text}";
+                return result;
+            }
+            
+            try
+            {
+                result.Postfix = splitRes[3];
+            }
+            catch (Exception e)
+            {
+                result.Postfix = string.Empty;
+            }
             return result;
         }
 
