@@ -1,8 +1,11 @@
 name: .NET Core
 
 on:
-  push:
-    branches: [ master ]
+  #push:
+  #  branches: [master]  
+  create:
+    tags:
+      - '*'
 
 jobs:
   build:
@@ -11,8 +14,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    #- name: print tag
-      #run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV            
+    - name: print tag
+      run: echo "RELEASE_VERSION=${GITHUB_REF##*/}"
+      
+    - name: Set env
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
       
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
@@ -29,7 +35,7 @@ jobs:
       run: dotnet restore HSMClient/HSMClient.sln
       
     - name: Build Client
-      run: dotnet build HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client
+      run: dotnet build HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2
@@ -38,22 +44,83 @@ jobs:
         name: Release
   
   build_NuGet:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment: Nuget  
     steps:
       - uses: actions/checkout@v2
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 3.1.101        
       
       - name: Intall nuget
         uses: nuget/setup-nuget@v1
         with: 
-          nuget-api-key: ${{ secrets.NUGETKEY }}
-          
-      - name: Publish data collector
-        uses: rohith/publish-nuget@v2
-        with:
-          PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
-          NUGET_KEY: ${{ secrets.NUGETKEY }}
-          VERSION_STATIC: 1.0.5
+          nuget-api-key: ${{ secrets.NUGETKEY }}        
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $RELEASE_VERSION
+          echo ${{ env.RELEASE_VERSION }}
+      #- name: Publish data collector
+      #  uses: rohith/publish-nuget@v2
+      #  with:
+      #    PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      #    NUGET_KEY: ${{ secrets.NUGETKEY }}
+      #    VERSION_STATIC: 1.0.5    
+      - name: Install nuget package dependencies
+        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      - name: Build DataCollector
+        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild
+      - name: Create nuspec file
+        run: nuget spec
+      - name: install xml editor
+        run: sudo apt install  xmlstarlet
+      - name: edit nuspec config
+        env:
+          version: ${GITHUB_REF#refs/*/}
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v $RELEASE_VERSION -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
+      - name: Add package dependency to nuspec file
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" -s "//package/metadata" -t elem -n dependencies -s "//package/metadata/dependencies" -t elem -n dependency -i "//package/metadata/dependencies/dependency" -t attr -n id -v "Newtonsoft.Json" -i "//package/metadata/dependencies/dependency" -t attr -n version -v "13.0.1" Package.nuspec
+      - name: show nuspec file contents
+        run: cat Package.nuspec
+      - name: build nuspec file
+        run: nuget pack Package.nuspec                            
+      - name: Push DataCollector
+        run: nuget push *.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
+      
+      - name: Restore nuget
+        run: dotnet restore HSMSensorDataObjects/HSMSensorDataObjects.csproj
+      - name: Create nuspec file
+        run: nuget spec Force
+      - name: Edit data objects spec file
+        env:
+          version: ${GITHUB_REF#refs/*/}
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMSensorDataObjects' -u "//package/metadata/version" -v $RELEASE_VERSION -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
+      - name: Add package to nuspec file
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMSensorDataObjects.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
+      - name: Show nuspec file contents
+        run: cat Package.nuspec
+      - name: build nuspec file 2
+        run: nuget pack Package.nuspec
+      - name: Push SensorDataObjects
+        run: nuget push HSMSensorDataObjects/*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
+     
+      - name: Display files structure
+        run: ls -R
+      
+     
+     
+        
+      #- name: build package one
+      #  run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release
+      #- name: Run pack
+      #  run: dotnet pack HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --output . --configuration Release -p:PackageVersion=1.0.5
+      #- name: Show packed structure
+      #  run: Tree /F ${{ github.workspace }}
+      #- name: Push
+      #  run: dotnet nuget push *.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
   publish:
     runs-on: ubuntu-latest
@@ -62,12 +129,26 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $RELEASE_VERSION
+          echo ${{ env.RELEASE_VERSION }}
+          
       - name: Download artifact
         uses: actions/download-artifact@v2
         with: 
           name: Release
           path: ${{ github.workspace }}/Release
           
+      - name: Add client version file
+        uses: DamianReeves/write-file-action@master
+        with: 
+           path: ${{ github.workspace }}/Release/Client/version.txt
+           contents: |
+             echo $RELEASE_VERSION
+           write-mode: overwrite    
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: ${{ github.workspace }}/Release
