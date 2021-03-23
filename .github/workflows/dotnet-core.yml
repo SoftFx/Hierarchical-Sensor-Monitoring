@@ -88,7 +88,7 @@ jobs:
       - name: build nuspec file
         run: nuget pack Package.nuspec                            
       - name: Push DataCollector
-        run: nuget push *.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
+        run: nuget push HSMDataCollector.HSMDataCollector*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
       
       - name: Restore nuget
         run: dotnet restore HSMSensorDataObjects/HSMSensorDataObjects.csproj
@@ -105,7 +105,7 @@ jobs:
       - name: build nuspec file 2
         run: nuget pack Package.nuspec
       - name: Push SensorDataObjects
-        run: nuget push *.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
+        run: nuget push HSMDataCollector.HSMSensorDataObjects*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
      
       - name: Display files structure
         run: ls -R
