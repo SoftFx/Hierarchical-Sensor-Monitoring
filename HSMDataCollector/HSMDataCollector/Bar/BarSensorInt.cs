@@ -15,7 +15,7 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorInt : BarSensorBase, IIntBarSensor
     {
-        private readonly SortedSet<int> ValuesList;
+        private readonly List<int> ValuesList;
         public BarSensorInt(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
             int smallPeriod = 15000)
             : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
@@ -29,7 +29,7 @@ namespace HSMDataCollector.Bar
             TimeSpan smallPeriod) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
-            ValuesList = new SortedSet<int>(new DuplicateIntComparer());
+            ValuesList = new List<int>();
         }
 
         public override CommonSensorValue GetLastValue()
@@ -95,6 +95,8 @@ namespace HSMDataCollector.Bar
                 result.StartTime = barStart;
             }
 
+            result.LastValue = currentValues.Last();
+            currentValues.Sort();
             FillNumericData(result, currentValues);
             FillCommonData(result);
             result.EndTime = DateTime.MinValue.ToUniversalTime();
@@ -116,6 +118,8 @@ namespace HSMDataCollector.Bar
                 barStart = DateTime.Now;
             }
 
+            result.LastValue = collected.Last();
+            collected.Sort();
             FillNumericData(result, collected);
 
             FillCommonData(result);

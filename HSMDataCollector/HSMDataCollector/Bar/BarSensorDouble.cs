@@ -15,7 +15,7 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorDouble : BarSensorBase, IDoubleBarSensor
     {
-        private readonly SortedSet<double> ValuesList;
+        private readonly List<double> ValuesList;
         public BarSensorDouble(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
             int smallPeriod = 15000)
             : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
@@ -29,7 +29,7 @@ namespace HSMDataCollector.Bar
             TimeSpan smallPeriod) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
-            ValuesList = new SortedSet<double>();
+            ValuesList = new List<double>();
         }
 
         protected override void SmallTimerTick(object state)
@@ -95,6 +95,8 @@ namespace HSMDataCollector.Bar
                 result.StartTime = barStart;
             }
 
+            result.LastValue = currentValues.Last();
+            currentValues.Sort();
             FillNumericData(result, currentValues);
             FillCommonData(result);
             result.EndTime = DateTime.MinValue.ToUniversalTime();
@@ -116,6 +118,8 @@ namespace HSMDataCollector.Bar
                 barStart = DateTime.Now;
             }
 
+            result.LastValue = collected.Last();
+            collected.Sort();
             FillNumericData(result, collected);
 
             FillCommonData(result);
