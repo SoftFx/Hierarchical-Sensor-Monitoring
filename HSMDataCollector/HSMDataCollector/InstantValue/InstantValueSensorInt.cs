@@ -29,6 +29,16 @@ namespace HSMDataCollector.InstantValue
             SendValue(data);
         }
 
+        public void AddValue(int value, SensorStatus status, string comment = null)
+        {
+            IntSensorValue data = new IntSensorValue() { IntValue = value, Path = Path, Time = DateTime.Now, Key = ProductKey, Status = status};
+            if (!string.IsNullOrEmpty(comment))
+            {
+                data.Comment = comment;
+            }
+            SendValue(data);
+        }
+
         private void SendValue(IntSensorValue data)
         {
             string serializedValue = GetStringData(data);

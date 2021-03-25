@@ -13,7 +13,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
-//using System.Text.Json;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
@@ -29,8 +28,6 @@ namespace HSMDataCollector.Core
         private readonly object _syncRoot = new object();
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
-        //private readonly List<>
-        //private readonly InstantValueSensorInt _countSensor;
         public DataCollector(string productKey, string address, int port)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
@@ -42,29 +39,7 @@ namespace HSMDataCollector.Core
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
             _dataQueue.SendData += DataQueue_SendData;
-            //_countSensor = new InstantValueSensorInt("CountSensor", productKey, address);
         }
-
-        //private ISensor CreateNewSensor(string path, SensorType type)
-        //{
-        //    switch (type)
-        //    {
-        //        case SensorType.BooleanValue:
-        //            return new InstantValueSensorBool(path, _productKey, _connectionAddress);
-        //        case SensorType.IntValue:
-        //            return new InstantValueSensorInt(path, _productKey, _connectionAddress);
-        //        case SensorType.DoubleValue:
-        //            return new InstantValueSensorDouble(path, _productKey, _connectionAddress);
-        //        case SensorType.StringValue:
-        //            return new InstantValueSensorString(path, _productKey, _connectionAddress);
-        //        case SensorType.IntegerBar:
-        //            return new BarSensorInt(path, _productKey, _connectionAddress);
-        //        case SensorType.DoubleBar:
-        //            return new BarSensorDouble(path, _productKey, _connectionAddress);
-        //        default:
-        //            throw new InvalidEnumArgumentException($"Invalid enum argument: {type}!");
-        //    }
-        //}
 
         public event EventHandler ValuesQueueOverflow;
         public void Initialize()
@@ -108,17 +83,17 @@ namespace HSMDataCollector.Core
             
             _client.Dispose();
         }
-        public void InitializeSystemMonitoring()
+        public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
         {
-            StartSystemMonitoring();
+            StartSystemMonitoring(isCPU, isFreeRam);
         }
 
-        public void InitializeProcessMonitoring()
+        public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads)
         {
-            StartCurrentProcessMonitoring();
+            StartCurrentProcessMonitoring(isCPU, isMemory, isThreads);
         }
 
-        public void InitializeProcessMonitoring(string processName)
+        public void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads)
         {
             
         }
@@ -208,31 +183,31 @@ namespace HSMDataCollector.Core
 
         #region Bar sensors
 
-        public IDoubleBarSensor Create1HrDoubleBarSensor(string path)
+        public IDoubleBarSensor Create1HrDoubleBarSensor(string path, int precision = 2)
         {
-            return CreateDoubleBarSensor(path, 3600000);
+            return CreateDoubleBarSensor(path, 3600000, 15000, precision);
         }
 
-        public IDoubleBarSensor Create30MinDoubleBarSensor(string path)
+        public IDoubleBarSensor Create30MinDoubleBarSensor(string path, int precision = 2)
         {
-            return CreateDoubleBarSensor(path, 1800000);
+            return CreateDoubleBarSensor(path, 1800000, 15000, precision);
         }
 
-        public IDoubleBarSensor Create10MinDoubleBarSensor(string path)
+        public IDoubleBarSensor Create10MinDoubleBarSensor(string path, int precision = 2)
         {
-            return CreateDoubleBarSensor(path, 600000);
+            return CreateDoubleBarSensor(path, 600000, 15000, precision);
         }
 
-        public IDoubleBarSensor Create5MinDoubleBarSensor(string path)
+        public IDoubleBarSensor Create5MinDoubleBarSensor(string path, int precision = 2)
         {
-            return CreateDoubleBarSensor(path, 300000);
+            return CreateDoubleBarSensor(path, 300000, 15000, precision);
         }
 
-        public IDoubleBarSensor Create1MinDoubleBarSensor(string path)
+        public IDoubleBarSensor Create1MinDoubleBarSensor(string path, int precision = 2)
         {
-            return CreateDoubleBarSensor(path, 60000);
+            return CreateDoubleBarSensor(path, 60000, 15000, precision);
         }
-        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000, int smallPeriod = 15000)
+        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000, int smallPeriod = 15000, int precision = 2)
         {
             var existingSensor = GetExistingSensor(path);
             var doubleBarSensor = existingSensor as IDoubleBarSensor;
@@ -242,7 +217,7 @@ namespace HSMDataCollector.Core
                 return doubleBarSensor;
             }
 
-            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod);
+            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod, precision);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -295,24 +270,42 @@ namespace HSMDataCollector.Core
             return GetCount();
         }
 
-        private void StartSystemMonitoring()
+        private void StartSystemMonitoring(bool isCPU, bool isFreeRam)
         {
-            CPUSensor cpuSensor = new CPUSensor(_productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(cpuSensor, cpuSensor.Path);
-            FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
+            if (isCPU)
+            {
+                CPUSensor cpuSensor = new CPUSensor(_productKey, _dataQueue as IValuesQueue);
+                AddNewSensor(cpuSensor, cpuSensor.Path);
+            }
+
+            if (isFreeRam)
+            {
+                FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_productKey, _dataQueue as IValuesQueue);
+                AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
+            }
             //FreeDiskSpaceSensor freeDiskSpaceSensor = new FreeDiskSpaceSensor();
         }
 
-        private void StartCurrentProcessMonitoring()
+        private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads)
         {
             Process currentProcess = Process.GetCurrentProcess();
-            ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
-            AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
-            ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
-            AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
-            ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
-            AddNewSensor(currentThreadCount, currentThreadCount.Path);
+            if (isCPU)
+            {
+                ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
+            }
+
+            if (isMemory)
+            {
+                ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
+            }
+
+            if (isThreads)
+            {
+                ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                AddNewSensor(currentThreadCount, currentThreadCount.Path);
+            }
         }
         private void StartProcessMonitoring(string processFileName)
         {
