@@ -6,8 +6,10 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
+using HSMSensorDataObjects;
 using HSMService;
 using RSAParameters = HSMService.RSAParameters;
+using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMClient
 {
@@ -40,6 +42,7 @@ namespace HSMClient
             result.SensorType = Convert(updateMessage.ObjectType);
             result.Time = updateMessage.Time.ToDateTime();
             result.ShortValue = updateMessage.ShortValue;
+            result.Status = Convert(updateMessage.Status);
             return result;
         }
 
@@ -52,6 +55,22 @@ namespace HSMClient
             return result;
         }
 
+        private static SensorStatus Convert(HSMService.SensorStatus status)
+        {
+            switch (status)
+            {
+                case HSMService.SensorStatus.Unknown:
+                    return SensorStatus.Unknown;
+                case HSMService.SensorStatus.Ok:
+                    return SensorStatus.Ok;
+                case HSMService.SensorStatus.Warning:
+                    return SensorStatus.Warning;
+                case HSMService.SensorStatus.Error:
+                    return SensorStatus.Error;
+                default:
+                    throw new Exception($"Unknown sensor status value: {status}!");
+            }
+        }
         private static ActionTypes Convert(SensorUpdateMessage.Types.TransactionType transactionType)
         {
             switch (transactionType)

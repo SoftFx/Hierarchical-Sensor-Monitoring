@@ -65,6 +65,13 @@ enum SensorObjectType {
 	OBJECT_TYPE_BAR_INT_SENSOR = 6;
 }
 
+enum SensorStatus {
+	SENSOR_STATUS_UNKNOWN = 0;
+	SENSOR_STATUS_OK = 1;
+	SENSOR_STATUS_WARNING = 2;
+	SENSOR_STATUS_ERROR = 3;
+}
+
 message SensorUpdateMessage {
 	string Path = 1;
 	string Product = 2;
@@ -78,6 +85,7 @@ message SensorUpdateMessage {
 	SensorObjectType ObjectType = 4;
 	google.protobuf.Timestamp time = 5;
 	string shortValue = 6;
+	SensorStatus status = 7;
 }
 
 //Sensors history
