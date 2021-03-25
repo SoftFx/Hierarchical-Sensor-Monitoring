@@ -11,5 +11,6 @@ namespace HSMServer.DataLayer.Model
         public SensorType DataType { get; set; }
         public string TypedData { get; set; }
         public DateTime TimeCollected { get; set; }
+        public SensorStatus Status { get; set; }
     }
 }

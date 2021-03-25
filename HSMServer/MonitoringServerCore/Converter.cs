@@ -141,6 +141,7 @@ namespace HSMServer.MonitoringServerCore
             SensorDataObject result;
             FillCommonFields(sensorValue, timeCollected, out result);
             result.DataType = SensorType.BooleanSensor;
+            result.Status = sensorValue.Status;
 
             BoolSensorData typedData = new BoolSensorData() { BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -151,6 +152,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.IntSensor;
+            result.Status = sensorValue.Status;
 
             IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -161,6 +163,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.DoubleSensor;
+            result.Status = sensorValue.Status;
 
             DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -171,6 +174,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.StringSensor;
+            result.Status = sensorValue.Status;
 
             StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -191,7 +195,8 @@ namespace HSMServer.MonitoringServerCore
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
-                Percentiles = sensorValue.Percentiles
+                Percentiles = sensorValue.Percentiles,
+                Status = sensorValue.Status
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
@@ -212,7 +217,8 @@ namespace HSMServer.MonitoringServerCore
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
-                Percentiles = sensorValue.Percentiles
+                Percentiles = sensorValue.Percentiles,
+                Status = sensorValue.Status
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
@@ -231,6 +237,7 @@ namespace HSMServer.MonitoringServerCore
             result.Product = productName;
             result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
             result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+            result.Status = Convert(dataObject.Status);
             return result;
         }
         
