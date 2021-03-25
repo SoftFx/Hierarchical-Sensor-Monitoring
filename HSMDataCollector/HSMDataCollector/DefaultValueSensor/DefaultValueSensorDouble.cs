@@ -31,15 +31,38 @@ namespace HSMDataCollector.DefaultValueSensor
             }
         }
 
+        public void AddValue(double value, string comment)
+        {
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+                _currentComment = comment;
+            }
+        }
+
+        public void AddValue(double value, SensorStatus status, string comment = null)
+        {
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+                _currentStatus = status;
+                _currentComment = comment;
+            }
+        }
+
         private DoubleSensorValue GetValue()
         {
             double val;
+            string comment;
+            SensorStatus status;
             lock (_syncRoot)
             {
                 val = _currentValue;
+                comment = _currentComment;
+                status = _currentStatus;
             }
 
-            DoubleSensorValue result = new DoubleSensorValue() { DoubleValue = val, Key = ProductKey, Path = Path, Time = DateTime.Now };
+            DoubleSensorValue result = new DoubleSensorValue() { DoubleValue = val, Key = ProductKey, Path = Path, Time = DateTime.Now, Comment = comment, Status = status};
             return result;
         }
     }

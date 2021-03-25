@@ -83,7 +83,7 @@ namespace HSMDataCollector.Bar
                 return leftNumber;
 
             double part = n - Math.Floor(n);
-            return leftNumber + part * (rightNumber - leftNumber);
+            return Math.Round(leftNumber + part * (rightNumber - leftNumber));
         }
 
         protected int GetPercentile(List<int> values, double percent)
