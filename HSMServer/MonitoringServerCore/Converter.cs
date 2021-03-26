@@ -196,9 +196,9 @@ namespace HSMServer.MonitoringServerCore
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
                 Percentiles = sensorValue.Percentiles,
-                Status = sensorValue.Status
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
             return result;
         }
 
@@ -218,9 +218,9 @@ namespace HSMServer.MonitoringServerCore
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
                 Percentiles = sensorValue.Percentiles,
-                Status = sensorValue.Status
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
             return result;
         }
 

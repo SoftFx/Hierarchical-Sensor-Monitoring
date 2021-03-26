@@ -123,6 +123,9 @@
         <member name="F:HSMService.SensorUpdateMessage.ShortValueFieldNumber">
             <summary>Field number for the "shortValue" field.</summary>
         </member>
+        <member name="F:HSMService.SensorUpdateMessage.StatusFieldNumber">
+            <summary>Field number for the "status" field.</summary>
+        </member>
         <member name="T:HSMService.SensorUpdateMessage.Types">
             <summary>Container for nested types declared in the SensorUpdateMessage message type.</summary>
         </member>
