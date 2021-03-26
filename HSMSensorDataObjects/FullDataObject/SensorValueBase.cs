@@ -14,5 +14,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public DateTime Time { get; set; }
         [DataMember]
         public string Comment { get; set; }
+        [DataMember]
+        public SensorStatus Status { get; set; }
     }
 }

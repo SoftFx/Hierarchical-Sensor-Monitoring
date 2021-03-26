@@ -79,6 +79,8 @@ namespace HSMServer.DataLayer
         {
             _logger = LogManager.GetCurrentClassLogger();
             environment = new LightningEnvironment(ENVIRONMENT_PATH);
+            //Might need to increase later
+            environment.MapSize = 343597383680;
             environment.MaxDatabases = 1;
             //environment.MaxReaders = Config.UsersCount;
             environment.MaxReaders = 10;
@@ -487,6 +489,7 @@ namespace HSMServer.DataLayer
             try
             {
                 var keyString = GetSensorWriteValueKey(productName, dataObject.Path, dataObject.TimeCollected);
+                //_logger.Info($"Adding record with key = {keyString}");
                 string json = JsonSerializer.Serialize(dataObject);
                 lock (_accessLock)
                 {
@@ -494,11 +497,17 @@ namespace HSMServer.DataLayer
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.None });
 
                     var code = tx.Put(db, Encoding.UTF8.GetBytes(keyString), Encoding.UTF8.GetBytes(json));
-                    tx.Commit();
+                    var commitCode = tx.Commit();
 
                     if (code != MDBResultCode.Success)
                     {
                         throw new ServerDatabaseException($"Failed to put data, code = {code}");
+                    }
+
+                    if (commitCode != MDBResultCode.Success)
+                    {
+                        //
+                        throw new ServerDatabaseException($"Failed to commit put transaction, code = {code}");
                     }
                 }
             }
@@ -600,7 +609,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.Error(e, "Failed to read sensorDataaObject");
+                                _logger.Error(e, "Failed to read sensorDataObject");
                             }
 
                             //if (n != -1 && count == n)

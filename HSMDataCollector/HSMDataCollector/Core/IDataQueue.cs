@@ -14,5 +14,7 @@ namespace HSMDataCollector.Core
         void InitializeTimer();
         void Stop();
         void Clear();
+
+        bool Disposed { get; }
     }
 }

@@ -15,21 +15,30 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorDouble : BarSensorBase, IDoubleBarSensor
     {
-        private readonly SortedSet<double> ValuesList;
+        private readonly List<double> ValuesList;
+        private readonly int _precision;
         public BarSensorDouble(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
-            int smallPeriod = 15000)
+            int smallPeriod = 15000, int precision = 2)
             : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
-                TimeSpan.FromMilliseconds(smallPeriod))
+                TimeSpan.FromMilliseconds(smallPeriod), precision)
         {
-            
+                        
         }
 
         public BarSensorDouble(string path, string productKey, IValuesQueue queue,
             TimeSpan collectPeriod,
-            TimeSpan smallPeriod) : base(path, productKey, queue, collectPeriod,
+            TimeSpan smallPeriod, int precision) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
-            ValuesList = new SortedSet<double>();
+            ValuesList = new List<double>();
+            if (precision < 1 || precision > 10)
+            {
+                _precision = 2;
+            }
+            else
+            {
+                _precision = precision;
+            }
         }
 
         protected override void SmallTimerTick(object state)
@@ -95,6 +104,8 @@ namespace HSMDataCollector.Bar
                 result.StartTime = barStart;
             }
 
+            result.LastValue = currentValues.Last();
+            currentValues.Sort();
             FillNumericData(result, currentValues);
             FillCommonData(result);
             result.EndTime = DateTime.MinValue.ToUniversalTime();
@@ -116,6 +127,8 @@ namespace HSMDataCollector.Bar
                 barStart = DateTime.Now;
             }
 
+            result.LastValue = collected.Last();
+            collected.Sort();
             FillNumericData(result, collected);
 
             FillCommonData(result);
@@ -124,13 +137,13 @@ namespace HSMDataCollector.Bar
 
         private void FillNumericData(DoubleBarSensorValue value, List<double> values)
         {
-            value.Max = values.Last();
-            value.Min = values.First();
+            value.Max = GetRoundedNumber(values.Last());
+            value.Min = GetRoundedNumber(values.First());
             value.Count = values.Count;
-            value.Mean = CountMean(values);
-            value.Percentiles.Add(new PercentileValueDouble(GetPercentile(values, 0.25), 0.25));
-            value.Percentiles.Add(new PercentileValueDouble(GetPercentile(values, 0.5), 0.5));
-            value.Percentiles.Add(new PercentileValueDouble(GetPercentile(values, 0.75), 0.75));
+            value.Mean = GetRoundedNumber(CountMean(values));
+            value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.25)), 0.25));
+            value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.5)), 0.5));
+            value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.75)), 0.75));
         }
 
         private void FillCommonData(DoubleBarSensorValue value)
@@ -184,6 +197,11 @@ namespace HSMDataCollector.Bar
                 Console.WriteLine(e);
             }
             return mean;
+        }
+
+        private double GetRoundedNumber(double number)
+        {
+            return Math.Round(number, _precision, MidpointRounding.AwayFromZero);
         }
     }
 }

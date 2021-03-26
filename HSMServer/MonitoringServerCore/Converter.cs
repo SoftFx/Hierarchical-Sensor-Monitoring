@@ -13,6 +13,7 @@ using HSMServer.Model;
 using HSMService;
 using NLog;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
+using SensorStatus = HSMService.SensorStatus;
 using Timestamp = Google.Protobuf.WellKnownTypes.Timestamp;
 
 namespace HSMServer.MonitoringServerCore
@@ -140,6 +141,7 @@ namespace HSMServer.MonitoringServerCore
             SensorDataObject result;
             FillCommonFields(sensorValue, timeCollected, out result);
             result.DataType = SensorType.BooleanSensor;
+            result.Status = sensorValue.Status;
 
             BoolSensorData typedData = new BoolSensorData() { BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -150,6 +152,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.IntSensor;
+            result.Status = sensorValue.Status;
 
             IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -160,6 +163,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.DoubleSensor;
+            result.Status = sensorValue.Status;
 
             DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -170,6 +174,7 @@ namespace HSMServer.MonitoringServerCore
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.StringSensor;
+            result.Status = sensorValue.Status;
 
             StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
@@ -190,9 +195,10 @@ namespace HSMServer.MonitoringServerCore
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
-                Percentiles = sensorValue.Percentiles
+                Percentiles = sensorValue.Percentiles,
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
             return result;
         }
 
@@ -211,9 +217,10 @@ namespace HSMServer.MonitoringServerCore
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
-                Percentiles = sensorValue.Percentiles
+                Percentiles = sensorValue.Percentiles,
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
             return result;
         }
 
@@ -230,6 +237,7 @@ namespace HSMServer.MonitoringServerCore
             result.Product = productName;
             result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
             result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+            result.Status = Convert(dataObject.Status);
             return result;
         }
         
@@ -240,6 +248,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeBoolSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -251,6 +260,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeIntSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -262,6 +272,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeDoubleSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -273,6 +284,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeStringSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -284,6 +296,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeBarIntSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -295,6 +308,7 @@ namespace HSMServer.MonitoringServerCore
             update.ShortValue = GetShortValue(value, timeCollected);
             update.ObjectType = SensorObjectType.ObjectTypeBarDoubleSensor;
             update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
 
             return update;
         }
@@ -306,6 +320,22 @@ namespace HSMServer.MonitoringServerCore
             update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
         }
 
+        private static HSMService.SensorStatus Convert(HSMSensorDataObjects.SensorStatus status)
+        {
+            switch (status)
+            {
+                case HSMSensorDataObjects.SensorStatus.Unknown:
+                    return SensorStatus.Unknown;
+                case HSMSensorDataObjects.SensorStatus.Ok:
+                    return SensorStatus.Ok;
+                case HSMSensorDataObjects.SensorStatus.Warning:
+                    return SensorStatus.Warning;
+                case HSMSensorDataObjects.SensorStatus.Error:
+                    return SensorStatus.Error;
+                default:
+                    throw new Exception($"Unknown sensor status: {status}!");
+            }
+        }
         #endregion
 
         #region Typed data objects

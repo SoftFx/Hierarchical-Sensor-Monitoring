@@ -172,6 +172,10 @@ namespace HSMServer.MonitoringServerCore
             var commonSensorValues = values.ToList();
             foreach (var value in commonSensorValues)
             {
+                if (value == null)
+                {
+                    continue;
+                }
                 switch (value.SensorType)
                 {
                     case SensorType.IntegerBarSensor:
