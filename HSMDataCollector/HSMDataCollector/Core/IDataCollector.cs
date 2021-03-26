@@ -63,7 +63,7 @@ namespace HSMDataCollector.Core
 
         #endregion
 
-        int GetSensorCount();
+        //int GetSensorCount();
 
         event EventHandler ValuesQueueOverflow;
     }

@@ -6,6 +6,7 @@ using HSMDataCollector.PerformanceSensor.Base;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,6 +14,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
@@ -24,8 +26,7 @@ namespace HSMDataCollector.Core
     {
         private readonly string _productKey;
         private readonly string _listSendingAddress;
-        private readonly Dictionary<string, ISensor> _nameToSensor;
-        private readonly object _syncRoot = new object();
+        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
         public DataCollector(string productKey, string address, int port)
@@ -33,7 +34,7 @@ namespace HSMDataCollector.Core
             var connectionAddress = $"{address}:{port}/api/sensors";
             _listSendingAddress = $"{connectionAddress}/list";
             _productKey = productKey;
-            _nameToSensor = new Dictionary<string, ISensor>();
+            _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             _client = new HttpClient();
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             _dataQueue = new DataQueue();
@@ -56,23 +57,18 @@ namespace HSMDataCollector.Core
                 _dataQueue.Stop();
             }
 
-            lock (_syncRoot)
+            Thread.Sleep(TimeSpan.FromSeconds(1));
+            
+            foreach (var pair in _nameToSensor)
             {
-                foreach (var pair in _nameToSensor)
+                if (pair.Value.HasLastValue)
                 {
-                    if (pair.Value.HasLastValue)
-                    {
-                        allData.Add(pair.Value.GetLastValue());
-                    }
+                    allData.Add(pair.Value.GetLastValue());
                 }
             }
-
-            lock (_syncRoot)
+            foreach (var pair in _nameToSensor)
             {
-                foreach (var pair in _nameToSensor)
-                { 
-                    pair.Value.Dispose();
-                }
+                pair.Value.Dispose();
             }
 
 
@@ -344,12 +340,10 @@ namespace HSMDataCollector.Core
         private SensorBase GetExistingSensor(string path)
         {
             SensorBase sensor = null;
-            lock (_syncRoot)
+            bool exists = _nameToSensor.TryGetValue(path, out var readValue);
+            if (exists)
             {
-                if (_nameToSensor.ContainsKey(path))
-                {
-                    sensor = _nameToSensor[path] as SensorBase;
-                }
+                sensor = readValue as SensorBase;
             }
 
             if (sensor == null && sensor as IPerformanceSensor != null)
@@ -361,19 +355,13 @@ namespace HSMDataCollector.Core
 
         private void AddNewSensor(ISensor sensor, string path)
         {
-            lock (_syncRoot)
-            {
-                _nameToSensor[path] = sensor;
-                //_countSensor.AddValue(_nameToSensor.Count);
-            }
+            _nameToSensor[path] = sensor;
+            //_nameToSensor.AddOrUpdate(path, sensor);
         }
         private int GetCount()
         {
             int count = 0;
-            lock (_syncRoot)
-            {
-                count = _nameToSensor.Count;
-            }
+            count = _nameToSensor.Count;
 
             return count;
         }
@@ -402,9 +390,12 @@ namespace HSMDataCollector.Core
 
                 //request.GetResponse();
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
-                _dataQueue.ReturnFailedData(values);
+                if (_dataQueue != null && !_dataQueue.Disposed)
+                {
+                    _dataQueue?.ReturnFailedData(values);
+                }
                 Console.WriteLine($"Failed to send: {e}");
             }
             

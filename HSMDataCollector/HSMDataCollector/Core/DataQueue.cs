@@ -16,12 +16,15 @@ namespace HSMDataCollector.Core
         private readonly object _listLock;
         private Timer _sendTimer;
         private bool _hasFailedData;
+        public bool Disposed { get; private set; }
+
         public DataQueue()
         {
             _valuesQueue = new Queue<CommonSensorValue>();
             _failedList = new List<CommonSensorValue>();
             _lockObj = new object();
             _listLock = new object();
+            Disposed = false;
         }
         
         public event EventHandler<List<CommonSensorValue>> SendData;
@@ -56,11 +59,12 @@ namespace HSMDataCollector.Core
         public void Stop()
         {
             _sendTimer.Dispose();
+            Disposed = true;
         }
 
         public void Clear()
         {
-            //TODO: add clear code
+            ClearData();
         }
 
         private void EnqueueValue(CommonSensorValue value)
@@ -91,7 +95,15 @@ namespace HSMDataCollector.Core
         {
             if (_hasFailedData)
             {
-                _failedList.Clear();
+                lock (_listLock)
+                {
+                    _failedList.Clear();
+                }
+            }
+
+            lock (_lockObj)
+            {
+                _valuesQueue.Clear();
             }
         }
         private List<CommonSensorValue> DequeueData()
