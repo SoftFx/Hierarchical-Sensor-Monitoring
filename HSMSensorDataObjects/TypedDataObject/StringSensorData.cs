@@ -9,7 +9,5 @@ namespace HSMSensorDataObjects.TypedDataObject
         public string StringValue { get; set; }
         [DataMember]
         public string Comment { get; set; }
-        [DataMember]
-        public SensorStatus Status { get; set; }
     }
 }
