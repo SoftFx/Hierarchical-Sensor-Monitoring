@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Extensions;
 using LightningDB;
@@ -81,6 +82,7 @@ namespace HSMServer.DataLayer
             environment = new LightningEnvironment(ENVIRONMENT_PATH);
             //Might need to increase later
             environment.MapSize = 343597383680;
+            //environment.MapSize = 687194767360;
             environment.MaxDatabases = 1;
             //environment.MaxReaders = Config.UsersCount;
             environment.MaxReaders = 10;
@@ -92,7 +94,7 @@ namespace HSMServer.DataLayer
                 {
                     using var tx = environment.BeginTransaction();
                     using var db = tx.OpenDatabase(DATABASE_NAME, new DatabaseConfiguration { Flags = DatabaseOpenFlags.Create });
-                    tx.Commit();
+                    var code = tx.Commit();
                     db.Dispose();
                     tx.Dispose();
                 }
@@ -275,10 +277,15 @@ namespace HSMServer.DataLayer
                     _logger.Info($"Products list read: {stringVal}");
                     prodList.Add(productName);
                     var code = tx.Put(db, bytesKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(prodList)));
-                    tx.Commit();
+                    var commitCode = tx.Commit();
                     if (code != MDBResultCode.Success)
                     {
                         throw new ServerDatabaseException("Failed to add product", code);
+                    }
+
+                    if (commitCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException($"Incorrect commit code", commitCode);
                     }
                 }
             }
@@ -352,10 +359,15 @@ namespace HSMServer.DataLayer
                     var code = tx.Put(db,
                         Encoding.UTF8.GetBytes(GetProductInfoKey(product.Name)),
                         Encoding.UTF8.GetBytes(JsonSerializer.Serialize(product)));
-                    tx.Commit();
+                    var commitCode = tx.Commit();
                     if (code != MDBResultCode.Success)
                     {
                         throw new ServerDatabaseException(code);
+                    }
+
+                    if (commitCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Commit code is wrong", commitCode);
                     }
                 }
             }
@@ -470,11 +482,16 @@ namespace HSMServer.DataLayer
 
                     var code = tx.Put(db, Encoding.UTF8.GetBytes(key),
                         Encoding.UTF8.GetBytes(stringVal));
-                    tx.Commit();
+                    var commitCode = tx.Commit();
 
                     if (code != MDBResultCode.Success)
                     {
                         throw new ServerDatabaseException(code);
+                    }
+
+                    if (commitCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Commit code is not success", commitCode);
                     }
                 }
             }
@@ -692,10 +709,15 @@ namespace HSMServer.DataLayer
 
                     var serializedVal = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(typedList));
                     var code = tx.Put(db, bytesKey, serializedVal);
-                    tx.Commit();
+                    var commitCode = tx.Commit();
                     if (code != MDBResultCode.Success)
                     {
                         throw new ServerDatabaseException("Failed to write new list", code);
+                    }
+
+                    if (commitCode != MDBResultCode.Success)
+                    {
+                        throw new ServerDatabaseException("Incorrect commit code", commitCode);
                     }
                 }
             }
