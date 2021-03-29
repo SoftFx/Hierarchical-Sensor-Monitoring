@@ -79,14 +79,21 @@ namespace HSMServer.DataLayer
         public DatabaseClass()
         {
             _logger = LogManager.GetCurrentClassLogger();
-            environment = new LightningEnvironment(ENVIRONMENT_PATH);
-            //Might need to increase later
-            environment.MapSize = 343597383680;
-            //environment.MapSize = 687194767360;
-            environment.MaxDatabases = 1;
-            //environment.MaxReaders = Config.UsersCount;
-            environment.MaxReaders = 10;
-            environment.Open();
+            try
+            {
+                environment = new LightningEnvironment(ENVIRONMENT_PATH);
+                //Might need to increase later. Current size is 1.25 GB
+                environment.MapSize = 1342177280;
+                environment.MaxDatabases = 1;
+                //environment.MaxReaders = Config.UsersCount;
+                environment.MaxReaders = 10;
+                environment.Open();
+            }
+            catch (Exception e)
+            {
+                _logger.Fatal(e, "Failed to open database environment!");
+            }
+            
             _accessLock = new object();
             try
             {
