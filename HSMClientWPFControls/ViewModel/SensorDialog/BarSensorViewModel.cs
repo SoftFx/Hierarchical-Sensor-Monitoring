@@ -85,7 +85,7 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
                     model.Count = int.Parse(value);
                 }
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(BoxWidth));
+                OnPropertyChanged(nameof(Count));
             }
         }
     }

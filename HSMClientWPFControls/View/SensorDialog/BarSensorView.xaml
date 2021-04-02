@@ -12,16 +12,16 @@
     <DockPanel MinWidth="600" MinHeight="450">
         <StackPanel DockPanel.Dock="Top" Margin="5" Orientation="Horizontal">
             <TextBlock>Values count:</TextBlock>
-            <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=Explicit}"></TextBox>
+            <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}"></TextBox>
         </StackPanel>
         <DockPanel>
             <oxy:Plot>
                 <oxy:Plot.Axes>
                     <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom" />
-                    <oxy:LinearAxis Title="Values"/>
+                    <oxy:LinearAxis Title="Values" Unit="px"/>
                 </oxy:Plot.Axes>
                 <oxy:Plot.Series>
-                    <oxy:BoxPlotSeries Name="BoxPlotSeries" Title="Values" WhiskerWidth="0.0005" BoxWidth="0.0005" ItemsSource="{Binding Items}" Fill="LightBlue" />
+                    <oxy:BoxPlotSeries Name="BoxPlotSeries" Title="Values" ShowBox="True" BoxWidth="0.00005" WhiskerWidth="0.0005" ItemsSource="{Binding Items}" Fill="LightCoral" />
                 </oxy:Plot.Series>
             </oxy:Plot>
         </DockPanel>
