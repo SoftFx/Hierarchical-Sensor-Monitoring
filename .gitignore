@@ -108,3 +108,6 @@ HSMServerInstaller/Output
 # Nuget build folder
 HSMDataCollector/lib
 
+# Monitoring database
+HSMServer/monitoring/
+

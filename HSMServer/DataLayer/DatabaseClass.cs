@@ -13,6 +13,7 @@ using NLog;
 
 namespace HSMServer.DataLayer
 {
+    [Obsolete("02.04.2021 Use LevelDB database.")]
     public class DatabaseClass : IDisposable, IDatabaseClass
     {
         #region IDisposable implementation
