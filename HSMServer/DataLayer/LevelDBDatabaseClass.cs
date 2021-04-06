@@ -366,7 +366,9 @@ namespace HSMServer.DataLayer
                 {
                     string currentValue = _database.Get(key);
                     _database.Delete(key);
-                    var list = JsonSerializer.Deserialize<List<string>>(currentValue);
+                    var list = string.IsNullOrEmpty(currentValue) 
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(currentValue);
                     list.Add(path);
                     _database.Put(key, JsonSerializer.Serialize(list));
                 }
