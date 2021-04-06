@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using HSMServer.DataLayer.Model;
 
 namespace HSMServer.DataLayer
 {
-    public interface IDatabaseClass
+    public interface IDatabaseClass : IDisposable
     {
         #region Products
 
