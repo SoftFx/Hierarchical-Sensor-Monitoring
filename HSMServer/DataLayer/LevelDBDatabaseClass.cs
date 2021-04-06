@@ -70,7 +70,7 @@ namespace HSMServer.DataLayer
         private readonly object _accessLock;
         private readonly Logger _logger;
         private readonly char[] _keysSeparator = { '_' };
-        private const string DATABASE_NAME = "monitoring";
+        private const string DATABASE_NAME = "MonitoringData";
         private DB _database;
         public LevelDBDatabaseClass()
         {
@@ -434,7 +434,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Error parsing datetime: {str}");
+                //_logger.Error(e, $"Error parsing datetime: {str}");
             }
             //Back compatibility
             str = splitRes.Last();
