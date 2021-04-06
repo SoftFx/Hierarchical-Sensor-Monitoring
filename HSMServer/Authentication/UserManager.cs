@@ -17,7 +17,7 @@ namespace HSMServer.Authentication
 
         private readonly List<User> _users;
         private readonly Logger _logger;
-        private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(30);
+        private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(60);
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;

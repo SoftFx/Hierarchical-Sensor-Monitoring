@@ -30,6 +30,7 @@ namespace HSMServer.Middleware
 
                 if (!_validator.IsValid(certificate))
                 {
+                    //_logger.Warn($" Denied access for {certificate.Thumbprint} : {certificate.SubjectName.Name}");
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     //await context.ForbidAsync();
                     return;

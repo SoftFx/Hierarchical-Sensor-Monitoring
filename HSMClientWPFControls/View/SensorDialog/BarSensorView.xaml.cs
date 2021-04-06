@@ -24,7 +24,7 @@ namespace HSMClientWPFControls.View.SensorDialog
         {
             InitializeComponent();
             //BoxPlotSeries.BoxWidth = 0.00000005;
-            BoxPlotSeries.Width = 0.0005;
+            //BoxPlotSeries.Width = 0.0005;
         }
 
         public override DialogViewModel ConstructDefaultViewModel(ISensorDialogModel model)
