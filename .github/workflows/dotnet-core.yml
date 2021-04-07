@@ -26,16 +26,16 @@ jobs:
         dotnet-version: 3.1.301
     
     - name: Install dependencies
-      run: dotnet restore HSMServer/HSMServer.sln
+      run: dotnet restore src/HSMServer/HSMServer.sln
       
     - name: Build
-      run: dotnet build HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
       
     - name: Install Client Dependencies
-      run: dotnet restore HSMClient/HSMClient.sln
+      run: dotnet restore src/HSMClient/HSMClient.sln
       
     - name: Build Client
-      run: dotnet build HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
+      run: dotnet build src/HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2
@@ -70,9 +70,9 @@ jobs:
       #    NUGET_KEY: ${{ secrets.NUGETKEY }}
       #    VERSION_STATIC: 1.0.5    
       - name: Install nuget package dependencies
-        run: dotnet restore HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+        run: dotnet restore src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       - name: Build DataCollector
-        run: dotnet build HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild
+        run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild
       - name: Create nuspec file
         run: nuget spec
       - name: install xml editor
@@ -91,7 +91,7 @@ jobs:
         run: nuget push HSMDataCollector.HSMDataCollector*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
       
       - name: Restore nuget
-        run: dotnet restore HSMSensorDataObjects/HSMSensorDataObjects.csproj
+        run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
       - name: Create nuspec file
         run: nuget spec Force
       - name: Edit data objects spec file
