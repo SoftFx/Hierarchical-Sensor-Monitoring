@@ -111,3 +111,5 @@ HSMDataCollector/lib
 # Monitoring database
 HSMServer/monitoring/
 
+# New monitoring database
+src/HSMServer/MonitoringData
