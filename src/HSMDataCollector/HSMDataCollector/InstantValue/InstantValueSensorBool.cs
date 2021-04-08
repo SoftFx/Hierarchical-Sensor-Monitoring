@@ -31,7 +31,7 @@ namespace HSMDataCollector.InstantValue
 
         public void AddValue(bool value, SensorStatus status, string comment = null)
         {
-            BoolSensorValue data = new BoolSensorValue() { BoolValue = value, Status = status, Key = ProductKey, Time = DateTime.Now }; ;
+            BoolSensorValue data = new BoolSensorValue() { BoolValue = value, Path = Path, Status = status, Key = ProductKey, Time = DateTime.Now }; 
             if (!string.IsNullOrEmpty(comment))
             {
                 data.Comment = comment;
