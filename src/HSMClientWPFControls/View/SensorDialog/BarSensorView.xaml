@@ -7,6 +7,7 @@
              xmlns:local="clr-namespace:HSMClientWPFControls.View.SensorDialog"
              xmlns:oxy="http://oxyplot.org/wpf"
              xmlns:series="clr-namespace:OxyPlot.Series;assembly=OxyPlot"
+             xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
     <DockPanel MinWidth="600" MinHeight="450">
@@ -18,12 +19,17 @@
             <oxy:Plot>
                 <oxy:Plot.Axes>
                     <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom" />
-                    <oxy:LinearAxis Title="Values" Unit="px"/>
+                    <oxy:LinearAxis Title="Values" />
                 </oxy:Plot.Axes>
                 <oxy:Plot.Series>
-                    <oxy:BoxPlotSeries Name="BoxPlotSeries" Title="Values" ShowBox="True" BoxWidth="0.00005" WhiskerWidth="0.0005" ItemsSource="{Binding Items}" Fill="LightCoral" />
+                    <oxy:BoxPlotSeries Name="BoxPlotSeries" WhiskerWidth="0.005" BoxWidth="{Binding BoxWidth}" Title="Values" ShowBox="True" ItemsSource="{Binding Items}" Fill="LightCoral" />
                 </oxy:Plot.Series>
             </oxy:Plot>
+            <!--<lvc:CartesianChart Name="Chart">
+                <lvc:CartesianChart.AxisX>
+                    <lvc:Axis Labels="{Binding Labels}" DisableAnimations="True" />
+                </lvc:CartesianChart.AxisX>
+            </lvc:CartesianChart>-->
         </DockPanel>
     </DockPanel>
 </src:SensorControl>

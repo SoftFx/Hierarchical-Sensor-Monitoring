@@ -48,6 +48,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="OxyPlot">
+      <HintPath>..\ThirdPartyLib\OxyPlot.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="Properties\Settings.Designer.cs">
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <AutoGen>True</AutoGen>
