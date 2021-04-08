@@ -174,7 +174,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 if (value == null)
                 {
-                    _logger.Warn("Received null value in list!!!");
+                    _logger.Warn("Received null value in list!");
                     continue;
                 }
                 switch (value.SensorType)

@@ -236,7 +236,6 @@ namespace HSMServer.DataLayer
 
         public void WriteSensorData(SensorDataObject dataObject, string productName)
         {
-            _logger.Info($"Writing value for sensor {dataObject.Path}");
             try
             {
                 var key = GetSensorWriteValueKey(productName, dataObject.Path, dataObject.TimeCollected);

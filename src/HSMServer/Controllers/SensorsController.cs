@@ -203,7 +203,6 @@ namespace HSMServer.Controllers
         {
             if (values != null)
             {
-                _logger.Info($"Received list with {values.Count()} values");
                 try
                 {
                     _monitoringCore.AddSensorsValues(values);
