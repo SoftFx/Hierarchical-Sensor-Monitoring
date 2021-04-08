@@ -310,7 +310,8 @@ namespace HSMServer.MonitoringServerCore
                     _barsStorage.Add(value, updateMessage.Product, timeCollected);
                     return;
                 }
-
+                
+                _barsStorage.Remove(productName, value.Path);
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
             }
@@ -336,6 +337,7 @@ namespace HSMServer.MonitoringServerCore
                     return;
                 }
 
+                _barsStorage.Remove(productName, value.Path);
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
             }

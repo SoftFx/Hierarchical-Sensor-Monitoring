@@ -52,6 +52,13 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
+        public void Remove(string product, string path)
+        {
+            lock (_syncObject)
+            {
+                _lastValues.Remove((product, path));
+            }
+        }
         public ExtendedBarSensorData GetLastValue(string product, string path)
         {
             ExtendedBarSensorData result = null;
