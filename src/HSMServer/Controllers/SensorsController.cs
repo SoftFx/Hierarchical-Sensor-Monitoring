@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
@@ -200,16 +201,22 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<List<CommonSensorValue>> Post([FromBody] IEnumerable<CommonSensorValue> values)
         {
-            try
+            if (values != null)
             {
-                _monitoringCore.AddSensorsValues(values);
-                return Ok(values);
+                _logger.Info($"Received list with {values.Count()} values");
+                try
+                {
+                    _monitoringCore.AddSensorsValues(values);
+                    return Ok(values);
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, "Failed to put data");
+                    return BadRequest(values);
+                }
             }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to put data");
-                return BadRequest(values);
-            }
+
+            return BadRequest(values);
         }
         //[HttpPost("nokey")]
         //public ActionResult<string> Post([FromBody] NewJobResult newJobResult)
