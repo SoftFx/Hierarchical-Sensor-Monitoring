@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text;
 using HSMClientWPFControls.Model.SensorDialog;
+using LiveCharts.Defaults;
 using OxyPlot.Series;
 
 namespace HSMClientWPFControls.ViewModel.SensorDialog
@@ -15,7 +16,10 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
         {
         }
 
-        public double BoxWidth => double.MinValue;
+        public double BoxWidth
+        {
+            get => 0.0005;
+        }
         public double MinValue
         {
             get => _minValue - 5;
@@ -33,6 +37,42 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
             {
                 _maxValue = value;
                 OnPropertyChanged(nameof(MaxValue));
+            }
+        }
+
+        public Collection<OhlcPoint> Points
+        {
+            get
+            {
+                var model = Model as IBarSensorModel;
+                return model?.Points;
+            }
+            set
+            {
+                var model = Model as IBarSensorModel;
+                if (model != null)
+                {
+                    model.Points = value;
+                }
+                OnPropertyChanged(nameof(Points));
+            }
+        }
+
+        public Collection<string> Labels
+        {
+            get
+            {
+                var model = Model as IBarSensorModel;
+                return model?.Labels;
+            }
+            set
+            {
+                var model = Model as IBarSensorModel;
+                if (model != null)
+                {
+                    model.Labels = value;
+                }
+                OnPropertyChanged(nameof(Labels));
             }
         }
         public Collection<BoxPlotItem> Items
