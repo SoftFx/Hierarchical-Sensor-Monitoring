@@ -62,7 +62,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\HSMservice.proto" GrpcServices="Server" />
+    <Protobuf Include="..\Protos\HSMservice.proto" GrpcServices="Server" />
   </ItemGroup>
 
   <ItemGroup>

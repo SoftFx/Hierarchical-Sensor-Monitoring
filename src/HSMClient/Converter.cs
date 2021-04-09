@@ -103,6 +103,8 @@ namespace HSMClient
                     return SensorTypes.BarDoubleSensor;
                 case SensorObjectType.ObjectTypeBarIntSensor:
                     return SensorTypes.BarIntSensor;
+                case SensorObjectType.ObjectTypeFileSensor:
+                    return SensorTypes.FileSensor;
                 default:
                     return SensorTypes.None;
             }

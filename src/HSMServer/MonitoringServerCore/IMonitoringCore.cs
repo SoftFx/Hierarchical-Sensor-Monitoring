@@ -18,6 +18,8 @@ namespace HSMServer.MonitoringServerCore
         public void AddSensorValue(StringSensorValue value);
         public void AddSensorValue(IntBarSensorValue value);
         public void AddSensorValue(DoubleBarSensorValue value);
+
+        public void AddSensorValue(FileSensorValue value);
         //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);

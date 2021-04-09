@@ -542,6 +542,16 @@ namespace HSMServer.DataLayer
             }
         }
 
+        public void WriteOneValueSensorData(SensorDataObject dataObject, string productName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteUniqueSensorData(SensorDataObject dataObject, string productName)
+        {
+            throw new NotImplementedException();
+        }
+
         public SensorDataObject GetLastSensorValue(string productName, string path)
         {
             SensorDataObject sensorDataObject = null;

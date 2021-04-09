@@ -1,0 +1,13 @@
+﻿using System.Runtime.Serialization;
+
+namespace HSMSensorDataObjects.FullDataObject
+{
+    [DataContract]
+    public class FileSensorValue : SensorValueBase
+    {
+        [DataMember]
+        public string Extension { get; set; }
+        [DataMember]
+        public byte[] FileBytes { get; set; }
+    }
+}

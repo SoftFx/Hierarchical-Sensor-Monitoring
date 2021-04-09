@@ -26,7 +26,10 @@ namespace HSMClient.Dialog
             {
                 if (_sensorModelType.ContainsKey(sensor.SensorType))
                 {
-                    return Activator.CreateInstance(_sensorModelType[sensor.SensorType], _connector, sensor) as ISensorDialogModel;
+                    if (_sensorModelType[sensor.SensorType] != typeof(object))
+                    {
+                        return Activator.CreateInstance(_sensorModelType[sensor.SensorType], _connector, sensor) as ISensorDialogModel;
+                    }
                 }
             }
             catch (Exception e)

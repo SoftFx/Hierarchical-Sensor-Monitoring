@@ -60,6 +60,13 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
+            <summary>
+            Receives the value of file sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.IEnumerable{HSMSensorDataObjects.CommonSensorValue})">
             <summary>
             Endpoint used by HSMDataCollector services, which sends data in portions
@@ -68,11 +75,32 @@
             <returns></returns>
         </member>
         <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
+        <member name="M:HSMServer.DataLayer.IDatabaseClass.WriteOneValueSensorData(HSMServer.DataLayer.Model.SensorDataObject,System.String)">
+            <summary>
+            Use for sensors, for which only last value must be stored
+            </summary>
+            <param name="dataObject"></param>
+            <param name="productName"></param>
+        </member>
+        <member name="M:HSMServer.MonitoringServerCore.MonitoringCore.SaveSensorValue(HSMServer.DataLayer.Model.SensorDataObject,System.String)">
+            <summary>
+            Simply save the given sensorValue
+            </summary>
+            <param name="dataObject"></param>
+            <param name="productName"></param>
+        </member>
+        <member name="M:HSMServer.MonitoringServerCore.MonitoringCore.SaveOneValueSensorValue(HSMServer.DataLayer.Model.SensorDataObject,System.String)">
+            <summary>
+            Use this method for sensors, for which only last value is stored
+            </summary>
+            <param name="dataObject"></param>
+            <param name="productName"></param>
+        </member>
         <member name="T:HSMService.HSMserviceReflection">
-            <summary>Holder for reflection information generated from Protos/HSMservice.proto</summary>
+            <summary>Holder for reflection information generated from HSMservice.proto</summary>
         </member>
         <member name="P:HSMService.HSMserviceReflection.Descriptor">
-            <summary>File descriptor for Protos/HSMservice.proto</summary>
+            <summary>File descriptor for HSMservice.proto</summary>
         </member>
         <member name="T:HSMService.UpdateInfoMessage">
              <summary>

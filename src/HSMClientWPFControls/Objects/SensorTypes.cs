@@ -8,6 +8,7 @@
         StringSensor,
         BarIntSensor,
         BarDoubleSensor,
+        FileSensor,
         None
     }
 }

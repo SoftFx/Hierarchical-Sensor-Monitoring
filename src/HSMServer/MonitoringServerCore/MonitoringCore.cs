@@ -111,16 +111,35 @@ namespace HSMServer.MonitoringServerCore
                 }
             }
         }
+        /// <summary>
+        /// Simply save the given sensorValue
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
+        {
+            AddSensorIfNotRegistered(dataObject, productName);
+            Task.Run(() => _database.WriteSensorData(dataObject, productName));
+        }
+
+        /// <summary>
+        /// Use this method for sensors, for which only last value is stored
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
+        private void SaveOneValueSensorValue(SensorDataObject dataObject, string productName)
+        {
+            AddSensorIfNotRegistered(dataObject, productName);
+            Task.Run(() => _database.WriteOneValueSensorData(dataObject, productName));
+        }
+
+        private void AddSensorIfNotRegistered(SensorDataObject dataObject, string productName)
         {
             if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
             {
                 _productManager.AddSensor(productName, dataObject.Path);
             }
-
-            Task.Run(() => _database.WriteSensorData(dataObject, productName));
         }
-
         private async Task<bool> SaveSensorValueAsync(SensorDataObject dataObject, string productName)
         {
             try
@@ -294,6 +313,24 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
+        public void AddSensorValue(FileSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
+
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
         public void AddSensorValue(IntBarSensorValue value)
         {
             try
