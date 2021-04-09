@@ -71,11 +71,12 @@ namespace HSMServer.MonitoringServerCore
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
-        private readonly ProductManager _productManager;
+        private readonly IProductManager _productManager;
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage)
+        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage,
+            IProductManager productManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _database = database;
@@ -84,7 +85,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager = new CertificateManager();
             _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
-            _productManager = new ProductManager(_database);
+            _productManager = productManager;
             _logger.Debug("Monitoring core initialized");
         }
 
@@ -118,7 +119,7 @@ namespace HSMServer.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
-            AddSensorIfNotRegistered(dataObject, productName);
+            _productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
             Task.Run(() => _database.WriteSensorData(dataObject, productName));
         }
 
@@ -129,16 +130,8 @@ namespace HSMServer.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveOneValueSensorValue(SensorDataObject dataObject, string productName)
         {
-            AddSensorIfNotRegistered(dataObject, productName);
+            _productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
             Task.Run(() => _database.WriteOneValueSensorData(dataObject, productName));
-        }
-
-        private void AddSensorIfNotRegistered(SensorDataObject dataObject, string productName)
-        {
-            if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
-            {
-                _productManager.AddSensor(productName, dataObject.Path);
-            }
         }
         private async Task<bool> SaveSensorValueAsync(SensorDataObject dataObject, string productName)
         {
