@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using HSMClientWPFControls.ConnectorInterface;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Model.SensorDialog;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
@@ -14,6 +15,7 @@ namespace HSMClient.Dialog
         private Collection<BoxPlotItem> _items;
         private Collection<OhlcPoint> _points;
         private Collection<string> _labels;
+        private Collection<DefaultSensorModel> _defaultList;
 
         protected ClientBarSensorModel(ISensorHistoryConnector connector, MonitoringSensorViewModel sensor) : base(connector, sensor)
         {
@@ -33,6 +35,16 @@ namespace HSMClient.Dialog
             {
                 _items = value;
                 OnPropertyChanged(nameof(Items));
+            }
+        }
+
+        public Collection<DefaultSensorModel> DefaultList
+        {
+            get => _defaultList;
+            set
+            {
+                _defaultList = value;
+                OnPropertyChanged(nameof(DefaultList));
             }
         }
 

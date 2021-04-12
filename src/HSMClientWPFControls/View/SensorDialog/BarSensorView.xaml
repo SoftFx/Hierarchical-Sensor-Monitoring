@@ -8,6 +8,7 @@
              xmlns:oxy="http://oxyplot.org/wpf"
              xmlns:series="clr-namespace:OxyPlot.Series;assembly=OxyPlot"
              xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
+             xmlns:controls="clr-namespace:HSMClientWPFControls.View.SensorDialog.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
     <DockPanel MinWidth="600" MinHeight="450">
@@ -29,7 +30,9 @@
                     </oxy:Plot>
                 </TabItem>
                 <TabItem Header="Raw view">
-                    <src:DefaultValuesListSensorView></src:DefaultValuesListSensorView>
+                    <controls:ValuesListControl Items="{Binding DefaultList}">
+
+                    </controls:ValuesListControl>
                 </TabItem>
             </TabControl>
             
