@@ -2,9 +2,9 @@ syntax = "proto3";
 
 option csharp_namespace = "HSMService";
 
-import "Protos/empty.proto";
-import "Protos/any.proto";
-import "Protos/timestamp.proto";
+import "empty.proto";
+import "any.proto";
+import "timestamp.proto";
 
 package HSMService;
 
@@ -63,6 +63,7 @@ enum SensorObjectType {
 	OBJECT_TYPE_STRING_SENSOR = 4;
 	OBJECT_TYPE_BAR_DOUBLE_SENSOR = 5;
 	OBJECT_TYPE_BAR_INT_SENSOR = 6;
+	OBJECT_TYPE_FILE_SENSOR = 7;
 }
 
 enum SensorStatus {

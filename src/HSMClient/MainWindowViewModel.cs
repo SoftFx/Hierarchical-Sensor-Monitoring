@@ -106,6 +106,8 @@ namespace HSMClient
                 typeof(ClientBarSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.FileSensor, typeof(object),
+                typeof(ClientFileSensorModel));
 
             _monitoringTree.SensorExpandingService = expandingService;
 

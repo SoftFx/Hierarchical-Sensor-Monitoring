@@ -65,9 +65,12 @@ namespace HSMClientWPFControls.SensorExpandingService
                 viewModel = new DefaultValuesListSensorViewModel(model);
             }
 
-            string title = $"{sensor.Product}/{sensor.Path}";
-            DialogWindow dw = new DialogWindow(view, viewModel, title);
-            dw.Show();
+            if (VVMTypes.ViewType != typeof(object))
+            {
+                string title = $"{sensor.Product}/{sensor.Path}";
+                DialogWindow dw = new DialogWindow(view, viewModel, title);
+                dw.Show();
+            }
         }
     }
 }

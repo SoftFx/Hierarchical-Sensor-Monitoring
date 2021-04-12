@@ -6,6 +6,7 @@ using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
+using HSMServer.Products;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -43,6 +44,7 @@ namespace HSMServer
 
             //services.AddSingleton<IDatabaseClass, DatabaseClass>();
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
+            services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<UserManager>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();

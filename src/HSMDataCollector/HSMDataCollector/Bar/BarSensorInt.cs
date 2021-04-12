@@ -36,7 +36,7 @@ namespace HSMDataCollector.Bar
         {
             try
             {
-                IntBarSensorValue dataObject = GetDataObject();
+                IntBarSensorValue dataObject = GetPartialDataObject();
                 CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
                 return commonValue;
             }

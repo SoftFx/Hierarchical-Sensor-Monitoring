@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Keys;
 using HSMServer.DataLayer;
@@ -11,7 +10,7 @@ using Product = HSMServer.DataLayer.Model.Product;
 
 namespace HSMServer.Products
 {
-    public class ProductManager
+    public class ProductManager : IProductManager
     {
         private readonly IDatabaseClass _database;
         private readonly Logger _logger;
@@ -161,6 +160,19 @@ namespace HSMServer.Products
 
             Task.Run(() => _database.AddNewSensorToList(productName, path));
         }
+
+        public void AddSensorIfNotRegistered(string productName, string path)
+        {
+            lock (_dictionaryLock)
+            {
+                if (!_productSensorsDictionary.ContainsKey(productName))
+                {
+                    _productSensorsDictionary[productName] = new List<string>();
+                }
+                _productSensorsDictionary[productName].Add(path);
+            }
+        }
+
         public void AddSensor(SensorInfo sensorInfo)
         {
             lock (_dictionaryLock)

@@ -191,6 +191,29 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
+        /// Receives the value of file sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("file")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
+        {
+            try
+            {
+                _monitoringCore.AddSensorValue(sensorValue);
+                return Ok(sensorValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
+
+        /// <summary>
         /// Endpoint used by HSMDataCollector services, which sends data in portions
         /// </summary>
         /// <param name="values"></param>
@@ -203,7 +226,6 @@ namespace HSMServer.Controllers
         {
             if (values != null)
             {
-                _logger.Info($"Received list with {values.Count()} values");
                 try
                 {
                     _monitoringCore.AddSensorsValues(values);

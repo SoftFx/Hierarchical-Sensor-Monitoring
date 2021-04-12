@@ -120,6 +120,8 @@ namespace HSMServer.MonitoringServerCore
                     return SensorType.DoubleBarSensor;
                 case SensorObjectType.ObjectTypeBarIntSensor:
                     return SensorType.IntegerBarSensor;
+                case SensorObjectType.ObjectTypeFileSensor:
+                    return SensorType.FileSensor;
                 default:
                     throw new InvalidEnumArgumentException($"Invalid SensorDataType: {type}");
             }
@@ -181,6 +183,20 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
+        public static SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
+        {
+            FillCommonFields(sensorValue, timeCollected, out var result);
+            result.DataType = SensorType.FileSensor;
+            result.Status = sensorValue.Status;
+
+            FileSensorData typedData = new FileSensorData()
+            {
+                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileBytes = sensorValue.FileBytes
+            };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
+
+        }
         public static SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
@@ -289,6 +305,16 @@ namespace HSMServer.MonitoringServerCore
             return update;
         }
 
+        public static SensorUpdateMessage Convert(FileSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var update);
+            update.ShortValue = GetShortValue(value, timeCollected);
+            update.ObjectType = SensorObjectType.ObjectTypeFileSensor;
+            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+            update.Status = Convert(value.Status);
+
+            return update;
+        }
         public static SensorUpdateMessage Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
         {
             SensorUpdateMessage update;
@@ -376,6 +402,11 @@ namespace HSMServer.MonitoringServerCore
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
                             return $"Time: {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}";
                         }
+                    case SensorType.FileSensor:
+                        {
+                            FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                            return $"Time: {timeCollected:G}. File with length of {fileData.FileBytes.Length} received.";
+                        }
                     default:
                         throw new ApplicationException($"Unknown data type: {sensorType}!");
                 }
@@ -405,6 +436,10 @@ namespace HSMServer.MonitoringServerCore
             return $"Time: {timeCollected:G}. Value = {value.StringValue}";
         }
 
+        private static string GetShortValue(FileSensorValue value, DateTime timeCollected)
+        {
+            return $"Time: {timeCollected:G}. File with length of {value.FileBytes.Length} received.";
+        }
         private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
         {
             return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
@@ -473,6 +508,8 @@ namespace HSMServer.MonitoringServerCore
                     return SensorObjectType.ObjectTypeBarIntSensor;
                 case SensorType.DoubleBarSensor:
                     return SensorObjectType.ObjectTypeBarDoubleSensor;
+                case SensorType.FileSensor:
+                    return SensorObjectType.ObjectTypeFileSensor;
             }
             throw new Exception($"Unknown SensorDataType = {type}!");
         }

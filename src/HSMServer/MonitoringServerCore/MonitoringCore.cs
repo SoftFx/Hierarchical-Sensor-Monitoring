@@ -71,11 +71,12 @@ namespace HSMServer.MonitoringServerCore
         private readonly IMonitoringQueueManager _queueManager;
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
-        private readonly ProductManager _productManager;
+        private readonly IProductManager _productManager;
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage)
+        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage,
+            IProductManager productManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _database = database;
@@ -84,7 +85,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager = new CertificateManager();
             _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
-            _productManager = new ProductManager(_database);
+            _productManager = productManager;
             _logger.Debug("Monitoring core initialized");
         }
 
@@ -111,16 +112,27 @@ namespace HSMServer.MonitoringServerCore
                 }
             }
         }
+        /// <summary>
+        /// Simply save the given sensorValue
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
-            if (!_productManager.IsSensorRegistered(productName, dataObject.Path))
-            {
-                _productManager.AddSensor(productName, dataObject.Path);
-            }
-
+            _productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
             Task.Run(() => _database.WriteSensorData(dataObject, productName));
         }
 
+        /// <summary>
+        /// Use this method for sensors, for which only last value is stored
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
+        private void SaveOneValueSensorValue(SensorDataObject dataObject, string productName)
+        {
+            _productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
+            Task.Run(() => _database.WriteOneValueSensorData(dataObject, productName));
+        }
         private async Task<bool> SaveSensorValueAsync(SensorDataObject dataObject, string productName)
         {
             try
@@ -174,13 +186,14 @@ namespace HSMServer.MonitoringServerCore
             {
                 if (value == null)
                 {
+                    _logger.Warn("Received null value in list!");
                     continue;
                 }
                 switch (value.SensorType)
                 {
                     case SensorType.IntegerBarSensor:
                     {
-                        var typedValue = Converter.GetIntBarSensorValue(value.TypedValue.Replace("\\", ""));
+                        var typedValue = Converter.GetIntBarSensorValue(value.TypedValue);
                         AddSensorValue(typedValue);
                         break;
                     }
@@ -204,7 +217,7 @@ namespace HSMServer.MonitoringServerCore
                     }
                     case SensorType.BooleanSensor:
                     {
-                        var typedValue = Converter.GetBoolSensorValue(value.TypedValue.Replace("\\", ""));
+                        var typedValue = Converter.GetBoolSensorValue(value.TypedValue);
                         AddSensorValue(typedValue);
                         break;
                     }
@@ -220,106 +233,149 @@ namespace HSMServer.MonitoringServerCore
 
         public void AddSensorValue(BoolSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
 
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
         public void AddSensorValue(IntSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
 
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
 
         public void AddSensorValue(DoubleSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
 
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
 
         public void AddSensorValue(StringSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
 
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
 
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
 
+        public void AddSensorValue(FileSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
+
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
         public void AddSensorValue(IntBarSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
-
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
-
-            //Skip 
-            if (value.EndTime == DateTime.MinValue)
+            try
             {
-                _barsStorage.Add(value, updateMessage.Product, timeCollected);
-                return;
-            }
+                string productName = _productManager.GetProductNameByKey(value.Key);
 
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
+
+                //Skip 
+                if (value.EndTime == DateTime.MinValue)
+                {
+                    _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                    return;
+                }
+                
+                _barsStorage.Remove(productName, value.Path);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
 
         public void AddSensorValue(DoubleBarSensorValue value)
         {
-            string productName = _productManager.GetProductNameByKey(value.Key);
-
-            DateTime timeCollected = DateTime.Now;
-            SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
-            _queueManager.AddSensorData(updateMessage);
-
-            if (value.EndTime == DateTime.MinValue)
+            try
             {
-                _barsStorage.Add(value, updateMessage.Product, timeCollected);
-                return;
+                string productName = _productManager.GetProductNameByKey(value.Key);
+
+                DateTime timeCollected = DateTime.Now;
+                SensorUpdateMessage updateMessage = Converter.Convert(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
+
+                if (value.EndTime == DateTime.MinValue)
+                {
+                    _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                    return;
+                }
+
+                _barsStorage.Remove(productName, value.Path);
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
             }
-
-            SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-            ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
-            //SaveSensorValue(dataObject, productName);
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
         }
-
-
-        //public string AddSensorInfo(NewJobResult value)
-        //{
-        //    SensorUpdateMessage updateMessage = Converter.Convert(value);
-        //    _queueManager.AddSensorData(updateMessage);
-
-        //    var convertedInfo = Converter.ConvertToInfo(value);
-            
-        //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.AddSensor(convertedInfo));
-        //    //DatabaseClass.Instance.AddSensor(convertedInfo);
-        //    return key;
-        //}
 
         #endregion
 

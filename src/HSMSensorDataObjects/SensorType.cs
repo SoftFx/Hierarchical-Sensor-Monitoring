@@ -46,6 +46,15 @@ namespace HSMSensorDataObjects
         /// All values must have type double
         /// </summary>
         [EnumMember]
-        DoubleBarSensor = 5
+        DoubleBarSensor = 5,
+        
+        /// <summary>
+        /// The sensor has a file data in its' value, the file data is stored in the database like the other sensors' data
+        /// Only the last value for file sensors is stored due to possible size of files
+        /// May be used to store different reports, graphs, etc.
+        /// Data object also includes file extension, so the client app automatically opens the file using a proper program
+        /// </summary>
+        [EnumMember]
+        FileSensor = 6
     }
 }

@@ -236,10 +236,26 @@ namespace HSMServer.DataLayer
 
         public void WriteSensorData(SensorDataObject dataObject, string productName)
         {
-            _logger.Info($"Writing value for sensor {dataObject.Path}");
             try
             {
                 var key = GetSensorWriteValueKey(productName, dataObject.Path, dataObject.TimeCollected);
+                string value = JsonSerializer.Serialize(dataObject);
+                lock (_accessLock)
+                {
+                    _database.Put(key, value);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
+            }
+        }
+
+        public void WriteOneValueSensorData(SensorDataObject dataObject, string productName)
+        {
+            try
+            {
+                var key = GetOneValueSensorWriteKey(productName, dataObject.Path);
                 string value = JsonSerializer.Serialize(dataObject);
                 lock (_accessLock)
                 {
@@ -410,6 +426,11 @@ namespace HSMServer.DataLayer
         {
             return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}";
         }
+
+        private string GetOneValueSensorWriteKey(string productName, string path)
+        {
+            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{DateTime.MaxValue:G}_{DateTime.MaxValue.Ticks}";
+        }
         private string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
             return
@@ -424,6 +445,7 @@ namespace HSMServer.DataLayer
         {
             return $"{PrefixConstants.PRODUCT_INFO_PREFIX}_{name}";
         }
+
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)
         {
             string str = Encoding.UTF8.GetString(keyBytes);
