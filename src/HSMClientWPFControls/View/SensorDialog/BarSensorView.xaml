@@ -16,13 +16,13 @@
             <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}"></TextBox>
         </StackPanel>
         <DockPanel>
-            <oxy:Plot>
+            <oxy:Plot Name="Plot">
                 <oxy:Plot.Axes>
                     <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom" />
                     <oxy:LinearAxis Title="Values" />
                 </oxy:Plot.Axes>
                 <oxy:Plot.Series>
-                    <oxy:BoxPlotSeries Name="BoxPlotSeries" WhiskerWidth="0.005" BoxWidth="{Binding BoxWidth}" Title="Values" ShowBox="True" ItemsSource="{Binding Items}" Fill="LightCoral" />
+                    <oxy:BoxPlotSeries Name="BoxPlotSeries" WhiskerWidth="0.005" BoxWidth="{Binding BoxWidth}" Title="Values" ShowBox="True"  ItemsSource="{Binding Items}" Fill="LightBlue" />
                 </oxy:Plot.Series>
             </oxy:Plot>
             <!--<lvc:CartesianChart Name="Chart">

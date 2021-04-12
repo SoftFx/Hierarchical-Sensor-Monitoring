@@ -8,7 +8,6 @@ using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
-using HSMClientWPFControls.ViewModel.SensorDialog;
 using HSMCommon.Model;
 
 namespace HSMClient
@@ -103,9 +102,11 @@ namespace HSMClient
             //expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(DefaultValuesListSensorView),
             //    typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(BarSensorView),
-                typeof(ClientBarSensorModel));
-            expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
+                typeof(ClientIntBarSensorModel));
+            //expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
+            //    typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(BarSensorView),
+                typeof(ClientDoubleBarSensorModel));
             expandingService.RegisterDialog(SensorTypes.FileSensor, typeof(object),
                 typeof(ClientFileSensorModel));
 

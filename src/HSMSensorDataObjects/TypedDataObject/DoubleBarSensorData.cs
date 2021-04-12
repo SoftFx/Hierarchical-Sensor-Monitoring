@@ -24,5 +24,7 @@ namespace HSMSensorDataObjects.TypedDataObject
         public DateTime StartTime { get; set; }
         [DataMember]
         public DateTime EndTime { get; set; }
+        [DataMember]
+        public double LastValue { get; set; }
     }
 }

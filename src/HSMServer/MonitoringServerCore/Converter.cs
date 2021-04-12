@@ -72,6 +72,11 @@ namespace HSMServer.MonitoringServerCore
             return JsonSerializer.Deserialize<DoubleBarSensorValue>(json);
         }
 
+        public static FileSensorValue GetFileSensorValue(string json)
+        {
+            return JsonSerializer.Deserialize<FileSensorValue>(json);
+        }
+
         #endregion
 
         #region Convert to history items
@@ -212,6 +217,7 @@ namespace HSMServer.MonitoringServerCore
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
                 Percentiles = sensorValue.Percentiles,
+                LastValue = sensorValue.LastValue
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             result.Status = sensorValue.Status;
@@ -234,6 +240,7 @@ namespace HSMServer.MonitoringServerCore
                 StartTime = sensorValue.StartTime,
                 EndTime = sensorValue.EndTime,
                 Percentiles = sensorValue.Percentiles,
+                LastValue = sensorValue.LastValue
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             result.Status = sensorValue.Status;
@@ -395,12 +402,12 @@ namespace HSMServer.MonitoringServerCore
                     case SensorType.IntegerBarSensor:
                         {
                             IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}";
+                            return $"Time: {timeCollected:G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}";
                         }
                     case SensorType.DoubleBarSensor:
                         {
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}";
+                            return $"Time: {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}";
                         }
                     case SensorType.FileSensor:
                         {
@@ -442,12 +449,12 @@ namespace HSMServer.MonitoringServerCore
         }
         private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
+            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
         }
 
         private static string GetShortValue(DoubleBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}";
+            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
         }
         #endregion
 
