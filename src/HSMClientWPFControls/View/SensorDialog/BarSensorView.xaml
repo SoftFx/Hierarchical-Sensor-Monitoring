@@ -16,15 +16,23 @@
             <TextBox Margin="5,0,0,0" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}"></TextBox>
         </StackPanel>
         <DockPanel>
-            <oxy:Plot Name="Plot">
-                <oxy:Plot.Axes>
-                    <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom" />
-                    <oxy:LinearAxis Title="Values" />
-                </oxy:Plot.Axes>
-                <oxy:Plot.Series>
-                    <oxy:BoxPlotSeries Name="BoxPlotSeries" WhiskerWidth="0.005" BoxWidth="{Binding BoxWidth}" Title="Values" ShowBox="True"  ItemsSource="{Binding Items}" Fill="LightBlue" />
-                </oxy:Plot.Series>
-            </oxy:Plot>
+            <TabControl>
+                <TabItem Header="Graph view">
+                    <oxy:Plot Name="Plot">
+                        <oxy:Plot.Axes>
+                            <oxy:DateTimeAxis Title="Time" StringFormat="HH:mm:ss" Position="Bottom" />
+                            <oxy:LinearAxis Title="Values" />
+                        </oxy:Plot.Axes>
+                        <oxy:Plot.Series>
+                            <oxy:BoxPlotSeries Name="BoxPlotSeries" WhiskerWidth="0.005" BoxWidth="{Binding BoxWidth}" Title="Values" ShowBox="True"  ItemsSource="{Binding Items}" Fill="LightBlue" />
+                        </oxy:Plot.Series>
+                    </oxy:Plot>
+                </TabItem>
+                <TabItem Header="Raw view">
+                    <src:DefaultValuesListSensorView></src:DefaultValuesListSensorView>
+                </TabItem>
+            </TabControl>
+            
             <!--<lvc:CartesianChart Name="Chart">
                 <lvc:CartesianChart.AxisX>
                     <lvc:Axis Labels="{Binding Labels}" DisableAnimations="True" />
