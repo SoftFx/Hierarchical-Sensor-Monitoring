@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using HSMDataCollector.Base;
 using HSMDataCollector.Core;
@@ -12,8 +13,8 @@ namespace HSMDataCollector.Bar
         private Timer _smallTimer;
         protected object _syncObject;
         protected DateTime barStart;
-        private TimeSpan _barTimerSpan;
-        private TimeSpan _smallTimerSpan;
+        private int _barTimerPeriod;
+        private int _smallTimerPeriod;
         /// <summary>
         /// </summary>
         /// <param name="path"></param>
@@ -21,37 +22,74 @@ namespace HSMDataCollector.Bar
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds.</param>
         /// <param name="smallPeriod">The sensor sends intermediate bar data every smallPeriod time.</param>
         protected BarSensorBase(string path, string productKey,
-            IValuesQueue queue, TimeSpan barTimerPeriod, TimeSpan smallTimerPeriod)
+            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod)
             : base(path, productKey, queue)
         {
             _syncObject = new object();
-            _barTimerSpan = barTimerPeriod;
-            _smallTimerSpan = smallTimerPeriod;
-            StartTimer(_barTimerSpan, _smallTimerSpan);
+            _barTimerPeriod = barTimerPeriod;
+            _smallTimerPeriod = smallTimerPeriod;
+            StartTimer(_barTimerPeriod, _smallTimerPeriod);
         }
         protected abstract void SendDataTimer(object state);
         protected abstract void SmallTimerTick(object state);
 
         public void Restart(int barPeriod, int smallPeriod)
         {
-            Restart(TimeSpan.FromMilliseconds(barPeriod), TimeSpan.FromMilliseconds(smallPeriod));
+            RestartInternal(barPeriod, smallPeriod);
         }
-        public void Restart(TimeSpan barTimerSpan, TimeSpan smallTimerSpan)
+        public void RestartInternal(int barTimerPeriod, int smallTimerPeriod)
         {
-            if (_barTimerSpan != barTimerSpan || _smallTimerSpan != smallTimerSpan)
+            if (_barTimerPeriod != barTimerPeriod || _smallTimerPeriod != smallTimerPeriod)
             {
-                _barTimerSpan = barTimerSpan;
-                _smallTimerSpan = smallTimerSpan;
-                StartTimer(_barTimerSpan, _smallTimerSpan);
+                _barTimerPeriod = barTimerPeriod;
+                _smallTimerPeriod = smallTimerPeriod;
+                StartTimer(_barTimerPeriod, _smallTimerPeriod);
             }
         }
-        private void StartTimer(TimeSpan barTimeSpan, TimeSpan smallTimerSpan)
+        private void StartTimer(int barTimePeriod, int smallTimerPeriod)
         {
             _barTimer?.Dispose();
             _smallTimer?.Dispose();
-            _barTimer = new Timer(SendDataTimer, null, barTimeSpan, barTimeSpan);
-            _smallTimer = new Timer(SmallTimerTick, null, smallTimerSpan, smallTimerSpan);
+            _smallTimer = new Timer(SmallTimerTick, null, TimeSpan.FromMilliseconds(smallTimerPeriod), TimeSpan.FromMilliseconds(smallTimerPeriod));
+
+            _barTimer = new Timer(SendDataTimer, null, GetSpanUntilFirstTick(barTimePeriod), TimeSpan.FromMilliseconds(barTimePeriod));
             barStart = DateTime.Now;
+        }
+
+        private TimeSpan GetSpanUntilFirstTick(int period)
+        {
+            DateTime firstTime = DateTime.MinValue;
+            if (period == 3600000)
+            {
+                firstTime = DateTime.Now.AddHours(1).Subtract(TimeSpan.FromMinutes(DateTime.Now.Minute)).Subtract(TimeSpan.FromSeconds(DateTime.Now.Second));
+            }
+
+            if (period == 1800000)
+            {
+                firstTime = DateTime.Now.AddMinutes(30 - DateTime.Now.Minute % 30)
+                    .Subtract(TimeSpan.FromSeconds(DateTime.Now.Second));
+            }
+
+            if (period == 600000)
+            {
+                firstTime = DateTime.Now.AddMinutes(10 - DateTime.Now.Minute % 10).Subtract(TimeSpan.FromSeconds(DateTime.Now.Second));
+            }
+
+            if (period == 300000)
+            {
+                firstTime = DateTime.Now.AddMinutes(5 - DateTime.Now.Minute % 5).Subtract(TimeSpan.FromSeconds(DateTime.Now.Second));
+            }
+
+            if (period == 60000)
+            {
+                firstTime = DateTime.Now.AddMinutes(1).Subtract(TimeSpan.FromSeconds(DateTime.Now.Second));
+            }
+
+            if (firstTime != DateTime.MinValue)
+            {
+                return firstTime - DateTime.Now;
+            }
+            return TimeSpan.FromMilliseconds(period);
         }
         protected void Stop()
         {
