@@ -16,17 +16,10 @@ namespace HSMDataCollector.Bar
     public class BarSensorInt : BarSensorBase, IIntBarSensor
     {
         private readonly List<int> ValuesList;
-        public BarSensorInt(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
-            int smallPeriod = 15000)
-            : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
-                TimeSpan.FromMilliseconds(smallPeriod))
-        {
-            
-        }
-
+        
         public BarSensorInt(string path, string productKey, IValuesQueue queue,
-            TimeSpan collectPeriod,
-            TimeSpan smallPeriod) : base(path, productKey, queue, collectPeriod,
+            int collectPeriod = 300000,
+            int smallPeriod = 15000) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
             ValuesList = new List<int>();

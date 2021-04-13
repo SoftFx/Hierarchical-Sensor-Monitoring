@@ -17,17 +17,10 @@ namespace HSMDataCollector.Bar
     {
         private readonly List<double> ValuesList;
         private readonly int _precision;
-        public BarSensorDouble(string path, string productKey, IValuesQueue queue, int collectPeriod = 300000,
-            int smallPeriod = 15000, int precision = 2)
-            : this(path, productKey, queue, TimeSpan.FromMilliseconds(collectPeriod),
-                TimeSpan.FromMilliseconds(smallPeriod), precision)
-        {
-                        
-        }
 
         public BarSensorDouble(string path, string productKey, IValuesQueue queue,
-            TimeSpan collectPeriod,
-            TimeSpan smallPeriod, int precision) : base(path, productKey, queue, collectPeriod,
+            int collectPeriod = 300000,
+            int smallPeriod = 15000, int precision = 2) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
             ValuesList = new List<double>();

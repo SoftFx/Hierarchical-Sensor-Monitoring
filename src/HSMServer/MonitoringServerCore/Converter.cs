@@ -81,6 +81,50 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to history items
 
+        public static SensorHistoryMessage Convert(ExtendedBarSensorData data)
+        {
+            switch (data.ValueType)
+            {
+                case SensorType.DoubleBarSensor:
+                    return Convert(data.Value as DoubleBarSensorValue, data.TimeCollected);
+                case SensorType.IntegerBarSensor:
+                    return Convert(data.Value as IntBarSensorValue, data.TimeCollected);
+                default:
+                    return null;
+            }
+        }
+
+        private static SensorHistoryMessage Convert(IntBarSensorValue value, DateTime timeCollected)
+        {
+            SensorHistoryMessage result = new SensorHistoryMessage();
+            try
+            {
+                result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
+                result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
+                result.Type = SensorObjectType.ObjectTypeBarIntSensor;
+            }
+            catch (Exception e)
+            {
+
+            }
+            return result;
+        }
+
+        private static SensorHistoryMessage Convert(DoubleBarSensorValue value, DateTime timeCollected)
+        {
+            SensorHistoryMessage result = new SensorHistoryMessage();
+            try
+            {
+                result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
+                result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
+                result.Type = SensorObjectType.ObjectTypeBarDoubleSensor;
+            }
+            catch (Exception e)
+            {
+
+            }
+            return result;
+        }
         public static SensorHistoryMessage Convert(SensorDataObject dataObject)
         {
             SensorHistoryMessage result = new SensorHistoryMessage();
@@ -207,6 +251,27 @@ namespace HSMServer.MonitoringServerCore
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.IntegerBarSensor;
 
+            IntBarSensorData typedData = ToTypedData(sensorValue);
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
+            return result;
+        }
+
+        public static SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        {
+            SensorDataObject result;
+            FillCommonFields(sensorValue, timeCollected, out result);
+            result.DataType = SensorType.DoubleBarSensor;
+
+            DoubleBarSensorData typedData = ToTypedData(sensorValue);
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            result.Status = sensorValue.Status;
+            return result;
+        }
+
+
+        private static IntBarSensorData ToTypedData(IntBarSensorValue sensorValue)
+        {
             IntBarSensorData typedData = new IntBarSensorData()
             {
                 Max = sensorValue.Max,
@@ -219,17 +284,11 @@ namespace HSMServer.MonitoringServerCore
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
-            result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = sensorValue.Status;
-            return result;
+            return typedData;
         }
 
-        public static SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        private static DoubleBarSensorData ToTypedData(DoubleBarSensorValue sensorValue)
         {
-            SensorDataObject result;
-            FillCommonFields(sensorValue, timeCollected, out result);
-            result.DataType = SensorType.DoubleBarSensor;
-
             DoubleBarSensorData typedData = new DoubleBarSensorData()
             {
                 Max = sensorValue.Max,
@@ -242,11 +301,8 @@ namespace HSMServer.MonitoringServerCore
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
-            result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = sensorValue.Status;
-            return result;
+            return typedData;
         }
-
         #endregion
 
 
