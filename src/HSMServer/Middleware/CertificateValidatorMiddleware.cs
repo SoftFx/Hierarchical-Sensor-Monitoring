@@ -10,7 +10,6 @@ namespace HSMServer.Middleware
     public class CertificateValidatorMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly ILogger _logger;
         private readonly ClientCertificateValidator _validator;
         private readonly UserManager _userManager;
 
@@ -19,8 +18,6 @@ namespace HSMServer.Middleware
             _next = next;
             _validator = validator;
             _userManager = userManager;
-            _logger = LogManager.GetCurrentClassLogger();
-            _logger.Info("Certificate validation middleware created.");
         }
 
         public async Task InvokeAsync(HttpContext context)
