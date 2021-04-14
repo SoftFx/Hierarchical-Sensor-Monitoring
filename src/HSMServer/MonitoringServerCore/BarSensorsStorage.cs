@@ -124,6 +124,19 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
-        
+
+        public void Dispose()
+        {
+            _checkOutdatedTimer?.Dispose();
+            lock (_syncObject)
+            {
+                foreach (var pair in _lastValues)
+                {
+                    var data = pair.Value;
+                    _lastValues.Remove(pair.Key);
+                    OnIncompleteBarOutdated(data);
+                }
+            }
+        }
     }
 }

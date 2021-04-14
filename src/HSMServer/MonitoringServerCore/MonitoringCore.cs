@@ -505,5 +505,11 @@ namespace HSMServer.MonitoringServerCore
 
 
         #endregion
+
+        public void Dispose()
+        {
+            _barsStorage?.Dispose();
+            _database?.Dispose();
+        }
     }
 }
