@@ -1,8 +1,9 @@
 ﻿using System.Collections.Generic;
+using System.Security.Claims;
 
 namespace HSMServer.Authentication
 {
-    public class User
+    public class User : ClaimsPrincipal
     {
         public string UserName { get; set; }
         public string CertificateThumbprint { get; set; }

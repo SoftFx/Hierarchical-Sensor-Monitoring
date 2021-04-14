@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using System.Threading.Tasks;
+using HSMServer.Authentication;
 using HSMServer.Configuration;
 using Microsoft.AspNetCore.Http;
 using NLog;
@@ -11,11 +12,13 @@ namespace HSMServer.Middleware
         private readonly RequestDelegate _next;
         private readonly ILogger _logger;
         private readonly ClientCertificateValidator _validator;
+        private readonly UserManager _userManager;
 
-        public CertificateValidatorMiddleware(RequestDelegate next, ClientCertificateValidator validator)
+        public CertificateValidatorMiddleware(RequestDelegate next, ClientCertificateValidator validator, UserManager userManager)
         {
             _next = next;
             _validator = validator;
+            _userManager = userManager;
             _logger = LogManager.GetCurrentClassLogger();
             _logger.Info("Certificate validation middleware created.");
         }
@@ -35,6 +38,8 @@ namespace HSMServer.Middleware
                     //await context.ForbidAsync();
                     return;
                 }
+
+                context.User = _userManager.GetUserByCertificateThumbprint(certificate.Thumbprint);
             }
 
             await _next(context);
