@@ -163,13 +163,25 @@ namespace HSMServer.Products
 
         public void AddSensorIfNotRegistered(string productName, string path)
         {
+            bool needToAdd = false;
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                 {
                     _productSensorsDictionary[productName] = new List<string>();
+                    needToAdd = true;
                 }
-                _productSensorsDictionary[productName].Add(path);
+
+                if (!_productSensorsDictionary[productName].Contains(path))
+                {
+                    _productSensorsDictionary[productName].Add(path);
+                    needToAdd = true;
+                }
+            }
+
+            if (needToAdd)
+            {
+                Task.Run(() => _database.AddNewSensorToList(productName, path));
             }
         }
 

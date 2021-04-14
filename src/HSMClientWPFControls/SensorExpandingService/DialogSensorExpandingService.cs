@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model.SensorDialog;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.View.SensorDialog;

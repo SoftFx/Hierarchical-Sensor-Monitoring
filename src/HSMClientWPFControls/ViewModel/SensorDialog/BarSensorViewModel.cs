@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Text;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Model.SensorDialog;
 using LiveCharts.Defaults;
 using OxyPlot.Series;
@@ -73,6 +72,24 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
                     model.Labels = value;
                 }
                 OnPropertyChanged(nameof(Labels));
+            }
+        }
+
+        public Collection<DefaultSensorModel> DefaultList
+        {
+            get
+            {
+                var model = Model as IBarSensorModel;
+                return model?.DefaultList;
+            }
+            set
+            {
+                var model = Model as IBarSensorModel;
+                if (model != null)
+                {
+                    model.DefaultList = value;
+                }
+                OnPropertyChanged(nameof(DefaultList));
             }
         }
         public Collection<BoxPlotItem> Items

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using HSMClient.Common.Logging;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model.SensorDialog;

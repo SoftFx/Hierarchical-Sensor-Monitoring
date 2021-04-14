@@ -421,7 +421,15 @@ namespace HSMServer.MonitoringServerCore
             {
                 dataList = dataList.TakeLast((int)n).ToList();
             }
-            sensorsUpdate.Sensors.AddRange(dataList.Select(Converter.Convert));
+
+            var finalList = dataList.Select(Converter.Convert).ToList();
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null)
+            {
+                finalList.Add(Converter.Convert(lastValue));
+            }
+
+            sensorsUpdate.Sensors.AddRange(n == -1 ? finalList : finalList.TakeLast((int) n));
             return sensorsUpdate;
         }
 

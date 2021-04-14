@@ -8,7 +8,6 @@ using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.SensorExpandingService;
 using HSMClientWPFControls.View.SensorDialog;
 using HSMClientWPFControls.ViewModel;
-using HSMClientWPFControls.ViewModel.SensorDialog;
 using HSMCommon.Model;
 
 namespace HSMClient
@@ -88,24 +87,26 @@ namespace HSMClient
             DialogSensorExpandingService expandingService = new DialogSensorExpandingService(factory);
             //expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(DefaultValuesListSensorView),
             //    typeof(DefaultValuesListSensorView));
-            expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(BoolSensorView),
-                typeof(ClientBoolSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BoolSensor, typeof(NumericSensorView),
+                typeof(ClientBoolTimeValueModel));
             //expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(DefaultValuesListSensorView),
             //    typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.IntSensor, typeof(NumericSensorView),
-                typeof(ClientNumericTimeValueModel));
-            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
-            //expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(NumericSensorView),
-            //    typeof(ClientNumericTimeValueModel));
+                typeof(ClientIntTimeValueModel));
+            //expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(DefaultValuesListSensorView),
+            //    typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.DoubleSensor, typeof(NumericSensorView),
+                typeof(ClientDoubleTimeValueModel));
             expandingService.RegisterDialog(SensorTypes.StringSensor, typeof(DefaultValuesListSensorView),
                 typeof(ClientDefaultValuesListSensorModel));
             //expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(DefaultValuesListSensorView),
             //    typeof(ClientDefaultValuesListSensorModel));
             expandingService.RegisterDialog(SensorTypes.BarIntSensor, typeof(BarSensorView),
-                typeof(ClientBarSensorModel));
-            expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
-                typeof(ClientDefaultValuesListSensorModel));
+                typeof(ClientIntBarSensorModel));
+            //expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(DefaultValuesListSensorView),
+            //    typeof(ClientDefaultValuesListSensorModel));
+            expandingService.RegisterDialog(SensorTypes.BarDoubleSensor, typeof(BarSensorView),
+                typeof(ClientDoubleBarSensorModel));
             expandingService.RegisterDialog(SensorTypes.FileSensor, typeof(object),
                 typeof(ClientFileSensorModel));
 
