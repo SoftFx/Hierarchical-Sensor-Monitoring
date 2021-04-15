@@ -29,7 +29,7 @@ namespace HSMClient.Dialog
             CheckFilesFolder();
             string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _filesFolderName,
                 $"{DateTime.Now.Ticks}.{typedData.Extension}");
-            File.WriteAllBytes(filePath, typedData.FileBytes);
+            File.WriteAllText(filePath, typedData.FileContent);
             Process process = new Process() {StartInfo = new ProcessStartInfo(filePath) {UseShellExecute = true}};
             process.Start();
         }

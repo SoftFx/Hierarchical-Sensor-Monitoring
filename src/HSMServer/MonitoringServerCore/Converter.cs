@@ -240,7 +240,7 @@ namespace HSMServer.MonitoringServerCore
 
             FileSensorData typedData = new FileSensorData()
             {
-                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileBytes = sensorValue.FileBytes
+                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
@@ -468,7 +468,7 @@ namespace HSMServer.MonitoringServerCore
                     case SensorType.FileSensor:
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
-                            return $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData.FileBytes.Length} received.";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData.FileContent.Length} received.";
                         }
                     default:
                         throw new ApplicationException($"Unknown data type: {sensorType}!");
@@ -481,36 +481,106 @@ namespace HSMServer.MonitoringServerCore
         }
         private static string GetShortValue(BoolSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}";
+            string result = string.Empty;
+            try
+            {
+                result =  $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e,"Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(IntSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(DoubleSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(StringSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(FileSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileBytes.Length} received.";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received.";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
         private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(DoubleBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
         #endregion
 

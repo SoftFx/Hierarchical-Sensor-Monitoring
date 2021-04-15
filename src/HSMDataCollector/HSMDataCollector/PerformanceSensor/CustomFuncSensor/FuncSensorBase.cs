@@ -11,11 +11,11 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
     {
         protected Func<T> Function;
         protected Timer _valuesTimer;
-        internal FuncSensorBase(Func<T> function)
+        internal FuncSensorBase(Func<T> function, int timeout = 150000)
         {
             Function = function;
         }
 
-
+        //private void 
     }
 }

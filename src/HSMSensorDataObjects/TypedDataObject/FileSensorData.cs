@@ -10,6 +10,6 @@ namespace HSMSensorDataObjects.TypedDataObject
         [DataMember]
         public string Extension { get; set; }
         [DataMember]
-        public byte[] FileBytes { get; set; }
+        public string FileContent { get; set; }
     }
 }
