@@ -30,9 +30,7 @@
                     </oxy:Plot>
                 </TabItem>
                 <TabItem Header="Raw view">
-                    <controls:ValuesListControl Items="{Binding DefaultList}">
-
-                    </controls:ValuesListControl>
+                    <controls:ValuesListControl Items="{Binding Path=DefaultList}" />
                 </TabItem>
             </TabControl>
             

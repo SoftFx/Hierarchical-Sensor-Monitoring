@@ -5,12 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:HSMClientWPFControls.View.SensorDialog.Controls"
              xmlns:model="clr-namespace:HSMClientWPFControls.Model"
+             x:Name="ListControl"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
-    <ListView DockPanel.Dock="Bottom" Margin="10" ItemsSource="{Binding Items}">
+             d:DesignHeight="450" d:DesignWidth="800" Height="Auto">
+    <ListView DockPanel.Dock="Bottom" Margin="10" ItemsSource="{Binding ElementName=ListControl, Path=Items}" >
         <ListView.Resources>
             <DataTemplate DataType="{x:Type model:DefaultSensorModel}">
-                <StackPanel Margin="0,0,0,5">
+                <StackPanel Margin="0,0,0,5" >
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Margin="1,1,1,5">Time:</TextBlock>
                         <TextBlock Text="{Binding TimeString}"/>
@@ -20,5 +21,17 @@
                 </StackPanel>
             </DataTemplate>
         </ListView.Resources>
+        <ListView.ItemContainerStyle>
+            <Style TargetType="ListViewItem">
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="IsSelected" Value="True" />
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="False">
+                        <Setter Property="IsSelected" Value="False" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ListView.ItemContainerStyle>
     </ListView>
 </UserControl>

@@ -129,10 +129,22 @@ namespace HSMClient.Dialog
             if (list.Count < 1)
                 return;
 
+            list.Reverse();
             Items = ConvertToBoxPlotItems(list);
-
+            DefaultList = ConvertToDefaultSensorModels(list);
         }
 
         protected abstract Collection<BoxPlotItem> ConvertToBoxPlotItems(List<SensorHistoryItem> historyItems);
+
+        private Collection<DefaultSensorModel> ConvertToDefaultSensorModels(List<SensorHistoryItem> historyItems)
+        {
+            Collection<DefaultSensorModel> result = new Collection<DefaultSensorModel>();
+            foreach (var item in historyItems)
+            {
+                result.Add(new DefaultSensorModel(item));
+            }
+
+            return result;
+        }
     }
 }
