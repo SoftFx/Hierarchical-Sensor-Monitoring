@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
 using HSMClientWPFControls.ConnectorInterface;
+using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMSensorDataObjects.TypedDataObject;
@@ -21,14 +22,14 @@ namespace HSMClient.Dialog
 
         protected override Collection<BoxPlotItem> ConvertToBoxPlotItems(List<SensorHistoryItem> historyItems)
         {
-            historyItems.Reverse();
+            //historyItems.Reverse();
             List<DoubleBarSensorData> serializedData = RangeByTime(historyItems);
             Collection<BoxPlotItem> result = new Collection<BoxPlotItem>();
             FillCollection(result, serializedData);
 
             return result;
         }
-
+        
         private List<DoubleBarSensorData> RangeByTime(List<SensorHistoryItem> historyItems)
         {
             var serializedList = historyItems.Select(l => JsonSerializer.Deserialize<DoubleBarSensorData>(l.SensorValue)).ToList();
