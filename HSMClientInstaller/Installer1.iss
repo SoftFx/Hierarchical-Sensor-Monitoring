@@ -9,13 +9,13 @@
 [Setup]
 AppId={{8FB93B9E-B78C-4B1F-9C19-4BD0663B985C}
 AppName=HSMClient
-AppVerName=HSMClient 1.0.1
+AppVerName=HSMClient 1.3.2
 DefaultDirName={pf64}\HSMClient
 DefaultGroupName=HSMClient
 AppPublisher=Soft-FX
 
 ;InfoBeforeFile=
-OutputBaseFilename=HSMClient_setup_1.0.1
+OutputBaseFilename=HSMClient_setup_1.3.2
 ;SetupIconFile=
 ;UninstallDisplayIcon=
 DisableProgramGroupPage=yes
