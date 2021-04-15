@@ -148,8 +148,8 @@ namespace HSMServer.MonitoringServerCore
         {
             dataObject = new SensorDataObject();
             dataObject.Path = value.Path;
-            dataObject.Time = value.Time;
-            dataObject.TimeCollected = timeCollected;
+            dataObject.Time = value.Time.ToUniversalTime();
+            dataObject.TimeCollected = timeCollected.ToUniversalTime();
             dataObject.Timestamp = GetTimestamp(value.Time);
         }
 
@@ -240,7 +240,7 @@ namespace HSMServer.MonitoringServerCore
 
             FileSensorData typedData = new FileSensorData()
             {
-                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileBytes = sensorValue.FileBytes
+                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
@@ -279,8 +279,8 @@ namespace HSMServer.MonitoringServerCore
                 Mean = sensorValue.Mean,
                 Count = sensorValue.Count,
                 Comment = sensorValue.Comment,
-                StartTime = sensorValue.StartTime,
-                EndTime = sensorValue.EndTime,
+                StartTime = sensorValue.StartTime.ToUniversalTime(),
+                EndTime = sensorValue.EndTime.ToUniversalTime(),
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
@@ -296,8 +296,8 @@ namespace HSMServer.MonitoringServerCore
                 Mean = sensorValue.Mean,
                 Count = sensorValue.Count,
                 Comment = sensorValue.Comment,
-                StartTime = sensorValue.StartTime,
-                EndTime = sensorValue.EndTime,
+                StartTime = sensorValue.StartTime.ToUniversalTime(),
+                EndTime = sensorValue.EndTime.ToUniversalTime(),
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
@@ -438,37 +438,37 @@ namespace HSMServer.MonitoringServerCore
                     case SensorType.BooleanSensor:
                         {
                             BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value = {boolData.BoolValue}";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}";
                         }
                     case SensorType.IntSensor:
                         {
                             IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value = {intData.IntValue}";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}";
                         }
                     case SensorType.DoubleSensor:
                         {
                             DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value = {doubleData.DoubleValue}";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}";
                         }
                     case SensorType.StringSensor:
                         {
                             StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value = '{stringTypedData.StringValue}'";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}'";
                         }
                     case SensorType.IntegerBarSensor:
                         {
                             IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}";
                         }
                     case SensorType.DoubleBarSensor:
                         {
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}";
                         }
                     case SensorType.FileSensor:
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
-                            return $"Time: {timeCollected:G}. File with length of {fileData.FileBytes.Length} received.";
+                            return $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData.FileContent.Length} received.";
                         }
                     default:
                         throw new ApplicationException($"Unknown data type: {sensorType}!");
@@ -481,36 +481,106 @@ namespace HSMServer.MonitoringServerCore
         }
         private static string GetShortValue(BoolSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value = {value.BoolValue}";
+            string result = string.Empty;
+            try
+            {
+                result =  $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e,"Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(IntSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value = {value.IntValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(DoubleSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value = {value.DoubleValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(StringSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value = {value.StringValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(FileSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. File with length of {value.FileBytes.Length} received.";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received.";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
         private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
 
         private static string GetShortValue(DoubleBarSensorValue value, DateTime timeCollected)
         {
-            return $"Time: {timeCollected:G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            string result = string.Empty;
+            try
+            {
+                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
         }
         #endregion
 

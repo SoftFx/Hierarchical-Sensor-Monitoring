@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
@@ -7,7 +8,7 @@ using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public interface IMonitoringCore
+    public interface IMonitoringCore : IDisposable
     {
         //public void AddSensorValue(JobResult value);
         public void AddSensorsValues(IEnumerable<CommonSensorValue> values);

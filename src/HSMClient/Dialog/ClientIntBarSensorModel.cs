@@ -20,7 +20,7 @@ namespace HSMClient.Dialog
 
         protected override Collection<BoxPlotItem> ConvertToBoxPlotItems(List<SensorHistoryItem> historyItems)
         {
-            historyItems.Reverse();
+            //historyItems.Reverse();
             List<IntBarSensorData> serializedData = RangeByTime(historyItems);
             Collection<BoxPlotItem> result = new Collection<BoxPlotItem>();
             FillCollection(result, serializedData);

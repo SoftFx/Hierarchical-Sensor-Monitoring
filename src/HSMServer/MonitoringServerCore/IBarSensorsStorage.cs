@@ -4,7 +4,7 @@ using HSMServer.Model;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public interface IBarSensorsStorage
+    public interface IBarSensorsStorage : IDisposable
     {
         void Add(IntBarSensorValue value, string product, DateTime timeCollected);
         void Add(DoubleBarSensorValue value, string product, DateTime timeCollected);

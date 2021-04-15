@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using HSMServer.Authentication;
 using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
@@ -18,6 +20,7 @@ namespace HSMServer
 {
     public class Startup
     {
+        private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddAuthentication(options =>
@@ -69,9 +72,14 @@ namespace HSMServer
                 var xmlPath = Path.Combine(basePath, "HSMServer.xml");
                 options.IncludeXmlComments(xmlPath, true);
             });
+
+            this.services = services;
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)
         {
+            var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
+            lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
+
             app.UseCertificateValidator();
 
             app.UseSwagger(c =>
@@ -112,13 +120,18 @@ namespace HSMServer
             app.UseHttpsRedirection();
 
             //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
-
-            lifetime.ApplicationStopping.Register(OnShutdown);
         }
 
-        public void OnShutdown()
+        public void OnShutdown(object state)
         {
-            Console.WriteLine("Stopping application");
+            var serviceProvider = (IServiceProvider) state;
+            var objectToDispose = services
+                .Where(s => s.Lifetime == ServiceLifetime.Singleton
+                            && s.ImplementationInstance != null
+                            && s.ServiceType.GetInterfaces().Contains(typeof(IMonitoringCore)))
+                .Select(s => s.ImplementationInstance as IMonitoringCore).First();
+
+            objectToDispose.Dispose();
             System.Diagnostics.Process.GetCurrentProcess().Kill();
         }
     }
