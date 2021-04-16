@@ -40,7 +40,10 @@ namespace HSMServer
             });
 
 
-            services.AddGrpc();
+            services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
+            {
+                options.MaxSendMessageSize = 20 * 1024 * 1024;
+            });
             services.AddControllers();
 
             services.AddCors();

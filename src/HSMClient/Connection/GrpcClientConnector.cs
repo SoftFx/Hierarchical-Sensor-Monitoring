@@ -43,7 +43,7 @@ namespace HSMClient.Connection
             _channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
             {
                 HttpHandler = handler,
-                
+                MaxReceiveMessageSize = 20 * 1024 * 1024
             });
 
             _sensorsClient = new Sensors.SensorsClient(_channel);
