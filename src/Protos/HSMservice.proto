@@ -14,6 +14,8 @@ service Sensors {
 	rpc GetMonitoringUpdates (google.protobuf.Empty) returns (SensorsUpdateMessage);
 	//rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorsUpdateMessage);
 	rpc GetSensorHistory (GetSensorHistoryMessage) returns (SensorHistoryListMessage);
+	rpc GetFileSensorStream (GetFileSensorValueMessage) returns (stream FileStreamMessage);
+	rpc GetFileSensorExtension (GetFileSensorValueMessage) returns (HSMService.StringMessage);
 
 	//Products methods
 	rpc GetProductsList (google.protobuf.Empty) returns (ProductsListMessage);
@@ -107,6 +109,17 @@ message SensorHistoryMessage {
 	string typedData = 3; 
 }
 
+message GetFileSensorValueMessage {
+	string product = 1;
+	string path = 2;
+}
+
+message FileStreamMessage {
+	int32 blockIndex = 1;
+	int32 blockSize = 2;
+	bytes bytesData = 3;
+}
+
 //Products
 message ProductsListMessage {
 	repeated ProductDataMessage products = 1;
@@ -191,4 +204,9 @@ message RSAParameters {
 message SignedCertificateMessage {
 	bytes signedCertificateBytes = 1;
 	bytes caCertificateBytes = 2;
+}
+
+//Base messages
+message StringMessage {
+	string data = 1;
 }

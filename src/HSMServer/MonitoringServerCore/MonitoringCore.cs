@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Certificates;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -431,6 +433,41 @@ namespace HSMServer.MonitoringServerCore
 
             sensorsUpdate.Sensors.AddRange(n == -1 ? finalList : finalList.TakeLast((int) n));
             return sensorsUpdate;
+        }
+
+        public string GetFileSensorValue(User user, string product, string path)
+        {
+            List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
+            if (historyList.Count < 1)
+            {
+                return string.Empty;
+            }
+
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            if (typedData == null)
+            {
+                return string.Empty;
+            }
+
+            return typedData.FileContent;
+        }
+
+        public StringMessage GetFileSensorValueExtension(User user, string product, string path)
+        {
+            StringMessage result = new StringMessage();
+            string content = string.Empty;
+            List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
+            if (historyList.Count > 1)
+            {
+                var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+                if (typedData != null)
+                {
+                    content = typedData.Extension;
+                }
+            }
+
+            result.Data = content;
+            return result;
         }
 
         public ProductsListMessage GetProductsList(User user)

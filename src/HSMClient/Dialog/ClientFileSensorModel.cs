@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows.Input;
 using HSMClientWPFControls.ConnectorInterface;
+using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMSensorDataObjects.TypedDataObject;
 
@@ -33,13 +34,17 @@ namespace HSMClient.Dialog
 
             if (string.IsNullOrEmpty(existingFile))
             {
-                var items = _connector.GetSensorHistory(_product, _path, _name, -1);
-                if (items.Count < 1)
+                //byte[] fileBytes = _connector.GetFileSensorValueBytes(_product, _path);
+                //string stringData = Encoding.UTF8.GetString(fileBytes);
+                //string extension = _connector.GetFileSensorValueExtension(_product, _path);
+                List<SensorHistoryItem> historyItems = _connector.GetSensorHistory(_product, _path, _name, 1);
+                if (historyItems.Count < 1)
                     return;
 
-                var item = items[0];
-                var typedData = JsonSerializer.Deserialize<FileSensorData>(item.SensorValue);
 
+                var typedData = JsonSerializer.Deserialize<FileSensorData>(historyItems[0].SensorValue);
+                //filePath = $"{filePath}.{extension}";
+                //File.WriteAllText(filePath, stringData);
                 filePath = $"{filePath}.{typedData.Extension}";
                 File.WriteAllText(filePath, typedData.FileContent);
             }

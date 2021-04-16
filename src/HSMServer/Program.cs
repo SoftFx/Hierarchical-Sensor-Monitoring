@@ -68,6 +68,7 @@ namespace HSMServer
                                 portOptions.ServerCertificate = Config.ServerCertificate;
                             });
                         });
+                        options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
                     });
                     webBuilder.UseStartup<Startup>();
                 })
