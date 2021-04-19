@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Windows.Input;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Objects;
@@ -21,7 +22,7 @@ namespace HSMClient.Dialog
         {
             _folderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _filesFolderName);
             _viewModel = sensor;
-            ExpandValue();
+            ThreadPool.QueueUserWorkItem(_ => ExpandValue());
         }
 
         private void ExpandValue()
@@ -34,19 +35,19 @@ namespace HSMClient.Dialog
 
             if (string.IsNullOrEmpty(existingFile))
             {
-                //byte[] fileBytes = _connector.GetFileSensorValueBytes(_product, _path);
-                //string stringData = Encoding.UTF8.GetString(fileBytes);
-                //string extension = _connector.GetFileSensorValueExtension(_product, _path);
-                List<SensorHistoryItem> historyItems = _connector.GetSensorHistory(_product, _path, _name, 1);
-                if (historyItems.Count < 1)
-                    return;
+                byte[] fileBytes = _connector.GetFileSensorValueBytes(_product, _path);
+                string stringData = Encoding.UTF8.GetString(fileBytes);
+                string extension = _connector.GetFileSensorValueExtension(_product, _path);
+                //List<SensorHistoryItem> historyItems = _connector.GetSensorHistory(_product, _path, _name, 1);
+                //if (historyItems.Count < 1)
+                //    return;
 
 
-                var typedData = JsonSerializer.Deserialize<FileSensorData>(historyItems[0].SensorValue);
-                //filePath = $"{filePath}.{extension}";
-                //File.WriteAllText(filePath, stringData);
-                filePath = $"{filePath}.{typedData.Extension}";
-                File.WriteAllText(filePath, typedData.FileContent);
+                //var typedData = JsonSerializer.Deserialize<FileSensorData>(historyItems[0].SensorValue);
+                filePath = $"{filePath}.{extension}";
+                File.WriteAllText(filePath, stringData);
+                //filePath = $"{filePath}.{typedData.Extension}";
+                //File.WriteAllText(filePath, typedData.FileContent);
             }
             else
             {

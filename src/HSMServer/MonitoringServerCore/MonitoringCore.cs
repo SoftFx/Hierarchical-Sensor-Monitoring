@@ -457,7 +457,7 @@ namespace HSMServer.MonitoringServerCore
             StringMessage result = new StringMessage();
             string content = string.Empty;
             List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
-            if (historyList.Count > 1)
+            if (historyList.Count > 0)
             {
                 var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
                 if (typedData != null)
