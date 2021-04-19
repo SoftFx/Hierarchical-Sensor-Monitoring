@@ -8,7 +8,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
 {
     internal class BoolFuncSensor : FuncSensorBase<bool>
     {
-        public BoolFuncSensor(Func<bool> function, string path, string productKey, IValuesQueue queue, int timeout = 150000) : base(function, path, productKey, queue, timeout)
+        public BoolFuncSensor(Func<bool> function, string path, string productKey, IValuesQueue queue, int timeout = 15000) : base(function, path, productKey, queue, timeout)
         {
         }
 

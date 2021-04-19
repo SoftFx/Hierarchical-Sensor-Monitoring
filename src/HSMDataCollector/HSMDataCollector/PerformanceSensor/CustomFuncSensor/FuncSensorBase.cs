@@ -10,7 +10,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
     {
         protected Func<T> Function;
         protected Timer _valuesTimer;
-        internal FuncSensorBase(Func<T> function, string path, string productKey, IValuesQueue queue,int timeout = 150000)
+        internal FuncSensorBase(Func<T> function, string path, string productKey, IValuesQueue queue,int timeout = 15000)
             : base(path, productKey, queue)
         {
             Function = function;
