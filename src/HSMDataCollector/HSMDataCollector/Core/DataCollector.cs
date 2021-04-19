@@ -16,6 +16,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using HSMDataCollector.DefaultValueSensor;
+using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using Newtonsoft.Json;
@@ -93,6 +94,15 @@ namespace HSMDataCollector.Core
         {
             
         }
+
+        public void MonitorServiceAlive()
+        {
+            string path = $"{TextConstants.PerformanceNodeName}/Service alive";
+            BoolFuncSensor aliveSensor = new BoolFuncSensor(() => true, path, _productKey,
+                _dataQueue as IValuesQueue);
+            AddNewSensor(aliveSensor, path);
+        }
+
         public IBoolSensor CreateBoolSensor(string path)
         {
             var existingSensor = GetExistingSensor(path);
