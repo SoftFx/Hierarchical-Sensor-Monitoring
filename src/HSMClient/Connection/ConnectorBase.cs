@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using HSMClientWPFControls.ConnectorInterface;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
@@ -24,6 +25,8 @@ namespace HSMClient.Connection
         public abstract ProductInfo AddNewProduct(string name);
         public abstract bool RemoveProduct(string name);
         public abstract List<SensorHistoryItem> GetSensorHistory(string product, string path, string name, long n);
+        public abstract byte[] GetFileSensorValueBytes(string product, string path);
+        public abstract string GetFileSensorValueExtension(string product, string path);
         public abstract X509Certificate2 GetSignedClientCertificate(CreateCertificateModel model,
              out X509Certificate2 caCertificate);
 

@@ -17,6 +17,7 @@ namespace HSMClientWPFControls.ViewModel
         private string _message;
         private Dictionary<string, string> _validationParams;
         private string _path;
+        private MonitoringSensorUpdate _sensorUpdate;
         public MonitoringSensorViewModel(MonitoringSensorUpdate sensorUpdate, MonitoringNodeBase parent = null)
         {
             _lastStatusUpdate = DateTime.Now;
@@ -27,6 +28,7 @@ namespace HSMClientWPFControls.ViewModel
             _sensorType = sensorUpdate.SensorType;
             _path = ConvertPathToString(sensorUpdate.Path);
             ShortValue = sensorUpdate.ShortValue;
+            _sensorUpdate = sensorUpdate;
         }
         public MonitoringSensorViewModel(string name, MonitoringNodeBase parent = null)
         {
@@ -111,9 +113,10 @@ namespace HSMClientWPFControls.ViewModel
         }
         public SensorTypes SensorType => _sensorType;
         public string Path => _path;
-
+        public MonitoringSensorUpdate SensorUpdate => _sensorUpdate;
         public void Update(MonitoringSensorUpdate sensorUpdate)
         {
+            _sensorUpdate = sensorUpdate;
             ShortValue = sensorUpdate.ShortValue;
         }
 

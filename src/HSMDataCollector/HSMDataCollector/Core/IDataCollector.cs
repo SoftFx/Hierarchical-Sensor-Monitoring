@@ -39,6 +39,10 @@ namespace HSMDataCollector.Core
         /// <param name="isMemory">Specifies whether the sensor for the specified process RAM (in mb) is created</param>
         /// <param name="isThreads">Specifies whether the sensor for the specified process thread count is created</param>
         void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads);
+        /// <summary>
+        /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
+        /// </summary>
+        void MonitorServiceAlive();
         IBoolSensor CreateBoolSensor(string path);
         IDoubleSensor CreateDoubleSensor(string path);
         IIntSensor CreateIntSensor(string path);

@@ -186,6 +186,21 @@
         <member name="F:HSMService.SensorHistoryMessage.TypedDataFieldNumber">
             <summary>Field number for the "typedData" field.</summary>
         </member>
+        <member name="F:HSMService.GetFileSensorValueMessage.ProductFieldNumber">
+            <summary>Field number for the "product" field.</summary>
+        </member>
+        <member name="F:HSMService.GetFileSensorValueMessage.PathFieldNumber">
+            <summary>Field number for the "path" field.</summary>
+        </member>
+        <member name="F:HSMService.FileStreamMessage.BlockIndexFieldNumber">
+            <summary>Field number for the "blockIndex" field.</summary>
+        </member>
+        <member name="F:HSMService.FileStreamMessage.BlockSizeFieldNumber">
+            <summary>Field number for the "blockSize" field.</summary>
+        </member>
+        <member name="F:HSMService.FileStreamMessage.BytesDataFieldNumber">
+            <summary>Field number for the "bytesData" field.</summary>
+        </member>
         <member name="T:HSMService.ProductsListMessage">
              <summary>
             Products
@@ -310,6 +325,14 @@
         </member>
         <member name="F:HSMService.SignedCertificateMessage.CaCertificateBytesFieldNumber">
             <summary>Field number for the "caCertificateBytes" field.</summary>
+        </member>
+        <member name="T:HSMService.StringMessage">
+             <summary>
+            Base messages
+             </summary>
+        </member>
+        <member name="F:HSMService.StringMessage.DataFieldNumber">
+            <summary>Field number for the "data" field.</summary>
         </member>
         <member name="P:HSMService.Sensors.Descriptor">
             <summary>Service descriptor</summary>

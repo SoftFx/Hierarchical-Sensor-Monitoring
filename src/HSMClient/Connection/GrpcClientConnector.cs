@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -43,7 +46,8 @@ namespace HSMClient.Connection
             _channel = GrpcChannel.ForAddress(sensorsUrl, new GrpcChannelOptions()
             {
                 HttpHandler = handler,
-                
+                MaxReceiveMessageSize = 40 * 1024 * 1024,
+                MaxSendMessageSize = 40 * 1024 * 1024,
             });
 
             _sensorsClient = new Sensors.SensorsClient(_channel);
@@ -113,6 +117,43 @@ namespace HSMClient.Connection
             convertedList.Sort((u1,u2) => u2.Time.CompareTo(u1.Time));
             return convertedList;
         }
+
+        public override string GetFileSensorValueExtension(string product, string path)
+        {
+            GetFileSensorValueMessage request = new GetFileSensorValueMessage() {Path = path, Product = product};
+            return _sensorsClient.GetFileSensorExtension(request).Data;
+        }
+
+        public override byte[] GetFileSensorValueBytes(string product, string path)
+        {
+            return GetFileSensorValueBytesAsync(product, path).Result;
+        }
+
+        private async Task<byte[]> GetFileSensorValueBytesAsync(string product, string path)
+        {
+            var cts = new CancellationTokenSource();
+
+            using var stream = new MemoryStream();
+            GetFileSensorValueMessage request = new GetFileSensorValueMessage() { Path = path, Product = product };
+            using (var streamingCall = _sensorsClient.GetFileSensorStream(request))
+            {
+                try
+                {
+                    await foreach (var val in streamingCall.ResponseStream.ReadAllAsync(cts.Token))
+                    {
+                        byte[] currentBytes = val.BytesData.ToByteArray();
+                        stream.Write(currentBytes, 0, currentBytes.Length);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Error($"Error while loading file for {product}/{path}: {e}");
+                }
+            }
+
+            return stream.ToArray();
+        }
+
 
         public override ClientVersionModel GetLastAvailableVersion()
         {

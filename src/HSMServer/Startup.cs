@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using HSMServer.Authentication;
 using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
@@ -40,7 +39,12 @@ namespace HSMServer
             });
 
 
-            services.AddGrpc();
+            services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
+            {
+                options.MaxSendMessageSize = 40 * 1024 * 1024;
+                options.MaxReceiveMessageSize = 40 * 1024 * 1024;
+                options.EnableDetailedErrors = true;
+            });
             services.AddControllers();
 
             services.AddCors();
@@ -75,7 +79,7 @@ namespace HSMServer
 
             this.services = services;
         }       
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
             lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);

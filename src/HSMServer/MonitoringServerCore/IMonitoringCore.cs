@@ -27,6 +27,8 @@ namespace HSMServer.MonitoringServerCore
         public SensorsUpdateMessage GetSensorUpdates(User user);
         public SensorsUpdateMessage GetSensorsTree(User user);
         public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
+        public string GetFileSensorValue(User user, string product, string path);
+        public StringMessage GetFileSensorValueExtension(User user, string product, string path);
         public ProductsListMessage GetProductsList(User user);
         public AddProductResultMessage AddProduct(User user, string productName);
         public RemoveProductResultMessage RemoveProduct(User user, string productName);

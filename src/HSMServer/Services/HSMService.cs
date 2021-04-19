@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Text;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using HSMServer.Authentication;
@@ -13,7 +15,7 @@ namespace HSMServer.Services
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;
-
+        private const int BLOCK_SIZE = 1048576;
         public HSMService(IMonitoringCore monitoringCore)
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -41,6 +43,48 @@ namespace HSMServer.Services
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
             return Task.FromResult(_monitoringCore.GetSensorHistory(httpContext.User as User, request.Name, request.Path, request.Product, request.N));
+        }
+
+        public override async Task GetFileSensorStream(GetFileSensorValueMessage request, IServerStreamWriter<FileStreamMessage> responseStream,
+            ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            var sensorValue = _monitoringCore.GetFileSensorValue(httpContext.User as User, request.Product, request.Path);
+            byte[] bytes = Encoding.UTF8.GetBytes(sensorValue);
+            int count = 0;
+            int currentIndex = 0;
+            int bytesLeft = bytes.Length;
+            while (currentIndex < bytesLeft)
+            {
+                FileStreamMessage message = new FileStreamMessage();
+                if (bytesLeft <= BLOCK_SIZE)
+                {
+                    message.BytesData = ByteString.CopyFrom(bytes);
+                    message.BlockSize = bytesLeft;
+                    message.BlockIndex = count;
+                    currentIndex = bytesLeft;
+                }
+                else
+                {
+                    message.BytesData = ByteString.CopyFrom(bytes[currentIndex..(BLOCK_SIZE + currentIndex)]);
+                    message.BlockIndex = count;
+                    message.BlockSize = BLOCK_SIZE;
+                    bytesLeft = bytesLeft - BLOCK_SIZE;
+                    currentIndex = currentIndex + BLOCK_SIZE;
+                }
+
+                await responseStream.WriteAsync(message);
+
+                ++count;
+            }
+        }
+
+        public override Task<StringMessage> GetFileSensorExtension(GetFileSensorValueMessage request, ServerCallContext context)
+        {
+            var httpContext = context.GetHttpContext();
+            return Task.FromResult(
+                _monitoringCore.GetFileSensorValueExtension(httpContext.User as User, request.Product, request.Path));
         }
 
         public override Task<ProductsListMessage> GetProductsList(Empty request, ServerCallContext context)
