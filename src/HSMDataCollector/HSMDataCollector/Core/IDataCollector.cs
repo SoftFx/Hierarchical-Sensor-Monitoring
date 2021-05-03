@@ -9,6 +9,7 @@ namespace HSMDataCollector.Core
         /// The method sets the sending timer up. No data will be sent without calling this method
         /// </summary>
         void Initialize();
+        void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null);
         /// <summary>
         /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
         /// The method also disposes the HttpClient.

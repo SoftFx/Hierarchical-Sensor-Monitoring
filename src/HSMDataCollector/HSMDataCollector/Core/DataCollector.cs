@@ -20,6 +20,7 @@ using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using Newtonsoft.Json;
+using HSMDataCollector.Logging;
 
 namespace HSMDataCollector.Core
 {
@@ -30,6 +31,7 @@ namespace HSMDataCollector.Core
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
+        private NLog.Logger _logger;
         public DataCollector(string productKey, string address, int port)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
@@ -44,6 +46,22 @@ namespace HSMDataCollector.Core
         }
 
         public event EventHandler ValuesQueueOverflow;
+        //Use after constructor!
+        public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
+        {
+            if (useLogging)
+            {
+                _logger = Logger.Create(nameof(DataCollector));
+
+                Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{TextConstants.LogDefaultFolder}",
+                    fileNameFormat ?? TextConstants.LogFormatFileName);
+            }
+
+            _logger?.Info("Initialize timer...");
+            _dataQueue.InitializeTimer();
+        }
+
+        [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
             _dataQueue.InitializeTimer();
@@ -51,6 +69,8 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
+            _logger?.Info("DataCollector stopping...");
+
             List<CommonSensorValue> allData = new List<CommonSensorValue>();
             if (_dataQueue != null)
             {
@@ -79,6 +99,7 @@ namespace HSMDataCollector.Core
             }
             
             _client.Dispose();
+            _logger?.Info("DataCollector successful stoped.");
         }
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
         {
@@ -98,6 +119,8 @@ namespace HSMDataCollector.Core
         public void MonitorServiceAlive()
         {
             string path = $"{TextConstants.PerformanceNodeName}/Service alive";
+            _logger?.Info($"Initialize {path} sensor...");
+
             BoolFuncSensor aliveSensor = new BoolFuncSensor(() => true, path, _productKey,
                 _dataQueue as IValuesQueue);
             AddNewSensor(aliveSensor, path);
@@ -358,7 +381,9 @@ namespace HSMDataCollector.Core
 
             if (sensor == null && sensor as IPerformanceSensor != null)
             {
-                throw new InvalidSensorPathException($"Path {path} is used by standard performance sensor!");
+                var message = $"Path {path} is used by standard performance sensor!";
+                _logger?.Error(message);
+                throw new InvalidSensorPathException(message);
             }
             return sensor;
         }
@@ -366,6 +391,8 @@ namespace HSMDataCollector.Core
         private void AddNewSensor(ISensor sensor, string path)
         {
             _nameToSensor[path] = sensor;
+
+            _logger?.Info($"Added new sensor {path}");
             //_nameToSensor.AddOrUpdate(path, sensor);
         }
         private int GetCount()
@@ -386,10 +413,16 @@ namespace HSMDataCollector.Core
             try
             {
                 string jsonString = JsonConvert.SerializeObject(values);
+                _logger?.Info("Try to send data: " + jsonString);
+
                 //string jsonString = Serializer.Serialize(values);
                 //byte[] bytesData = Encoding.UTF8.GetBytes(jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
                 var res = _client.PostAsync(_listSendingAddress, data).Result;
+                if (res.IsSuccessStatusCode)
+                    _logger?.Info("Data successful sended.");
+                else
+                    _logger?.Error($"Data doesn't sended. StatusCode={res.StatusCode}, Content={res.Content}");
                 //HttpWebRequest request = (HttpWebRequest) WebRequest.Create(_listSendingAddress);
                 //request.Method = "POST";
                 //request.ContentType = "application/json";
@@ -406,7 +439,8 @@ namespace HSMDataCollector.Core
                 {
                     _dataQueue?.ReturnFailedData(values);
                 }
-                Console.WriteLine($"Failed to send: {e}");
+
+                _logger?.Error($"Failed to send: {e}");
             }
             
         }
