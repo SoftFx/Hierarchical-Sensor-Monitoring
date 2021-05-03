@@ -41,13 +41,6 @@
   <!-- <Exec WorkingDirectory="$(BaseDir)" Command="$(NuGetExePath) pack -OutputDirectory $(OutDir) -Symbols -Prop Configuration=$(Configuration);TargetPath=$(OutDir)$(AssemblyName)$(TargetExt)" /> -->
   <!-- </Target> -->
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>Lib\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="NLog">
-      <HintPath>..\..\..\..\ConsoleApp1\ConsoleApp1\Lib\NLog.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Runtime.Serialization" />
@@ -115,6 +108,12 @@
       <Version>1.0.0</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json">
+      <Version>13.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="NLog">
+      <Version>4.7.9</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup />
