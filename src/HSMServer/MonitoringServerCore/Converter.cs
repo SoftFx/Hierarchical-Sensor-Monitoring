@@ -10,6 +10,7 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
+using HSMServer.Model.SensorsData;
 using HSMService;
 using NLog;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
@@ -308,106 +309,106 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to update messages
 
-        public static SensorUpdateMessage Convert(SensorDataObject dataObject, string productName)
-        {
-            SensorUpdateMessage result = new SensorUpdateMessage();
-            result.Path = dataObject.Path;
-            result.ObjectType = Convert(dataObject.DataType);
-            result.Product = productName;
-            result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
-            result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
-            result.Status = Convert(dataObject.Status);
-            return result;
-        }
+        //public static SensorUpdateMessage Convert(SensorDataObject dataObject, string productName)
+        //{
+        //    SensorUpdateMessage result = new SensorUpdateMessage();
+        //    result.Path = dataObject.Path;
+        //    result.ObjectType = Convert(dataObject.DataType);
+        //    result.Product = productName;
+        //    result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
+        //    result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+        //    result.Status = Convert(dataObject.Status);
+        //    return result;
+        //}
         
-        public static SensorUpdateMessage Convert(BoolSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeBoolSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(BoolSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeBoolSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
+        //    return update;
+        //}
 
-        public static SensorUpdateMessage Convert(IntSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeIntSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(IntSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeIntSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
+        //    return update;
+        //}
 
-        public static SensorUpdateMessage Convert(DoubleSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeDoubleSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(DoubleSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeDoubleSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
+        //    return update;
+        //}
 
-        public static SensorUpdateMessage Convert(StringSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeStringSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(StringSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeStringSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
+        //    return update;
+        //}
 
-        public static SensorUpdateMessage Convert(FileSensorValue value, string productName, DateTime timeCollected)
-        {
-            AddCommonValues(value, productName, timeCollected, out var update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeFileSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(FileSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    AddCommonValues(value, productName, timeCollected, out var update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeFileSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
-        public static SensorUpdateMessage Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeBarIntSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //    return update;
+        //}
+        //public static SensorUpdateMessage Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeBarIntSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
+        //    return update;
+        //}
 
-        public static SensorUpdateMessage Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected)
-        {
-            SensorUpdateMessage update;
-            AddCommonValues(value, productName, timeCollected, out update);
-            update.ShortValue = GetShortValue(value, timeCollected);
-            update.ObjectType = SensorObjectType.ObjectTypeBarDoubleSensor;
-            update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-            update.Status = Convert(value.Status);
+        //public static SensorUpdateMessage Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected)
+        //{
+        //    SensorUpdateMessage update;
+        //    AddCommonValues(value, productName, timeCollected, out update);
+        //    update.ShortValue = GetShortValue(value, timeCollected);
+        //    update.ObjectType = SensorObjectType.ObjectTypeBarDoubleSensor;
+        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
+        //    update.Status = Convert(value.Status);
 
-            return update;
-        }
-        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, out SensorUpdateMessage update)
-        {
-            update = new SensorUpdateMessage();
-            update.Path = value.Path;
-            update.Product = productName;
-            update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
-        }
+        //    return update;
+        //}
+        //private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, out SensorUpdateMessage update)
+        //{
+        //    update = new SensorUpdateMessage();
+        //    update.Path = value.Path;
+        //    update.Product = productName;
+        //    update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
+        //}
 
         private static HSMService.SensorStatus Convert(HSMSensorDataObjects.SensorStatus status)
         {
@@ -427,6 +428,89 @@ namespace HSMServer.MonitoringServerCore
         }
         #endregion
 
+        #region Independent update messages
+
+        public static SensorData Convert(SensorDataObject dataObject, string productName)
+        {
+            SensorData result = new SensorData();
+            result.Path = dataObject.Path;
+            result.SensorType = dataObject.DataType;
+            result.Product = productName;
+            result.Time = dataObject.TimeCollected;
+            result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+            result.Status = dataObject.Status;
+            return result;
+        }
+
+        public static SensorData Convert(BoolSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+
+        public static SensorData Convert(IntSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+
+        public static SensorData Convert(DoubleSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+
+        public static SensorData Convert(StringSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+
+        public static SensorData Convert(FileSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+        public static SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+        public static SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.BooleanSensor;
+            data.Status = value.Status;
+            return data;
+        }
+        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, out SensorData data)
+        {
+            data = new SensorData();
+            data.Path = value.Path;
+            data.Product = productName;
+            data.Time = timeCollected;
+        }
+
+        #endregion
         #region Typed data objects
 
         private static string GetShortValue(string stringData, SensorType sensorType, DateTime timeCollected)
