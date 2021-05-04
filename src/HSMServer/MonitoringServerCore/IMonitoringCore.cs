@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using HSMCommon.Model;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model.SensorsData;
-using HSMService;
+using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -42,8 +44,9 @@ namespace HSMServer.MonitoringServerCore
         public bool AddProduct(User user, string productName, out Product product, out string error);
         //public RemoveProductResultMessage RemoveProduct(User user, string productName);
         public bool RemoveProduct(User user, string productName, out Product product, out string error);
-        public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request);
+        public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
+            RSAParameters rsaParameters);
         //public ClientVersionMessage GetLastAvailableClientVersion();
-        public string GetLastAvailableClientVersion();
+        public ClientVersionModel GetLastAvailableClientVersion();
     }
 }
