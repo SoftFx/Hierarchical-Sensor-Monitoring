@@ -68,6 +68,17 @@ namespace HSMServer
                                 portOptions.ServerCertificate = Config.ServerCertificate;
                             });
                         });
+                        options.Listen(IPAddress.Any, Config.ApiPort, listenOptions =>
+                        {
+                            listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+                            listenOptions.UseHttps(portOptions =>
+                            {
+                                portOptions.CheckCertificateRevocation = false;
+                                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+                                portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+                                portOptions.ServerCertificate = Config.ServerCertificate;
+                            });
+                        });
                         options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
                     });
                     webBuilder.UseStartup<Startup>();
