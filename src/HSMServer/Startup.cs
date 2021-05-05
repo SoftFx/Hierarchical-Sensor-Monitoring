@@ -85,7 +85,6 @@ namespace HSMServer
             lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
             app.UseCertificateValidator();
-            app.UseTokenAuth();
 
             app.UseSwagger(c =>
             {
