@@ -2,7 +2,6 @@
 using System.Net;
 using HSMServer.Authentication;
 using HSMServer.Model.SensorsData;
-using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {

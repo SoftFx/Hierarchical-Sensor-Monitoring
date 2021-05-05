@@ -5,7 +5,6 @@ using System.Net;
 using HSMServer.Authentication;
 using HSMServer.Extensions;
 using HSMServer.Model.SensorsData;
-using HSMService;
 using NLog;
 
 namespace HSMServer.MonitoringServerCore
@@ -66,10 +65,10 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
-        private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
+        //private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        private readonly object _historyAccessLock = new object();
+        //private readonly object _historyAccessLock = new object();
         public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();

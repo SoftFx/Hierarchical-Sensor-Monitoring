@@ -462,7 +462,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.IntSensor;
             data.Status = value.Status;
             return data;
         }
@@ -471,7 +471,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.DoubleSensor;
             data.Status = value.Status;
             return data;
         }
@@ -480,7 +480,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.StringSensor;
             data.Status = value.Status;
             return data;
         }
@@ -489,7 +489,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.FileSensor;
             data.Status = value.Status;
             return data;
         }
@@ -497,7 +497,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.IntegerBarSensor;
             data.Status = value.Status;
             return data;
         }
@@ -505,7 +505,7 @@ namespace HSMServer.MonitoringServerCore
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
-            data.SensorType = SensorType.BooleanSensor;
+            data.SensorType = SensorType.DoubleBarSensor;
             data.Status = value.Status;
             return data;
         }
