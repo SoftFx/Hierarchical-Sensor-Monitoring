@@ -99,7 +99,7 @@ namespace HSMDataCollector.Core
             }
             
             _client.Dispose();
-            _logger?.Info("DataCollector successful stoped.");
+            _logger?.Info("DataCollector successfully stopped.");
         }
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
         {
@@ -413,25 +413,17 @@ namespace HSMDataCollector.Core
             try
             {
                 string jsonString = JsonConvert.SerializeObject(values);
-                _logger?.Info("Try to send data: " + jsonString);
-
-                //string jsonString = Serializer.Serialize(values);
-                //byte[] bytesData = Encoding.UTF8.GetBytes(jsonString);
+                //_logger?.Info("Try to send data: " + jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
                 var res = _client.PostAsync(_listSendingAddress, data).Result;
                 if (res.IsSuccessStatusCode)
-                    _logger?.Info("Data successful sended.");
+                {
+                    //_logger?.Info("Data successfully sent.");
+                }
                 else
-                    _logger?.Error($"Data doesn't sended. StatusCode={res.StatusCode}, Content={res.Content}");
-                //HttpWebRequest request = (HttpWebRequest) WebRequest.Create(_listSendingAddress);
-                //request.Method = "POST";
-                //request.ContentType = "application/json";
-                //using (var stream = request.GetRequestStream())
-                //{
-                //    stream.Write(bytesData, 0, bytesData.Length);
-                //}
-
-                //request.GetResponse();
+                {
+                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content}");
+                }
             }
             catch (Exception e)
             {

@@ -35,5 +35,7 @@ namespace HSMServer.MonitoringServerCore
         public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request);
         public ClientVersionMessage GetLastAvailableClientVersion();
 
+        //
+
     }
 }

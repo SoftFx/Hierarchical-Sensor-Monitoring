@@ -280,11 +280,28 @@ namespace HSMServer.DataLayer
                 {
                     using (var iterator = _database.CreateIterator())
                     {
-                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
-                        {
-                            if (!iterator.Key().StartsWith(searchKey))
-                                continue;
+                        //for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        //{
+                        //    if (!iterator.Key().StartsWith(searchKey))
+                        //        continue;
 
+                        //    try
+                        //    {
+                        //        DateTime currentDateTime = GetTimeFromSensorWriteKey(iterator.Key());
+                        //        if (currentDateTime > lastDateTime)
+                        //        {
+                        //            lastDateTime = currentDateTime;
+                        //            bytesValue = iterator.Value();
+                        //        }
+                        //    }
+                        //    catch (Exception e)
+                        //    {
+                        //        _logger.Error(e, "Failed to read SensorDataObject");
+                        //    }
+
+                        //}
+                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
+                        {
                             try
                             {
                                 DateTime currentDateTime = GetTimeFromSensorWriteKey(iterator.Key());
@@ -298,7 +315,6 @@ namespace HSMServer.DataLayer
                             {
                                 _logger.Error(e, "Failed to read SensorDataObject");
                             }
-
                         }
                     }
                 }
