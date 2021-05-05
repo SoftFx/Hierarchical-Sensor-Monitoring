@@ -28,7 +28,7 @@ namespace HSMDataCollector.Logging
             var config = new NLog.Config.LoggingConfiguration();
             var file = new FileTarget(TextConstants.LogTargetFile)
             {
-                FileName = "${basedir}/logs/${shortdate}.log",
+                FileName = "${basedir}/logs/DataCollector_${shortdate}.log",
                 Layout = "${longdate} [${uppercase:${level}}] ${logger}: ${message}"
             };
 
