@@ -96,29 +96,36 @@ namespace HSMServer.Services
         public override Task<StringMessage> GetFileSensorExtension(GetFileSensorValueMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
-            return Task.FromResult(
-                _monitoringCore.GetFileSensorValueExtension(httpContext.User as User, request.Product, request.Path));
+
+            string extension =
+                _monitoringCore.GetFileSensorValueExtension(httpContext.User as User, request.Product, request.Path);
+            return Task.FromResult(Convert(extension));
         }
 
         public override Task<ProductsListMessage> GetProductsList(Empty request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
-            return Task.FromResult(_monitoringCore.GetProductsList(httpContext.User as User));
+            var list = _monitoringCore.GetProductsList(httpContext.User as User);
+            return Task.FromResult(Convert(list));
         }
 
         public override Task<AddProductResultMessage> AddNewProduct(AddProductMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
-            return Task.FromResult(_monitoringCore.AddProduct(httpContext.User as User, request.Name));
+            bool result =
+                _monitoringCore.AddProduct(httpContext.User as User, request.Name, out var product, out var error);
+            return Task.FromResult(GetAddResultMessage(product, result, error));
         }
 
         public override Task<RemoveProductResultMessage> RemoveProduct(RemoveProductMessage request, ServerCallContext context)
         {
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
-            return Task.FromResult(_monitoringCore.RemoveProduct(httpContext.User as User, request.Name));
+            bool result = _monitoringCore.RemoveProduct(httpContext.User as User, request.Name, out var product,
+                out var error);
+            return Task.FromResult(GetRemoveResultMessage(product, result, error));
         }
 
         public override Task<SignedCertificateMessage> SignClientCertificate(CertificateSignRequestMessage request, ServerCallContext context)
@@ -127,7 +134,9 @@ namespace HSMServer.Services
 
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate
             //    .Thumbprint);
-            return Task.FromResult(_monitoringCore.SignClientCertificate(httpContext.User as User, request));
+            var certs = _monitoringCore.SignClientCertificate(httpContext.User as User, request.Subject,
+                request.CommonName, Convert(request.RSAParameters));
+            return Task.FromResult(Convert(certs.Item1, certs.Item2));
         }
 
         public override Task<ServerAvailableMessage> CheckServerAvailable(Empty request, ServerCallContext context)
@@ -219,7 +228,42 @@ namespace HSMServer.Services
         }
         #endregion
 
+        #region Products
 
+        private ProductsListMessage Convert(List<Product> products)
+        {
+            ProductsListMessage result = new ProductsListMessage();
+            result.Products.AddRange(products.Select(Convert));
+            return result;
+        }
+        private ProductDataMessage Convert(Product product)
+        {
+            ProductDataMessage result = new ProductDataMessage();
+            result.Name = product.Name;
+            result.Key = product.Key;
+            result.DateAdded = product.DateAdded.ToUniversalTime().ToTimestamp();
+            return result;
+        }
+
+        private AddProductResultMessage GetAddResultMessage(Product product, bool success, string error)
+        {
+            AddProductResultMessage result = new AddProductResultMessage();
+            result.Result = success;
+            result.ProductData = Convert(product);
+            result.Error = error;
+            return result;
+        }
+
+        private RemoveProductResultMessage GetRemoveResultMessage(Product product, bool success, string error)
+        {
+            RemoveProductResultMessage result = new RemoveProductResultMessage();
+            result.Result = success;
+            result.ProductData = Convert(product);
+            result.Error = error;
+            return result;
+        }
+
+        #endregion
         private ClientVersionMessage Convert(ClientVersionModel versionModel)
         {
             ClientVersionMessage result = new ClientVersionMessage();
@@ -252,16 +296,7 @@ namespace HSMServer.Services
             result.Q = rsaParameters.Q.ToByteArray();
             return result;
         }
-
-        private ProductDataMessage Convert(Product product)
-        {
-            ProductDataMessage result = new ProductDataMessage();
-            result.Name = product.Name;
-            result.Key = product.Key;
-            result.DateAdded = product.DateAdded.ToUniversalTime().ToTimestamp();
-            return result;
-        }
-
+        
         public GenerateClientCertificateModel Convert(CertificateRequestMessage requestMessage)
         {
             GenerateClientCertificateModel model = new GenerateClientCertificateModel
@@ -276,7 +311,13 @@ namespace HSMServer.Services
             };
             return model;
         }
-        
+
+        public StringMessage Convert(string value)
+        {
+            StringMessage result = new StringMessage();
+            result.Data = value;
+            return result;
+        }
         #endregion
     }
 }
