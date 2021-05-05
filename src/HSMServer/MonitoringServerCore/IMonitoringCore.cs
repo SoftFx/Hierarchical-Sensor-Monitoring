@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using HSMCommon.Model;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Authentication;
-using HSMService;
+using HSMServer.DataLayer.Model;
+using HSMServer.Model.SensorsData;
+using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -24,18 +28,25 @@ namespace HSMServer.MonitoringServerCore
         //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);
-        public SensorsUpdateMessage GetSensorUpdates(User user);
-        public SensorsUpdateMessage GetSensorsTree(User user);
-        public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
+        //public SensorsUpdateMessage GetSensorUpdates(User user);
+        public List<SensorData> GetSensorUpdates(User user);
+        //public SensorsUpdateMessage GetSensorsTree(User user);
+        public List<SensorData> GetSensorsTree(User user);
+        //public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
+        public List<SensorHistoryData> GetSensorHistory(User user, string name, string path, string product,
+            long n = -1);
         public string GetFileSensorValue(User user, string product, string path);
-        public StringMessage GetFileSensorValueExtension(User user, string product, string path);
-        public ProductsListMessage GetProductsList(User user);
-        public AddProductResultMessage AddProduct(User user, string productName);
-        public RemoveProductResultMessage RemoveProduct(User user, string productName);
-        public SignedCertificateMessage SignClientCertificate(User user, CertificateSignRequestMessage request);
-        public ClientVersionMessage GetLastAvailableClientVersion();
-
-        //
-
+        //public StringMessage GetFileSensorValueExtension(User user, string product, string path);
+        public string GetFileSensorValueExtension(User user, string product, string path);
+        //public ProductsListMessage GetProductsList(User user);
+        public List<Product> GetProductsList(User user);
+        //public AddProductResultMessage AddProduct(User user, string productName);
+        public bool AddProduct(User user, string productName, out Product product, out string error);
+        //public RemoveProductResultMessage RemoveProduct(User user, string productName);
+        public bool RemoveProduct(User user, string productName, out Product product, out string error);
+        public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
+            RSAParameters rsaParameters);
+        //public ClientVersionMessage GetLastAvailableClientVersion();
+        public ClientVersionModel GetLastAvailableClientVersion();
     }
 }
