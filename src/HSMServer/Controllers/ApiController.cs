@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using HSMCommon.Model;
+using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
-using HSMServer.Model.SensorsData;
 using HSMServer.MonitoringServerCore;
 using NLog;
 

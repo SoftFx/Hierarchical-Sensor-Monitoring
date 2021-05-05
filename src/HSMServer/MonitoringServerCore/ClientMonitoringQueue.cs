@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Timers;
-using HSMServer.Model.SensorsData;
-using HSMService;
+using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.MonitoringServerCore
 {

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.Extensions;
-using HSMServer.Model.SensorsData;
 using NLog;
 
 namespace HSMServer.MonitoringServerCore

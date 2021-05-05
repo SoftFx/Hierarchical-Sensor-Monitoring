@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Text.Json;
+using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
-using HSMServer.Model.SensorsData;
 using NLog;
 
 namespace HSMServer.MonitoringServerCore

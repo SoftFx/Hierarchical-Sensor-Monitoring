@@ -1,7 +1,7 @@
 ﻿using System;
 using HSMSensorDataObjects;
 
-namespace HSMServer.Model.SensorsData
+namespace HSMCommon.Model.SensorsData
 {
     public class SensorData
     {
