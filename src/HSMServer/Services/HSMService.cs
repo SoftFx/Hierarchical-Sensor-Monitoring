@@ -53,8 +53,8 @@ namespace HSMServer.Services
         {
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
-            var historyList = _monitoringCore.GetSensorHistory(httpContext.User as User, request.Name, request.Path,
-                request.Product, request.N);
+            var historyList = _monitoringCore.GetSensorHistory(httpContext.User as User, request.Path, request.Product,
+                request.N);
             return Task.FromResult(Convert(historyList));
         }
 

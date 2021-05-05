@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using System;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using HSMCommon.Model;
+using HSMServer.Authentication;
+using HSMServer.Model.SensorsData;
 using HSMServer.MonitoringServerCore;
-using HSMService;
 using NLog;
 
 namespace HSMServer.Controllers
@@ -22,16 +21,46 @@ namespace HSMServer.Controllers
             _monitoringCore = monitoringCore;
         }
 
-        //[HttpGet("tree")]
-        //public ActionResult<SensorsUpdateMessage> Get()
-        //{
-            
-        //}
+        [HttpGet("tree")]
+        public ActionResult<List<SensorData>> GetTree()
+        {
+            try
+            {
+                return _monitoringCore.GetSensorsTree(HttpContext.User as User);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e);
+                return BadRequest();
+            }
+        }
 
-        //[HttpGet("updates")]
-        //public ActionResult<SensorsUpdateMessage> Get()
-        //{
+        [HttpGet("updates")]
+        public ActionResult<List<SensorData>> GetUpdates()
+        {
+            try
+            {
+                return _monitoringCore.GetSensorUpdates(HttpContext.User as User);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e);
+                return BadRequest();
+            }
+        }
 
-        //}
+        [HttpGet("history")]
+        public ActionResult<List<SensorHistoryData>> GetHistory([FromBody] GetSensorHistoryModel model)
+        {
+            try
+            {
+                return _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e);
+                return BadRequest();
+            }
+        }
     }
 }

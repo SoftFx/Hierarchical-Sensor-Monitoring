@@ -413,8 +413,11 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(User user, string name, string path, string product,
-            long n = -1)
+        public List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model)
+        {
+            return GetSensorHistory(user, model.Path, model.Product, model.Amount);
+        }
+        public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
         {
             List<SensorHistoryData> historyList = new List<SensorHistoryData>();
             List<SensorDataObject> dataList = _database.GetSensorDataHistory(product, path, n);

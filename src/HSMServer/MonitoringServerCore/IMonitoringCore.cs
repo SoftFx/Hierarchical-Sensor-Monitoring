@@ -33,8 +33,8 @@ namespace HSMServer.MonitoringServerCore
         //public SensorsUpdateMessage GetSensorsTree(User user);
         public List<SensorData> GetSensorsTree(User user);
         //public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
-        public List<SensorHistoryData> GetSensorHistory(User user, string name, string path, string product,
-            long n = -1);
+        public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
+        public List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model);
         public string GetFileSensorValue(User user, string product, string path);
         //public StringMessage GetFileSensorValueExtension(User user, string product, string path);
         public string GetFileSensorValueExtension(User user, string product, string path);
