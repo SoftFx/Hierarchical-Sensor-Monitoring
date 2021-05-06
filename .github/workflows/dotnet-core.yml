@@ -94,7 +94,7 @@ jobs:
       - name: Push SensorDataObjects
         run: nuget push HSMDataCollector.HSMSensorDataObjects*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
       - name: Remove existing nuspec file 
-        run: rm Package.spec
+        run: rm Package.nuspec
               
       - name: Create nuspec file
         run: nuget spec
