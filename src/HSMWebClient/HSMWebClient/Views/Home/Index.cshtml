@@ -1,0 +1,28 @@
+﻿@using HSMWebClient.Models
+@model ConnectionViewModel
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<form method="post" >
+    <label id="URLLabel">
+        URL address:
+        <input id="URL" name="Url" type="text" value="@Model.Url"/>
+    </label>
+
+    <label id="PortLabel">
+        Port:
+        <input id="Port" name="Port" type="number" value="@Model.Port"/>
+    </label>
+
+    <input type="submit" style="text-align: center" value="Submit"/>
+    
+    <hr />
+</form>
+
+<style>
+    body{
+        margin: 10px;
+    }
+</style>
