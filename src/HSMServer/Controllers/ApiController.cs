@@ -21,7 +21,7 @@ namespace HSMServer.Controllers
             _monitoringCore = monitoringCore;
         }
 
-        [HttpGet("tree")]
+        [HttpGet("GetTree")]
         public ActionResult<List<SensorData>> GetTree()
         {
             try
@@ -35,7 +35,7 @@ namespace HSMServer.Controllers
             }
         }
 
-        [HttpGet("updates")]
+        [HttpGet("GetUpdates")]
         public ActionResult<List<SensorData>> GetUpdates()
         {
             try
@@ -49,7 +49,7 @@ namespace HSMServer.Controllers
             }
         }
 
-        [HttpGet("history")]
+        [HttpGet("GetHistory")]
         public ActionResult<List<SensorHistoryData>> GetHistory([FromBody] GetSensorHistoryModel model)
         {
             try
