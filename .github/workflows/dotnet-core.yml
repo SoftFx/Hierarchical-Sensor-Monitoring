@@ -80,7 +80,7 @@ jobs:
         run: sudo apt install  xmlstarlet
         
       - name: Create nuspec file
-        run: nuget spec Force
+        run: nuget spec
       - name: Edit data objects spec file
         env:
           version: ${GITHUB_REF#refs/*/}
