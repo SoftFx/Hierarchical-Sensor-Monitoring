@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using HSMCommon.Extensions;
@@ -79,7 +80,15 @@ namespace HSMServer.DataLayer
             try
             {
                 Options dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
-                _database = new DB(DATABASE_NAME, dbOptions);
+                //Options options = new Options()
+                //{
+                //    CreateIfMissing = true,
+                //    CompressionLevel = CompressionLevel.SnappyCompression,
+                //    BlockSize = 204800,
+                //    WriteBufferSize = 8388608
+                //};
+                _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
+                //_database = new DB(DATABASE_NAME, options);
             }
             catch (Exception e)
             {
@@ -300,7 +309,7 @@ namespace HSMServer.DataLayer
                         //    }
 
                         //}
-                        for (iterator.Seek(searchKey); iterator.Valid() && iterator.Key().StartsWith(searchKey); iterator.Next())
+                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
                         {
                             try
                             {
@@ -339,14 +348,14 @@ namespace HSMServer.DataLayer
                 {
                     using (var iterator = _database.CreateIterator())
                     {
-                        for (iterator.SeekToFirst(); iterator.Valid(); iterator.Next())
+                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
                         {
                             if (!iterator.Key().StartsWith(searchKey))
                                 continue;
 
                             try
                             {
-                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.StringValue());
+                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.ValueAsString());
                                 if (typedValue.Path == path)
                                 {
                                     result.Add(typedValue);
