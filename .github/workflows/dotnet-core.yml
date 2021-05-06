@@ -76,6 +76,8 @@ jobs:
         run: dotnet restore src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
       - name: Build DataCollector
         run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild        
+      - name: install xml editor
+        run: sudo apt install  xmlstarlet
         
       - name: Create nuspec file
         run: nuget spec Force
@@ -93,9 +95,7 @@ jobs:
         run: nuget push HSMDataCollector.HSMSensorDataObjects*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
                      
       - name: Create nuspec file
-        run: nuget spec Force
-      - name: install xml editor
-        run: sudo apt install  xmlstarlet
+        run: nuget spec Force      
       - name: edit nuspec config
         env:
           version: ${GITHUB_REF#refs/*/}
