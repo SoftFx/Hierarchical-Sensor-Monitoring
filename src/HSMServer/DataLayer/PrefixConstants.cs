@@ -9,5 +9,6 @@
         public const string PRODUCTS_LIST_PREFIX = "ProductsNames";
         public const string PRODUCT_INFO_PREFIX = "ProductInfo";
         public const string FIRST_LOGIN_PREFIX = "FirstLogin";
+        public const string USER_INFO_PREFIX = "UserInfo";
     }
 }

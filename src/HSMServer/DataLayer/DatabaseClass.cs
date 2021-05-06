@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Extensions;
+using HSMServer.Authentication;
 using LightningDB;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
@@ -784,6 +785,22 @@ namespace HSMServer.DataLayer
                 _logger.Error(e, $"Failed to remove sensor = {sensorName} for product = {productName}");
             }
         }
+
+        public void AddUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<User> ReadUsers()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
         #endregion
 
         #endregion

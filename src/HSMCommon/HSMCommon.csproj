@@ -25,6 +25,9 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="BouncyCastle.Crypto">
       <HintPath>..\ThirdPartyLib\BouncyCastle.Crypto.dll</HintPath>
     </Reference>

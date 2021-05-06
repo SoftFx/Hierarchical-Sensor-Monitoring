@@ -20,7 +20,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
         {
             try
             {
-                _valuesSensor.AddValue(Math.Round(_internalCounter.NextValue(), 2, MidpointRounding.AwayFromZero));
+                _valuesSensor.AddValue(Math.Round(_internalCounter.NextValue() / Environment.ProcessorCount, 2, MidpointRounding.AwayFromZero));
             }
             catch (Exception e)
             { }

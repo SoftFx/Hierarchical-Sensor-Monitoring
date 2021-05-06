@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Timers;
-using HSMService;
+using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -10,8 +10,8 @@ namespace HSMServer.MonitoringServerCore
         private readonly object _lockObj = new object();
         private readonly string _userName;
         //private readonly Timer _timer;
-        private readonly Queue<SensorUpdateMessage> _monitoringQueue;
-        private readonly List<SensorUpdateMessage> _emptyQueue = new List<SensorUpdateMessage>();
+        private readonly Queue<SensorData> _monitoringQueue;
+        private readonly List<SensorData> _emptyQueue = new List<SensorData>();
         private int _elementsCount;
         private const int ErrorCapacity = 10000;
         private const int WarningCapacity = 5000;
@@ -26,7 +26,7 @@ namespace HSMServer.MonitoringServerCore
         public ClientMonitoringQueue(string userName)
         {
             _userName = userName;
-            _monitoringQueue = new Queue<SensorUpdateMessage>();
+            _monitoringQueue = new Queue<SensorData>();
             _elementsCount = 0;
             //_timer = new Timer(15000);
             //_timer.Elapsed += DisconnectedTimer_Elapsed;
@@ -34,7 +34,7 @@ namespace HSMServer.MonitoringServerCore
             //_timer.Enabled = true;
         }
 
-        public void AddUpdate(SensorUpdateMessage message)
+        public void AddUpdate(SensorData message)
         {
             lock (_lockObj)
             {
@@ -53,13 +53,13 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
-        public List<SensorUpdateMessage> GetSensorUpdateMessages()
+        public List<SensorData> GetSensorsUpdates()
         {
             if (!HasData)
             {
                 return _emptyQueue;
             }
-            List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
+            List<SensorData> updateList = new List<SensorData>();
             lock (_lockObj)
             {
                 for (int i = 0; i < UpdateListCapacity; i++)
@@ -81,13 +81,13 @@ namespace HSMServer.MonitoringServerCore
             return updateList;
         }
 
-        public List<SensorUpdateMessage> GetSensorUpdateMessages(int n)
+        public List<SensorData> GetSensorsUpdates(int n)
         {
             if (!HasData)
             {
                 return _emptyQueue;
             }
-            List<SensorUpdateMessage> updateList = new List<SensorUpdateMessage>();
+            List<SensorData> updateList = new List<SensorData>();
             lock (_lockObj)
             {
                 int loopStepCount = n > UpdateListCapacity ? UpdateListCapacity : n;

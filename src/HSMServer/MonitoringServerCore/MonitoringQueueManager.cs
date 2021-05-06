@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.Extensions;
-using HSMService;
 using NLog;
 
 namespace HSMServer.MonitoringServerCore
@@ -65,10 +65,10 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
-        private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
+        //private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        private readonly object _historyAccessLock = new object();
+        //private readonly object _historyAccessLock = new object();
         public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -77,10 +77,10 @@ namespace HSMServer.MonitoringServerCore
                 _currentSessions = new Dictionary<User, ClientMonitoringQueue>();
             }
             
-            lock (_historyAccessLock)
-            {
-                _historySessions = new Dictionary<UserSensorKey, HistoryMonitoringQueue>(new UserSensorKey.EqualityComparer());
-            }
+            //lock (_historyAccessLock)
+            //{
+            //    _historySessions = new Dictionary<UserSensorKey, HistoryMonitoringQueue>(new UserSensorKey.EqualityComparer());
+            //}
 
             _logger.Info("Monitoring queue manager initialized");
         }
@@ -170,20 +170,20 @@ namespace HSMServer.MonitoringServerCore
             //}
         }
 
-        public List<SensorUpdateMessage> GetUserUpdates(User user)
+        public List<SensorData> GetUserUpdates(User user)
         {
-            List<SensorUpdateMessage> result = new List<SensorUpdateMessage>();
+            List<SensorData> result = new List<SensorData>();
 
             var queue = GetUserQueue(user);
             if (queue != null)
             {
-                result.AddRange(queue.GetSensorUpdateMessages());
+                result.AddRange(queue.GetSensorsUpdates());
             }
 
             return result;
         }
 
-        public void AddSensorData(SensorUpdateMessage message)
+        public void AddSensorData(SensorData message)
         {
             lock (_accessLock)
             {
@@ -208,45 +208,45 @@ namespace HSMServer.MonitoringServerCore
 
         #region Sensor history queue
 
-        public bool ISensorHistoryStarted(User user, string productName, string path)
-        {
-            bool isRegistered;
-            lock (_historyAccessLock)
-            {
-                isRegistered = _historySessions.ContainsKey(new UserSensorKey(user.UserName, productName, path));
-            }
+        //public bool ISensorHistoryStarted(User user, string productName, string path)
+        //{
+        //    bool isRegistered;
+        //    lock (_historyAccessLock)
+        //    {
+        //        isRegistered = _historySessions.ContainsKey(new UserSensorKey(user.UserName, productName, path));
+        //    }
 
-            return isRegistered;
-        }
+        //    return isRegistered;
+        //}
 
-        public void StartSensorHistory(User user, string productName, string path)
-        {
-            HistoryMonitoringQueue queue = new HistoryMonitoringQueue();
-            lock (_historyAccessLock)
-            {
-                _historySessions[new UserSensorKey(user.UserName, productName, path)] = queue;
-            }
-        }
+        //public void StartSensorHistory(User user, string productName, string path)
+        //{
+        //    HistoryMonitoringQueue queue = new HistoryMonitoringQueue();
+        //    lock (_historyAccessLock)
+        //    {
+        //        _historySessions[new UserSensorKey(user.UserName, productName, path)] = queue;
+        //    }
+        //}
 
-        public List<SensorHistoryMessage> GetHistoryUpdates(User user, string productName, string path, int n)
-        {
-            var queue = GetHistoryQueue(user, productName, path);
-            return queue.GetHistoryMessages(n);
-        }
+        //public List<SensorHistoryMessage> GetHistoryUpdates(User user, string productName, string path, int n)
+        //{
+        //    var queue = GetHistoryQueue(user, productName, path);
+        //    return queue.GetHistoryMessages(n);
+        //}
 
         #endregion
 
-        private HistoryMonitoringQueue GetHistoryQueue(User user, string productName, string path)
-        {
-            UserSensorKey key = new UserSensorKey(user.UserName, productName, path);
-            HistoryMonitoringQueue res;
-            lock (_historyAccessLock)
-            {
-                _historySessions.TryGetValue(key, out res);
-            }
+        //private HistoryMonitoringQueue GetHistoryQueue(User user, string productName, string path)
+        //{
+        //    UserSensorKey key = new UserSensorKey(user.UserName, productName, path);
+        //    HistoryMonitoringQueue res;
+        //    lock (_historyAccessLock)
+        //    {
+        //        _historySessions.TryGetValue(key, out res);
+        //    }
 
-            return res;
-        }
+        //    return res;
+        //}
         private ClientMonitoringQueue GetUserQueue(User user)
         {
             lock (_accessLock)

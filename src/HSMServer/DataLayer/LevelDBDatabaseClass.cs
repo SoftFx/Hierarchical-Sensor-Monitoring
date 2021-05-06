@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using HSMCommon.Extensions;
+using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using LevelDB;
 using NLog;
@@ -45,7 +46,6 @@ namespace HSMServer.DataLayer
                     // Dispose managed resources here...
                     //foreach (var counter in Counters)
                     //  counter.Dispose();
-                    _database.Close();
                     _database.Dispose();
                     _database = null;
                 }
@@ -67,6 +67,7 @@ namespace HSMServer.DataLayer
         }
 
         #endregion
+
         private readonly object _accessLock;
         private readonly Logger _logger;
         private readonly char[] _keysSeparator = { '_' };
@@ -79,7 +80,15 @@ namespace HSMServer.DataLayer
             try
             {
                 Options dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
+                //Options options = new Options()
+                //{
+                //    CreateIfMissing = true,
+                //    CompressionLevel = CompressionLevel.SnappyCompression,
+                //    BlockSize = 204800,
+                //    WriteBufferSize = 8388608
+                //};
                 _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
+                //_database = new DB(DATABASE_NAME, options);
             }
             catch (Exception e)
             {
@@ -88,6 +97,9 @@ namespace HSMServer.DataLayer
             }
             
         }
+
+        #region Product
+
         public void AddProductToList(string productName)
         {
             try
@@ -200,6 +212,10 @@ namespace HSMServer.DataLayer
                 _logger.Error(e, "Failer to remove prodcut from list");
             }
         }
+
+        #endregion
+
+        #region Sensors
 
         public void RemoveSensor(SensorInfo info)
         {
@@ -356,7 +372,7 @@ namespace HSMServer.DataLayer
                             {
                                 _logger.Error(e, "Failed to read SensorDataObject");
                             }
-                            
+
                         }
                     }
                 }
@@ -399,7 +415,7 @@ namespace HSMServer.DataLayer
                 {
                     string currentValue = _database.Get(key);
                     _database.Delete(key);
-                    var list = string.IsNullOrEmpty(currentValue) 
+                    var list = string.IsNullOrEmpty(currentValue)
                         ? new List<string>()
                         : JsonSerializer.Deserialize<List<string>>(currentValue);
                     list.Add(path);
@@ -432,8 +448,89 @@ namespace HSMServer.DataLayer
             }
         }
 
+        #endregion
+
+        #region Users
+
+        public void AddUser(User user)
+        {
+            try
+            {
+                string key = GetUniqueUserKey(user.UserName);
+                string value = JsonSerializer.Serialize(user);
+                lock (_accessLock)
+                {
+                    _database.Put(key, value);                 
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write user data for user = '{user.UserName}'");
+            }
+        }
+
+        public List<User> ReadUsers()
+        {
+            List<User> users = new List<User>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
+                        {
+                            try
+                            {
+                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                users.Add(user);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read ");
+            }
+
+            return users;
+        }
+
+        public void RemoveUser(User user)
+        {
+            try
+            {
+                string key = GetUniqueUserKey(user.UserName);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove user = '{user.UserName}'");
+            }
+        }
+
+        #endregion
+
         #region Private methods
 
+        private string GetUniqueUserKey(string userName)
+        {
+            return $"{PrefixConstants.USER_INFO_PREFIX}_{userName}";
+        }
+
+        private string GetUserReadKey()
+        {
+            return PrefixConstants.USER_INFO_PREFIX;
+        }
         private string GetSensorsListKey(string productName)
         {
             return $"{PrefixConstants.SENSORS_LIST_PREFIX}_{productName}";
