@@ -45,7 +45,6 @@ namespace HSMServer.DataLayer
                     // Dispose managed resources here...
                     //foreach (var counter in Counters)
                     //  counter.Dispose();
-                    _database.Close();
                     _database.Dispose();
                     _database = null;
                 }
@@ -67,6 +66,7 @@ namespace HSMServer.DataLayer
         }
 
         #endregion
+
         private readonly object _accessLock;
         private readonly Logger _logger;
         private readonly char[] _keysSeparator = { '_' };
@@ -79,7 +79,7 @@ namespace HSMServer.DataLayer
             try
             {
                 Options dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
-                _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
+                _database = new DB(DATABASE_NAME, dbOptions);
             }
             catch (Exception e)
             {
@@ -300,7 +300,7 @@ namespace HSMServer.DataLayer
                         //    }
 
                         //}
-                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
+                        for (iterator.Seek(searchKey); iterator.Valid() && iterator.Key().StartsWith(searchKey); iterator.Next())
                         {
                             try
                             {
@@ -339,14 +339,14 @@ namespace HSMServer.DataLayer
                 {
                     using (var iterator = _database.CreateIterator())
                     {
-                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        for (iterator.SeekToFirst(); iterator.Valid(); iterator.Next())
                         {
                             if (!iterator.Key().StartsWith(searchKey))
                                 continue;
 
                             try
                             {
-                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.ValueAsString());
+                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.StringValue());
                                 if (typedValue.Path == path)
                                 {
                                     result.Add(typedValue);
