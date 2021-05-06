@@ -3,13 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29519.87
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "HSM.Server", "HSM.Server", "{F5022C1D-010E-459E-A2DA-8F9DACB53AA1}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "HSMServer.Core", "HSMServer.Core", "{F5022C1D-010E-459E-A2DA-8F9DACB53AA1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMCommon", "..\HSMCommon\HSMCommon.csproj", "{72BC57D1-2582-4AA4-B078-AC1B7648CFCE}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMServer", "HSMServer.csproj", "{5E6C1200-0B26-4EE0-819B-0EF93B3899D8}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{205968E6-DAC6-4114-A5DD-34F471824DCC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMAuthentication", "..\HSMAuthentication\HSMAuthentication.csproj", "{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,12 +31,17 @@ Global
 		{205968E6-DAC6-4114-A5DD-34F471824DCC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{205968E6-DAC6-4114-A5DD-34F471824DCC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{205968E6-DAC6-4114-A5DD-34F471824DCC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5E6C1200-0B26-4EE0-819B-0EF93B3899D8} = {F5022C1D-010E-459E-A2DA-8F9DACB53AA1}
+		{ADAA2292-E3D1-41C6-8BB8-ED990EBC78EF} = {F5022C1D-010E-459E-A2DA-8F9DACB53AA1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {87147EF6-89C6-4B9D-B8E2-DB28679905BD}
