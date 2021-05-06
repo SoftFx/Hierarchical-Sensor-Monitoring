@@ -175,7 +175,7 @@ namespace HSMServer.Authentication
             User user = null;
             lock (_accessLock)
             {
-                user = _users.FirstOrDefault(u => u.CertificateThumbprint == thumbprint);
+                user = _users.FirstOrDefault(u => u.CertificateThumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
             }
 
             return user;
