@@ -7,7 +7,7 @@ using HSMServer.Model;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class BarSensorsStorage : IBarSensorsStorage
+    internal class BarSensorsStorage : IBarSensorsStorage
     {
         private readonly object _syncObject;
         private readonly Dictionary<(string, string), ExtendedBarSensorData> _lastValues;

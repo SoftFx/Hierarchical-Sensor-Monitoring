@@ -22,6 +22,7 @@ namespace HSMServer
         private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
         {
+            Console.WriteLine($"ConfigureServices called at {DateTime.Now:F}");
             services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = "CertificateValidationScheme";
@@ -81,6 +82,7 @@ namespace HSMServer
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            Console.WriteLine($"Configure called at {DateTime.Now:F}");
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
             lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 

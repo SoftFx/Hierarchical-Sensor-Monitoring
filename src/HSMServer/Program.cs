@@ -17,6 +17,7 @@ namespace HSMServer
     {
         public static void Main(string[] args)
         {
+            Console.WriteLine($"Main called at {DateTime.Now:F}");
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
 
@@ -46,7 +47,7 @@ namespace HSMServer
                         {
                             httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                         });
-                        options.Listen(IPAddress.Any, Config.GrpcPort, listenOptions =>
+                        options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
                             //listenOptions.UseHttps(Config.ServerCertificate);
@@ -57,7 +58,7 @@ namespace HSMServer
                                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                             });
                         });
-                        options.Listen(IPAddress.Any, Config.SensorsPort, listenOptions =>
+                        options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                             listenOptions.UseHttps(portOptions =>
@@ -68,7 +69,7 @@ namespace HSMServer
                                 portOptions.ServerCertificate = Config.ServerCertificate;
                             });
                         });
-                        options.Listen(IPAddress.Any, Config.ApiPort, listenOptions =>
+                        options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                             listenOptions.UseHttps(portOptions =>

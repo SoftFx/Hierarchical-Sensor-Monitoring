@@ -9,7 +9,7 @@ using NLog;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class MonitoringQueueManager : IMonitoringQueueManager, IDisposable
+    internal class MonitoringQueueManager : IMonitoringQueueManager, IDisposable
     {
         #region IDisposable implementation
 

@@ -1,13 +1,11 @@
-﻿using System.Security.Claims;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using Microsoft.AspNetCore.Http;
-using NLog;
 
 namespace HSMServer.Middleware
 {
-    public class CertificateValidatorMiddleware
+    internal class CertificateValidatorMiddleware
     {
         private readonly RequestDelegate _next;
         private readonly ClientCertificateValidator _validator;
@@ -24,7 +22,7 @@ namespace HSMServer.Middleware
         {
             var port = context.Connection.LocalPort;
 
-            if (port == Config.GrpcPort)
+            if (port == ConfigurationConstants.GrpcPort)
             {
                 var certificate = context.Connection.ClientCertificate;
 

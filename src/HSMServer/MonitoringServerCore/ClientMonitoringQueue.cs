@@ -5,7 +5,7 @@ using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class ClientMonitoringQueue
+    internal class ClientMonitoringQueue
     {
         private readonly object _lockObj = new object();
         private readonly string _userName;

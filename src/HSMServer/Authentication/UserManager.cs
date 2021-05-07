@@ -11,7 +11,7 @@ using NLog;
 
 namespace HSMServer.Authentication
 {
-    public class UserManager
+    internal class UserManager
     {
         #region Private fields
 

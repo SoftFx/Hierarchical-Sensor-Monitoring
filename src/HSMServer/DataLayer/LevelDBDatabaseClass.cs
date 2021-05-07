@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMCommon.Extensions;
 using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
+using HSMServer.Extensions;
 using LevelDB;
 using NLog;
 using Logger = NLog.Logger;
 
 namespace HSMServer.DataLayer
 {
-    public class LevelDBDatabaseClass : IDatabaseClass
+    internal class LevelDBDatabaseClass : IDatabaseClass
     {
         #region IDisposable implementation
 

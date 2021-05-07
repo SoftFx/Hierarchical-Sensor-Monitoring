@@ -12,7 +12,7 @@ using NLog;
 
 namespace HSMServer.Configuration
 {
-    public static class Config
+    internal static class Config
     {
         #region Sync objects
 
@@ -65,9 +65,7 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Public fields
-        public const int GrpcPort = 22900;
-        public const int SensorsPort = 44330;
-        public const int ApiPort = 44333;
+        
         public static X509Certificate2 ServerCertificate => _serverCertificate ??= ReadServerCertificate();
 
         public static X509Certificate2 CACertificate => _caCertificate ??= ReadCACertificate();

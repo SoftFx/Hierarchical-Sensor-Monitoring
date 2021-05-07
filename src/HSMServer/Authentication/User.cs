@@ -3,7 +3,7 @@ using System.Security.Claims;
 
 namespace HSMServer.Authentication
 {
-    public class User : ClaimsPrincipal
+    internal class User : ClaimsPrincipal
     {
         public string UserName { get; set; }
         public string CertificateThumbprint { get; set; }

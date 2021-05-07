@@ -10,7 +10,7 @@ using Product = HSMServer.DataLayer.Model.Product;
 
 namespace HSMServer.Products
 {
-    public class ProductManager : IProductManager
+    internal class ProductManager : IProductManager
     {
         private readonly IDatabaseClass _database;
         private readonly Logger _logger;

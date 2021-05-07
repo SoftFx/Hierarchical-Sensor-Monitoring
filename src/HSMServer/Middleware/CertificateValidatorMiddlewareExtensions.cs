@@ -2,7 +2,7 @@
 
 namespace HSMServer.Middleware
 {
-    public static class CertificateValidatorMiddlewareExtensions
+    internal static class CertificateValidatorMiddlewareExtensions
     {
         public static IApplicationBuilder UseCertificateValidator(this IApplicationBuilder builder)
         {

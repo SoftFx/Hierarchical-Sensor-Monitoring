@@ -3,8 +3,6 @@ using HSMServer.Model;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using NLog;
-using ILogger = NLog.ILogger;
 
 namespace HSMServer.Controllers
 {
@@ -13,7 +11,7 @@ namespace HSMServer.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
-    public class ValuesController : ControllerBase
+    internal class ValuesController : ControllerBase
     {
         private readonly ILogger<ValuesController> _logger;
         private readonly IMonitoringCore _monitoringCore;

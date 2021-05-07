@@ -7,7 +7,7 @@ using NLog;
 
 namespace HSMServer.Configuration
 {
-    public class CertificateManager
+    internal class CertificateManager
     {
         private readonly Logger _logger;
         private readonly TimeSpan _updateInterval;

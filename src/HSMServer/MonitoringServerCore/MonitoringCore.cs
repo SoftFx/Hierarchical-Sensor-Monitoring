@@ -23,7 +23,7 @@ using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore
+    internal class MonitoringCore : IMonitoringCore
     {
         //#region IDisposable implementation
 

@@ -2,7 +2,7 @@
 
 namespace HSMServer.Middleware
 {
-    public static class TokenAuthMiddlewareExtensions
+    internal static class TokenAuthMiddlewareExtensions
     {
         public static IApplicationBuilder UseTokenAuth(this IApplicationBuilder builder)
         {

@@ -4,7 +4,7 @@ using HSMServer.Authentication;
 
 namespace HSMServer.Extensions
 {
-    public static class UserExtensions
+    internal static class UserExtensions
     {
         public static bool IsSensorAvailable(this User user, string server, string sensor)
         {

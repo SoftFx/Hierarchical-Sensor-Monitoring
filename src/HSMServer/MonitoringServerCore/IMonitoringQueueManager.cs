@@ -5,7 +5,7 @@ using HSMServer.Authentication;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public interface IMonitoringQueueManager
+    internal interface IMonitoringQueueManager
     {
         #region Common queue
 
