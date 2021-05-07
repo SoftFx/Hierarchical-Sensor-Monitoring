@@ -5,5 +5,7 @@
         public string Url { get; set; }
      
         public int Port { get; set; }
+
+        public TreeViewModel Tree { get; set; }
     }
 }

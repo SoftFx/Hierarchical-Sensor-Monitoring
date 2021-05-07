@@ -31,7 +31,9 @@ namespace HSMWebClient.Controllers
         {
             var result = ApiConnector.GetTree(model.Url, model.Port);
 
-            return Ok();
+            model.Tree = new TreeViewModel(result);
+
+            return View(model);
         }
 
     }
