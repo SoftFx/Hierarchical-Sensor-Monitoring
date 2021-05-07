@@ -13,11 +13,10 @@ using NLog.Web;
 
 namespace HSMServer
 {
-    public class Program
+    internal class Program
     {
         public static void Main(string[] args)
         {
-            Console.WriteLine($"Main called at {DateTime.Now:F}");
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             Config.InitializeConfig();
 
@@ -37,8 +36,9 @@ namespace HSMServer
             }
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
+        public static IHostBuilder CreateHostBuilder(string[] args)
+        {
+            return  Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.ConfigureKestrel(options =>
@@ -89,6 +89,59 @@ namespace HSMServer
                     logging.ClearProviders();
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
                 }).UseNLog().UseConsoleLifetime();
+        }
+        //public static IHostBuilder CreateHostBuilder(string[] args) =>
+        //    Host.CreateDefaultBuilder(args)
+        //        .ConfigureWebHostDefaults(webBuilder =>
+        //        {
+        //            webBuilder.ConfigureKestrel(options =>
+        //            {
+        //                options.ConfigureHttpsDefaults(httpsOptions =>
+        //                {
+        //                    httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+        //                });
+        //                options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
+        //                {
+        //                    listenOptions.Protocols = HttpProtocols.Http2;
+        //                    //listenOptions.UseHttps(Config.ServerCertificate);
+        //                    listenOptions.UseHttps(portOptions =>
+        //                    {
+        //                        portOptions.ServerCertificate = Config.ServerCertificate;
+        //                        portOptions.ClientCertificateValidation = ValidateClientCertificate;
+        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+        //                    });
+        //                });
+        //                options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort, listenOptions =>
+        //                {
+        //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        //                    listenOptions.UseHttps(portOptions =>
+        //                    {
+        //                        portOptions.CheckCertificateRevocation = false;
+        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+        //                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+        //                        portOptions.ServerCertificate = Config.ServerCertificate;
+        //                    });
+        //                });
+        //                options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
+        //                {
+        //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        //                    listenOptions.UseHttps(portOptions =>
+        //                    {
+        //                        portOptions.CheckCertificateRevocation = false;
+        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+        //                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+        //                        portOptions.ServerCertificate = Config.ServerCertificate;
+        //                    });
+        //                });
+        //                options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
+        //            });
+        //            webBuilder.UseStartup<Startup>();
+        //        })
+        //        .ConfigureLogging(logging =>
+        //        {
+        //            logging.ClearProviders();
+        //            logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+        //        }).UseNLog().UseConsoleLifetime();
 
         public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
             SslPolicyErrors policyErrors)

@@ -6,7 +6,7 @@
 
         public static ConfigurationObject CreateDefaultObject()
         {
-            return new ConfigurationObject();
+            return new ConfigurationObject() {MaxPathLength = ConfigurationConstants.DefaultMaxPathLength};
         }
     }
 }
