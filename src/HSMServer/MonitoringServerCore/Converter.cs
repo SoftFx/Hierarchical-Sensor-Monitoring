@@ -530,7 +530,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}, comment = {boolData.Comment}";
+                            result = !string.IsNullOrEmpty(boolData.Comment) 
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}, comment = {boolData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}.";
                         }
                         catch { }
                         break;
@@ -540,7 +542,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}, comment = {intData.Comment}";
+                            result = !string.IsNullOrEmpty(intData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}, comment = {intData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}.";
                         }
                         catch { }
                         break;
@@ -550,7 +554,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}, comment = {doubleData.Comment}";
+                            result = !string.IsNullOrEmpty(doubleData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}, comment = {doubleData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}.";
                         }
                         catch { }
                         break;
@@ -560,7 +566,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}', comment = {stringTypedData.Comment}";
+                            result = !string.IsNullOrEmpty(stringTypedData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}', comment = {stringTypedData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}'.";
                         }
                         catch { }
                         break;
@@ -570,7 +578,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}. Comment = {intBarData.Comment}";
+                            result = !string.IsNullOrEmpty(intBarData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}. Comment = {intBarData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}.";
                         }
                         catch { }
                         break;
@@ -580,7 +590,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}. Comment = {doubleBarData.Comment}";
+                            result = !string.IsNullOrEmpty(doubleBarData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}. Comment = {doubleBarData.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}.";
                         }
                         catch { }
                         break;
@@ -590,7 +602,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
-                            result = $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Comment = {fileData?.Comment}";
+                            result = !string.IsNullOrEmpty(fileData?.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Comment = {fileData?.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received.";
                         }
                         catch { }
                         break;
@@ -608,7 +622,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result =  $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}, comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}, comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.BoolValue}.";
             }
             catch (Exception e)
             {
@@ -623,7 +639,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}, comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}, comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.IntValue}.";
             }
             catch (Exception e)
             {
@@ -638,7 +656,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}, comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}, comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.DoubleValue}.";
             }
             catch (Exception e)
             {
@@ -653,7 +673,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}, comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}, comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value = {value.StringValue}.";
             }
             catch (Exception e)
             {
@@ -668,7 +690,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received.";
             }
             catch (Exception e)
             {
@@ -682,7 +706,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}. Comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}. Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}.";
             }
             catch (Exception e)
             {
@@ -697,7 +723,9 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
-                result = $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}. Comment = {value.Comment}.";
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}. Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}.";
             }
             catch (Exception e)
             {
