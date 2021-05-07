@@ -12,7 +12,7 @@ using NLog;
 
 namespace HSMServer.Configuration
 {
-    internal static class Config
+    internal static class CertificatesConfig
     {
         #region Sync objects
 

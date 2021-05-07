@@ -528,20 +528,20 @@ namespace HSMServer.MonitoringServerCore
             var rsa = RSA.Create(rsaParameters);
 
             X509Certificate2 clientCert =
-                CertificatesProcessor.CreateAndSignCertificate(subject, rsa, Config.CACertificate);
+                CertificatesProcessor.CreateAndSignCertificate(subject, rsa, CertificatesConfig.CACertificate);
 
             string fileName = $"{commonName}.crt";
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddNewUser(commonName, clientCert.Thumbprint, fileName);
             result.Item1 = clientCert;
-            result.Item2 = Config.CACertificate;
+            result.Item2 = CertificatesConfig.CACertificate;
             return result;
         }
 
         public ClientVersionModel GetLastAvailableClientVersion()
         {
-            return Config.LastAvailableClientVersion;
+            return CertificatesConfig.LastAvailableClientVersion;
         }
 
         #region Sub-methods

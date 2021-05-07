@@ -31,7 +31,7 @@ namespace HSMServer.Authentication
             _logger = LogManager.GetCurrentClassLogger();
             _certificateManager = certificateManager;
             _users = new List<User>();
-            _usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
+            _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             if (!File.Exists(_usersFilePath))
             {
                 _logger.Info("First launch, users file does not exist");
