@@ -12,11 +12,16 @@ namespace HSMWebClient.Models
         {
             foreach (var sensor in sensors)
             {
+                var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(sensor.Product));
+
                 if (Nodes == null)
                     Nodes = new List<NodeViewModel> { new NodeViewModel(sensor.Product, sensor) };
 
-                else if (Nodes.FirstOrDefault(x => x.Name.Equals(sensor.Product)) == null)
+                else if (existingNode == null)
                     Nodes.Add(new NodeViewModel(sensor.Product, sensor));
+
+                else
+                    existingNode.AddSensor(sensor);
             }
         }
     }

@@ -11,7 +11,7 @@ namespace HSMWebClient
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append("<ul class=\"list-group\" id=\"treeview\" >");
+            result.Append("<ul>");
             if (model.Nodes != null)
                 foreach (var node in model.Nodes)
                 {
@@ -27,19 +27,20 @@ namespace HSMWebClient
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append("<li class=\"list-group-item list-group-item-action\"><span>" + node.Name);
+            result.Append("<li>" + node.Name);
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)
                 {
-                    result.Append("<ul class=\"list-group\">" + Recursion(subnode) + "</ul>");
+                    result.Append("<ul>" + Recursion(subnode) + "</ul>");
                 }
 
-            if (node.Sensors != null)
-                foreach (var sensor in node.Sensors)
-                {
-                    result.Append("<li class=\"list-group-item list-group-item-action\">" + sensor.Name + "</li>");
-                }
-            result.Append("</span></li>");
+            //if (node.Sensors != null)
+            //    foreach (var sensor in node.Sensors)
+            //    {
+            //        //result.Append("<li class=\"list-group-item list-group-item-action\">" + sensor.Name + "</li>");
+            //        result.Append("<li>" + sensor.Name + "</li>");
+            //    }
+            result.Append("</li>");
 
             return result.ToString();
         }

@@ -24,9 +24,13 @@ namespace HSMWebClient.Models
             Name = name;
             Status = sensor.Status;
 
+            AddSensor(sensor);
+        }
+
+        public void AddSensor(SensorData sensor)
+        {
             var nodes = sensor.Path.Split('/');
 
-            //if only sensor
             if (nodes.Length == 1)
             {
                 if (Sensors == null)
@@ -34,17 +38,19 @@ namespace HSMWebClient.Models
 
                 else
                     Sensors.Add(new SensorViewModel(nodes[0], sensor));
-
-                return;
             }
-
-            sensor.Path = sensor.Path.Substring(nodes[0].Length + 1, sensor.Path.Length - nodes[0].Length - 1);
-
-            if (Nodes == null)
-                Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], sensor) };
             else
-                Nodes.Add(new NodeViewModel(nodes[0], sensor));
-        }
+            {
+                sensor.Path = sensor.Path.Substring(nodes[0].Length + 1, sensor.Path.Length - nodes[0].Length - 1);
+                var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(nodes[0]));
 
+                if (Nodes == null)
+                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], sensor) };
+                else if (existingNode == null)
+                    Nodes.Add(new NodeViewModel(nodes[0], sensor));
+                else
+                    existingNode.AddSensor(sensor);
+            }         
+        }
     }
 }
