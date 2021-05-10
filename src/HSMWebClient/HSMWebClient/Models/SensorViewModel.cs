@@ -9,6 +9,7 @@ namespace HSMWebClient.Models
 {
     public class SensorViewModel
     {
+        //ToDo: add path
         public string Name { get; set; }
 
         public string Value { get; set; }

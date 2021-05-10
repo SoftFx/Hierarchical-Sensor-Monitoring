@@ -15,13 +15,13 @@ namespace HSMWebClient.Models
                 var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(sensor.Product));
 
                 if (Nodes == null)
-                    Nodes = new List<NodeViewModel> { new NodeViewModel(sensor.Product, sensor) };
+                    Nodes = new List<NodeViewModel> { new NodeViewModel(sensor.Product, sensor.Product, sensor) };
 
                 else if (existingNode == null)
-                    Nodes.Add(new NodeViewModel(sensor.Product, sensor));
+                    Nodes.Add(new NodeViewModel(sensor.Product, sensor.Product, sensor));
 
                 else
-                    existingNode.AddSensor(sensor);
+                    existingNode.AddSensor(sensor.Product, sensor);
             }
         }
     }

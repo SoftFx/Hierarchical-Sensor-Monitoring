@@ -1,15 +1,15 @@
 ﻿using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace HSMWebClient.Models
 {
     public class NodeViewModel
     {
         public string Name { get; set; }
+
+        public string Path { get; set; }
 
         public SensorStatus Status { get; set; }
 
@@ -19,15 +19,16 @@ namespace HSMWebClient.Models
 
         public List<SensorViewModel> Sensors { get; set; }
 
-        public NodeViewModel(string name, SensorData sensor)
+        public NodeViewModel(string name, string path, SensorData sensor)
         {
             Name = name;
+            Path = path;
             Status = sensor.Status;
 
-            AddSensor(sensor);
+            AddSensor(path, sensor);
         }
 
-        public void AddSensor(SensorData sensor)
+        public void AddSensor(string path, SensorData sensor)
         {
             var nodes = sensor.Path.Split('/');
 
@@ -43,13 +44,14 @@ namespace HSMWebClient.Models
             {
                 sensor.Path = sensor.Path.Substring(nodes[0].Length + 1, sensor.Path.Length - nodes[0].Length - 1);
                 var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(nodes[0]));
+                path += $"/{nodes[0]}";
 
                 if (Nodes == null)
-                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], sensor) };
+                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], path, sensor) };
                 else if (existingNode == null)
-                    Nodes.Add(new NodeViewModel(nodes[0], sensor));
+                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor));
                 else
-                    existingNode.AddSensor(sensor);
+                    existingNode.AddSensor(path, sensor);
             }         
         }
     }
