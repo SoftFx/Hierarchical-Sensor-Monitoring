@@ -23,7 +23,7 @@
       "launchBrowser": true,
       "launchUrl": "https://localhost:44330/api/swagger",
       "environmentVariables": {
-        "ASPNETCORE_URLS": "https://localhost:44330;https://localhost:22900",
+        "ASPNETCORE_URLS": "https://localhost:44330;https://localhost:22900;https://localhost:44333",
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "distributionName": ""

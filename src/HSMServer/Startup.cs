@@ -46,7 +46,7 @@ namespace HSMServer
                 options.EnableDetailedErrors = true;
             });
             services.AddControllers();
-
+            services.AddControllersWithViews();
             services.AddCors();
 
             //services.AddSingleton<IDatabaseClass, DatabaseClass>();
@@ -111,13 +111,17 @@ namespace HSMServer
                 endpoints.MapGrpcService<Services.HSMService>();
                 endpoints.MapGrpcService<Services.AdminService>();
               
-                endpoints.MapGet("/Protos/sensors_service.proto", async context =>
-                {
-                    await context.Response.WriteAsync(
-                        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
-                });
+                //endpoints.MapGet("/Protos/sensors_service.proto", async context =>
+                //{
+                //    await context.Response.WriteAsync(
+                //        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
+                //});
 
                 endpoints.MapControllers();
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}/{id?}"
+                );
             });
 
             

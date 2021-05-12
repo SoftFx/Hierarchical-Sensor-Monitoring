@@ -76,7 +76,7 @@ namespace HSMServer
                                 portOptions.CheckCertificateRevocation = false;
                                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                portOptions.ServerCertificate = Config.ServerCertificate;
+                                //portOptions.ServerCertificate = Config.ServerCertificate;
                             });
                         });
                         options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
