@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
 using LevelDB;
@@ -450,7 +451,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Users
+        #region Configuration
 
         public void AddUser(User user)
         {
@@ -518,10 +519,52 @@ namespace HSMServer.DataLayer
             }
         }
 
+        public ConfigurationObject ReadConfigurationObject()
+        {
+            try
+            {
+                string key = GetConfigurationObjectKey();
+                string value;
+                lock (key)
+                {
+                    value = _database.Get(key);
+                }
+
+                return JsonSerializer.Deserialize<ConfigurationObject>(value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read ConfigurationObject!");
+                return null;
+            }
+        }
+
+        public void WriteConfigurationObject(ConfigurationObject obj)
+        {
+            try
+            {
+                string key = GetConfigurationObjectKey();
+                string value = JsonSerializer.Serialize(obj);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                    _database.Put(key, value);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to save ConfigurationObject!");
+            }
+        }
+
         #endregion
 
         #region Private methods
 
+        private string GetConfigurationObjectKey()
+        {
+            return PrefixConstants.CONFIGURATION_OBJECT_PREFIX;
+        }
         private string GetUniqueUserKey(string userName)
         {
             return $"{PrefixConstants.USER_INFO_PREFIX}_{userName}";

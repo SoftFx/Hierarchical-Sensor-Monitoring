@@ -54,6 +54,7 @@ namespace HSMServer
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<UserManager>();
+            services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();

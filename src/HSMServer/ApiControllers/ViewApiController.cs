@@ -8,7 +8,7 @@ namespace HSMServer.ApiControllers
 {
     [ApiController]
     [Route("[controller]")]
-    internal class ViewApiController : Controller
+    public class ViewApiController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
 

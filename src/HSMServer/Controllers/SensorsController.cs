@@ -18,7 +18,7 @@ namespace HSMServer.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
-    internal class SensorsController : ControllerBase
+    public class SensorsController : ControllerBase
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;

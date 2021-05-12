@@ -2,6 +2,7 @@
 using HSMCommon;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
+using HSMServer.Constants;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware

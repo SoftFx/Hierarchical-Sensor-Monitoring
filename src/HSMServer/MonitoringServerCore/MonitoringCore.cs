@@ -23,7 +23,7 @@ using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
-    internal class MonitoringCore : IMonitoringCore
+    public class MonitoringCore : IMonitoringCore
     {
         //#region IDisposable implementation
 
@@ -76,11 +76,12 @@ namespace HSMServer.MonitoringServerCore
         private readonly UserManager _userManager;
         private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
+        private readonly IConfigurationProvider _configurationProvider;
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
         public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager)
+            IProductManager productManager, IConfigurationProvider configurationProvider)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _database = database;
@@ -90,6 +91,7 @@ namespace HSMServer.MonitoringServerCore
             _userManager = userManager;
             _queueManager = new MonitoringQueueManager();
             _productManager = productManager;
+            _configurationProvider = configurationProvider;
             _logger.Debug("Monitoring core initialized");
         }
 
@@ -541,7 +543,7 @@ namespace HSMServer.MonitoringServerCore
 
         public ClientVersionModel GetLastAvailableClientVersion()
         {
-            return CertificatesConfig.LastAvailableClientVersion;
+            return _configurationProvider.ClientVersion;
         }
 
         #region Sub-methods

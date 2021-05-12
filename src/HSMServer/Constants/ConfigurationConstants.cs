@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Configuration
+﻿namespace HSMServer.Constants
 {
     internal class ConfigurationConstants
     {

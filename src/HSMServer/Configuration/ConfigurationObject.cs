@@ -1,10 +1,12 @@
-﻿namespace HSMServer.Configuration
+﻿using HSMServer.Constants;
+
+namespace HSMServer.Configuration
 {
-    internal class ConfigurationObject
+    public class ConfigurationObject
     {
         public int MaxPathLength { get; set; }
 
-        public static ConfigurationObject CreateDefaultObject()
+        internal static ConfigurationObject CreateDefaultObject()
         {
             return new ConfigurationObject() {MaxPathLength = ConfigurationConstants.DefaultMaxPathLength};
         }
