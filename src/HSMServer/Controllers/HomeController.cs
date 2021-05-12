@@ -6,7 +6,7 @@ using NLog;
 
 namespace HSMServer.Controllers
 {
-    public class HomeController : Controller
+    internal class HomeController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
         private readonly Logger _logger;

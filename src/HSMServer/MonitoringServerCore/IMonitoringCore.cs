@@ -12,7 +12,7 @@ using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public interface IMonitoringCore : IDisposable
+    internal interface IMonitoringCore : IDisposable
     {
         //public void AddSensorValue(JobResult value);
         public void AddSensorsValues(IEnumerable<CommonSensorValue> values);

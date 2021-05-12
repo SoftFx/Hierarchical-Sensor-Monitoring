@@ -3,19 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
-using HSMCommon.Extensions;
 using HSMServer.Authentication;
 using LightningDB;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
+using HSMServer.Extensions;
 using NLog;
 
 namespace HSMServer.DataLayer
 {
     [Obsolete("02.04.2021 Use LevelDB database.")]
-    public class DatabaseClass : IDisposable, IDatabaseClass
+    internal class DatabaseClass : IDisposable, IDatabaseClass
     {
         #region IDisposable implementation
 

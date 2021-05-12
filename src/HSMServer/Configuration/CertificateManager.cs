@@ -7,7 +7,7 @@ using NLog;
 
 namespace HSMServer.Configuration
 {
-    public class CertificateManager
+    internal class CertificateManager
     {
         private readonly Logger _logger;
         private readonly TimeSpan _updateInterval;
@@ -30,7 +30,7 @@ namespace HSMServer.Configuration
 
         private IEnumerable<CertificateDescriptor> ReadUserCertificates()
         {
-            string certFolderPath = Config.CertificatesFolderPath;
+            string certFolderPath = CertificatesConfig.CertificatesFolderPath;
 
             if(!Directory.Exists(certFolderPath))
                 yield break;
@@ -101,7 +101,7 @@ namespace HSMServer.Configuration
 
         public void SaveClientCertificate(X509Certificate2 certificate, string fileName)
         {
-            string certPath = Path.Combine(Config.CertificatesFolderPath, fileName);
+            string certPath = Path.Combine(CertificatesConfig.CertificatesFolderPath, fileName);
             byte[] certBytes = certificate.Export(X509ContentType.Cert);
 
             FileStream fs = new FileStream(certPath, FileMode.CreateNew);

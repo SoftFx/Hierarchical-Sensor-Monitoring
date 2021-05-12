@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public struct UserSensorKey
+    internal struct UserSensorKey
     {
         private string _userName;
         private string _productName;

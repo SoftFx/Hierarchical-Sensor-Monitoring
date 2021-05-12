@@ -10,7 +10,7 @@ using NLog;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public static class Converter
+    internal static class Converter
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 

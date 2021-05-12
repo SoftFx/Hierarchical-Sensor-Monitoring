@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware
 {
-    public class TokenAuthMiddleware
+    internal class TokenAuthMiddleware
     {
         private readonly RequestDelegate _next;
         private readonly UserManager _userManager;
@@ -21,7 +21,7 @@ namespace HSMServer.Middleware
         {
             var port = context.Connection.LocalPort;
 
-            if (port == Config.ApiPort)
+            if (port == ConfigurationConstants.ApiPort)
             {
                 context.User = _userManager.GetUserByCertificateThumbprint(CommonConstants.DefaultClientCertificateThumbprint);
             }

@@ -20,7 +20,7 @@ using SensorStatus = HSMService.SensorStatus;
 
 namespace HSMServer.Services
 {
-    public class HSMService : Sensors.SensorsBase
+    internal class HSMService : Sensors.SensorsBase
     {
         private readonly Logger _logger;
         private readonly IMonitoringCore _monitoringCore;

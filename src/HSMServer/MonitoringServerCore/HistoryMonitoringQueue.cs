@@ -3,7 +3,7 @@ using HSMService;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class HistoryMonitoringQueue
+    internal class HistoryMonitoringQueue
     {
         private readonly object _lockObj = new object();
         private readonly Queue<SensorHistoryMessage> _historyQueue;
