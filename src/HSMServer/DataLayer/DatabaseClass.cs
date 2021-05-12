@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using LightningDB;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
@@ -796,6 +797,16 @@ namespace HSMServer.DataLayer
         }
 
         public void RemoveUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ConfigurationObject ReadConfigurationObject()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteConfigurationObject(ConfigurationObject obj)
         {
             throw new NotImplementedException();
         }

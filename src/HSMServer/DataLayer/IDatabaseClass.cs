@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 
 namespace HSMServer.DataLayer
@@ -37,11 +38,14 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Users
+        #region Configuration
 
         void AddUser(User user);
         List<User> ReadUsers();
         void RemoveUser(User user);
+
+        ConfigurationObject ReadConfigurationObject();
+        void WriteConfigurationObject(ConfigurationObject obj);
 
         #endregion
     }
