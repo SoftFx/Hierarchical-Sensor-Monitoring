@@ -7,7 +7,7 @@ using NLog;
 
 namespace HSMServer.Configuration
 {
-    internal class ClientCertificateValidator
+    public class ClientCertificateValidator
     {
         private readonly Logger _logger;
         private readonly CertificateManager _certificateManager;

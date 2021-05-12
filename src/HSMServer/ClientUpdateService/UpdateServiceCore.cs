@@ -15,10 +15,10 @@ namespace HSMServer.ClientUpdateService
         private string _updatePath;
         private ClientUpdateInfo _updateInfo;
         private List<string> _filesList;
-        public UpdateServiceCore(ILogger<UpdateServiceCore> logger)
+        public UpdateServiceCore(ILogger<UpdateServiceCore> logger, IConfigurationProvider configurationProvider)
         {
             _logger = logger;
-            _updatePath = CertificatesConfig.ClientAppFolderPath;
+            _updatePath = configurationProvider.ClientAppFolderPath;
             _updateInfo = ReadUpdateInfo();
             _logger.LogInformation("Update uploader initialized");
         }

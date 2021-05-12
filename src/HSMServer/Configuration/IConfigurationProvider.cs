@@ -2,8 +2,9 @@
 
 namespace HSMServer.Configuration
 {
-    internal interface IConfigurationProvider
+    public interface IConfigurationProvider
     {
+        string ClientAppFolderPath { get; }
         ClientVersionModel ClientVersion { get; }
     }
 }

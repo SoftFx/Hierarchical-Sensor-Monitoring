@@ -5,7 +5,7 @@ using HSMServer.DataLayer.Model;
 
 namespace HSMServer.DataLayer
 {
-    internal interface IDatabaseClass : IDisposable
+    public interface IDatabaseClass : IDisposable
     {
         #region Products
 

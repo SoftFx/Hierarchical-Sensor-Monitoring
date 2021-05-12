@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Configuration
+﻿using HSMServer.Constants;
+
+namespace HSMServer.Configuration
 {
     internal class ConfigurationObject
     {
