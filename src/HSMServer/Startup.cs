@@ -108,7 +108,7 @@ namespace HSMServer
 
             app.UseStaticFiles();
             app.UseRouting();
-
+            //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGrpcService<Services.HSMService>();
@@ -133,8 +133,6 @@ namespace HSMServer
             //    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
             //});
             app.UseHttpsRedirection();
-
-            //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         }
 
         public void OnShutdown(object state)
