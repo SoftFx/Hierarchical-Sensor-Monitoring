@@ -18,8 +18,4 @@
     <ProjectReference Include="..\HSMServer\HSMServer.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="ServerCoreTests\" />
-  </ItemGroup>
-
 </Project>
