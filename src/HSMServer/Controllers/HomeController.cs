@@ -18,22 +18,9 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            return View(new ConnectionViewModel
-            {
-                Url = "https://localhost",//"https://hsm.dev.soft-fx.eu",
-                Port = 44333,
-            });
-        }
-        [HttpPost]
-        public IActionResult Index(ConnectionViewModel model)
-        {
-            //var result = ApiConnector.GetTree(model.Url, model.Port);
             var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
 
-            model.Tree = new TreeViewModel(result);
-
-            return View(model);
+            return View( new TreeViewModel(result));
         }
-
     }
 }

@@ -63,7 +63,6 @@ namespace HSMServer.Configuration
         #endregion
 
         #region Public fields
-        
         public static X509Certificate2 ServerCertificate => _serverCertificate ??= ReadServerCertificate();
 
         public static X509Certificate2 CACertificate => _caCertificate ??= ReadCACertificate();

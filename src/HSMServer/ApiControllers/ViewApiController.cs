@@ -17,9 +17,8 @@ namespace HSMServer.ApiControllers
             _monitoringCore = monitoringCore;
         }
         [HttpGet]
-        public string GetList(string url, int port, string path)
+        public string GetList(TreeViewModel model, string path)
         {
-            //var result = ApiConnector.GetTree(url.Split(';')[0], port);
             var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
 
             TreeViewModel tree = new TreeViewModel(result);
