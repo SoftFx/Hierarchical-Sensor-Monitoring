@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using HSMServer.Configuration;
+﻿using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using Moq;
 using Xunit;
@@ -28,20 +23,21 @@ namespace HSMServer.Tests.ConfigTests
             Assert.True(configurationObject.Equals(defaultObj));
         }
 
-        //[Fact]
-        //public void ReturnNewConfigurationObjectAfterUpdate()
-        //{
-        //    //Arrange
-        //    var databaseMock = new Mock<IDatabaseClass>();
-        //    databaseMock.Setup(db => db.ReadConfigurationObject()).Returns(() => null);
-        //    IConfigurationProvider configurationProvider = new ConfigurationProvider(null);
-        //    ConfigurationObject newObj = new ConfigurationObject() {MaxPathLength = 34};
+        [Fact]
+        public void ReturnNewConfigurationObjectAfterUpdate()
+        {
+            //Arrange
+            var databaseMock = new Mock<IDatabaseClass>();
+            databaseMock.Setup(db => db.ReadConfigurationObject()).Returns(() => null);
+            IConfigurationProvider configurationProvider = new ConfigurationProvider(databaseMock.Object);
+            ConfigurationObject newObj = new ConfigurationObject() { MaxPathLength = 34 };
 
-        //    //Act
-        //    configurationProvider.UpdateConfigurationObject(newObj);
+            //Act
+            configurationProvider.UpdateConfigurationObject(newObj);
 
-        //    //Assert
-        //    var currentObj = 
-        //}
+            //Assert
+            var currentObj = configurationProvider.CurrentConfigurationObject;
+            Assert.Equal(newObj, currentObj);
+        }
     }
 }
