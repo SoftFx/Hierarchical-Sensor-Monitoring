@@ -8,9 +8,11 @@ using HSMServer.DataLayer;
 using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
 using HSMServer.Products;
+using HSMServer.SignalR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
@@ -48,6 +50,11 @@ namespace HSMServer
             services.AddControllers();
             services.AddControllersWithViews();
             services.AddCors();
+
+            services.AddSignalR(hubOptions =>
+            {
+                hubOptions.EnableDetailedErrors = true;
+            });
 
             //services.AddSingleton<IDatabaseClass, DatabaseClass>();
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
@@ -111,12 +118,16 @@ namespace HSMServer
             {
                 endpoints.MapGrpcService<Services.HSMService>();
                 endpoints.MapGrpcService<Services.AdminService>();
-              
+
                 //endpoints.MapGet("/Protos/sensors_service.proto", async context =>
                 //{
                 //    await context.Response.WriteAsync(
                 //        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
                 //});
+                endpoints.MapHub<MonitoringHub>("/monitoring", options =>
+                    {
+                        options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages
+                    });
 
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
