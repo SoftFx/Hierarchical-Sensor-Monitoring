@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
@@ -11,12 +8,14 @@ using HSMServer.Products;
 using HSMServer.SignalR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
+using System;
+using System.IO;
+using System.Linq;
+using HSMServer.Services;
 
 namespace HSMServer
 {
@@ -69,7 +68,7 @@ namespace HSMServer
             services.AddSingleton<IUpdateService, UpdateServiceCore>();
             services.AddSingleton<Services.HSMService>();
             services.AddSingleton<Services.AdminService>();
-            services.AddSingleton<MonitoringHub>();
+            services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
 
@@ -127,7 +126,7 @@ namespace HSMServer
                 //    await context.Response.WriteAsync(
                 //        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
                 //});
-                endpoints.MapHub<MonitoringHub>("/monitoring", options =>
+                endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
                     {
                         options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages
                     });
