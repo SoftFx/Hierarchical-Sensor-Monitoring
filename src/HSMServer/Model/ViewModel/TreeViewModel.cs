@@ -6,6 +6,7 @@ namespace HSMServer.Model.ViewModel
 {
     public class TreeViewModel
     {
+
         public List<NodeViewModel> Nodes { get; set; }
 
         public TreeViewModel(List<SensorData> sensors)

@@ -19,7 +19,7 @@ namespace HSMServer.SignalR
         public MonitoringHub(IMonitoringCore monitoringCore)
         {
             _monitoringCore = monitoringCore;
-            _timer = new Timer(GetUpdate, null, _updateInterval, _updateInterval);
+           // _timer = new Timer(GetUpdate, null, _updateInterval, _updateInterval);
         }
 
         public async Task Send(List<SensorData> sensors)
@@ -29,9 +29,9 @@ namespace HSMServer.SignalR
             await Clients.Caller.SendAsync("Receive", tree);
         }
 
-        private void GetUpdate(object state)
-        {
-            _monitoringCore.GetSensorUpdates(Context.User as User);
-        }
+        //private void GetUpdate(object state)
+        //{
+        //     _monitoringCore.GetSensorUpdates(Context.User as User);
+        //}
     }
 }

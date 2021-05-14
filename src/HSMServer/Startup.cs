@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
+using HSMServer.ApiControllers;
 
 namespace HSMServer
 {
@@ -69,7 +70,7 @@ namespace HSMServer
             services.AddSingleton<IUpdateService, UpdateServiceCore>();
             services.AddSingleton<Services.HSMService>();
             services.AddSingleton<Services.AdminService>();
-            services.AddSingleton<MonitoringHub>();
+            //services.AddSingleton<MonitoringHub>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
 

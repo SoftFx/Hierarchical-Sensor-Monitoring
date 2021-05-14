@@ -6,7 +6,7 @@
     ViewData["Title"] = "Home Page";
 }
 <script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.GetListAction, ViewConstants.ViewApiController, new { tree = Model }, null));"
+    var urlAction = "@Html.Raw(Url.Action(ViewConstants.GetListAction, ViewConstants.ViewApiController))"
 </script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,8 +19,8 @@
 
 <script src="js/signalr/dist/browser/signalr.min.js"></script>
 
-@*<form method="post" style="margin: 10px">
-    <label id="URLLabel">
+<form method="post" style="margin: 10px">
+    @*<label id="URLLabel">
         URL address:
         <input id="Url" name="Url" type="text" value="@Model.Url" />
     </label>
@@ -30,14 +30,14 @@
         <input id="Port" name="Port" type="number" value="@Model.Port" />
     </label>
 
-    <input type="submit" style="text-align: center" value="Submit" />
+    <input type="submit" style="text-align: center" value="Submit" />*@
 
     <hr />
-</form>*@
+</form>
 
 @if (Model != null)
 {
-    <div class="container" style="margin: 10px;">
+    <div class="container">
         <div class="row">
             <div class="col-md-auto">
                 <div id="jstree">
@@ -61,7 +61,7 @@
             //alert('clicked node: ' + data.node.id);
 
             $.ajax({
-                url: urlAction + "&path=" + data.node.id,
+                url: decodeURIComponent(urlAction) + "/" + data.node.id,
                 type: "GET",
                 cache: false,
                 async: true,
