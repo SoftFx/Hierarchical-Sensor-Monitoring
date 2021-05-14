@@ -22,7 +22,7 @@ namespace HSMServer.Model.ViewModel
         public NodeViewModel(string name, string path, SensorData sensor)
         {
             Name = name;
-            Path = path;
+            Path = path.Replace('/', '_');
             Status = sensor.Status;
 
             AddSensor(path, sensor);

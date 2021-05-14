@@ -24,7 +24,7 @@ namespace HSMServer.ApiControllers
 
             TreeViewModel tree = new TreeViewModel(result);
 
-            return ListHelper.CreateList(path, tree).ToString();
+            return ListHelper.CreateList(path.Replace('_', '/'), tree).ToString();
         }
     }
 }
