@@ -7,17 +7,18 @@ using Microsoft.AspNetCore.Mvc;
 namespace HSMServer.ApiControllers
 {
     [ApiController]
-    [Route("[controller]")]
-    public class ViewApiController : Controller
+    [Route("api/[controller]")]
+    public class ViewController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
 
-        public ViewApiController(IMonitoringCore monitoringCore)
+        public ViewController(IMonitoringCore monitoringCore)
         {
             _monitoringCore = monitoringCore;
         }
-        [HttpGet]
-        public string GetList(TreeViewModel model, string path)
+
+        [HttpGet("GetList/{path}")]
+        public string GetList(string path)
         {
             var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
 
