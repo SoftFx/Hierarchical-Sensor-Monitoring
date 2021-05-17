@@ -7,27 +7,22 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ListHelper
     {
-        public static HtmlString CreateFullList(TreeViewModel model)
+        public static HtmlString CreateFullLists(TreeViewModel model)
         {
             StringBuilder result = new StringBuilder();
-
-            result.Append("<ul class=\"list-group\">");
-            if (model.Nodes != null)
-                foreach (var node in model.Nodes)
-                {
-                    result.Append(GetStringRecursion(node));
-                }
-
-            result.Append("</ul>");
+            foreach (var path in model.Paths)
+            {
+                result.Append(CreateList(path, path, model));
+            }
 
             return new HtmlString(result.ToString());
         }
 
-        public static HtmlString CreateList(string path, TreeViewModel model)
+        public static HtmlString CreateList(string path, string fullPath, TreeViewModel model)
         {
             if (path == null) return new HtmlString(string.Empty);
 
-            var nodes = path.Split('/');
+            var nodes = path.Split('_');
             var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
             NodeViewModel node = existingNode;
             if (nodes[0].Length < path.Length)
@@ -38,7 +33,7 @@ namespace HSMServer.HtmlHelpers
             
             StringBuilder result = new StringBuilder();
 
-            result.Append("<ul class=\"list-group\">");
+            result.Append($"<ul id=\"list_{fullPath.Replace(' ', '_')}\" class=\"list-group\" style=\"display: none;\">");
             if (node.Sensors != null)
                 foreach(var sensor in node.Sensors)
                 {
@@ -72,13 +67,14 @@ namespace HSMServer.HtmlHelpers
 
         private static NodeViewModel GetNodeRecursion(string path, NodeViewModel model)
         {
-            var nodes = path.Split('/');
+            var nodes = path.Split('_');
 
             if (nodes[0].Length == path.Length)
                 return model.Nodes.First(x => x.Name.Equals(nodes[0]));
 
             path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
             var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
+
             return GetNodeRecursion(path, existingNode);
         }
     }

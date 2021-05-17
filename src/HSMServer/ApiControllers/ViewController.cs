@@ -17,14 +17,14 @@ namespace HSMServer.ApiControllers
             _monitoringCore = monitoringCore;
         }
 
-        [HttpGet("GetList/{path}")]
-        public string GetList(string path)
-        {
-            var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
+        //[HttpGet("GetList/{path}")]
+        //public string GetList(string path)
+        //{
+        //    var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
 
-            TreeViewModel tree = new TreeViewModel(result);
+        //    TreeViewModel tree = new TreeViewModel(result);
 
-            return ListHelper.CreateList(path.Replace('_', '/'), tree).ToString();
-        }
+        //    return ListHelper.CreateList(path.Replace('_', '/'), tree).ToString();
+        //}
     }
 }

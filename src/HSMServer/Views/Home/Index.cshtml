@@ -14,72 +14,61 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/jstree.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js" ></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js" ></script>
+<script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js"></script>
 
 <script src="js/signalr/dist/browser/signalr.min.js"></script>
 
 <form method="post" style="margin: 10px">
-    @*<label id="URLLabel">
-        URL address:
-        <input id="Url" name="Url" type="text" value="@Model.Url" />
-    </label>
-
-    <label id="PortLabel">
-        Port:
-        <input id="Port" name="Port" type="number" value="@Model.Port" />
-    </label>
-
-    <input type="submit" style="text-align: center" value="Submit" />*@
-
     <hr />
 </form>
 
-@if (Model != null)
-{
-    <div class="container">
-        <div class="row">
-            <div class="col-md-auto">
-                <div id="jstree">
-                    @TreeHelper.CreateTree(Model)
-                </div>
-            </div>
-
-            <div class="col-sm-8" id="list">
-
+<div class="container">
+    <div class="row">
+        <div class="col-md-auto">
+            <div id="jstree">
+                @TreeHelper.CreateTree(Model)
             </div>
         </div>
+
+        <div class="col-sm-8" id="list">
+            @ListHelper.CreateFullLists(Model)
+        </div>
     </div>
+</div>
 
 
-    <script>
-        $('#jstree').jstree();
+<script>
+    $('#jstree').jstree();
 
-        $('#jstree').on('activate_node.jstree', function (e, data) {
-            if (data == undefined || data.node == undefined || data.node.id == undefined)
-                return;
-            //alert('clicked node: ' + data.node.id);
+    $('#jstree').on('activate_node.jstree', function (e, data) {
+        if (data == undefined || data.node == undefined || data.node.id == undefined)
+            return;
+        //alert('clicked node: ' + data.node.id);
 
-            $.ajax({
-                url: decodeURIComponent(urlAction) + "/" + data.node.id,
-                type: "GET",
-                cache: false,
-                async: true,
-                success: function (result) {
-                    $("#list").empty();
-                    $("#list").append(result);
-                }
-            });
-        });
-    </script>
-}
+        $('ul[id^="list_"]').css("display", "none"); //start with
+
+        $("#list_" + data.node.id).css("display", "block");
+
+        //$.ajax({
+        //    url: decodeURIComponent(urlAction) + "/" + data.node.id,
+        //    type: "GET",
+        //    cache: false,
+        //    async: true,
+        //    success: function (result) {
+        //        $("#list").empty();
+        //        $("#list").append(result);
+        //    }
+        //});
+    });
+</script>
 
 <script>
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl("/monitoring")
         .build();
 
-    hubConnection.on("Receive", function (data){
+    hubConnection.on("Receive", function (data) {
 
     });
 

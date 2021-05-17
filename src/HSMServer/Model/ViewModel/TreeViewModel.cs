@@ -6,13 +6,22 @@ namespace HSMServer.Model.ViewModel
 {
     public class TreeViewModel
     {
-
+        public List<string> Paths { get; set; }
         public List<NodeViewModel> Nodes { get; set; }
 
         public TreeViewModel(List<SensorData> sensors)
         {
             foreach (var sensor in sensors)
             {
+                var path = (sensor.Product + "/" + sensor.Path);
+                path = path.Substring(0, path.LastIndexOf('/'));
+                path = path.Replace('/', '_');
+
+                if (Paths == null)
+                    Paths = new List<string> { path };
+                else if (Paths.FirstOrDefault(x => x.Equals(path)) == null)
+                    Paths.Add(path);
+
                 var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(sensor.Product));
 
                 if (Nodes == null)
@@ -22,7 +31,7 @@ namespace HSMServer.Model.ViewModel
                     Nodes.Add(new NodeViewModel(sensor.Product, sensor.Product, sensor));
 
                 else
-                    existingNode.AddSensor(sensor.Product, sensor);
+                    existingNode.AddSensor(sensor.Product, sensor);                          
             }
         }
     }
