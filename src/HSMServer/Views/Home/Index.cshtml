@@ -69,8 +69,11 @@
         .build();
 
     hubConnection.on("Receive", function (data) {
-
+        console.log('Items count = ' + data.length);
+        console.log('Data:' + data);
     });
 
-    hubConnection.start();
+    hubConnection.start().then(() => {
+        console.log(hubConnection.connectionId);
+    });
 </script>

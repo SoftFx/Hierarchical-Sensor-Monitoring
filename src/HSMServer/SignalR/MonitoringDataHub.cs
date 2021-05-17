@@ -20,7 +20,6 @@ namespace HSMServer.SignalR
         {
             //_monitoringCore = monitoringCore;
             //_timer = new Timer(GetUpdate, null, _updateInterval, _updateInterval);
-           
         }
 
 

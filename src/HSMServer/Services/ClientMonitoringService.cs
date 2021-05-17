@@ -38,7 +38,7 @@ namespace HSMServer.Services
         {
             var updates = _monitoringCore.GetSensorUpdates(_user);
 
-            _monitoringDataHubContext.Clients.All.SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates),
+            _monitoringDataHubContext.Clients.All.SendAsync("Receive",
                 JsonSerializer.Serialize(updates));
         }
 
