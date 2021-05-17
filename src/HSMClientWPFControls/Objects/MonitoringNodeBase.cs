@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.ViewModel;
+using HSMSensorDataObjects;
 
 namespace HSMClientWPFControls.Objects
 {
@@ -70,15 +72,15 @@ namespace HSMClientWPFControls.Objects
 
         private MonitoringNodeBase _parent;
         private string _name;
-        private string _status;
-        private string _internalStatus = TextConstants.Ok;
+        private SensorStatus _status;
+        private SensorStatus _internalStatus = SensorStatus.Unknown;
         private DateTime _lastStatusUpdate;
         private readonly Dictionary<string, MonitoringSensorViewModel> _nameToSensor;
         private readonly Dictionary<string, MonitoringNodeBase> _nameToNode;
         public MonitoringNodeBase(MonitoringNodeBase parent = null)
         {
             _parent = parent;
-            _status = TextConstants.Ok;
+            _status = SensorStatus.Unknown;
             _lastStatusUpdate = DateTime.Now;
             SubNodes = new ObservableCollection<MonitoringNodeBase>();
             Sensors = new ObservableCollection<MonitoringSensorViewModel>();
@@ -118,9 +120,9 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
-        public string InternalStatus
+        public SensorStatus InternalStatus
         {
-            get => _internalStatus ??= TextConstants.Error;
+            get => _internalStatus;
             set
             {
                 _internalStatus = value;
@@ -128,9 +130,9 @@ namespace HSMClientWPFControls.Objects
             }
         }
 
-        public string Status
+        public SensorStatus Status
         {
-            get => _status ??= TextConstants.Error;
+            get => _status;
             set
             {
                 if (_status != value)
@@ -140,32 +142,69 @@ namespace HSMClientWPFControls.Objects
                 _status = value;
                 _parent?.UpdateStatus();
                 OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusString));
                 OnPropertyChanged(nameof(StatusDuration));
             }
         }
+        public string StatusString
+        {
+            get => TextConstants.ConvertStatus(_status);
+            set
+            {
+                var convertedStatus = TextConstants.ConvertFromString(value);
+                if (_status != convertedStatus)
+                    _lastStatusUpdate = DateTime.Now;
 
+                _status = convertedStatus;
+                _parent.UpdateStatus();
+                OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusString));
+                OnPropertyChanged(nameof(StatusDuration));
+            }
+        }
         public virtual void UpdateStatus()
         {
-            string status = TextConstants.Ok;
-            foreach (var counter in Sensors)
+            SensorStatus status = SensorStatus.Unknown;
+            if (Sensors.Count > 0)
             {
-                if (counter.Status == TextConstants.Warning && status == TextConstants.Ok)
-                    status = TextConstants.Warning;
-                if (counter.Status == TextConstants.Error && (status == TextConstants.Ok || status == TextConstants.Warning))
-                    status = TextConstants.Error;
-            }
-            foreach (var node in SubNodes)
-            {
-                if (node.Status == TextConstants.Warning && status == TextConstants.Ok)
-                    status = TextConstants.Warning;
-                if (node.Status == TextConstants.Error && (status == TextConstants.Ok || status == TextConstants.Warning))
-                    status = TextConstants.Error;
+                var sensorsStatus = Sensors.Max(s => s.Status);
+                if (sensorsStatus > status)
+                {
+                    status = sensorsStatus;
+                }
             }
 
-            if (InternalStatus == TextConstants.Warning && status == TextConstants.Ok)
-                status = TextConstants.Warning;
-            if (InternalStatus == TextConstants.Error && (status == TextConstants.Ok || status == TextConstants.Warning))
-                status = TextConstants.Error;
+            if (SubNodes.Count > 0)
+            {
+                var subNodesStatus = SubNodes.Max(n => n.Status);
+                if (subNodesStatus > status)
+                {
+                    status = subNodesStatus;
+                }
+            }
+
+            if (status < _internalStatus)
+            {
+                status = _internalStatus;
+            }
+            //foreach (var node in SubNodes)
+            //{
+            //    if (node.Status == TextConstants.Warning && status == TextConstants.Ok)
+            //        status = TextConstants.Warning;
+            //    if (node.Status == TextConstants.Error &&
+            //        (status == TextConstants.Ok || status == TextConstants.Warning))
+            //    {
+            //        status = TextConstants.Error;
+            //        //Status is error already
+            //        break;
+            //    }
+                    
+            //}
+
+            //if (InternalStatus == TextConstants.Warning && status == TextConstants.Ok)
+            //    status = TextConstants.Warning;
+            //if (InternalStatus == TextConstants.Error && status != TextConstants.Error)
+            //    status = TextConstants.Error;
 
             Status = status;
         }

@@ -212,6 +212,9 @@
                                                         <DataTrigger Binding="{Binding Status}"  Value="Ok">
                                                             <Setter Property="Fill" Value="GreenYellow"/>
                                                         </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Unknown">
+                                                            <Setter Property="Fill" Value="LightGray"></Setter>
+                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Ellipse.Style>
@@ -241,6 +244,9 @@
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}"  Value="Ok">
                                                                 <Setter Property="Foreground" Value="Green"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Unknown">
+                                                                <Setter Property="Foreground" Value="Gray"></Setter>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
