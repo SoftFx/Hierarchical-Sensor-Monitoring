@@ -15,14 +15,16 @@ namespace HSMServer.SignalR
         //private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(3);
         //private readonly Timer _timer;
         //private readonly IMonitoringCore _monitoringCore;
-
+        private readonly HubCallerContext _callerContext;
+        public HubCallerContext CallerContext => _callerContext;
         public MonitoringDataHub(IMonitoringCore monitoringCore)
         {
             //_monitoringCore = monitoringCore;
             //_timer = new Timer(GetUpdate, null, _updateInterval, _updateInterval);
+            _callerContext = Context;
         }
-
-
+        
+        
         //public async Task Send(List<SensorData> sensors)
         //{
         //    TreeViewModel tree = new TreeViewModel(sensors);

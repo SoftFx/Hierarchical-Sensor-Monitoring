@@ -16,6 +16,7 @@ using System;
 using System.IO;
 using System.Linq;
 using HSMServer.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace HSMServer
 {
@@ -32,6 +33,7 @@ namespace HSMServer
 
                 options.AddScheme<CertificateSchemeHandler>("CertificateValidationScheme", "CertificateValidationScheme");
             });
+            //services.AddAuthentication(JwtBearerDefaults.);
 
             services.AddHsts(options =>
             {
