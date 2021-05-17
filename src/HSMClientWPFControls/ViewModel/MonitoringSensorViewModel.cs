@@ -4,6 +4,7 @@ using System.Text;
 using HSMClient.Common;
 using HSMClientWPFControls.Bases;
 using HSMClientWPFControls.Objects;
+using HSMSensorDataObjects;
 
 namespace HSMClientWPFControls.ViewModel
 {
@@ -11,7 +12,7 @@ namespace HSMClientWPFControls.ViewModel
     {
         public DateTime _lastStatusUpdate;
         private MonitoringNodeBase _parent;
-        private string _status;
+        private SensorStatus _status;
         private string _shortValue;
         private SensorTypes _sensorType;
         private string _message;
@@ -24,7 +25,8 @@ namespace HSMClientWPFControls.ViewModel
             Name = sensorUpdate.Name;
             _parent = parent;
             Product = sensorUpdate.Product;
-            _status = TextConstants.Error;
+
+            Status = sensorUpdate.Status;
             _sensorType = sensorUpdate.SensorType;
             _path = ConvertPathToString(sensorUpdate.Path);
             ShortValue = sensorUpdate.ShortValue;
@@ -35,7 +37,7 @@ namespace HSMClientWPFControls.ViewModel
             _lastStatusUpdate = DateTime.Now;
             Name = name;
             _parent = parent;
-            _status = TextConstants.Error;
+            Status = SensorStatus.Unknown;
         }
         public string Name { get; set; }
         public string Product { get; private set; }
@@ -50,7 +52,7 @@ namespace HSMClientWPFControls.ViewModel
             get { return _lastStatusUpdate.ToString(@"G"); }
         }
 
-        public string Status
+        public SensorStatus Status
         {
             get { return _status; }
             set
@@ -61,10 +63,27 @@ namespace HSMClientWPFControls.ViewModel
                 _status = value;
                 _parent?.UpdateStatus();
                 OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusString));
                 OnPropertyChanged(nameof(StatusDuration));
             }
         }
 
+        public string StatusString
+        {
+            get => ConvertStatus(_status);
+            set
+            {
+                var convertedStatus = ConvertFromString(value);
+                if(_status != convertedStatus)
+                    _lastStatusUpdate = DateTime.Now;
+
+                _status = convertedStatus;
+                _parent.UpdateStatus();
+                OnPropertyChanged(nameof(Status));
+                OnPropertyChanged(nameof(StatusString));
+                OnPropertyChanged(nameof(StatusDuration));
+            }
+        }
         public string Message
         {
             get => _message;
@@ -129,6 +148,38 @@ namespace HSMClientWPFControls.ViewModel
             }
 
             return sb.ToString();
+        }
+
+        private string ConvertStatus(SensorStatus status)
+        {
+            switch (status)
+            {
+                case SensorStatus.Ok:
+                    return TextConstants.Ok;
+                case SensorStatus.Warning:
+                    return TextConstants.Warning;
+                case SensorStatus.Error:
+                    return TextConstants.Error;
+                case SensorStatus.Unknown:
+                    return TextConstants.Unknown;
+                default:
+                    return TextConstants.Unknown;
+            }
+        }
+
+        private SensorStatus ConvertFromString(string stringStatus)
+        {
+            switch (stringStatus)
+            {
+                case TextConstants.Ok:
+                    return SensorStatus.Ok;
+                case TextConstants.Error:
+                    return SensorStatus.Error;
+                case TextConstants.Warning:
+                    return SensorStatus.Warning;
+                default:
+                    return SensorStatus.Unknown;
+            }
         }
     }
 }

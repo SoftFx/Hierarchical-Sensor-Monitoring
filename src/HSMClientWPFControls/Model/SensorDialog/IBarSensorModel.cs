@@ -1,5 +1,5 @@
 ﻿using System.Collections.ObjectModel;
-using LiveCharts.Defaults;
+//using LiveCharts.Defaults;
 using OxyPlot.Series;
 
 namespace HSMClientWPFControls.Model.SensorDialog
@@ -10,7 +10,7 @@ namespace HSMClientWPFControls.Model.SensorDialog
         int Count { get; set; }
         Collection<BoxPlotItem> Items { get; set; }
         Collection<DefaultSensorModel> DefaultList { get; set; }
-        Collection<OhlcPoint> Points { get; set; }
+        //Collection<OhlcPoint> Points { get; set; }
         Collection<string> Labels { get; set; }
     }
 }

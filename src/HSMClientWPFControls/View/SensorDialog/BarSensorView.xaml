@@ -7,10 +7,10 @@
              xmlns:local="clr-namespace:HSMClientWPFControls.View.SensorDialog"
              xmlns:oxy="http://oxyplot.org/wpf"
              xmlns:series="clr-namespace:OxyPlot.Series;assembly=OxyPlot"
-             xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
              xmlns:controls="clr-namespace:HSMClientWPFControls.View.SensorDialog.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
+    <!--xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"-->
     <DockPanel MinWidth="600" MinHeight="450">
         <StackPanel DockPanel.Dock="Top" Margin="5" Orientation="Horizontal">
             <TextBlock>Values count:</TextBlock>
