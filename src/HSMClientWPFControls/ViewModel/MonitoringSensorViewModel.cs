@@ -137,6 +137,7 @@ namespace HSMClientWPFControls.ViewModel
         {
             _sensorUpdate = sensorUpdate;
             ShortValue = sensorUpdate.ShortValue;
+            Status = sensorUpdate.Status;
         }
 
         private string ConvertPathToString(List<string> path)
