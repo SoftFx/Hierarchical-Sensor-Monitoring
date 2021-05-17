@@ -17,6 +17,7 @@ using System.IO;
 using System.Linq;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 namespace HSMServer
 {
@@ -24,16 +25,21 @@ namespace HSMServer
     {
         private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = "CertificateValidationScheme";
-
-                options.DefaultForbidScheme = "CertificateValidationScheme";
-
-                options.AddScheme<CertificateSchemeHandler>("CertificateValidationScheme", "CertificateValidationScheme");
-            });
-            //services.AddAuthentication(JwtBearerDefaults.);
+        { 
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.RequireHttpsMetadata = true;
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        //ValidIssuer = 
+                        ValidateAudience = true,
+                        //ValidAudience = 
+                        //IssuerSigningKey = 
+                        ValidateIssuerSigningKey = true
+                    };
+                });
 
             services.AddHsts(options =>
             {
