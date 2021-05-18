@@ -103,6 +103,8 @@ namespace HSMServer
 
             app.UseCertificateValidator();
             app.UseTokenAuth();
+            //TODO: uncomment when the middleware is ready
+            //app.UseBasicAuthentication();
 
             app.UseSwagger(c =>
             {

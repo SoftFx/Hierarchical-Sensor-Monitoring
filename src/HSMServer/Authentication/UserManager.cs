@@ -7,6 +7,7 @@ using System.Threading;
 using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
+using HSMServer.DataLayer;
 using NLog;
 
 namespace HSMServer.Authentication
@@ -21,16 +22,18 @@ namespace HSMServer.Authentication
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
+        private readonly IDatabaseClass _database;
         private readonly string _usersFileName = "users.xml";
         private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager)
+        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _certificateManager = certificateManager;
             _users = new List<User>();
+            _database = databaseClass;
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             if (!File.Exists(_usersFilePath))
             {
@@ -52,6 +55,10 @@ namespace HSMServer.Authentication
                 CommonConstants.DefaultClientCrtCertificateName);
         }
 
+        private List<User> ReadUserFromDatabase()
+        {
+            return _database.ReadUsers();
+        }
         private List<User> ParseUsersFile()
         {
             List<User> users = new List<User>();
@@ -150,6 +157,7 @@ namespace HSMServer.Authentication
             {
                 _users.Clear();
                 _users.AddRange(ParseUsersFile());
+                _users.AddRange(ReadUserFromDatabase());
                 _lastUsersUpdate = DateTime.Now;
                 count = _users.Count;
             }
