@@ -1,12 +1,9 @@
-﻿using HSMCommon.Model.SensorsData;
+﻿using System;
+using System.Threading.Tasks;
+using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.Model.ViewModel;
-using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.SignalR;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace HSMServer.SignalR
 {
@@ -15,16 +12,32 @@ namespace HSMServer.SignalR
         //private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(3);
         //private readonly Timer _timer;
         //private readonly IMonitoringCore _monitoringCore;
-        private readonly HubCallerContext _callerContext;
-        public HubCallerContext CallerContext => _callerContext;
-        public MonitoringDataHub(IMonitoringCore monitoringCore)
+        private readonly ISignalRSessionsManager _sessionsManager;
+        public MonitoringDataHub(ISignalRSessionsManager sessionsManager)
         {
             //_monitoringCore = monitoringCore;
             //_timer = new Timer(GetUpdate, null, _updateInterval, _updateInterval);
-            _callerContext = Context;
+            _sessionsManager = sessionsManager;
+            //_sessionsManager.AddConnection(Context.User as User, Context.ConnectionId);
         }
-        
-        
+
+        public override Task OnConnectedAsync()
+        {
+            if (Context != null)
+            {
+                _sessionsManager.AddConnection(Context.User as User, Context.ConnectionId);
+            }
+            return base.OnConnectedAsync();
+        }
+
+        public override Task OnDisconnectedAsync(Exception? exception)
+        {
+            if (Context != null)
+            {
+                _sessionsManager.RemoveConnection(Context.User as User);
+            }
+            return base.OnDisconnectedAsync(exception);
+        }
         //public async Task Send(List<SensorData> sensors)
         //{
         //    TreeViewModel tree = new TreeViewModel(sensors);

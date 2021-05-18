@@ -7,7 +7,7 @@ namespace HSMServer.SignalR
 {
     public interface IMonitoringDataHub
     {
-        HubCallerContext CallerContext { get; }
         Task SendSensorUpdates(List<SensorData> data);
+        Task SendAddedSensors(List<SensorData> data);
     }
 }

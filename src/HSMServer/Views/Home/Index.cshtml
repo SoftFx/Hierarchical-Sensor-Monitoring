@@ -68,8 +68,13 @@
         .withUrl("/monitoring")
         .build();
 
-    hubConnection.on("Receive", function (data) {
-        console.log('Items count = ' + data.length);
+    hubConnection.on("SendSensorUpdates", function (data) {
+        console.log('Updated items count = ' + data.length);
+        console.log('Data:' + data);
+    });
+
+    hubConnection.on("SendAddedSensors", function(data) {
+        console.log('Added items count = ' + data.length);
         console.log('Data:' + data);
     });
 
