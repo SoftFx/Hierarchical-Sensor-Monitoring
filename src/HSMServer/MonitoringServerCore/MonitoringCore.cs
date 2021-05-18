@@ -125,7 +125,7 @@ namespace HSMServer.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveSensorValue(SensorDataObject dataObject, string productName)
         {
-            _productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
+            //_productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
             Task.Run(() => _database.WriteSensorData(dataObject, productName));
         }
 
@@ -178,7 +178,7 @@ namespace HSMServer.MonitoringServerCore
             string productName = _productManager.GetProductNameByKey(value.Key);
 
             DateTime timeCollected = DateTime.Now;
-            SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+            SensorData updateMessage = Converter.Convert(value, productName, timeCollected, TransactionType.Update);
             _queueManager.AddSensorData(updateMessage);
 
             SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -243,8 +243,14 @@ namespace HSMServer.MonitoringServerCore
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
 
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -261,8 +267,14 @@ namespace HSMServer.MonitoringServerCore
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
 
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -279,9 +291,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
-
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -298,9 +315,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
-
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -317,9 +339,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
-
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
@@ -335,9 +362,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
-
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 //Skip 
@@ -362,9 +394,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
-
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value.Path);
+                }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = Converter.Convert(value, productName, timeCollected);
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
 
                 if (value.EndTime == DateTime.MinValue)
