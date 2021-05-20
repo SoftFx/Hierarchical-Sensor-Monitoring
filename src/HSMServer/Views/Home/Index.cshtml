@@ -6,7 +6,7 @@
     ViewData["Title"] = "Home Page";
 }
 <script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.GetListAction, ViewConstants.ViewApiController))"
+    var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))"
 </script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -24,43 +24,28 @@
 </form>
 
 <div class="container">
-    <div class="row">
-        <div class="col-md-auto">
-            <div id="jstree">
-                @TreeHelper.CreateTree(Model)
-            </div>
-        </div>
-
-        <div class="col-sm-8" id="list">
-            @ListHelper.CreateFullLists(Model)
-        </div>
+    <div id="mainContainer" class="row">
+        @ViewHelper.CreateTreeWithLists(Model)
     </div>
 </div>
 
 
 <script>
-    $('#jstree').jstree();
+    function tree() {
+        $('#jstree').jstree();
 
-    $('#jstree').on('activate_node.jstree', function (e, data) {
-        if (data == undefined || data.node == undefined || data.node.id == undefined)
-            return;
-        //alert('clicked node: ' + data.node.id);
+        $('#jstree').on('activate_node.jstree', function (e, data) {
+            if (data == undefined || data.node == undefined || data.node.id == undefined)
+                return;
+            //alert('clicked node: ' + data.node.id);
 
-        $('ul[id^="list_"]').css("display", "none"); //start with
+            $('ul[id^="list_"]').css("display", "none"); //start with
 
-        $("#list_" + data.node.id).css("display", "block");
+            $("#list_" + data.node.id).css("display", "block");
+        });
+    }
 
-        //$.ajax({
-        //    url: decodeURIComponent(urlAction) + "/" + data.node.id,
-        //    type: "GET",
-        //    cache: false,
-        //    async: true,
-        //    success: function (result) {
-        //        $("#list").empty();
-        //        $("#list").append(result);
-        //    }
-        //});
-    });
+    tree();
 </script>
 
 <script>
@@ -68,14 +53,40 @@
         .withUrl("/monitoring")
         .build();
 
-    hubConnection.on("SendSensorUpdates", function (data) {
-        console.log('Updated items count = ' + data.length);
-        console.log('Data:' + data);
-    });
+    hubConnection.on("SendSensorUpdates", function (newModel) {
+        //console.log('Updated items count = ' + data.length);
+        console.log('Data:' + newModel);
 
-    hubConnection.on("SendAddedSensors", function(data) {
-        console.log('Added items count = ' + data.length);
-        console.log('Data:' + data);
+        if (newModel == undefined) return;
+
+        $.ajax({
+            type: "POST",
+            data: JSON.stringify(newModel),
+            url: urlAction,
+            dataType: "html",
+            contentType: "application/json",
+            cache: false,
+            async: true,
+            success: function (result) {
+                //$("#mainContainer").empty();
+
+                //alert(JSON.stringify(result));
+
+                //$("#mainContainer").append(result);
+                //var test = document.getElementById("mainContainer");
+                //test.innerHTML = decodeURI(result);
+
+                //tree();
+            }
+        }).done(function (data) {
+            $("#mainContainer").empty();
+
+            alert(data);
+
+            $("#mainContainer").append(data);
+
+            tree();
+        });
     });
 
     hubConnection.start().then(() => {

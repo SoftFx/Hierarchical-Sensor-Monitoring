@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using HSMCommon;
-using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.MonitoringServerCore;
 using HSMServer.SignalR;
@@ -49,50 +45,9 @@ namespace HSMServer.Services
                 if (updates.Count < 1)
                     continue;
 
-                var split = updates.GroupBy(u => u.TransactionType).ToList();
-                foreach (var updateList in split)
-                {
-                    SendUpdatesList(updateList.Key, updateList.ToList(), pair.Value);
-                }
+                _monitoringDataHubContext.Clients.Client(pair.Value)
+                    .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
             }
-            
-
-            //_monitoringDataHubContext.Clients.All.SendAsync("Receive",
-            //    JsonSerializer.Serialize(updates));
-        }
-
-        private void SendUpdatesList(TransactionType type, List<SensorData> updates, string connectionId)
-        {
-            switch (type)
-            {
-                case TransactionType.Update:
-                    {
-                        SendListWithUpdateType(updates, connectionId);
-                        break;
-                    }
-                case TransactionType.Add:
-                    {
-                        SendListWithAddType(updates, connectionId);
-                        break;
-                    }
-                default:
-                {
-                    return;
-                }
-                    
-            }
-        }
-
-        private void SendListWithUpdateType(List<SensorData> updates, string connectionId)
-        {
-            _monitoringDataHubContext.Clients.Client(connectionId)
-                .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
-        }
-
-        private void SendListWithAddType(List<SensorData> updates, string connectionId)
-        {
-            _monitoringDataHubContext.Clients.Client(connectionId)
-                .SendAsync(nameof(IMonitoringDataHub.SendAddedSensors), updates);
         }
     }
 }
