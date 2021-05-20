@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Html;
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 using HSMServer.Model.ViewModel;
 
@@ -7,20 +6,25 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ListHelper
     {
-        public static HtmlString CreateFullLists(TreeViewModel model)
+        public static string CreateFullLists(TreeViewModel model)
         {
+            if (model == null) return string.Empty;
+
             StringBuilder result = new StringBuilder();
+            result.Append("<div class=\"col-sm-8\" id=\"list\">");
+
             foreach (var path in model.Paths)
             {
                 result.Append(CreateList(path, path, model));
             }
+            result.Append("</div>");
 
-            return new HtmlString(result.ToString());
+            return result.ToString();
         }
 
-        public static HtmlString CreateList(string path, string fullPath, TreeViewModel model)
+        public static string CreateList(string path, string fullPath, TreeViewModel model)
         {
-            if (path == null) return new HtmlString(string.Empty);
+            if (path == null) return string.Empty;
 
             var nodes = path.Split('_');
             var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
@@ -42,7 +46,7 @@ namespace HSMServer.HtmlHelpers
                 }
             result.Append("</ul>");
 
-            return new HtmlString(result.ToString());
+            return result.ToString();
         }
 
         public static string GetStringRecursion(NodeViewModel node)

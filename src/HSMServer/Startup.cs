@@ -18,6 +18,7 @@ using System.Linq;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer
 {
@@ -70,6 +71,7 @@ namespace HSMServer
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<UserManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
+            services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
