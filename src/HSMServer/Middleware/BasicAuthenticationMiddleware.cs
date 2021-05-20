@@ -26,7 +26,7 @@ namespace HSMServer.Middleware
                 var basicAuthHeader = context.Request.Headers["Authorization"];
                 string credentialsString = Encoding.ASCII.GetString(Convert.FromBase64String(basicAuthHeader.ToString()));
 
-                //TODO: set user
+                
             }
 
             await _next.Invoke(context);

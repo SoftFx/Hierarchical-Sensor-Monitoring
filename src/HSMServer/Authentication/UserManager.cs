@@ -204,6 +204,19 @@ namespace HSMServer.Authentication
             ThreadPool.QueueUserWorkItem(_ => SaveUsers());
         }
 
+        public List<User> Users
+        {
+            get
+            {
+                List<User> users = new List<User>();
+                lock (_accessLock)
+                {
+                    users.AddRange(_users);
+                }
+
+                return users;
+            }
+        }
         private void SaveUsers()
         {
             try

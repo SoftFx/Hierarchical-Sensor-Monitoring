@@ -15,7 +15,9 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
+using HSMServer.Handlers;
 using HSMServer.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -26,20 +28,20 @@ namespace HSMServer
         private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
         { 
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.RequireHttpsMetadata = true;
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        //ValidIssuer = 
-                        ValidateAudience = true,
-                        //ValidAudience = 
-                        //IssuerSigningKey = 
-                        ValidateIssuerSigningKey = true
-                    };
-                });
+            //services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            //    .AddJwtBearer(options =>
+            //    {
+            //        options.RequireHttpsMetadata = true;
+            //        options.TokenValidationParameters = new TokenValidationParameters
+            //        {
+            //            ValidateIssuer = true,
+            //            //ValidIssuer = 
+            //            ValidateAudience = true,
+            //            //ValidAudience = 
+            //            //IssuerSigningKey = 
+            //            ValidateIssuerSigningKey = true
+            //        };
+            //    });
 
             services.AddHsts(options =>
             {
@@ -58,6 +60,9 @@ namespace HSMServer
             services.AddControllers();
             services.AddControllersWithViews();
             services.AddCors();
+
+            services.AddAuthentication("BasicAuthentication")
+                .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
 
             services.AddSignalR(hubOptions =>
             {
@@ -78,6 +83,7 @@ namespace HSMServer
             services.AddSingleton<Services.HSMService>();
             services.AddSingleton<Services.AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
+            services.AddScoped<IUserService, UserService>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
 
@@ -107,6 +113,7 @@ namespace HSMServer
             //TODO: uncomment when the middleware is ready
             //app.UseBasicAuthentication();
 
+            app.UseAuthentication();
             app.UseSwagger(c =>
             {
                 //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";
@@ -127,6 +134,7 @@ namespace HSMServer
             app.UseStaticFiles();
             app.UseRouting();
             //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            app.UseAuthorization();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGrpcService<Services.HSMService>();
