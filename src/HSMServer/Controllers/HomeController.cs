@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
+using HSMServer.Model;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Html;
@@ -35,7 +36,8 @@ namespace HSMServer.Controllers
         //}
         public IActionResult Main()
         {
-            return View();
+            
+            return View(new LoginModel());
         }
 
         [HttpPost]

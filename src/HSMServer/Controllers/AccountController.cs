@@ -20,11 +20,11 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("authenticate")]
+        [HttpPost("Authenticate")]
         //[ValidateAntiForgeryToken]
-        public async Task<IActionResult> Authenticate([FromBody] LoginModel model)
+        public IActionResult Authenticate([FromForm]LoginModel model)
         {
-            var user = await _userService.Authenticate(model.Login, model.Password);
+            var user = _userService.Authenticate(model.Login, model.Password);
 
             if (user == null)
             {
@@ -34,10 +34,10 @@ namespace HSMServer.Controllers
             return Ok(user);
         }
 
-        [HttpGet("hello")]
-        public async Task<IActionResult> Hello()
-        {
-            return Ok(DateTime.Now);
-        }
+        //[HttpGet("hello")]
+        //public async Task<IActionResult> Hello()
+        //{
+        //    return Ok(DateTime.Now);
+        //}
     }
 }

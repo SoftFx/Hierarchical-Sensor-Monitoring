@@ -5,25 +5,38 @@
 <h2>Login</h2>
 
 <div class="login-form-div">
-    <form asp-action="Login" asp-controller="Account" asp-anti-forgery="true">
-        <div asp-validation-summary="ModelOnly"/>
+    @*<form asp-action="Login" method="post" asp-controller="authenticate" asp-anti-forgery="true">
+        <div asp-validation-summary="ModelOnly" />
         <div>
             <div class="form-group">
                 <label asp-for="Login">Enter Login</label>
-                <input type="text" asp-for="Login" id="loginInput"/>
-                <span asp-validation-for="Login"/>
+                <input type="text" asp-for="Login" id="loginInput" />
+                <span asp-validation-for="Login" />
             </div>
+
             <div class="form-group">
                 <label asp-for="Password">Enter Password</label>
-                <input asp-for="Password" id="passwordInput" type="password"/>
-                <span asp-validation-for="Password"/>
+                <input asp-for="Password" id="passwordInput" type="password" />
+                <span asp-validation-for="Password" />
             </div>
+
             <div class="form-group">
-                <input type="submit" value="Login" class="btn" id="loginSubmit"/>
+                <input type="submit" value="Login" class="btn" id="loginSubmit" />
             </div>
         </div>
-    </form>
-    <script>
+        @Html.AntiForgeryToken()
+    </form>*@
+
+    @using(Html.BeginForm("Authenticate", "Account", FormMethod.Post))
+            {
+                <input value="@Model.Login" name="Login"/>
+                <input value="@Model.Password" name="Password"/>
+
+                <input type="submit" value="Send"/>
+            }
+
+
+    @*<script>
         function data(login, password) {
             this.Login = login;
             this.Password = password;
@@ -56,6 +69,5 @@
             e.preventDefault();
             authorizeAsync();
         });
-    </script>
+    </script>*@
 </div>
-@Html.AntiForgeryToken()
