@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System;
+using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model;
@@ -9,17 +10,18 @@ namespace HSMServer.Controllers
     [Authorize]
     [Route("[controller]")]
     [ApiController]
-    internal class AuthController : ControllerBase
+    public class AccountController : ControllerBase
     {
         private readonly IUserService _userService;
 
-        public AuthController(IUserService userService)
+        public AccountController(IUserService userService)
         {
             _userService = userService;
         }
 
         [AllowAnonymous]
         [HttpPost("authenticate")]
+        //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromBody] LoginModel model)
         {
             var user = await _userService.Authenticate(model.Login, model.Password);
@@ -27,9 +29,15 @@ namespace HSMServer.Controllers
             if (user == null)
             {
                 return BadRequest(new { message = "Incorrect password or username" });
-            }
+            } 
 
             return Ok(user);
+        }
+
+        [HttpGet("hello")]
+        public async Task<IActionResult> Hello()
+        {
+            return Ok(DateTime.Now);
         }
     }
 }

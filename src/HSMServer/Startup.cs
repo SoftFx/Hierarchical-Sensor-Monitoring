@@ -60,10 +60,15 @@ namespace HSMServer
             });
             services.AddControllers();
             services.AddControllersWithViews();
-            services.AddCors();
+            //services.AddCors(options =>
+            //    {
+            //        options.AddDefaultPolicy(builder =>
+            //            builder.SetIsOriginAllowed(_ => true)
+            //                .AllowCredentials());
+            //    });
 
-            services.AddAuthentication("BasicAuthentication")
-                .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
+            //services.AddAuthentication("BasicAuthentication")
+            //    .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
 
             services.AddSignalR(hubOptions =>
             {
@@ -135,7 +140,7 @@ namespace HSMServer
 
             app.UseStaticFiles();
             app.UseRouting();
-            //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            app.UseCors();
             app.UseAuthorization();
             app.UseEndpoints(endpoints =>
             {
@@ -155,7 +160,7 @@ namespace HSMServer
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",
-                    pattern: "{controller=Home}/{action=Index}/{id?}"
+                    pattern: "{controller=Home}/{action=Main}/{id?}"
                 );
             });
 

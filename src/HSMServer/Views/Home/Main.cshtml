@@ -1,0 +1,61 @@
+﻿@model HSMServer.Model.LoginModel
+@{
+    ViewData["Title"] = "Login";
+}
+<h2>Login</h2>
+
+<div class="login-form-div">
+    <form asp-action="Login" asp-controller="Account" asp-anti-forgery="true">
+        <div asp-validation-summary="ModelOnly"/>
+        <div>
+            <div class="form-group">
+                <label asp-for="Login">Enter Login</label>
+                <input type="text" asp-for="Login" id="loginInput"/>
+                <span asp-validation-for="Login"/>
+            </div>
+            <div class="form-group">
+                <label asp-for="Password">Enter Password</label>
+                <input asp-for="Password" id="passwordInput" type="password"/>
+                <span asp-validation-for="Password"/>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Login" class="btn" id="loginSubmit"/>
+            </div>
+        </div>
+    </form>
+    <script>
+        function data(login, password) {
+            this.Login = login;
+            this.Password = password;
+        }
+
+        async function authorizeAsync() {
+            //const formData = new FormData();
+            //formData.append("grant_type", "password");
+            //formData.append("username", document.getElementById("loginInput").value);
+            //formData.append("password", document.getElementById("passwordInput").value);
+            var loginData = new data(document.getElementById("loginInput").value, document.getElementById("passwordInput").value);
+            //data.Login = document.getElementById("loginInput").value;
+            //data.Password = document.getElementById("passwordInput").value;
+            console.log("data = ", loginData);
+            const response = await fetch("/account/authenticate", {
+                method: "POST",
+                headers: { "Accept": "application/json" },
+                body: loginData
+            });
+            const responseData = await response.json();
+            if (response.ok === true) {
+                console.log('User authenticated');
+                console.log(responseData);
+            } else {
+                console.log("Error occurred bla-bla-bla: ", response.status, responseData.errorText);
+            }
+        };
+
+        document.getElementById("loginSubmit").addEventListener("click", e => {
+            e.preventDefault();
+            authorizeAsync();
+        });
+    </script>
+</div>
+@Html.AntiForgeryToken()

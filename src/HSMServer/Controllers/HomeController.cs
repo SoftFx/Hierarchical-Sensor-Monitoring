@@ -23,15 +23,19 @@ namespace HSMServer.Controllers
             _treeManager = treeManager;
         }
 
-        public IActionResult Index()
+        //public IActionResult Index()
+        //{
+        //    var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
+        //    var tree = new TreeViewModel(result);
+        //    var user = HttpContext.User as User;
+
+        //    _treeManager.AddOrCreate(user, tree);
+
+        //    return View(tree);
+        //}
+        public IActionResult Main()
         {
-            var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
-            var tree = new TreeViewModel(result);
-            var user = HttpContext.User as User;
-
-            _treeManager.AddOrCreate(user, tree);
-
-            return View(tree);
+            return View();
         }
 
         [HttpPost]
