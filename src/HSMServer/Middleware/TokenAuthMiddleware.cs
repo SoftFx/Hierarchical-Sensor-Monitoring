@@ -20,12 +20,12 @@ namespace HSMServer.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var port = context.Connection.LocalPort;
+            //var port = context.Connection.LocalPort;
 
-            if (port == ConfigurationConstants.ApiPort)
-            {
-                context.User = _userManager.GetUserByCertificateThumbprint(CommonConstants.DefaultClientCertificateThumbprint);
-            }
+            //if (port == ConfigurationConstants.ApiPort)
+            //{
+            //    context.User = _userManager.GetUserByCertificateThumbprint(CommonConstants.DefaultClientCertificateThumbprint);
+            //}
 
             await _next(context);
         }

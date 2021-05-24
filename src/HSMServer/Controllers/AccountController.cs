@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace HSMServer.Controllers
 {
-    [Authorize]
+ //   [Authorize]
     [Route("[controller]")]
     [ApiController]
     public class AccountController : ControllerBase

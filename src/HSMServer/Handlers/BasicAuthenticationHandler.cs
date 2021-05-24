@@ -44,7 +44,7 @@ namespace HSMServer.Handlers
                 var credentials = Encoding.UTF8.GetString(credBytes).Split(new[] {':'}, 2);
                 var login = credentials[0];
                 var password = credentials[1];
-                user = await _userService.Authenticate(login, password);
+                user = _userService.Authenticate(login, password);
             }
             catch (Exception e)
             {

@@ -4,6 +4,6 @@ namespace HSMServer.Authentication
 {
     public interface IUserService
     {
-        Task<User> Authenticate(string login, string password);
+        User Authenticate(string login, string password);
     }
 }

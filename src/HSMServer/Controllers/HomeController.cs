@@ -34,11 +34,12 @@ namespace HSMServer.Controllers
 
             return View(tree);
         }
-        //public IActionResult Main()
-        //{
 
-        //    return View(new LoginModel());
-        //}
+        public IActionResult Main()
+        {
+
+            return View(new LoginModel());
+        }
 
         [HttpPost]
         public HtmlString Update([FromBody]List<SensorData> sensors)

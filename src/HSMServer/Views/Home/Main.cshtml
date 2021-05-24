@@ -1,23 +1,30 @@
-﻿@model HSMServer.Model.LoginModel
+﻿@using HSMServer.Constants
+@model HSMServer.Model.LoginModel
 @{
     ViewData["Title"] = "Login";
 }
+
+<script>
+    var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthorizeAction, ViewConstants.StartController))"
+    var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))"
+</script>
+
 <h2>Login</h2>
 
 <div class="login-form-div">
-    @*<form asp-action="Login" method="post" asp-controller="authenticate" asp-anti-forgery="true">
+    @*<form asp-anti-forgery="true">
         <div asp-validation-summary="ModelOnly" />
         <div>
             <div class="form-group">
-                <label asp-for="Login">Enter Login</label>
-                <input type="text" asp-for="Login" id="loginInput" />
-                <span asp-validation-for="Login" />
+                <label>Enter Login</label>
+                <input type="text" id="loginInput" />
+                <span  />
             </div>
 
             <div class="form-group">
-                <label asp-for="Password">Enter Password</label>
-                <input asp-for="Password" id="passwordInput" type="password" />
-                <span asp-validation-for="Password" />
+                <label>Enter Password</label>
+                <input id="passwordInput" type="password" />
+                <span />
             </div>
 
             <div class="form-group">
@@ -27,47 +34,52 @@
         @Html.AntiForgeryToken()
     </form>*@
 
-    @using(Html.BeginForm("Authenticate", "Account", FormMethod.Post))
-            {
-                <input value="@Model.Login" name="Login"/>
-                <input value="@Model.Password" name="Password"/>
+    @using (Html.BeginForm())
+    {
+                <label>Enter login:</label><br/>
+                <input value="@Model.Login" name="Login" id="loginInput"/><br/>
+                <label>Enter password:</label><br/>
+                <input value="@Model.Password" name="Password" type="password" id="passwordInput"/>
 
-                <input type="submit" value="Send"/>
-            }
+                <input type="submit" id="loginSubmit" value="Send"/>          
+    }
 
-
-    @*<script>
+    <script>
         function data(login, password) {
             this.Login = login;
             this.Password = password;
         }
 
-        async function authorizeAsync() {
-            //const formData = new FormData();
-            //formData.append("grant_type", "password");
-            //formData.append("username", document.getElementById("loginInput").value);
-            //formData.append("password", document.getElementById("passwordInput").value);
+        function authorize() {
             var loginData = new data(document.getElementById("loginInput").value, document.getElementById("passwordInput").value);
-            //data.Login = document.getElementById("loginInput").value;
-            //data.Password = document.getElementById("passwordInput").value;
-            console.log("data = ", loginData);
-            const response = await fetch("/account/authenticate", {
-                method: "POST",
-                headers: { "Accept": "application/json" },
-                body: loginData
+            console.log(loginData);
+            $.ajax({
+                type: "POST",
+                data: JSON.stringify(loginData),
+                url: urlAction,
+                dataType: "json",
+                cache: false,
+                async: true,
+                contentType: "application/json",
+                success: function (response, request) {
+                    var headerValue = "Basic " + btoa(document.getElementById("loginInput").value + ":" + document.getElementById("passwordInput").value);
+                    console.log("We are successful!");
+                    console.log(headerValue);
+                    $.ajax({
+                        type: "GET",
+                        url: urlLogged,
+                        cache: false,
+                        beforeSend: function (xhr) {
+                            xhr.setRequestHeader('Authorization', headerValue);
+                        },
+                    });
+                },
             });
-            const responseData = await response.json();
-            if (response.ok === true) {
-                console.log('User authenticated');
-                console.log(responseData);
-            } else {
-                console.log("Error occurred bla-bla-bla: ", response.status, responseData.errorText);
-            }
         };
 
         document.getElementById("loginSubmit").addEventListener("click", e => {
-            e.preventDefault();
-            authorizeAsync();
+             e.preventDefault();
+             authorize();
         });
-    </script>*@
+    </script>
 </div>

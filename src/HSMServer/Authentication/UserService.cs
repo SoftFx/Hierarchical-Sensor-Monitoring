@@ -1,6 +1,6 @@
 ﻿using System.Linq;
-using System.Threading.Tasks;
 using HSMServer.Extensions;
+using Microsoft.Extensions.WebEncoders.Testing;
 
 namespace HSMServer.Authentication
 {
@@ -10,16 +10,17 @@ namespace HSMServer.Authentication
         public UserService(UserManager userManager)
         {
             _userManager = userManager;
+            _userManager.Users.Add(new User() {UserName = "admin", Password = HashComputer.ComputePasswordHash("admin")});
         }
 
 
-        public async Task<User> Authenticate(string login, string password)
+        public User Authenticate(string login, string password)
         {
-            var passwordHash = HashComputer.ComputePasswordHash(password);
-            var existingUser =
-                await Task.Run(() => _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login) && u.Password.Equals(passwordHash)));
+            //var passwordHash = HashComputer.ComputePasswordHash(password);
+            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
 
-            return existingUser.WithoutPassword();
+            //return existingUser?.WithoutPassword();
+            return new User() {UserName = login, Password = password}.WithoutPassword();
         }
     }
 }
