@@ -10,7 +10,7 @@ namespace HSMServer.HtmlHelpers
             if (model == null) return string.Empty;
 
             StringBuilder result = new StringBuilder();
-            result.Append("<div class=\"col-md-auto\"><div id=\"jstree\"><ul>");
+            result.Append("<div class='col-md-auto'><div id='jstree'><ul>");
             if (model.Nodes != null)
                 foreach (var node in model.Nodes)
                 {
@@ -26,7 +26,7 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append($"<li id=\"{node.Path.Replace(' ', '_')}\">" + node.Name);
+            result.Append($"<li id='{node.Path.Replace(' ', '_')}'>" + node.Name);
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)
                 {

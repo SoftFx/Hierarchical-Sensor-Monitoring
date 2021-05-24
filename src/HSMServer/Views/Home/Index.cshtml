@@ -11,13 +11,15 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.1/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/jstree.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js"></script>
 
 <script src="js/signalr/dist/browser/signalr.min.js"></script>
+
+<div id="updateTime"></div>
 
 <form method="post" style="margin: 10px">
     <hr />
@@ -29,67 +31,65 @@
     </div>
 </div>
 
+        <script>
+            function tree() {
+                $('#jstree').jstree();
 
-<script>
-    function tree() {
-        $('#jstree').jstree();
+                $("#updateTime").empty();
+                $('#updateTime').append("Update Time: " + new Date().toString());
 
-        $('#jstree').on('activate_node.jstree', function (e, data) {
-            if (data == undefined || data.node == undefined || data.node.id == undefined)
-                return;
-            //alert('clicked node: ' + data.node.id);
+                $('#jstree').on('activate_node.jstree', function (e, data) {
+                    if (data == undefined || data.node == undefined || data.node.id == undefined)
+                        return;
+                    //alert('clicked node: ' + data.node.id);
 
-            $('ul[id^="list_"]').css("display", "none"); //start with
+                    $('ul[id^="list_"]').css("display", "none"); //start with
 
-            $("#list_" + data.node.id).css("display", "block");
-        });
-    }
-
-    tree();
-</script>
-
-<script>
-    const hubConnection = new signalR.HubConnectionBuilder()
-        .withUrl("/monitoring")
-        .build();
-
-    hubConnection.on("SendSensorUpdates", function (newModel) {
-        //console.log('Updated items count = ' + data.length);
-        console.log('Data:' + newModel);
-
-        if (newModel == undefined) return;
-
-        $.ajax({
-            type: "POST",
-            data: JSON.stringify(newModel),
-            url: urlAction,
-            dataType: "html",
-            contentType: "application/json",
-            cache: false,
-            async: true,
-            success: function (result) {
-                //$("#mainContainer").empty();
-
-                //alert(JSON.stringify(result));
-
-                //$("#mainContainer").append(result);
-                //var test = document.getElementById("mainContainer");
-                //test.innerHTML = decodeURI(result);
-
-                //tree();
+                    $("#list_" + data.node.id).css("display", "block");
+                });
             }
-        }).done(function (data) {
-            $("#mainContainer").empty();
-
-            alert(data);
-
-            $("#mainContainer").append(data);
 
             tree();
-        });
-    });
+        </script>
 
-    hubConnection.start().then(() => {
-        console.log(hubConnection.connectionId);
-    });
-</script>
+        <script>
+            const hubConnection = new signalR.HubConnectionBuilder()
+                .withUrl("/monitoring")
+                .build();
+
+            hubConnection.on("SendSensorUpdates", function (newModel) {
+                //console.log('Updated items count = ' + data.length);
+                //console.log('Data:' + newModel);
+
+                if (newModel == undefined) return;
+
+                $.ajax({
+                    type: "POST",
+                    data: JSON.stringify(newModel),
+                    url: urlAction,
+                    dataType: "html",
+                    contentType: "application/json",
+                    cache: false,
+                    async: true
+                }).done(function (data) {
+                    var node = $("#jstree").jstree().get_selected(true)[0];
+
+                    data = data.replace('{"value":"', '');//fix sometime
+                    data = data.replace('"}', '');
+                    $("#mainContainer").empty();
+                    $("#mainContainer").append(data);
+
+                    tree();
+
+                    $("#list_" + node.id).css("display", "block");
+                    $("#jstree").jstree('select_node', node.id);
+
+                    $("#updateTime").empty();
+                    $('#updateTime').append("Update Time: " + new Date().toString());
+                });  
+            });
+
+            hubConnection.start().then(() => {
+                console.log(hubConnection.connectionId);
+            });
+        </script>

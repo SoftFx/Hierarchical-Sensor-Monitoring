@@ -34,5 +34,29 @@ namespace HSMServer.Model.ViewModel
                     existingNode.AddSensor(sensor.Product, sensor);                          
             }
         }
+
+        public TreeViewModel Update(TreeViewModel newModel)
+        {
+            foreach (var path in newModel.Paths)
+            {
+                if (!Paths.Contains(path))
+                    Paths.Add(path);
+            }
+
+            foreach(var node in newModel.Nodes)
+            {
+                var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(node.Name));
+
+                if (Nodes == null)
+                    Nodes = new List<NodeViewModel> { node };
+
+                else if (existingNode == null)
+                    Nodes.Add(node);
+
+                else existingNode = existingNode.Update(node); 
+            }
+
+            return this;
+        }
     }
 }

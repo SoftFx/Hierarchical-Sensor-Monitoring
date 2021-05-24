@@ -24,29 +24,31 @@ namespace HSMServer.Controllers
             _treeManager = treeManager;
         }
 
-        //public IActionResult Index()
-        //{
-        //    var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
-        //    var tree = new TreeViewModel(result);
-        //    var user = HttpContext.User as User;
-
-        //    _treeManager.AddOrCreate(user, tree);
-
-        //    return View(tree);
-        //}
-        public IActionResult Main()
+        public IActionResult Index()
         {
-            
-            return View(new LoginModel());
+            var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
+            var tree = new TreeViewModel(result);
+            var user = HttpContext.User as User;
+
+            _treeManager.AddOrCreate(user, tree);
+
+            return View(tree);
         }
+        //public IActionResult Main()
+        //{
+
+        //    return View(new LoginModel());
+        //}
 
         [HttpPost]
         public HtmlString Update([FromBody]List<SensorData> sensors)
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
+            var newModel = new TreeViewModel(sensors);
+            var model = oldModel.Update(newModel);
 
-            return ViewHelper.CreateTreeWithLists(oldModel);
+            return ViewHelper.CreateTreeWithLists(model);
         }
     }
 }

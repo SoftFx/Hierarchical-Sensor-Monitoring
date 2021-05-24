@@ -11,7 +11,7 @@ namespace HSMServer.HtmlHelpers
             if (model == null) return string.Empty;
 
             StringBuilder result = new StringBuilder();
-            result.Append("<div class=\"col-sm-8\" id=\"list\">");
+            result.Append("<div class='col-sm-8' id='list'>");
 
             foreach (var path in model.Paths)
             {
@@ -37,11 +37,11 @@ namespace HSMServer.HtmlHelpers
             
             StringBuilder result = new StringBuilder();
 
-            result.Append($"<ul id=\"list_{fullPath.Replace(' ', '_')}\" class=\"list-group\" style=\"display: none;\">");
+            result.Append($"<ul id='list_{fullPath.Replace(' ', '_')}' class='list-group' style='display: none;'>");
             if (node.Sensors != null)
                 foreach(var sensor in node.Sensors)
                 {
-                    result.Append("<li class=\"list-group-item list-group-item-action\">"
+                    result.Append("<li class='list-group-item list-group-item-action'>"
                         + $"{sensor.Name} {sensor.Value}" + "</li>");
                 }
             result.Append("</ul>");
@@ -56,7 +56,7 @@ namespace HSMServer.HtmlHelpers
             if (node.Sensors != null)
                 foreach (var sensor in node.Sensors)
                 {
-                    result.Append("<li class=\"list-group-item list-group-item-action\">"
+                    result.Append("<li class='list-group-item list-group-item-action'>"
                         + $"{sensor.Name} {sensor.Value}" + "</li>");
                 }
 

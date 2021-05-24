@@ -6,22 +6,22 @@ namespace HSMServer.Model.ViewModel
 {
     public class TreeViewManager : ITreeViewManager
     {
-        private readonly Dictionary<User, TreeViewModel> _treeModels;
+        private readonly Dictionary<string, TreeViewModel> _treeModels;
         private readonly object _lockObj = new object();
 
         public TreeViewManager()
         {
-            _treeModels = new Dictionary<User, TreeViewModel>(new UserComparer());
+            _treeModels = new Dictionary<string, TreeViewModel>();
         }
 
-        public Dictionary<User, TreeViewModel> UserTreeViewDictionary
+        public Dictionary<string, TreeViewModel> UserTreeViewDictionary
         {
             get
             {
-                Dictionary<User, TreeViewModel> dictionary;
+                Dictionary<string, TreeViewModel> dictionary;
                 lock (_lockObj)
                 {
-                    dictionary = new Dictionary<User, TreeViewModel>(_treeModels, comparer: new UserComparer());
+                    dictionary = new Dictionary<string, TreeViewModel>(_treeModels);
                 }
 
                 return dictionary;
@@ -35,10 +35,11 @@ namespace HSMServer.Model.ViewModel
             {
                 try
                 {
-                    result = _treeModels[user];
+                    result = _treeModels[user.UserName];
                 }
                 catch (Exception e)
                 {
+                    throw e;
                     result = null;
                 }
             }
@@ -47,26 +48,26 @@ namespace HSMServer.Model.ViewModel
 
         public void AddOrCreate(User user, TreeViewModel model)
         {
-            if (_treeModels.ContainsKey(user))
-                _treeModels[user] = model;
+            if (_treeModels.ContainsKey(user.UserName))
+                _treeModels[user.UserName] = model;
             else
-                _treeModels.Add(user, model);
+                _treeModels.Add(user.UserName, model);
         }
 
-        class UserComparer : IEqualityComparer<User>
-        {
-            public bool Equals(User x, User y)
-            {
-                if (/*x.CertificateThumbprint == y.CertificateThumbprint  && */(x.UserName == y.UserName))
-                    return true;
+        //class UserComparer : IEqualityComparer<User>
+        //{
+        //    public bool Equals(User x, User y)
+        //    {
+        //        if (/*x.CertificateThumbprint == y.CertificateThumbprint  && */(x.UserName == y.UserName))
+        //            return true;
 
-                return false;
-            }
+        //        return false;
+        //    }
 
-            public int GetHashCode(User obj)
-            {
-                return obj.GetHashCode();
-            }
-        }
+        //    public int GetHashCode(User obj)
+        //    {
+        //        return obj.GetHashCode();
+        //    }
+        //}
     }
 }
