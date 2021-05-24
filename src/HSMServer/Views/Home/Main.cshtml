@@ -54,26 +54,13 @@
             var loginData = new data(document.getElementById("loginInput").value, document.getElementById("passwordInput").value);
             console.log(loginData);
             $.ajax({
-                type: "POST",
+                type: "GET",
                 data: JSON.stringify(loginData),
                 url: urlAction,
                 dataType: "json",
                 cache: false,
                 async: true,
-                contentType: "application/json",
-                success: function (response, request) {
-                    var headerValue = "Basic " + btoa(document.getElementById("loginInput").value + ":" + document.getElementById("passwordInput").value);
-                    console.log("We are successful!");
-                    console.log(headerValue);
-                    $.ajax({
-                        type: "GET",
-                        url: urlLogged,
-                        cache: false,
-                        beforeSend: function (xhr) {
-                            xhr.setRequestHeader('Authorization', headerValue);
-                        },
-                    });
-                },
+                contentType: "application/json",                
             });
         };
 

@@ -37,7 +37,6 @@ namespace HSMServer.Controllers
 
         public IActionResult Main()
         {
-
             return View(new LoginModel());
         }
 

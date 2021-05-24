@@ -4,7 +4,7 @@
     {
         public const string HomeController = "Home";
         public const string StartController = "Account";
-        public const string AuthorizeAction = "Authorize";
+        public const string AuthorizeAction = "Authenticate";
         public const string UploadAction = "Upload";
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";

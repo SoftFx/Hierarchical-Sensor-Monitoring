@@ -20,7 +20,7 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("Authenticate")]
+        [HttpGet("Authenticate")]
         //[ValidateAntiForgeryToken]
         public IActionResult Authenticate([FromForm]LoginModel model)
         {
@@ -29,9 +29,9 @@ namespace HSMServer.Controllers
             if (user == null)
             {
                 return BadRequest(new { message = "Incorrect password or username" });
-            } 
+            }
 
-            return Ok(user);
+            return RedirectToAction("Index","Home");
         }
 
         //[HttpGet("hello")]
