@@ -49,7 +49,6 @@ namespace HSMServer
                 .AddCookie(options =>
                 {
                     options.LoginPath = new PathString("/Account/Authenticate");
-                    //options.EventsType = typeof(CustomCookieAuthenticationEvents);
                 });
 
             services.AddHsts(options =>

@@ -15,20 +15,22 @@ namespace HSMServer.Controllers
     {
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
+        private readonly IUserManager _userManager;
         private readonly Logger _logger;
 
-        public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager)
+        public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
+            _userManager = userManager;
         }
 
         public IActionResult Index()
         {
-            var result = _monitoringCore.GetSensorsTree(HttpContext.User as User);
+            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
+            var result = _monitoringCore.GetSensorsTree(user as User);
             var tree = new TreeViewModel(result);
-            var user = HttpContext.User as User;
 
             _treeManager.AddOrCreate(user, tree);
 
