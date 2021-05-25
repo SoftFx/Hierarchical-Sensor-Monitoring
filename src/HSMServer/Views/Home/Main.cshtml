@@ -12,61 +12,80 @@
 <h2>Login</h2>
 
 <div class="login-form-div">
-    @*<form asp-anti-forgery="true">
-        <div asp-validation-summary="ModelOnly" />
-        <div>
-            <div class="form-group">
-                <label>Enter Login</label>
-                <input type="text" id="loginInput" />
-                <span  />
-            </div>
 
-            <div class="form-group">
-                <label>Enter Password</label>
-                <input id="passwordInput" type="password" />
-                <span />
-            </div>
+    <form asp-controller="Account" asp-action="Authenticate" data-ajax="true" data-ajax-method="POST">
+        <label>Enter login:</label><br />
+        <input value="@Model.Login" name="Login" id="loginInput" /><br />
+        <label>Enter password:</label><br />
+        <input value="@Model.Password" name="Password" type="password" id="passwordInput" />
 
-            <div class="form-group">
-                <input type="submit" value="Login" class="btn" id="loginSubmit" />
-            </div>
-        </div>
-        @Html.AntiForgeryToken()
-    </form>*@
-
-    @using (Html.BeginForm())
+        <input type="submit" id="loginSubmit" value="Send" />
+    </form>
+    @*@using (Ajax.BeginForm("Authenticate"))
     {
-                <label>Enter login:</label><br/>
-                <input value="@Model.Login" name="Login" id="loginInput"/><br/>
-                <label>Enter password:</label><br/>
-                <input value="@Model.Password" name="Password" type="password" id="passwordInput"/>
+        <label>Enter login:</label><br />
+        <input value="@Model.Login" name="Login" id="loginInput" /><br />
+        <label>Enter password:</label><br />
+        <input value="@Model.Password" name="Password" type="password" id="passwordInput" />
 
-                <input type="submit" id="loginSubmit" value="Send"/>          
-    }
+        <input type="submit" id="loginSubmit" value="Send" />
+    }*@
+    @*<form>
+            <label>Enter login:</label><br />
+            <input value="@Model.Login" name="Login" id="loginInput" /><br />
+            <label>Enter password:</label><br />
+            <input value="@Model.Password" name="Password" type="password" id="passwordInput" />
 
+            <input type="submit" id="loginSubmit" value="Send" />
+        </form>
+
+        *@
     <script>
         function data(login, password) {
             this.Login = login;
             this.Password = password;
         }
 
-        function authorize() {
+        async function authorizeAsync() {
             var loginData = new data(document.getElementById("loginInput").value, document.getElementById("passwordInput").value);
             console.log(loginData);
-            $.ajax({
-                type: "GET",
-                data: JSON.stringify(loginData),
-                url: urlAction,
-                dataType: "json",
-                cache: false,
-                async: true,
-                contentType: "application/json",                
+            let response = await fetch(urlAction, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json;charset=utf-8'
+                },
+                body: JSON.stringify(loginData)
             });
+            if (response.ok === true) {
+                console.log('logged in successfully');               
+                document.cookie = 'auth' + '=' + btoa(document.getElementById("loginInput").value + ":" + document.getElementById("passwordInput").value);
+                window.location = urlLogged;
+            } else {
+                console.log('failed to log in!');
+            }
+            //$.ajax({
+            //    type: "POST",
+            //    data: JSON.stringify(loginData),
+            //    url: urlAction,               
+            //    cache: false,
+            //    async: true,
+            //    contentType: "application/json",
+            //    success: function (request, response) {
+            //        $.ajaxSetup({
+            //            headers: {
+            //                "Authorization": btoa(document.getElementById("loginInput").value + ":" + document.getElementById("passwordInput").value)
+            //            }
+            //        });
+            //        console.log('success section triggered');
+            //        window.location.href = urlLogged;
+            //    },
+            //});
+            
         };
 
         document.getElementById("loginSubmit").addEventListener("click", e => {
-             e.preventDefault();
-             authorize();
+            e.preventDefault();
+            authorizeAsync();
         });
     </script>
 </div>
