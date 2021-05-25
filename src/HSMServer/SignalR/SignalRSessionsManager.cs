@@ -6,10 +6,10 @@ namespace HSMServer.SignalR
 {
     internal class SignalRSessionsManager : ISignalRSessionsManager
     {
-        private readonly UserManager _userManager;
+        private readonly IUserManager _userManager;
         private readonly Dictionary<User, string> _userConnectionIdCross;
         private readonly object _lockObj = new object();
-        public SignalRSessionsManager(UserManager userManager)
+        public SignalRSessionsManager(IUserManager userManager)
         {
             _userManager = userManager;
             _userConnectionIdCross = new Dictionary<User, string>();

@@ -10,9 +10,9 @@ namespace HSMServer.Middleware
     internal class TokenAuthMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly UserManager _userManager;
+        private readonly IUserManager _userManager;
 
-        public TokenAuthMiddleware(RequestDelegate next, UserManager userManager)
+        public TokenAuthMiddleware(RequestDelegate next, IUserManager userManager)
         {
             _next = next;
             _userManager = userManager;

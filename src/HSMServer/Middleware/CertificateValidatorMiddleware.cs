@@ -10,9 +10,9 @@ namespace HSMServer.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ClientCertificateValidator _validator;
-        private readonly UserManager _userManager;
+        private readonly IUserManager _userManager;
 
-        public CertificateValidatorMiddleware(RequestDelegate next, ClientCertificateValidator validator, UserManager userManager)
+        public CertificateValidatorMiddleware(RequestDelegate next, ClientCertificateValidator validator, IUserManager userManager)
         {
             _next = next;
             _validator = validator;

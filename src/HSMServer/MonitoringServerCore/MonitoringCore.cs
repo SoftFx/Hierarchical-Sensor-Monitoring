@@ -73,14 +73,14 @@ namespace HSMServer.MonitoringServerCore
         private readonly IDatabaseClass _database;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
-        private readonly UserManager _userManager;
+        private readonly IUserManager _userManager;
         private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly Logger _logger;
         public readonly char[] _pathSeparator = new[] { '/' };
 
-        public MonitoringCore(IDatabaseClass database, UserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseClass database, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider)
         {
             _logger = LogManager.GetCurrentClassLogger();

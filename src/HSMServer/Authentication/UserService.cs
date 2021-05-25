@@ -6,8 +6,8 @@ namespace HSMServer.Authentication
 {
     internal class UserService : IUserService
     {
-        private readonly UserManager _userManager;
-        public UserService(UserManager userManager)
+        private readonly IUserManager _userManager;
+        public UserService(IUserManager userManager)
         {
             _userManager = userManager;
             _userManager.Users.Add(new User() {UserName = "admin", Password = HashComputer.ComputePasswordHash("admin")});

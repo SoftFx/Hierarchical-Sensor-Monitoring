@@ -17,7 +17,7 @@ namespace HSMServer.Services
         private readonly User _user;
         private readonly ISignalRSessionsManager _sessionsManager;
         public ClientMonitoringService(IHubContext<MonitoringDataHub> hubContext, IMonitoringCore monitoringCore,
-            UserManager userManager, ISignalRSessionsManager sessionsManager)
+            IUserManager userManager, ISignalRSessionsManager sessionsManager)
         {
             _monitoringDataHubContext = hubContext;
             _monitoringCore = monitoringCore;

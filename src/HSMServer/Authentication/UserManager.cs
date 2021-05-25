@@ -12,7 +12,7 @@ using NLog;
 
 namespace HSMServer.Authentication
 {
-    public class UserManager
+    public class UserManager : IUserManager
     {
         #region Private fields
 
@@ -47,6 +47,63 @@ namespace HSMServer.Authentication
             
             _logger.Info("UserManager initialized");
         }
+
+        #region Interface implementation
+
+        public User GetUserByCertificateThumbprint(string thumbprint)
+        {
+            CheckUsersUpToDate();
+            User user = null;
+            lock (_accessLock)
+            {
+                user = _users.FirstOrDefault(u => u.CertificateThumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return user;
+        }
+
+        public void AddNewUser(string userName, string certificateThumbprint, string certificateFileName)
+        {
+            User user = new User
+            {
+                CertificateThumbprint = certificateThumbprint,
+                UserName = userName,
+                CertificateFileName = certificateFileName
+            };
+            lock (_accessLock)
+            {
+                _users.Add(user);
+            }
+
+            ThreadPool.QueueUserWorkItem(_ => SaveUsers());
+        }
+
+        public List<User> Users
+        {
+            get
+            {
+                List<User> users = new List<User>();
+                lock (_accessLock)
+                {
+                    users.AddRange(_users);
+                }
+
+                return users;
+            }
+        }
+
+        public User GetUserByUserName(string username)
+        {
+            User result = default(User);
+            lock (_accessLock)
+            {
+                result = _users.FirstOrDefault(u => u.UserName == username);
+            }
+
+            return result;
+        }
+
+        #endregion
 
         private void AddDefaultUser()
         {
@@ -177,46 +234,6 @@ namespace HSMServer.Authentication
             return correspondingUser != null ? correspondingUser.UserPermissions : new List<PermissionItem>();
         }
 
-        public User GetUserByCertificateThumbprint(string thumbprint)
-        {
-            CheckUsersUpToDate();
-            User user = null;
-            lock (_accessLock)
-            {
-                user = _users.FirstOrDefault(u => u.CertificateThumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return user;
-        }
-
-        public void AddNewUser(string userName, string certificateThumbprint, string certificateFileName)
-        {
-            User user = new User
-            {
-                CertificateThumbprint = certificateThumbprint, UserName = userName,
-                CertificateFileName = certificateFileName
-            };
-            lock (_accessLock)
-            {
-                _users.Add(user);
-            }
-
-            ThreadPool.QueueUserWorkItem(_ => SaveUsers());
-        }
-
-        public List<User> Users
-        {
-            get
-            {
-                List<User> users = new List<User>();
-                lock (_accessLock)
-                {
-                    users.AddRange(_users);
-                }
-
-                return users;
-            }
-        }
         private void SaveUsers()
         {
             try

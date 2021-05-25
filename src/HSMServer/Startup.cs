@@ -49,6 +49,7 @@ namespace HSMServer
                 .AddCookie(options =>
                 {
                     options.LoginPath = new PathString("/Account/Authenticate");
+                    //options.EventsType = typeof(CustomCookieAuthenticationEvents);
                 });
 
             services.AddHsts(options =>
@@ -86,7 +87,7 @@ namespace HSMServer
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
-            services.AddSingleton<UserManager>();
+            services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
