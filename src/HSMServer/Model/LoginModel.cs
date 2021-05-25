@@ -3,9 +3,9 @@ namespace HSMServer.Model
 {
     public class LoginModel
     {
-        //[Required(ErrorMessage = "Enter login", AllowEmptyStrings = false)]
+        [Required(ErrorMessage = "Enter login", AllowEmptyStrings = false)]
         public string Login { get; set; }
-        //[Required(ErrorMessage = "Enter password!")]
+        [Required(ErrorMessage = "Enter password!")]
         [DataType(DataType.Password)]
         public string Password { get; set; }
     }

@@ -13,13 +13,13 @@
 
 <div class="login-form-div">
 
-    <form asp-controller="Account" asp-action="Authenticate" data-ajax="true" data-ajax-method="POST">
+    <form method="post" action="account/authenticate" enctype="application/x-www-form-urlencoded">
         <label>Enter login:</label><br />
-        <input value="@Model.Login" name="Login" id="loginInput" /><br />
+        <input name="login" id="loginInput" /><br />
         <label>Enter password:</label><br />
-        <input value="@Model.Password" name="Password" type="password" id="passwordInput" />
+        <input name="password" type="password" id="passwordInput" />
 
-        <input type="submit" id="loginSubmit" value="Send" />
+        <input type="submit" id="loginSubmit" value="Enter" />
     </form>
     @*@using (Ajax.BeginForm("Authenticate"))
     {
@@ -83,9 +83,9 @@
             
         };
 
-        document.getElementById("loginSubmit").addEventListener("click", e => {
-            e.preventDefault();
-            authorizeAsync();
-        });
+        //document.getElementById("loginSubmit").addEventListener("click", e => {
+        //    e.preventDefault();
+        //    authorizeAsync();
+        //});
     </script>
 </div>

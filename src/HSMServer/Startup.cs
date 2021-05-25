@@ -21,6 +21,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using HSMServer.Model.ViewModel;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 
 namespace HSMServer
 {
@@ -43,6 +45,11 @@ namespace HSMServer
             //            ValidateIssuerSigningKey = true
             //        };
             //    });
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options =>
+                {
+                    options.LoginPath = new PathString("/Account/Authenticate");
+                });
 
             services.AddHsts(options =>
             {
