@@ -32,13 +32,13 @@ namespace HSMServer.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm]LoginModel model)
         {
-            var user = _userService.Authenticate(model.Login, model.Password);
-            if (user != null)
-            {
+            var user = _userService.Authenticate(model.Login, model.Password); 
+            if (user != null) 
+            { 
                 await Authenticate(model.Login);
-
                 return RedirectToAction("Index", "Home");
             }
+
             return BadRequest(new { message = "Incorrect password or username" });
         }
 

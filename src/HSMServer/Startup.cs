@@ -126,6 +126,7 @@ namespace HSMServer
             app.UseTokenAuth();
             //TODO: uncomment when the middleware is ready
             //app.UseBasicAuthentication();
+            
 
             app.UseAuthentication();
             app.UseSwagger(c =>
@@ -149,6 +150,7 @@ namespace HSMServer
             app.UseRouting();
             app.UseCors();
             app.UseAuthorization();
+            app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGrpcService<Services.HSMService>();
