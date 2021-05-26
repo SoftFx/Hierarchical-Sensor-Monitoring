@@ -11,7 +11,8 @@ namespace HSMServer.HtmlHelpers
             if (model == null) return string.Empty;
 
             StringBuilder result = new StringBuilder();
-            result.Append("<div class='col-sm-8' id='list'>");
+            result.Append("<div class='col-sm-8' id='list'><div id='list_sensors_header' style='display: none;'>" +
+                "<p style='margin: 0px 20px 10px;'>Sensors</p></div>");
 
             foreach (var path in model.Paths)
             {
@@ -44,7 +45,7 @@ namespace HSMServer.HtmlHelpers
                     result.Append("<li class='list-group-item list-group-item-action'>"
                         + $"{sensor.Name} {sensor.Value}" + "</li>");
                 }
-            result.Append("</ul>");
+            result.Append($"</ul>");
 
             return result.ToString();
         }

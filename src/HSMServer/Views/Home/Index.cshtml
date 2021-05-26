@@ -19,77 +19,88 @@
 
 <script src="~/js/signalr/dist/browser/signalr.min.js"></script>
 
-<div id="updateTime"></div>
+
 
 <form method="post" style="margin: 10px">
+    <div id="updateTime"></div>
     <hr />
 </form>
 
 <div class="container">
     <div id="mainContainer" class="row">
         @ViewHelper.CreateTreeWithLists(Model)
+
     </div>
+    <hr />
 </div>
 
-        <script>
-            function tree() {
-                $('#jstree').jstree();
 
-                $("#updateTime").empty();
-                $('#updateTime').append("Update Time: " + new Date().toString());
 
-                $('#jstree').on('activate_node.jstree', function (e, data) {
-                    if (data == undefined || data.node == undefined || data.node.id == undefined)
-                        return;
-                    //alert('clicked node: ' + data.node.id);
+<script>
+    function tree() {
+        $('#jstree').jstree();
 
-                    $('ul[id^="list_"]').css("display", "none"); //start with
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
-                    $("#list_" + data.node.id).css("display", "block");
-                });
-            }
+        $('#jstree').on('activate_node.jstree', function (e, data) {
+            if (data == undefined || data.node == undefined || data.node.id == undefined)
+                return;
+            //alert('clicked node: ' + data.node.id);
+
+            $('[id^="list_"]').css("display", "none"); //start with
+
+            if (document.getElementById('list_' + data.node.id) == null)
+                $('#list_sensors_header').css('display', 'none');
+            else
+                $('#list_sensors_header').css('display', 'block');
+
+            $('#list_' + data.node.id).css('display', 'block');
+        });
+    }
+
+    tree();
+</script>
+
+<script>
+    const hubConnection = new signalR.HubConnectionBuilder()
+        .withUrl('/monitoring')
+        .build();
+
+    hubConnection.on('SendSensorUpdates', function (newModel) {
+        //console.log('Updated items count = ' + data.length);
+        //console.log('Data:' + newModel);
+
+        if (newModel == undefined) return;
+
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(newModel),
+            url: urlAction,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (data) {
+            var node = $('#jstree').jstree().get_selected(true)[0];
+
+            data = data.replace('{"value":"', '');//fix sometime
+            data = data.replace('"}', '');
+
+            $("#mainContainer").empty();
+            $("#mainContainer").append(data);
 
             tree();
-        </script>
 
-        <script>
-            const hubConnection = new signalR.HubConnectionBuilder()
-                .withUrl("/monitoring")
-                .build();
+            $('#list_' + node.id).css('display', 'block');
+            $('#jstree').jstree('select_node', node.id);
 
-            hubConnection.on("SendSensorUpdates", function (newModel) {
-                //console.log('Updated items count = ' + data.length);
-                //console.log('Data:' + newModel);
+            $('#updateTime').empty();
+            $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+        });
+    });
 
-                if (newModel == undefined) return;
-
-                $.ajax({
-                    type: "POST",
-                    data: JSON.stringify(newModel),
-                    url: urlAction,
-                    dataType: "html",
-                    contentType: "application/json",
-                    cache: false,
-                    async: true
-                }).done(function (data) {
-                    var node = $("#jstree").jstree().get_selected(true)[0];
-
-                    data = data.replace('{"value":"', '');//fix sometime
-                    data = data.replace('"}', '');
-                    $("#mainContainer").empty();
-                    $("#mainContainer").append(data);
-
-                    tree();
-
-                    $("#list_" + node.id).css("display", "block");
-                    $("#jstree").jstree('select_node', node.id);
-
-                    $("#updateTime").empty();
-                    $('#updateTime').append("Update Time: " + new Date().toString());
-                });  
-            });
-
-            hubConnection.start().then(() => {
-                console.log(hubConnection.connectionId);
-            });
-        </script>
+    hubConnection.start().then(() => {
+        console.log(hubConnection.connectionId);
+    });
+</script>
