@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HSMServer.Controllers
 {
+    [Authorize]
     public class HomeController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
@@ -36,7 +38,7 @@ namespace HSMServer.Controllers
 
             return View(tree);
         }
-
+        [AllowAnonymous]
         public IActionResult Main()
         {
             return View(new LoginModel());

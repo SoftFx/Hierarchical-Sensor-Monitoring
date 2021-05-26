@@ -37,8 +37,17 @@ namespace HSMServer.Model.ViewModel
                 if (Sensors == null)
                     Sensors = new List<SensorViewModel> { new SensorViewModel(nodes[0], sensor) };
 
-                else
+
+                var existingSensor = Sensors.FirstOrDefault(s => s.Name == nodes[0]);
+                if (existingSensor == null)
+                {
                     Sensors.Add(new SensorViewModel(nodes[0], sensor));
+                }
+                else
+                {
+                    existingSensor.Update(sensor);
+                }
+                    
             }
             else
             {

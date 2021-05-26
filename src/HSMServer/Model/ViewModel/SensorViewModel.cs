@@ -21,5 +21,11 @@ namespace HSMServer.Model.ViewModel
             Status = sensor.Status;
             Value = sensor.ShortValue;
         }
+
+        public void Update(SensorData sensorData)
+        {
+            Status = sensorData.Status;
+            Value = sensorData.ShortValue;
+        }
     }
 }
