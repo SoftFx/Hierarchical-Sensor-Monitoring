@@ -31,20 +31,6 @@ namespace HSMServer
         private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
         { 
-            //services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            //    .AddJwtBearer(options =>
-            //    {
-            //        options.RequireHttpsMetadata = true;
-            //        options.TokenValidationParameters = new TokenValidationParameters
-            //        {
-            //            ValidateIssuer = true,
-            //            //ValidIssuer = 
-            //            ValidateAudience = true,
-            //            //ValidAudience = 
-            //            //IssuerSigningKey = 
-            //            ValidateIssuerSigningKey = true
-            //        };
-            //    });
             services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options =>
                 {
@@ -123,10 +109,7 @@ namespace HSMServer
             lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
             app.UseCertificateValidator();
-            app.UseTokenAuth();
-            //TODO: uncomment when the middleware is ready
-            //app.UseBasicAuthentication();
-            
+
 
             app.UseAuthentication();
             app.UseSwagger(c =>
@@ -169,7 +152,7 @@ namespace HSMServer
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",
-                    pattern: "{controller=Home}/{action=Index}/{id?}"
+                    pattern: "{controller=Home}/{action=Main}/{id?}"
                 );
             });
 
