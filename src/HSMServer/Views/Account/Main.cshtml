@@ -31,41 +31,4 @@
     {
         <span style="color:red">@TempData["ErrorMessage"].ToString()</span>
     }
-    @*<form>
-            <label>Enter login:</label><br />
-            <input value="@Model.Login" name="Login" id="loginInput" /><br />
-            <label>Enter password:</label><br />
-            <input value="@Model.Password" name="Password" type="password" id="passwordInput" />
-
-            <input type="submit" id="loginSubmit" value="Send" />
-        </form>
-
-    *@
-    
-    <script>
-        function data(login, password) {
-            this.Login = login;
-            this.Password = password;
-        }
-
-        async function authorizeAsync() {
-            var loginData = new data(document.getElementById("loginInput").value, document.getElementById("passwordInput").value);
-            console.log(loginData);
-            let response = await fetch(urlAction,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json;charset=utf-8'
-                    },
-                    body: JSON.stringify(loginData)
-                });
-            if (response.ok === true) {
-                console.log('logged in successfully');
-                document.cookie = 'auth' + '=' + btoa(document.getElementById("loginInput").value + ":" + document.getElementById("passwordInput").value);
-                window.location = urlLogged;
-            } else {
-                console.log('failed to log in!');
-            }
-        };
-    </script>
 </div>

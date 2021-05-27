@@ -1,6 +1,5 @@
 ﻿using System.Linq;
 using HSMServer.Extensions;
-using Microsoft.Extensions.WebEncoders.Testing;
 
 namespace HSMServer.Authentication
 {

@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Authorization;
 namespace HSMServer.Controllers
 {
     [Authorize]
-    //[Route("[controller]")]
     public class AccountController : Controller
     {
         private const string _tempDataErrorText = "ErrorMessage";
@@ -22,7 +21,7 @@ namespace HSMServer.Controllers
             _userService = userService;
         }
 
-        //[AllowAnonymous]
+        [AllowAnonymous]
         //[HttpPost("Authenticate")]
         [ActionName("Authenticate")]
         [Consumes("application/x-www-form-urlencoded")]
