@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Mime;
+﻿using System.Collections.Generic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -9,14 +7,12 @@ using HSMServer.Model;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc.Formatters;
 
 namespace HSMServer.Controllers
 {
- //   [Authorize]
-    [Route("[controller]")]
-    [ApiController]
-    public class AccountController : ControllerBase
+    [Authorize]
+    //[Route("[controller]")]
+    public class AccountController : Controller
     {
         private readonly IUserService _userService;
 
@@ -26,20 +22,31 @@ namespace HSMServer.Controllers
         }
 
         //[AllowAnonymous]
-        [HttpPost("Authenticate")]
+        //[HttpPost("Authenticate")]
         [ActionName("Authenticate")]
         [Consumes("application/x-www-form-urlencoded")]
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm]LoginModel model)
         {
-            var user = _userService.Authenticate(model.Login, model.Password); 
-            if (user != null) 
-            { 
-                await Authenticate(model.Login);
-                return RedirectToAction("Index", "Home");
+            if (ModelState.IsValid)
+            {
+                var user = _userService.Authenticate(model.Login, model.Password);
+                if (user != null)
+                {
+                    await Authenticate(model.Login);
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
+            //return View(model);
+
             return BadRequest(new { message = "Incorrect password or username" });
+        }
+
+        [AllowAnonymous]
+        public IActionResult Main()
+        {
+            return View(new LoginModel());
         }
 
         private async Task Authenticate(string login)
@@ -53,7 +60,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Main", "Home");
+            return RedirectToAction("Main");
         }
     }
 }
