@@ -10,15 +10,14 @@ namespace HSMServer.Authentication
         public UserService(IUserManager userManager)
         {
             _userManager = userManager;
-            _userManager.Users.Add(new User() {UserName = "admin", Password = HashComputer.ComputePasswordHash("admin")});
         }
 
 
         public User Authenticate(string login, string password)
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);
-            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
-            var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
+            var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
+            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
 
             return existingUser?.WithoutPassword();
         }

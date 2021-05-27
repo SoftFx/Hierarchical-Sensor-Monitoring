@@ -572,7 +572,7 @@ namespace HSMServer.MonitoringServerCore
             string fileName = $"{commonName}.crt";
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
-            _userManager.AddNewUser(commonName, clientCert.Thumbprint, fileName);
+            _userManager.AddNewUser(commonName, clientCert.Thumbprint, fileName, "");
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;
