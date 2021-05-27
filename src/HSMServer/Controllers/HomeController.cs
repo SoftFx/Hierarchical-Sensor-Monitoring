@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
-using HSMServer.Model;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Html;
@@ -31,7 +30,7 @@ namespace HSMServer.Controllers
         public IActionResult Index()
         {
             var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-            var result = _monitoringCore.GetSensorsTree(user as User);
+            var result = _monitoringCore.GetSensorsTree(user);
             var tree = new TreeViewModel(result);
 
             _treeManager.AddOrCreate(user, tree);
@@ -49,5 +48,7 @@ namespace HSMServer.Controllers
 
             return ViewHelper.CreateTreeWithLists(model);
         }
+
+
     }
 }

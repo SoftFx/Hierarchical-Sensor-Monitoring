@@ -22,7 +22,6 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        //[HttpPost("Authenticate")]
         [ActionName("Authenticate")]
         [Consumes("application/x-www-form-urlencoded")]
         //[ValidateAntiForgeryToken]
