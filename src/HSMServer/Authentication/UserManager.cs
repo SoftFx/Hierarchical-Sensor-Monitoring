@@ -36,7 +36,14 @@ namespace HSMServer.Authentication
             _database = databaseClass;
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
-            MigrateUsersToDatabase();
+            if (File.Exists(_usersFilePath))
+            {
+                Thread.Sleep(300);
+                MigrateUsersToDatabase();
+                File.Delete(_usersFilePath);
+                _logger.Info("Users file deleted");
+            }
+
             int count = dataBaseUsers.Count;
             lock (_accessLock)
             {
@@ -51,8 +58,6 @@ namespace HSMServer.Authentication
 
             CheckUsersUpToDate();
 
-            File.Delete(_usersFilePath);
-            _logger.Info("Users file deleted");
             _logger.Info("UserManager initialized");
         }
 
@@ -138,10 +143,10 @@ namespace HSMServer.Authentication
         }
         private void AddDefaultUser()
         {
-            AddNewUser(CommonConstants.DefaultClientUserName,
+            AddNewUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
                 CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultClientUserName), "Admin");
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), "Admin");
         }
 
         private List<User> ReadUserFromDatabase()

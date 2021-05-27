@@ -28,6 +28,10 @@
 
         <input type="submit" id="loginSubmit" value="Enter"/>
     </form>
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <span style="color:red">@TempData["ErrorMessage"].ToString()</span>
+    }
     @*<form>
             <label>Enter login:</label><br />
             <input value="@Model.Login" name="Login" id="loginInput" /><br />

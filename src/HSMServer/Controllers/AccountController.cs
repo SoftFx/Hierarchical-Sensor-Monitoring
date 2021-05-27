@@ -14,6 +14,7 @@ namespace HSMServer.Controllers
     //[Route("[controller]")]
     public class AccountController : Controller
     {
+        private const string _tempDataErrorText = "ErrorMessage";
         private readonly IUserService _userService;
 
         public AccountController(IUserService userService)
@@ -28,19 +29,25 @@ namespace HSMServer.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm]LoginModel model)
         {
-            if (ModelState.IsValid)
+            if (ValidateModel(model))
             {
                 var user = _userService.Authenticate(model.Login, model.Password);
                 if (user != null)
                 {
+                    TempData.Remove(_tempDataErrorText);
                     await Authenticate(model.Login);
                     return RedirectToAction("Index", "Home");
                 }
+                else
+                {
+                    TempData[_tempDataErrorText] = "Incorrect password or username!";
+                }
             }
+            
 
-            //return View(model);
+            return RedirectToAction("Main");
 
-            return BadRequest(new { message = "Incorrect password or username" });
+            //return BadRequest(new { message = "Incorrect password or username" });
         }
 
         [AllowAnonymous]
@@ -61,6 +68,23 @@ namespace HSMServer.Controllers
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Main");
+        }
+
+        private bool ValidateModel(LoginModel model)
+        {
+            if (string.IsNullOrEmpty(model.Login))
+            {
+                TempData[_tempDataErrorText] = "Login must not be empty!";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(model.Password))
+            {
+                TempData[_tempDataErrorText] = "Password must not be empty!";
+                return false;
+            }
+
+            return true;
         }
     }
 }
