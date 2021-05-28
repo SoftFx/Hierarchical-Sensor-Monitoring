@@ -9,19 +9,37 @@
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
     var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
 </script>
+<style>
+    .login-form-div {
+
+    }
+
+    .class login-form-text-input {
+        width: 100%;
+        border: 2px solid gray;
+        border-radius: 4px;
+    }
+    .class login-form-text-input {
+        border: 4px solid #000000;
+    }
+
+    #passwordInput {
+        margin: auto auto 10px auto;
+    }
+</style>
 
 <h2>Login</h2>
 
 <div class="login-form-div">
-    <form method="post" action="account/authenticate" enctype="application/x-www-form-urlencoded">
+    <form method="post" action="account/authenticate" enctype="application/x-www-form-urlencoded" >
         <div>
             <label asp-for="Login">Enter login:</label><br/>
-            <input name="login" id="loginInput" value="@Model.Login" type="text" asp-for="Login"/><br/>
+            <input class="login-form-text-input" name="login" id="loginInput" value="@Model.Login" type="text" asp-for="Login"/><br/>
             <span asp-validation-for="Login"/>
         </div>
         <div>
             <label asp-for="Password">Enter password:</label><br/>
-            <input name="password" type="password" id="passwordInput" value="@Model.Password" asp-for="Password"/>
+            <input class="login-form-text-input" name="password" type="password" id="passwordInput" value="@Model.Password" asp-for="Password"/>
             <span asp-validation-for="Password" />
         </div>
         
@@ -30,6 +48,6 @@
     </form>
     @if (TempData["ErrorMessage"] != null)
     {
-        <span style="color:red">@TempData["ErrorMessage"].ToString()</span>
+        <span style="color: red;font-size: large;font-weight:normal">@TempData["ErrorMessage"].ToString()</span>
     }
 </div>

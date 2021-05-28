@@ -6,8 +6,8 @@
     ViewData["Title"] = "Home Page";
 }
 <script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))"
-    var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))"
+    var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
+    var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
 </script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -88,17 +88,17 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (data) {
+        }).done(function(data) {
             //console.log(data);
 
-            data = data.replace('{"value":"', '');//fix sometime
+            data = data.replace('{"value":"', ''); //fix sometime
             data = data.replace('"}', '');
 
             console.log(`#values_${product}_${path}`);
 
             $(`#values_${product}_${path}`).empty();
             $(`#values_${product}_${path}`).append(data);
-        })
+        });
     }
 
     function data(product, path, totalCount) {
@@ -113,14 +113,36 @@
         initializeHistory(product, path, totalCount, historyAction);
     });
 
-    $('[id^="reload_"]').on("click", function () {
-        id = this.id.substring("reload_".length, this.id.length);
-        product = id.split('_')[0];
-        path = id.substring(product.length + 1, this.id.length);
-        totalCount = $('#inputCount_' + id).val();
+    $('[id^="reload_"]').on("click",
+        function() {
+            id = this.id.substring("reload_".length, this.id.length);
+            product = id.split('_')[0];
+            path = id.substring(product.length + 1, this.id.length);
+            totalCount = $('#inputCount_' + id).val();
 
-        initializeHistory(product, path, totalCount, historyAction);
-    })
+            initializeHistory(product, path, totalCount, historyAction);
+        });
 
+    function initializeTree() {
+        $('#jstree').jstree();
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+
+        $('#jstree').on('activate_node.jstree', function (e, data) {
+            if (data == undefined || data.node == undefined || data.node.id == undefined)
+                return;
+            //alert('clicked node: ' + data.node.id);
+
+            $('[id^="list_"]').css("display", "none"); //start with
+
+            if (document.getElementById('list_' + data.node.id) == null)
+                $('#list_sensors_header').css('display', 'none');
+            else
+                $('#list_sensors_header').css('display', 'block');
+
+            $('#list_' + data.node.id).css('display', 'block');
+        });
+    }
 
 </script>
