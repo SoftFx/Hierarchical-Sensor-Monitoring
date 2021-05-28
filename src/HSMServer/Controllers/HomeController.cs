@@ -1,4 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
+﻿using HSMCommon.Model;
+using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
@@ -48,6 +49,16 @@ namespace HSMServer.Controllers
             var model = oldModel.Update(newModel);
 
             return ViewHelper.CreateTreeWithLists(model);
+        }
+
+        [HttpPost]
+        public HtmlString History([FromBody]GetSensorHistoryModel model)
+        {
+            model.Product = model.Product.Replace('-', ' ');
+            model.Path = model.Path?.Replace('_', '/').Replace('-', ' ');
+            var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+
+            return new HtmlString(ListHelper.CreateHistoryList(result));
         }
     }
 }

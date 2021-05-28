@@ -3,13 +3,12 @@
     public class ViewConstants
     {
         public const string HomeController = "Home";
-        public const string StartController = "Account";
-        public const string AuthorizeAction = "Authenticate";
-        public const string UploadAction = "Upload";
+        public const string AccountController = "Account";
+
+        public const string AuthenticateAction = "Authenticate";
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
+        public const string HistoryAction = "History";
 
-        public const string ViewApiController = "api/View";
-        public const string GetListAction = "GetList";
     }
 }

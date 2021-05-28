@@ -15,15 +15,5 @@ namespace HSMServer.HtmlHelpers
 
             return new HtmlString(result.ToString());
         }
-
-        //public static string CreateStringTreeWithLists(TreeViewModel model)
-        //{
-        //    StringBuilder result = new StringBuilder();
-
-        //    result.Append(TreeHelper.CreateTree(model));
-        //    result.Append(ListHelper.CreateFullLists(model));
-
-        //    return result.ToString();
-        //}
     }
 }

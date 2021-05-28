@@ -8,6 +8,13 @@
       "files": [
         "dist/browser/signalr.min.js"
       ]
+    },
+    {
+      "library": "bootstrap@5.0.1",
+      "destination": "wwwroot/bootstrap/",
+      "files": [
+        "dist/css/bootstrap.min.css"
+      ]
     }
   ]
 }
