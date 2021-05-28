@@ -26,7 +26,7 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append($"<li id='{node.Path.Replace(' ', '_')}'>" + node.Name);
+            result.Append($"<li id='{node.Path.Replace(' ', '-')}'>" + node.Name);
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)
                 {

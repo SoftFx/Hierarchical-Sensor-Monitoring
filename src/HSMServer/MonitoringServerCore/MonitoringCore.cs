@@ -454,7 +454,7 @@ namespace HSMServer.MonitoringServerCore
 
         public List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model)
         {
-            return GetSensorHistory(user, model.Path, model.Product, model.Amount);
+            return GetSensorHistory(user, model.Path, model.Product, model.TotalCount);
         }
         public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
         {
