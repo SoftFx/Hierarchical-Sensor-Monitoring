@@ -19,7 +19,7 @@ namespace HSMServer.HtmlHelpers
             StringBuilder result = new StringBuilder();
             result.Append("<div class='col-sm-8' id='list'>" +
                 "<div id='list_sensors_header' style='display: none;'>" +
-                "<p style='margin: 0px 20px 10px;'>Sensors</p></div>");
+                "<h5 style='margin: 0px 20px 10px;'>Sensors</h5></div>");
 
             foreach (var path in model.Paths)
             {

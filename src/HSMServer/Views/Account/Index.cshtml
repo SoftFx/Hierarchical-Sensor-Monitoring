@@ -9,7 +9,7 @@
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
     var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
 </script>
-<style>
+@*<style>
     .login-form-div {
 
     }
@@ -26,26 +26,26 @@
     #passwordInput {
         margin: auto auto 10px auto;
     }
-</style>
+</style>*@
 
-<h2>Login</h2>
+<h4>Login</h4>
 
 <div class="login-form-div">
-    <form method="post" action="authenticate" enctype="application/x-www-form-urlencoded" >
-        <div>
-            <label asp-for="Login">Enter login:</label><br/>
-            <input class="login-form-text-input" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
+    <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded" >
+        <div class="mb-1">
+            @*<label asp-for="Login" class="form-label">Enter login:</label><br/>*@
+            <input class="form-control" placeholder="Login" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
         </div>
-        <div>
-            <label asp-for="Password">Enter password:</label><br/>
-            <input class="login-form-text-input" name="password" type="password" id="passwordInput" value="@Model.Password" />
+        <div class="mb-3">
+            @*<label asp-for="Password" class="form-label">Enter password:</label><br/>*@
+            <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" />
         </div>
-        <div>
-            <input type="checkbox" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
-            <label>Keep logged in</label>
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
+            <label class="form-check-label" for="keepLoggedInInput">Keep logged in</label>
         </div>
 
-        <input type="submit" id="loginSubmit" value="Enter"/>
+        <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-sign-in-alt"></i></button>
     </form>
     @if (TempData["ErrorMessage"] != null)
     {
