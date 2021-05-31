@@ -43,13 +43,13 @@ namespace HSMServer.Controllers
             }
             
 
-            return RedirectToAction("Main");
+            return RedirectToAction("Index");
 
             //return BadRequest(new { message = "Incorrect password or username" });
         }
 
         [AllowAnonymous]
-        public IActionResult Main()
+        public IActionResult Index()
         {
             return View(new LoginModel());
         }
@@ -61,14 +61,14 @@ namespace HSMServer.Controllers
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
             AuthenticationProperties properties = new AuthenticationProperties();
-            properties.IsPersistent = true;
+            properties.IsPersistent = keepLoggedIn;
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
                 properties);
         }
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Main");
+            return RedirectToAction("Index");
         }
 
         private bool ValidateModel(LoginModel model)
