@@ -30,7 +30,8 @@ namespace HSMServer
             services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options =>
                 {
-                    options.LoginPath = new PathString("/Account/Authenticate");
+                    options.LoginPath = new PathString("/Account/Index");
+                    //options.AccessDeniedPath = new PathString("/Account/i");
                 });
 
             services.AddHsts(options =>
