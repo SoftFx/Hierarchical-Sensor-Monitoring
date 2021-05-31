@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@using HSMServer.Constants
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -12,6 +14,9 @@
     <script src="https://unpkg.com/@@material-ui/core@latest/umd/material-ui.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/babel-standalone@latest/babel.min.js" crossorigin="anonymous"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js"></script>
+
     <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin="anonymous"></script>
     <!-- Fonts to support Material Design -->
@@ -21,17 +26,54 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script src="https://kit.fontawesome.com/96e197af10.js" crossorigin="anonymous"></script>
+    <link href="~/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
 </head>
 <body>
 
     <header>
     </header>
+
+    <nav class="navbar navbar-expand-lg navbar-light" style=" background-color: #edf0f5">
+        <div class="container-fluid">
+
+
+            <div class="collapse navbar-collapse" id="nabarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           href="@Url.Action(ViewConstants.IndexAction,ViewConstants.HomeController)">
+                            Tree
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           href="@Url.Action(ViewConstants.ProductsAction, ViewConstants.HomeController)">Products</a>
+                    </li>
+
+                    <li class="nav-item" style="position: absolute; right: 10px; bottom: 3px">
+
+                        <a class="nav-link"
+                           href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
+                            Logout
+                            <i class="fas fa-sign-out-alt" style="margin: 10px"></i>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+
+
     <div class="container">
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
     </div>
-   
+
 
 
     <footer class="border-top footer text-muted">

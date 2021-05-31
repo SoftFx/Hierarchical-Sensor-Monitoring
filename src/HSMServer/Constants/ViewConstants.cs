@@ -6,10 +6,13 @@
         public const string AccountController = "Account";
 
         public const string AuthenticateAction = "Authenticate";
+        public const string LogoutAction = "Logout";
+
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
         public const string HistoryAction = "History";
         public const string ViewFileAction = "ViewFile";
         public const string DownloadFileAction = "DownloadFile";
+        public const string ProductsAction = "Products";
     }
 }
