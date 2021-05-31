@@ -76,9 +76,10 @@ namespace HSMServer.HtmlHelpers
                         result.Append("<div class='accordion-item'><div class='file-sensor-shortvalue-div'" +
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
                                       $"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
-                                      $"<div class='col-md-auto'><button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor' title='View'>"+
+                                      $"<div class='col-md-auto'>" +
+                                      $"<button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                         "<i class='fas fa-eye'></i></button></div" +
-                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}' class='button-download-file-sensor-value'" +
+                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}' class='button-download-file-sensor-value btn btn-secondary'" +
                                         " title='Download'><i class='fas fa-file-download'></i></button></div>" +
                                       "</h2></div></div>");
                         //result.Append("<div class='accordion-item'>" +
