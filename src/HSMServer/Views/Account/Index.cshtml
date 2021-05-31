@@ -34,16 +34,14 @@
     <form method="post" action="account/authenticate" enctype="application/x-www-form-urlencoded" >
         <div>
             <label asp-for="Login">Enter login:</label><br/>
-            <input class="login-form-text-input" name="login" id="loginInput" value="@Model.Login" type="text" asp-for="Login"/><br/>
-            <span asp-validation-for="Login"/>
+            <input class="login-form-text-input" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
         </div>
         <div>
             <label asp-for="Password">Enter password:</label><br/>
-            <input class="login-form-text-input" name="password" type="password" id="passwordInput" value="@Model.Password" asp-for="Password"/>
-            <span asp-validation-for="Password" />
+            <input class="login-form-text-input" name="password" type="password" id="passwordInput" value="@Model.Password" />
         </div>
         <div>
-            <input type="checkbox" id="keepLoggedInInput" asp-for="KeepLoggedIn" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
+            <input type="checkbox" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
             <label>Keep logged in</label>
         </div>
 

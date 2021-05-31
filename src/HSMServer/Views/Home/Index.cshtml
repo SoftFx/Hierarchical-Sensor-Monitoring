@@ -48,7 +48,9 @@
     <hr />
 </div>
 
+
 <script>
+    //Tree functionality
     initializeTree();
 
     const hubConnection = new signalR.HubConnectionBuilder()
@@ -89,12 +91,32 @@
         console.log(hubConnection.connectionId);
     });
 
+    function initializeTree() {
+        $('#jstree').jstree();
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+
+        $('#jstree').on('activate_node.jstree', function (e, data) {
+            if (data == undefined || data.node == undefined || data.node.id == undefined)
+                return;
+            //alert('clicked node: ' + data.node.id);
+
+            $('[id^="list_"]').css("display", "none"); //start with
+
+            if (document.getElementById('list_' + data.node.id) == null)
+                $('#list_sensors_header').css('display', 'none');
+            else
+                $('#list_sensors_header').css('display', 'block');
+
+            $('#list_' + data.node.id).css('display', 'block');
+        });
+    }
+</script>
+<script>
+    //request history functionality 
     function data(product, path, totalCount) {
         return { "Path": path, "Product": product, "TotalCount": totalCount };
-    }
-
-    function fileData(product, path) {
-        return { "Product": product, "Path": path };
     }
 
     function initializeHistory(product, path, totalCount, historyAction) {
@@ -122,6 +144,27 @@
         });
     }
 
+    $(".accordion-button").on("click", function () {
+        product = this.id.split('_')[0];
+        path = this.id.substring(product.length + 1, this.id.length);
+        totalCount = $('#inputCount_' + this.id).val();
+
+        initializeHistory(product, path, totalCount, historyAction);
+    });
+
+    $('[id^="reload_"]').on("click",
+        function() {
+            id = this.id.substring("reload_".length, this.id.length);
+            product = id.split('_')[0];
+            path = id.substring(product.length + 1, this.id.length);
+            totalCount = $('#inputCount_' + id).val();
+
+            initializeHistory(product, path, totalCount, historyAction);
+        });
+
+</script>
+<script>
+    //files functionality
     function viewFile(product, path, viewFileAction) {
         console.log('In view file function');
         $.ajax({
@@ -152,23 +195,9 @@
         });
     }
 
-    $(".accordion-button").on("click", function () {
-        product = this.id.split('_')[0];
-        path = this.id.substring(product.length + 1, this.id.length);
-        totalCount = $('#inputCount_' + this.id).val();
-
-        initializeHistory(product, path, totalCount, historyAction);
-    });
-
-    $('[id^="reload_"]').on("click",
-        function() {
-            id = this.id.substring("reload_".length, this.id.length);
-            product = id.split('_')[0];
-            path = id.substring(product.length + 1, this.id.length);
-            totalCount = $('#inputCount_' + id).val();
-
-            initializeHistory(product, path, totalCount, historyAction);
-        });
+    function fileData(product, path) {
+        return { "Product": product, "Path": path };
+    }
 
     $('[id^="button_view"]').on("click",
         function () {
@@ -189,26 +218,4 @@
             downloadFile(product, path, downloadFileAction);
         }
     );
-
-    function initializeTree() {
-        $('#jstree').jstree();
-
-        $('#updateTime').empty();
-        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-
-        $('#jstree').on('activate_node.jstree', function (e, data) {
-            if (data == undefined || data.node == undefined || data.node.id == undefined)
-                return;
-            //alert('clicked node: ' + data.node.id);
-
-            $('[id^="list_"]').css("display", "none"); //start with
-
-            if (document.getElementById('list_' + data.node.id) == null)
-                $('#list_sensors_header').css('display', 'none');
-            else
-                $('#list_sensors_header').css('display', 'block');
-
-            $('#list_' + data.node.id).css('display', 'block');
-        });
-    }
 </script>
