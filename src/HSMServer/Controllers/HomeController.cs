@@ -1,4 +1,5 @@
-﻿using HSMCommon.Model;
+﻿using System;
+using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using System.Collections.Generic;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 
 namespace HSMServer.Controllers
@@ -59,6 +61,42 @@ namespace HSMServer.Controllers
             var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
 
             return new HtmlString(ListHelper.CreateHistoryList(result));
+        }
+
+        [HttpPost]
+        public IActionResult ViewFile([FromBody] GetFileSensorModel model)
+        {
+            var fullPath = model.Path?.Replace('_', '/').Replace('-', ' ');
+            int ind = fullPath.IndexOf('/');
+            string product = fullPath.Substring(0, ind);
+            string path = fullPath.Substring(ind + 1, fullPath.Length - ind - 1);
+            var fileContents =
+                Encoding.ASCII.GetBytes(_monitoringCore.GetFileSensorValue(HttpContext.User as User, product, path));
+            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
+            var fileName = $"{model.Product} {model.Path}.{extension}";
+            var fileType = GetFileTypeByExtension(fileName.Replace(".",""));
+            return File(fileContents, fileType, fileName);
+        }
+
+        [HttpPost]
+        public IActionResult DownloadFile([FromBody] GetFileSensorModel model)
+        {
+            throw new NotImplementedException();
+        }
+
+        private string GetFileTypeByExtension(string extension)
+        {
+            switch (extension)
+            {
+                case "pdf":
+                    return "application/pdf";
+                case "html":
+                    return "html";
+                case "txt":
+                    return "text/plain";
+                default:
+                    return "text/plain";
+            }
         }
     }
 }

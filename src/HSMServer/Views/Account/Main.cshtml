@@ -42,7 +42,10 @@
             <input class="login-form-text-input" name="password" type="password" id="passwordInput" value="@Model.Password" asp-for="Password"/>
             <span asp-validation-for="Password" />
         </div>
-        
+        <div>
+            <input type="checkbox" id="keepLoggedInInput" asp-for="KeepLoggedIn" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
+            <label>Keep logged in</label>
+        </div>
 
         <input type="submit" id="loginSubmit" value="Enter"/>
     </form>

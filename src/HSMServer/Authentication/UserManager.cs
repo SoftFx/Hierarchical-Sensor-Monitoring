@@ -38,7 +38,7 @@ namespace HSMServer.Authentication
             List<User> dataBaseUsers = ReadUserFromDatabase();
             if (File.Exists(_usersFilePath))
             {
-                Thread.Sleep(300);
+                Thread.Sleep(300); 
                 MigrateUsersToDatabase();
                 File.Delete(_usersFilePath);
                 _logger.Info("Users file deleted");

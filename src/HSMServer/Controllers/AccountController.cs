@@ -33,7 +33,7 @@ namespace HSMServer.Controllers
                 if (user != null)
                 {
                     TempData.Remove(_tempDataErrorText);
-                    await Authenticate(model.Login);
+                    await Authenticate(model.Login, model.KeepLoggedIn);
                     return RedirectToAction("Index", "Home");
                 }
                 else
@@ -54,13 +54,16 @@ namespace HSMServer.Controllers
             return View(new LoginModel());
         }
 
-        private async Task Authenticate(string login)
+        private async Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim>{new Claim(ClaimsIdentity.DefaultNameClaimType, login)};
             ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie", 
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
+            AuthenticationProperties properties = new AuthenticationProperties();
+            properties.IsPersistent = true;
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
+                properties);
         }
         public async Task<IActionResult> Logout()
         {

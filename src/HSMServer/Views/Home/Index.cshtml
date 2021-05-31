@@ -8,9 +8,21 @@
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.ViewFileAction, ViewConstants.HomeController))";
+    var downloadFileAction = "@Html.Raw(Url.Action(ViewConstants.DownloadFileAction, ViewConstants.HomeController))";
 </script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    .file-sensor-shortvalue-div {
+        font-size: medium;
+        font-weight: normal;
+        margin: 15px;
+    }
+    .button-view-file-sensor {
+        margin: 0px 10px 0px 0px;
+    }
+</style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
@@ -18,7 +30,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js"></script>
 
-<script src="https://kit.fontawesome.com/96e197af10.js" crossorigin="anonymous"></script><link href="~/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+<script src="https://kit.fontawesome.com/96e197af10.js" crossorigin="anonymous"></script>
+<link href="~/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
 
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
 
@@ -76,6 +89,14 @@
         console.log(hubConnection.connectionId);
     });
 
+    function data(product, path, totalCount) {
+        return { "Path": path, "Product": product, "TotalCount": totalCount };
+    }
+
+    function fileData(product, path) {
+        return { "Product": product, "Path": path };
+    }
+
     function initializeHistory(product, path, totalCount, historyAction) {
         if (totalCount == undefined)
             totalCount = 10;
@@ -88,7 +109,7 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function(data) {
+        }).done(function (data) {
             //console.log(data);
 
             data = data.replace('{"value":"', ''); //fix sometime
@@ -101,8 +122,34 @@
         });
     }
 
-    function data(product, path, totalCount) {
-        return { "Path": path, "Product": product, "TotalCount": totalCount };
+    function viewFile(product, path, viewFileAction) {
+        console.log('In view file function');
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(fileData(product, path)),
+            url: viewFileAction,
+            cache: false,
+            contentType: "application/json; charset=utf-8",
+            success: function (data) {
+                console.log(data);
+            }
+        });
+    }
+
+    function downloadFile(product, path, downloadFileAction) {
+        console.log('In download file function');
+        console.log('Product: ', product);
+        console.log('Path: ', path);
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(fileData(product, path)),
+            url: downloadFileAction,
+            cache: false,
+            contentType: "application/json; charset=utf-8",
+            success: function (data) {
+                console.log(data);
+            }
+        });
     }
 
     $(".accordion-button").on("click", function () {
@@ -122,6 +169,26 @@
 
             initializeHistory(product, path, totalCount, historyAction);
         });
+
+    $('[id^="button_view"]').on("click",
+        function () {
+            id = this.id.substring("button_view".length, this.id.length);
+            product = id.split('_')[0];
+            path = id.substring(product.length + 1, this.id.length);
+
+            viewFile(product, path, viewFileAction);
+        }
+    );
+
+    $('[id^="button_download"]').on("click",
+        function () {
+            id = this.id.substring("button_view".length, this.id.length);
+            product = id.split('_')[0];
+            path = id.substring(product.length + 1, this.id.length);
+
+            downloadFile(product, path, downloadFileAction);
+        }
+    );
 
     function initializeTree() {
         $('#jstree').jstree();
@@ -144,5 +211,4 @@
             $('#list_' + data.node.id).css('display', 'block');
         });
     }
-
 </script>

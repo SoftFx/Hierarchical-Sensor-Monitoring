@@ -9,6 +9,7 @@
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
         public const string HistoryAction = "History";
-
+        public const string ViewFileAction = "ViewFile";
+        public const string DownloadFileAction = "DownloadFile";
     }
 }
