@@ -9,26 +9,8 @@
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
     var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
 </script>
-@*<style>
-    .login-form-div {
 
-    }
-
-    .class login-form-text-input {
-        width: 100%;
-        border: 2px solid gray;
-        border-radius: 4px;
-    }
-    .class login-form-text-input {
-        border: 4px solid #000000;
-    }
-
-    #passwordInput {
-        margin: auto auto 10px auto;
-    }
-</style>*@
-
-<h4>Login</h4>
+<h4 style="margin: 20px 0px">Login</h4>
 
 <div class="login-form-div">
     <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded" >
