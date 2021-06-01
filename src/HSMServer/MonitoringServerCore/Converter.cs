@@ -605,8 +605,8 @@ namespace HSMServer.MonitoringServerCore
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
                             result = !string.IsNullOrEmpty(fileData?.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Comment = {fileData?.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received.";
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Extension: {fileData?.Extension.Replace(".","")}. Comment = {fileData?.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Extension: {fileData?.Extension.Replace(".", "")}.";
                         }
                         catch { }
                         break;
@@ -693,8 +693,8 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 result = !string.IsNullOrEmpty(value.Comment)
-                    ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Comment = {value.Comment}."
-                    : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received.";
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Extension: {value.Extension.Replace(".", "")}. Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Extension: {value.Extension.Replace(".", "")}.";
             }
             catch (Exception e)
             {

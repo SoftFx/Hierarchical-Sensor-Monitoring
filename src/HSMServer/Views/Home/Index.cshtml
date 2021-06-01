@@ -174,20 +174,35 @@
         });
     }
 
-    function downloadFile(product, path, downloadFileAction) {
-        console.log('In download file function');
-        console.log('Product: ', product);
-        console.log('Path: ', path);
+    function downloadFile(product, path, extension, downloadFileAction) {
         $.ajax({
-            type: 'POST',
+            type: 'POST', 
             data: JSON.stringify(fileData(product, path)),
             url: downloadFileAction,
             cache: false,
-            contentType: "application/json; charset=utf-8",
-            success: function (data) {
-                console.log(data);
+            async: true,
+            contentType: 'application/json',
+            //dataType: 'application/octet-stream',
+            success: function (response) {
+                console.log('download successful');
+                var date = new Date().toLocaleDateString("ru-RU");
+                let url = window.URL.createObjectURL(new Blob([response.data]));
+                let link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', product + "_" + path + "_" + date +  "." + extension);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             }
         });
+        //fetch(downloadFileAction, {
+        //    method: 'POST',
+        //    cache: 'no-cache',
+        //    body: JSON.stringify(fileData(product, path)),
+        //    headers: {
+        //        'Content-type': 'application/json'
+        //    }
+        //});
     }
 
     function fileData(product, path) {
@@ -206,11 +221,14 @@
 
     $('[id^="button_download"]').on("click",
         function () {
-            id = this.id.substring("button_view".length, this.id.length);
-            product = id.split('_')[0];
-            path = id.substring(product.length + 1, this.id.length);
+            id = this.id.substring("button_download".length, this.id.length);
 
-            downloadFile(product, path, downloadFileAction);
+            let splitRes = id.split('_');
+            product = splitRes[1];
+            extension = splitRes[splitRes.length - 1];
+            path = id.substring(product.length + 2, id.length - extension.length - 1);
+            
+            downloadFile(product, path, extension, downloadFileAction);
         }
     );
 </script>

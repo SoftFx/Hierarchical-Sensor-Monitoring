@@ -10,7 +10,7 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ListHelper
     {
-
+        private const string ExtensionPattern = "Extension: ";
 
         public static string CreateFullLists(TreeViewModel model)
         {
@@ -73,12 +73,13 @@ namespace HSMServer.HtmlHelpers
                     }
                     else
                     {
+                        string extension = GetSensorFileExtension(sensor.Value);
                         result.Append("<div class='accordion-item'><div class='file-sensor-shortvalue-div'" +
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
                                       $"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
                                       $"<div class='col-md-auto'><button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor' title='View'>"+
                                         "<i class='fas fa-eye'></i></button></div" +
-                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}' class='button-download-file-sensor-value'" +
+                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}_{extension}' class='button-download-file-sensor-value'" +
                                         " title='Download'><i class='fas fa-file-download'></i></button></div>" +
                                       "</h2></div></div>");
                         //result.Append("<div class='accordion-item'>" +
@@ -89,6 +90,14 @@ namespace HSMServer.HtmlHelpers
             result.Append("</div>");
 
             return result.ToString();
+        }
+
+        private static string GetSensorFileExtension(string sensorValue)
+        {
+            int extensionIndex = sensorValue.IndexOf(ExtensionPattern);
+            var extensionString = sensorValue.Substring(extensionIndex + ExtensionPattern.Length);
+            int dotIndex = extensionString.IndexOf('.');
+            return extensionString.Substring(0, dotIndex);
         }
 
         public static string CreateHistoryList(List<SensorHistoryData> sensors)

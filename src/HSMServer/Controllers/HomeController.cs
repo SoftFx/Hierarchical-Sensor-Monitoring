@@ -1,5 +1,4 @@
-﻿using System;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
@@ -9,8 +8,10 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace HSMServer.Controllers
 {
@@ -81,22 +82,27 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult DownloadFile([FromBody] GetFileSensorModel model)
         {
-            throw new NotImplementedException();
+            string product = model.Product.Replace('-', ' ');
+            string path = model.Path.Replace('_', '/');
+            var fileContents =
+                Encoding.ASCII.GetBytes(_monitoringCore.GetFileSensorValue(HttpContext.User as User, product, path));
+            var fileContentsStream = new MemoryStream(fileContents);
+            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
+            var fileName = $"{model.Path}.{extension}";
+            //return File(fileContents, System.Net.Mime.MediaTypeNames.Application.Octet, fileName);
+            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
+            //return File(fileContentsStream, fileName);
         }
 
-        private string GetFileTypeByExtension(string extension)
+        private string GetFileTypeByExtension(string fileName)
         {
-            switch (extension)
+            var provider = new FileExtensionContentTypeProvider();
+            if (!provider.TryGetContentType(fileName, out var contentType))
             {
-                case "pdf":
-                    return "application/pdf";
-                case "html":
-                    return "html";
-                case "txt":
-                    return "text/plain";
-                default:
-                    return "text/plain";
+                contentType = System.Net.Mime.MediaTypeNames.Application.Octet;
             }
+
+            return contentType;
         }
     }
 }
