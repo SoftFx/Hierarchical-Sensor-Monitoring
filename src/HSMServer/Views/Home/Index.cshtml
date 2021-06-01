@@ -189,7 +189,9 @@
             success: function (response) {
                 console.log('download successful');
                 var date = new Date().toLocaleDateString("ru-RU");
-                let url = window.URL.createObjectURL(new Blob([response.data]));
+                var blob = new Blob([response]);
+                console.log(blob);
+                let url = window.URL.createObjectURL(blob);
                 let link = document.createElement('a');
                 link.href = url;
                 link.setAttribute('download', product + "_" + path + "_" + date +  "." + extension);
