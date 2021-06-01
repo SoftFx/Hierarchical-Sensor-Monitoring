@@ -11,6 +11,9 @@ using NLog;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using System.Linq;
+using HSMServer.DataLayer.Model;
+using HSMServer.Constants;
 
 namespace HSMServer.Controllers
 {
@@ -97,6 +100,29 @@ namespace HSMServer.Controllers
                 default:
                     return "text/plain";
             }
+        }
+
+        public IActionResult Products()
+        {
+            var products = _monitoringCore.GetProductsList(HttpContext.User as User);
+
+            return View(products.Select(x => new ProductViewModel(x))?.ToList());
+        }
+
+        public IActionResult AddProduct(string productName)
+        {
+            _monitoringCore.AddProduct(HttpContext.User as User, productName, 
+                out Product product, out string error);
+
+            return RedirectToAction(ViewConstants.ProductsAction);
+        }
+
+        public IActionResult RemoveProduct([FromQuery(Name="Product")]string productName)
+        {
+            //_monitoringCore.RemoveProduct(HttpContext.User as User, productName,
+               // out Product product, out string error);
+
+            return RedirectToAction(ViewConstants.ProductsAction);
         }
     }
 }

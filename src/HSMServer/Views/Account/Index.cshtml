@@ -5,7 +5,6 @@
 }
 
 <script>
-
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
     var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
 </script>
@@ -15,11 +14,9 @@
 <div class="login-form-div">
     <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded" >
         <div class="mb-1">
-            @*<label asp-for="Login" class="form-label">Enter login:</label><br/>*@
             <input class="form-control" placeholder="Login" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
         </div>
         <div class="mb-3">
-            @*<label asp-for="Password" class="form-label">Enter password:</label><br/>*@
             <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" />
         </div>
         <div class="mb-3 form-check">

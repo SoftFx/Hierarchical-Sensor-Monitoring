@@ -1,5 +1,37 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@using HSMServer.Model.ViewModel
+@using HSMServer.Constants
+@using HSMServer.HtmlHelpers
+@model List<ProductViewModel>
+
+@{ ViewData["Title"] = "Products"; }
+
+<div class="container row justify-content-center">
+    @ViewHelper.CreateProductList(Model)
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+
+<script>
+    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.HomeController))";
+</script>
+
+<script>
+    //copy buttons
+    var clipboard = new ClipboardJS('[id^="copy_"]');
+
+
+
+    $('[id^="delete_"]').on("click",
+        function () {
+            name = this.id.substring("delete_".length, this.id.length);
+            console.log(name);
+
+            $.ajax({
+                type: 'GET',
+                url: deleteAction + "?Product=" + name,
+                cache: false,
+                async: true
+            });
+
+        });
+</script>

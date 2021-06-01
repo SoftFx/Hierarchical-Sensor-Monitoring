@@ -10,8 +10,6 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ListHelper
     {
-
-
         public static string CreateFullLists(TreeViewModel model)
         {
             if (model == null) return string.Empty;
@@ -29,6 +27,25 @@ namespace HSMServer.HtmlHelpers
 
             return result.ToString();
         }
+
+        //public static string CreateFullList(List<ProductViewModel> products)
+        //{
+        //    if (products == null || products.Count == 0) return string.Empty;
+
+        //    StringBuilder result = new StringBuilder();
+        //    result.Append("<div class='col-sm'><div><h5 style='margin: 10px 20px 10px;'>Products</h5></div>");
+        //    result.Append("<div class='col-xxl' style='margin: 10px 0px'><ul class='list-group'>");
+
+        //    foreach(var product in products)
+        //    {
+        //        result.Append("<li class='list-group-item list-group-item-action'>" +
+        //            $"{product.Name}\n {product.Key}\n {product.DateAdded}");
+        //    }
+
+        //    result.Append("</ul></div></div>");
+
+        //    return result.ToString();
+        //}
 
         public static string CreateList(string path, string fullPath, TreeViewModel model)
         {
