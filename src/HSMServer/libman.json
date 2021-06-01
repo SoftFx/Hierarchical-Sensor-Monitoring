@@ -15,6 +15,13 @@
       "files": [
         "dist/css/bootstrap.min.css"
       ]
+    },
+    {
+      "library": "clipboard@2.0.8",
+      "destination": "wwwroot/clipboard/",
+      "files": [
+        "dist/clipboard.min.js"
+      ]
     }
   ]
 }

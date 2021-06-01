@@ -19,7 +19,7 @@ namespace HSMServer.HtmlHelpers
             StringBuilder result = new StringBuilder();
             result.Append("<div class='col-sm-8' id='list'>" +
                 "<div id='list_sensors_header' style='display: none;'>" +
-                "<p style='margin: 0px 20px 10px;'>Sensors</p></div>");
+                "<h5 style='margin: 0px 20px 10px;'>Sensors</h5></div>");
 
             foreach (var path in model.Paths)
             {
@@ -29,6 +29,25 @@ namespace HSMServer.HtmlHelpers
 
             return result.ToString();
         }
+
+        //public static string CreateFullList(List<ProductViewModel> products)
+        //{
+        //    if (products == null || products.Count == 0) return string.Empty;
+
+        //    StringBuilder result = new StringBuilder();
+        //    result.Append("<div class='col-sm'><div><h5 style='margin: 10px 20px 10px;'>Products</h5></div>");
+        //    result.Append("<div class='col-xxl' style='margin: 10px 0px'><ul class='list-group'>");
+
+        //    foreach(var product in products)
+        //    {
+        //        result.Append("<li class='list-group-item list-group-item-action'>" +
+        //            $"{product.Name}\n {product.Key}\n {product.DateAdded}");
+        //    }
+
+        //    result.Append("</ul></div></div>");
+
+        //    return result.ToString();
+        //}
 
         public static string CreateList(string path, string fullPath, TreeViewModel model)
         {
@@ -77,10 +96,11 @@ namespace HSMServer.HtmlHelpers
                         result.Append("<div class='accordion-item'><div class='file-sensor-shortvalue-div'" +
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
                                       $"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
-                                      $"<div class='col-md-auto'><button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor' title='View'>"+
+                                      $"<div class='col-md-auto'>" +
+                                      $"<button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                         "<i class='fas fa-eye'></i></button></div" +
-                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}_{extension}' class='button-download-file-sensor-value'" +
-                                        " title='Download'><i class='fas fa-file-download'></i></button></div>" +
+                                      $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}_{extension}' class='button-download-file-sensor-value btn btn-secondary'" +
+                                      " title='Download'><i class='fas fa-file-download'></i></button></div>" +
                                       "</h2></div></div>");
                         //result.Append("<div class='accordion-item'>" +
                         //              $"</div>");

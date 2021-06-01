@@ -12,6 +12,9 @@ using System.IO;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.StaticFiles;
+using System.Linq;
+using HSMServer.DataLayer.Model;
+using HSMServer.Constants;
 
 namespace HSMServer.Controllers
 {
@@ -92,6 +95,28 @@ namespace HSMServer.Controllers
             //return File(fileContents, System.Net.Mime.MediaTypeNames.Application.Octet, fileName);
             return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
             //return File(fileContentsStream, fileName);
+        }
+        public IActionResult Products()
+        {
+            var products = _monitoringCore.GetProductsList(HttpContext.User as User);
+
+            return View(products.Select(x => new ProductViewModel(x))?.ToList());
+        }
+
+        public IActionResult AddProduct(string productName)
+        {
+            _monitoringCore.AddProduct(HttpContext.User as User, productName,
+                out Product product, out string error);
+
+            return RedirectToAction(ViewConstants.ProductsAction);
+        }
+
+        public IActionResult RemoveProduct([FromQuery(Name = "Product")] string productName)
+        {
+            //_monitoringCore.RemoveProduct(HttpContext.User as User, productName,
+            // out Product product, out string error);
+
+            return RedirectToAction(ViewConstants.ProductsAction);
         }
 
         private string GetFileTypeByExtension(string fileName)

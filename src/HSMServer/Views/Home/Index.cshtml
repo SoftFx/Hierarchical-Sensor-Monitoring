@@ -3,7 +3,7 @@
 @model HSMServer.Model.ViewModel.TreeViewModel
 
 @{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Tree";
 }
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
@@ -12,17 +12,20 @@
     var downloadFileAction = "@Html.Raw(Url.Action(ViewConstants.DownloadFileAction, ViewConstants.HomeController))";
 </script>
 
-<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-    .file-sensor-shortvalue-div {
-        font-size: medium;
-        font-weight: normal;
-        margin: 15px;
+    .file-sensor-shortvalue-div {       
+        margin: 10px;
     }
     .button-view-file-sensor {
         margin: 0px 10px 0px 0px;
     }
+
+    .button-download-file-sensor-value{
+        width: 45px;
+    }
 </style>
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
