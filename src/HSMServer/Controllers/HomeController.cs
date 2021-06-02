@@ -70,16 +70,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult ViewFile([FromBody] GetFileSensorModel model)
         {
-            var fullPath = model.Path?.Replace('_', '/').Replace('-', ' ');
-            int ind = fullPath.IndexOf('/');
-            string product = fullPath.Substring(0, ind);
-            string path = fullPath.Substring(ind + 1, fullPath.Length - ind - 1);
+            string product = model.Product.Replace('-', ' ');
+            string path = model.Path.Replace('_', '/');
             var fileContents =
                 Encoding.ASCII.GetBytes(_monitoringCore.GetFileSensorValue(HttpContext.User as User, product, path));
+            var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
-            var fileName = $"{model.Product} {model.Path}.{extension}";
-            var fileType = GetFileTypeByExtension(fileName.Replace(".",""));
-            return File(fileContents, fileType, fileName);
+            var fileName = $"{model.Path}.{extension}";
+            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]

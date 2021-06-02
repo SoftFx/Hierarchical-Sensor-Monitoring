@@ -97,7 +97,7 @@ namespace HSMServer.HtmlHelpers
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
                                       $"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
                                       $"<div class='col-md-auto'>" +
-                                      $"<button id='button_view_{formattedPath}_{name}' class='button-view-file-sensor btn btn-secondary' title='View'>" +
+                                      $"<button id='button_view_{formattedPath}_{name}_{extension}' class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                         "<i class='fas fa-eye'></i></button></div" +
                                       $"<div class='col-md-auto'><button id='button_download_{formattedPath}_{name}_{extension}' class='button-download-file-sensor-value btn btn-secondary'" +
                                       " title='Download'><i class='fas fa-file-download'></i></button></div>" +

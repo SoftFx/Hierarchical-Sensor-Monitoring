@@ -30,7 +30,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
 
-
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
 
 <div style="margin: 10px">
@@ -46,6 +45,12 @@
     <hr />
 </div>
 
+<script>
+    //Mime types map
+    const mimeTypesMap = new Map();
+    mimeTypesMap.set('html', 'text/html');
+    mimeTypesMap.set('pdf', 'application/pdf');
+</script>
 
 <script>
     //Tree functionality
@@ -163,16 +168,28 @@
 </script>
 <script>
     //files functionality
-    function viewFile(product, path, viewFileAction) {
-        console.log('In view file function');
+    function getFileName(product, path, extension) {
+        let newDate = new Date();
+        let date = newDate.toLocaleDateString("ru-RU");
+        let time = newDate.toLocaleTimeString("ru-Ru").replace(':','.');
+        return product + "_" + path + "_" + date + " " + time + "." + extension;
+    }
+
+    function viewFile(product, path, extension, viewFileAction) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(fileData(product, path)),
             url: viewFileAction,
             cache: false,
-            contentType: "application/json; charset=utf-8",
-            success: function (data) {
-                console.log(data);
+            contentType: "application/json",
+            success: function (response) {
+                let fileType = mimeTypesMap.get(extension);
+                if (fileType === undefined) {
+                    fileType = "text/html";
+                }
+                let blob = new Blob([response], { type: fileType });
+                let url = window.URL.createObjectURL(blob);
+                window.open(url);
             }
         });
     }
@@ -187,14 +204,12 @@
             contentType: 'application/json',
             //dataType: 'application/octet-stream',
             success: function (response) {
-                console.log('download successful');
                 var date = new Date().toLocaleDateString("ru-RU");
                 var blob = new Blob([response]);
-                console.log(blob);
                 let url = window.URL.createObjectURL(blob);
                 let link = document.createElement('a');
                 link.href = url;
-                link.setAttribute('download', product + "_" + path + "_" + date +  "." + extension);
+                link.setAttribute('download', getFileName(product, path, extension));
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -217,10 +232,13 @@
     $('[id^="button_view"]').on("click",
         function () {
             id = this.id.substring("button_view".length, this.id.length);
-            product = id.split('_')[0];
-            path = id.substring(product.length + 1, this.id.length);
 
-            viewFile(product, path, viewFileAction);
+            let splitRes = id.split('_');
+            let product = splitRes[1];
+            let extension = splitRes[splitRes.length - 1];
+            let path = id.substring(product.length + 2, id.length - extension.length - 1);
+
+            viewFile(product, path, extension, viewFileAction);
         }
     );
 
