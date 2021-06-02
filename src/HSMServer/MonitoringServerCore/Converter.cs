@@ -14,6 +14,7 @@ namespace HSMServer.MonitoringServerCore
     internal static class Converter
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private const double SIZE_DENOMINATOR = 1024.0;
 
         //public static SignedCertificateMessage Convert(X509Certificate2 signedCertificate,
         //    X509Certificate2 caCertificate)
@@ -604,9 +605,10 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                            string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
                             result = !string.IsNullOrEmpty(fileData?.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Extension: {fileData?.Extension.Replace(".","")}. Comment = {fileData?.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {fileData?.FileContent?.Length} received. Extension: {fileData?.Extension.Replace(".", "")}.";
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {fileData?.Extension.Replace(".","")}. Comment = {fileData?.Comment}"
+                                : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {fileData?.Extension.Replace(".", "")}.";
                         }
                         catch { }
                         break;
@@ -692,9 +694,10 @@ namespace HSMServer.MonitoringServerCore
             string result = string.Empty;
             try
             {
+                string sizeString = FileSizeToNormalString(value?.FileContent?.Length ?? 0);
                 result = !string.IsNullOrEmpty(value.Comment)
-                    ? $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Extension: {value.Extension.Replace(".", "")}. Comment = {value.Comment}."
-                    : $"Time: {timeCollected.ToUniversalTime():G}. File with length of {value.FileContent.Length} received. Extension: {value.Extension.Replace(".", "")}.";
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {value.Extension.Replace(".", "")}. Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {value.Extension.Replace(".", "")}.";
             }
             catch (Exception e)
             {
@@ -819,6 +822,29 @@ namespace HSMServer.MonitoringServerCore
         {
             var splitRes = path.Split("/".ToCharArray());
             return splitRes[^1];
+        }
+
+        private static string FileSizeToNormalString(int size)
+        {
+            if (size < SIZE_DENOMINATOR)
+            {
+                return $"{size} bytes";
+            }
+
+            double kb = size / SIZE_DENOMINATOR;
+            if (kb < SIZE_DENOMINATOR)
+            {
+                return $"{kb:#,##0} KB";
+            }
+
+            double mb = kb / SIZE_DENOMINATOR;
+            if (mb < SIZE_DENOMINATOR)
+            {
+                return $"{mb:#,##0.0} MB";
+            }
+
+            double gb = mb / SIZE_DENOMINATOR;
+            return $"{gb:#,##0.0} GB";
         }
         #endregion
 
