@@ -41,11 +41,8 @@ namespace HSMServer.Controllers
                     TempData[_tempDataErrorText] = "Incorrect password or username!";
                 }
             }
-            
 
-            return RedirectToAction("Index");
-
-            //return BadRequest(new { message = "Incorrect password or username" });
+            return RedirectToAction("Index", "Account");
         }
 
         [AllowAnonymous]
@@ -65,10 +62,10 @@ namespace HSMServer.Controllers
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
                 properties);
         }
-        public async Task<IActionResult> Logout()
+        public void Logout()
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Index");
+            TempData.Remove(_tempDataErrorText);
+            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties {RedirectUri = Url.Action(nameof(Index))});
         }
 
         private bool ValidateModel(LoginModel model)

@@ -40,8 +40,13 @@ namespace HSMServer.Extensions
 
         public static User WithoutPassword(this User user)
         {
-            user.Password = null;
-            return user;
+            User copy = new User();
+            copy.CertificateFileName = user.CertificateFileName;
+            copy.Password = null;
+            copy.CertificateThumbprint = user.CertificateThumbprint;
+            copy.Role = user.Role;
+            copy.UserPermissions = user.UserPermissions;
+            return copy;
         }
     }
 }

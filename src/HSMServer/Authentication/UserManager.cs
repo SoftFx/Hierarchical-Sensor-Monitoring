@@ -101,6 +101,7 @@ namespace HSMServer.Authentication
         {
             get
             {
+                CheckUsersUpToDate();
                 List<User> users = new List<User>();
                 lock (_accessLock)
                 {

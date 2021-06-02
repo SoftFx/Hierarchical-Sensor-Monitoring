@@ -15,6 +15,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using HSMServer.Services;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -32,6 +33,11 @@ namespace HSMServer
                 {
                     options.LoginPath = new PathString("/Account/Index");
                     //options.AccessDeniedPath = new PathString("/Account/i");
+                    options.Events.OnRedirectToReturnUrl = (context) =>
+                    {
+                        context.Response.Redirect("/Account/Index");
+                        return Task.CompletedTask;
+                    };
                 });
 
             services.AddHsts(options =>
