@@ -15,12 +15,12 @@ namespace HSMServer.Handlers
 {
     public class BasicAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
-        private readonly IUserService _userService;
+        private readonly IUserManager _userManager;
         public BasicAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock,
-            IUserService userService)
+            IUserManager userManager)
             : base(options, logger, encoder, clock)
         {
-            _userService = userService;
+            _userManager = userManager;
         }
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -44,7 +44,7 @@ namespace HSMServer.Handlers
                 var credentials = Encoding.UTF8.GetString(credBytes).Split(new[] {':'}, 2);
                 var login = credentials[0];
                 var password = credentials[1];
-                user = _userService.Authenticate(login, password);
+                user = _userManager.Authenticate(login, password);
             }
             catch (Exception e)
             {

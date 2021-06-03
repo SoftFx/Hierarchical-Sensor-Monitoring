@@ -8,6 +8,7 @@ using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
+using HSMServer.Extensions;
 using NLog;
 
 namespace HSMServer.Authentication
@@ -355,6 +356,15 @@ namespace HSMServer.Authentication
             }
 
             return correspondingUser != null ? correspondingUser.UserPermissions : new List<PermissionItem>();
+        }
+
+        public User Authenticate(string login, string password)
+        {
+            var passwordHash = HashComputer.ComputePasswordHash(password);
+            var existingUser = Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
+            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
+
+            return existingUser?.WithoutPassword();
         }
     }
 }

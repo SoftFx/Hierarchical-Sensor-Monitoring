@@ -82,7 +82,6 @@ namespace HSMServer
             services.AddSingleton<Services.HSMService>();
             services.AddSingleton<Services.AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
-            services.AddScoped<IUserService, UserService>();
             //services.AddSingleton<SensorsController>();
             //services.AddSingleton<ValuesController>();
 
