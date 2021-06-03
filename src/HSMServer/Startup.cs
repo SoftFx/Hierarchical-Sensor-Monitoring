@@ -19,6 +19,7 @@ using HSMServer.Services;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using FluentValidation.AspNetCore;
 
 namespace HSMServer
 {
@@ -41,6 +42,7 @@ namespace HSMServer
                 options.MaxAge = TimeSpan.FromDays(365);
             });
 
+            services.AddMvc().AddFluentValidation();
 
             services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
             {

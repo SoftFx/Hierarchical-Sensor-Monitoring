@@ -7,13 +7,13 @@ using HSMServer.Model;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using HSMServer.Constants;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     public class AccountController : Controller
     {
-        private const string _tempDataErrorText = "ErrorMessage";
         private readonly IUserService _userService;
 
         public AccountController(IUserService userService)
@@ -32,13 +32,13 @@ namespace HSMServer.Controllers
                 var user = _userService.Authenticate(model.Login, model.Password);
                 if (user != null)
                 {
-                    TempData.Remove(_tempDataErrorText);
+                    TempData.Remove(TextConstants.TempDataErrorText);
                     await Authenticate(model.Login, model.KeepLoggedIn);
                     return RedirectToAction("Index", "Home");
                 }
                 else
                 {
-                    TempData[_tempDataErrorText] = "Incorrect password or username!";
+                    TempData[TextConstants.TempDataErrorText] = "Incorrect password or username!";
                 }
             }
             
@@ -75,13 +75,13 @@ namespace HSMServer.Controllers
         {
             if (string.IsNullOrEmpty(model.Login))
             {
-                TempData[_tempDataErrorText] = "Login must not be empty!";
+                TempData[TextConstants.TempDataErrorText] = "Login must not be empty!";
                 return false;
             }
 
             if (string.IsNullOrEmpty(model.Password))
             {
-                TempData[_tempDataErrorText] = "Password must not be empty!";
+                TempData[TextConstants.TempDataErrorText] = "Password must not be empty!";
                 return false;
             }
 

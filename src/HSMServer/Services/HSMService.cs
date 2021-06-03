@@ -106,7 +106,7 @@ namespace HSMServer.Services
         {
             var httpContext = context.GetHttpContext();
             //User user = _userManager.GetUserByCertificateThumbprint(httpContext.Connection.ClientCertificate.Thumbprint);
-            var list = _monitoringCore.GetProductsList(httpContext.User as User);
+            var list = _monitoringCore.GetProducts(httpContext.User as User);
             return Task.FromResult(Convert(list));
         }
 

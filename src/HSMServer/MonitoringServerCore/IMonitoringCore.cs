@@ -39,7 +39,8 @@ namespace HSMServer.MonitoringServerCore
         //public StringMessage GetFileSensorValueExtension(User user, string product, string path);
         string GetFileSensorValueExtension(User user, string product, string path);
         //public ProductsListMessage GetProductsList(User user);
-        List<Product> GetProductsList(User user);
+        List<Product> GetProducts(User user);
+        List<Product> GetAllProducts();
         //public AddProductResultMessage AddProduct(User user, string productName);
         bool AddProduct(User user, string productName, out Product product, out string error);
         //public RemoveProductResultMessage RemoveProduct(User user, string productName);

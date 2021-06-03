@@ -12,6 +12,7 @@
         public const string UpdateAction = "Update";
         public const string HistoryAction = "History";
         public const string RemoveProductAction = "RemoveProduct";
+        public const string CreateProductAction = "CreateProduct";
         public const string ViewFileAction = "ViewFile";
         public const string DownloadFileAction = "DownloadFile";
         public const string ProductsAction = "Products";

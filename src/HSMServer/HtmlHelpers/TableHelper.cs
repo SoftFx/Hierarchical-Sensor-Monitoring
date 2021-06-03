@@ -1,4 +1,5 @@
 ﻿using HSMServer.Model.ViewModel;
+using HSMServer.MonitoringServerCore;
 using System.Collections.Generic;
 using System.Text;
 
@@ -12,11 +13,7 @@ namespace HSMServer.HtmlHelpers
             //header template
             result.Append("<div style='margin: 10px'>" +
                 "<div class='row justify-content-start'><div class='col-2'>" +
-                "<h5 style='margin: 10px 20px 10px;'>Products</h5></div>" +
-                "<div class='col'>" +
-                "<button id='add_{product.Key}' type='button' class='btn btn-secondary'>" +
-                    $"Add new product <i class='fas fa-plus'></i></button>" +
-                    $"</div></div></div>");
+                "<h5 style='margin: 10px 20px 10px;'>Products</h5></div></div></div>");
 
             result.Append("<div class='col-xxl'>");
             //table template
@@ -25,11 +22,18 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Name</th>" +
                 "<th scope='col'>Key</th>" +
                 "<th scope='col'>Creation Date</th>" +
-                "<th scope='col'>Delete</th></tr></thead>");
+                "<th scope='col'>Action</th></tr></thead>");
 
             result.Append("<tbody>");
 
             if (products == null || products.Count == 0) return result.ToString();
+
+            result.Append("<tr><th>0</th>" +
+                "<th><input id='createName' type='text' class='form - control'/></th>" +
+                "<th>---</th>" +
+                "<th>---</th>" +
+                "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
+                    $"<i class='fas fa-plus'></i></button></th></tr>");
 
             int index = 1;
             foreach (var product in products)
