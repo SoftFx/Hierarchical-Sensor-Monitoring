@@ -172,7 +172,7 @@
         let newDate = new Date();
         let date = newDate.toLocaleDateString("ru-RU");
         let time = newDate.toLocaleTimeString("ru-Ru").replace(':','.');
-        return product + "_" + path + "_" + date + " " + time + "." + extension;
+        return product + "_" + path + "_" + date + "_" + time + "." + extension;
     }
 
     function viewFile(product, path, extension, viewFileAction) {
@@ -204,7 +204,6 @@
             contentType: 'application/json',
             //dataType: 'application/octet-stream',
             success: function (response) {
-                var date = new Date().toLocaleDateString("ru-RU");
                 var blob = new Blob([response]);
                 let url = window.URL.createObjectURL(blob);
                 let link = document.createElement('a');
