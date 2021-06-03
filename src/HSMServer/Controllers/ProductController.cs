@@ -39,7 +39,7 @@ namespace HSMServer.Controllers
             var results = validator.Validate(product);
             if (!results.IsValid)
             {
-                TempData[TextConstants.TempDataErrorText] = GetErrorString(results.Errors);
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
                 return;
             }
 
@@ -52,18 +52,6 @@ namespace HSMServer.Controllers
         {
             _monitoringCore.RemoveProduct(HttpContext.User as User, productName,
                 out Product product, out string error);
-        }
-
-        private string GetErrorString(List<ValidationFailure> errors)
-        {
-            StringBuilder result = new StringBuilder();
-
-            foreach (var error in errors)
-            {
-                result.Append(error.ErrorMessage + "\n");
-            }
-
-            return result.ToString();
         }
     }
 }
