@@ -93,7 +93,7 @@ namespace HSMServer.HtmlHelpers
                     else
                     {
                         string extension = GetSensorFileExtension(sensor.Value);
-                        result.Append("<div class='accordion-item'><div class='file-sensor-shortvalue-div'" +
+                        result.Append("<div class='pseudo-accordion-item'><div class='file-sensor-shortvalue-div'" +
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
                                       $"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
                                       $"<div class='col-md-auto'>" +
