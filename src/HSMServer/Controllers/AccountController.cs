@@ -14,11 +14,12 @@ namespace HSMServer.Controllers
     [Authorize]
     public class AccountController : Controller
     {
-        private readonly IUserService _userService;
+        //private readonly IUserService _userService;
+        private readonly IUserManager _userManager;
 
-        public AccountController(IUserService userService)
+        public AccountController(IUserManager userManager)
         {
-            _userService = userService;
+            _userManager = userManager;
         }
 
         [AllowAnonymous]
@@ -29,7 +30,7 @@ namespace HSMServer.Controllers
         {
             if (ValidateModel(model))
             {
-                var user = _userService.Authenticate(model.Login, model.Password);
+                var user = _userManager.Authenticate(model.Login, model.Password);
                 if (user != null)
                 {
                     TempData.Remove(TextConstants.TempDataErrorText);
