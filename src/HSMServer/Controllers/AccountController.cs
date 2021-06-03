@@ -8,13 +8,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using HSMServer.Constants;
+using HSMServer.Model.Validators;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     public class AccountController : Controller
     {
-        //private readonly IUserService _userService;
         private readonly IUserManager _userManager;
 
         public AccountController(IUserManager userManager)
@@ -23,67 +23,51 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        [ActionName("Authenticate")]
-        [Consumes("application/x-www-form-urlencoded")]
-        //[ValidateAntiForgeryToken]
-        public async Task<IActionResult> Authenticate([FromForm]LoginModel model)
+        public IActionResult Index()
         {
-            if (ValidateModel(model))
-            {
-                var user = _userManager.Authenticate(model.Login, model.Password);
-                if (user != null)
-                {
-                    TempData.Remove(TextConstants.TempDataErrorText);
-                    await Authenticate(model.Login, model.KeepLoggedIn);
-                    return RedirectToAction("Index", "Home");
-                }
-                else
-                {
-                    TempData[TextConstants.TempDataErrorText] = "Incorrect password or username!";
-                }
-            }
-
-            return RedirectToAction("Index", "Account");
+            return View(new LoginViewModel());
         }
 
         [AllowAnonymous]
-        public IActionResult Index()
+        [ActionName("Authenticate")]
+        [Consumes("application/x-www-form-urlencoded")]
+        //[ValidateAntiForgeryToken]
+        public async Task<IActionResult> Authenticate([FromForm]LoginViewModel model)
         {
-            return View(new LoginModel());
+            LoginValidator validator = new LoginValidator(_userManager);
+            var results = validator.Validate(model);
+            if (!results.IsValid) 
+            {
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                return RedirectToAction("Index", "Account");
+            }
+
+            var user = _userManager.Authenticate(model.Login, model.Password);
+            if (user == null) return RedirectToAction("Index", "Account");
+
+            TempData.Remove(TextConstants.TempDataErrorText);
+            await Authenticate(model.Login, model.KeepLoggedIn);
+
+            return RedirectToAction("Index", "Home");
         }
 
-        private async Task Authenticate(string login, bool keepLoggedIn)
-        {
-            var claims = new List<Claim>{new Claim(ClaimsIdentity.DefaultNameClaimType, login)};
-            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie", 
-                ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
-            AuthenticationProperties properties = new AuthenticationProperties();
-            properties.IsPersistent = keepLoggedIn;
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
-                properties);
-        }
         public void Logout()
         {
             TempData.Remove(TextConstants.TempDataErrorText);
             HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties {RedirectUri = Url.Action(nameof(Index))});
         }
 
-        private bool ValidateModel(LoginModel model)
+        private async Task Authenticate(string login, bool keepLoggedIn)
         {
-            if (string.IsNullOrEmpty(model.Login))
-            {
-                TempData[TextConstants.TempDataErrorText] = "Login must not be empty!";
-                return false;
-            }
+            var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
+            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie",
+                ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-            if (string.IsNullOrEmpty(model.Password))
-            {
-                TempData[TextConstants.TempDataErrorText] = "Password must not be empty!";
-                return false;
-            }
-
-            return true;
+            AuthenticationProperties properties = new AuthenticationProperties();
+            properties.IsPersistent = keepLoggedIn;
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
+                properties);
+  
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿@using HSMServer.Constants
-@model HSMServer.Model.LoginModel
+@model HSMServer.Model.LoginViewModel
 @{
     ViewData["Title"] = "Login";
 }
@@ -26,6 +26,7 @@
 
         <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-sign-in-alt"></i></button>
     </form>
+
     @if (TempData["ErrorMessage"] != null)
     {
         <span style="color: red;font-size: large;font-weight:normal">@TempData["ErrorMessage"].ToString()</span>

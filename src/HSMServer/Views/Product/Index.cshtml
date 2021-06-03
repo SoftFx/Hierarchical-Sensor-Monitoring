@@ -8,8 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
 
 <script>
-    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.HomeController))";
-    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.HomeController))";
+    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
+    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.ProductController))";
 </script>
 
 
@@ -62,13 +62,13 @@
             $('#confirmDeleteButton').on('click', function () {
                 modal.hide();
 
-                $.ajax({//HomeController -> RemoveProduct
+                $.ajax({//ProductController -> RemoveProduct
                     type: 'GET',
                     url: deleteAction + "?Product=" + name,
                     cache: false,
                     async: true,
                     success: function () {
-                        window.location.href = "Products"; //HomeController -> Products
+                        window.location.href = "Product"; //ProductController -> Index
                     }
                 });
             });
@@ -89,7 +89,7 @@
             cache: false,
             async: true,
             success: function () {
-                window.location.href = "Products"; //HomeController -> Products
+                window.location.href = "Product"; //ProductController -> Index
             }
         })
     })
