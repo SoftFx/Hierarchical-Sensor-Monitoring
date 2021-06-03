@@ -511,11 +511,17 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public List<Product> GetProductsList(User user)
+        //ToDo: product by user, not all products
+        public List<Product> GetProducts(User user)
         {
             var products = _productManager.Products;
 
             return products;
+        }
+
+        public List<Product> GetAllProducts()
+        {
+            return _productManager.Products;
         }
 
         public bool AddProduct(User user, string productName, out Product product, out string error)

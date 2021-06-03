@@ -5,33 +5,94 @@
 
 @{ ViewData["Title"] = "Products"; }
 
-<div class="container row justify-content-center">
-    @ViewHelper.CreateProductList(Model)
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
 
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.HomeController))";
+    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.HomeController))";
 </script>
+
+
+
+<div class="container row justify-content-center">
+    @if (TempData[TextConstants.TempDataErrorText] != null)
+    {
+        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+    }
+
+    @ViewHelper.CreateProductList(Model)
+</div>
+
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     //copy buttons
     var clipboard = new ClipboardJS('[id^="copy_"]');
 
-
-
+    //delete buttons
     $('[id^="delete_"]').on("click",
         function () {
             name = this.id.substring("delete_".length, this.id.length);
             console.log(name);
 
-            $.ajax({
-                type: 'GET',
-                url: deleteAction + "?Product=" + name,
-                cache: false,
-                async: true
+            $('#modalDeleteBody').empty();
+            $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
+
+            var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+            modal.show();
+
+            //modal confirm
+            $('#confirmDeleteButton').on('click', function () {
+                modal.hide();
+
+                $.ajax({//HomeController -> RemoveProduct
+                    type: 'GET',
+                    url: deleteAction + "?Product=" + name,
+                    cache: false,
+                    async: true,
+                    success: function () {
+                        window.location.href = "Products"; //HomeController -> Products
+                    }
+                });
             });
 
+            //modal close
+            $('#closeDeleteButton').on('click', function () {
+                modal.hide();
+            });
         });
+
+    //create button
+    $('#createButton').on('click', function () {
+        name = $('#createName').val();
+
+        $.ajax({
+            type: 'GET',
+            url: createAction + "?Product=" + name,
+            cache: false,
+            async: true,
+            success: function () {
+                window.location.href = "Products"; //HomeController -> Products
+            }
+        })
+    })
+
+
 </script>

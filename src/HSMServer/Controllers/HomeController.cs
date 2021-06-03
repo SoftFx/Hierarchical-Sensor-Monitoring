@@ -15,6 +15,8 @@ using Microsoft.AspNetCore.StaticFiles;
 using System.Linq;
 using HSMServer.DataLayer.Model;
 using HSMServer.Constants;
+using HSMServer.Model.Validators;
+using FluentValidation.Results;
 
 namespace HSMServer.Controllers
 {
@@ -96,25 +98,34 @@ namespace HSMServer.Controllers
         }
         public IActionResult Products()
         {
-            var products = _monitoringCore.GetProductsList(HttpContext.User as User);
+            //var products = _monitoringCore.GetProducts(HttpContext.User as User);
+            var products = _monitoringCore.GetAllProducts();
 
             return View(products.Select(x => new ProductViewModel(x))?.ToList());
         }
 
-        public IActionResult AddProduct(string productName)
+        public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
-            _monitoringCore.AddProduct(HttpContext.User as User, productName,
-                out Product product, out string error);
+            Product product = new Product();
+            product.Name = productName;
 
-            return RedirectToAction(ViewConstants.ProductsAction);
+            ProductValidator validator = new ProductValidator(_monitoringCore);
+            var results = validator.Validate(product);
+            if (!results.IsValid)
+            {
+                TempData[TextConstants.TempDataErrorText] = GetErrorString(results.Errors);
+                return;
+            }
+
+            TempData.Remove(TextConstants.TempDataErrorText);
+            _monitoringCore.AddProduct(HttpContext.User as User, productName,
+                out Product newProduct, out string error);
         }
 
-        public IActionResult RemoveProduct([FromQuery(Name = "Product")] string productName)
+        public void RemoveProduct([FromQuery(Name="Product")]string productName)       
         {
-            //_monitoringCore.RemoveProduct(HttpContext.User as User, productName,
-            // out Product product, out string error);
-
-            return RedirectToAction(ViewConstants.ProductsAction);
+            _monitoringCore.RemoveProduct(HttpContext.User as User, productName,
+                out Product product, out string error);
         }
 
         private string GetFileTypeByExtension(string fileName)
@@ -126,6 +137,18 @@ namespace HSMServer.Controllers
             }
 
             return contentType;
+        }
+
+        private string GetErrorString(List<ValidationFailure> errors)
+        {
+            StringBuilder result = new StringBuilder();
+
+            foreach(var error in errors)
+            {
+                result.Append(error.ErrorMessage + "\n");
+            }
+
+            return result.ToString();
         }
     }
 }
