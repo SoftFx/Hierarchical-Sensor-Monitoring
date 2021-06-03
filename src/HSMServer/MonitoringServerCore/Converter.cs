@@ -331,114 +331,15 @@ namespace HSMServer.MonitoringServerCore
             return typedData;
         }
         #endregion
-
-
-        #region Convert to update messages
-
-        //public static SensorUpdateMessage Convert(SensorDataObject dataObject, string productName)
-        //{
-        //    SensorUpdateMessage result = new SensorUpdateMessage();
-        //    result.Path = dataObject.Path;
-        //    result.ObjectType = Convert(dataObject.DataType);
-        //    result.Product = productName;
-        //    result.Time = Timestamp.FromDateTime(dataObject.TimeCollected.ToUniversalTime());
-        //    result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
-        //    result.Status = Convert(dataObject.Status);
-        //    return result;
-        //}
         
-        //public static SensorUpdateMessage Convert(BoolSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeBoolSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-
-        //public static SensorUpdateMessage Convert(IntSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeIntSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-
-        //public static SensorUpdateMessage Convert(DoubleSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeDoubleSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-
-        //public static SensorUpdateMessage Convert(StringSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeStringSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-
-        //public static SensorUpdateMessage Convert(FileSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    AddCommonValues(value, productName, timeCollected, out var update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeFileSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-        //public static SensorUpdateMessage Convert(IntBarSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeBarIntSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-
-        //public static SensorUpdateMessage Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected)
-        //{
-        //    SensorUpdateMessage update;
-        //    AddCommonValues(value, productName, timeCollected, out update);
-        //    update.ShortValue = GetShortValue(value, timeCollected);
-        //    update.ObjectType = SensorObjectType.ObjectTypeBarDoubleSensor;
-        //    update.ActionType = SensorUpdateMessage.Types.TransactionType.TransAdd;
-        //    update.Status = Convert(value.Status);
-
-        //    return update;
-        //}
-        //private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, out SensorUpdateMessage update)
-        //{
-        //    update = new SensorUpdateMessage();
-        //    update.Path = value.Path;
-        //    update.Product = productName;
-        //    update.Time = Timestamp.FromDateTime(timeCollected.ToUniversalTime());
-        //}
-        #endregion
-
         #region Independent update messages
 
+        public static SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName)
+        {
+            var converted = Convert(dataObject, productName);
+            converted.Description = sensorInfo.Description;
+            return converted;
+        }
         public static SensorData Convert(SensorDataObject dataObject, string productName)
         {
             SensorData result = new SensorData();
@@ -518,6 +419,7 @@ namespace HSMServer.MonitoringServerCore
             data.Product = productName;
             data.Time = timeCollected;
             data.TransactionType = type;
+            data.Description = value.Description;
         }
 
         #endregion
@@ -741,6 +643,23 @@ namespace HSMServer.MonitoringServerCore
         }
         #endregion
 
+        public static SensorInfo Convert(string productName, string path)
+        {
+            SensorInfo result = new SensorInfo();
+            result.Path = path;
+            result.ProductName = productName;
+            result.SensorName = ExtractSensor(path);
+            return result;
+        }
+        public static SensorInfo Convert(string productName, SensorValueBase sensorValue)
+        {
+            SensorInfo result = new SensorInfo();
+            result.Path = sensorValue.Path;
+            result.Description = sensorValue.Description;
+            result.ProductName = productName;
+            result.SensorName = ExtractSensor(sensorValue.Path);
+            return result;
+        }
         //public static ProductDataMessage Convert(Product product)
         //{
         //    ProductDataMessage result = new ProductDataMessage();

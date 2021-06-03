@@ -64,7 +64,7 @@ namespace HSMServer.Controllers
         }
         public void Logout()
         {
-            TempData.Remove(_tempDataErrorText);
+            TempData.Remove(TextConstants.TempDataErrorText);
             HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties {RedirectUri = Url.Action(nameof(Index))});
         }
 

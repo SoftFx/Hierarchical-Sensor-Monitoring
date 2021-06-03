@@ -16,7 +16,7 @@ namespace HSMServer.MonitoringServerCore
     {
         //public void AddSensorValue(JobResult value);
         void AddSensorsValues(IEnumerable<CommonSensorValue> values);
-        Task<bool> AddSensorValueAsync(BoolSensorValue value);
+        //Task<bool> AddSensorValueAsync(BoolSensorValue value);
         void AddSensorValue(BoolSensorValue value);
         void AddSensorValue(IntSensorValue value);
         void AddSensorValue(DoubleSensorValue value);

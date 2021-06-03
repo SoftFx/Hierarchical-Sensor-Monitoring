@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Constants;
 using HSMServer.Keys;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
+using HSMServer.MonitoringServerCore;
 using NLog;
 using Product = HSMServer.DataLayer.Model.Product;
 
@@ -38,7 +40,7 @@ namespace HSMServer.Products
             }
         }
 
-
+        //TODO: read products via product info, like users are read now
         private void InitializeProducts()
         {
             List<string> productNames = _database.GetProductsList();
@@ -49,7 +51,18 @@ namespace HSMServer.Products
                 List<SensorInfo> sensorInfos = new List<SensorInfo>();
                 foreach (var sensorPath in sensorPaths)
                 {
-                    sensorInfos.Add(_database.GetSensorInfo(productName, sensorPath));
+                    var existingInfo = _database.GetSensorInfo(productName, sensorPath);
+                    if (existingInfo == null)
+                    {
+                        SensorInfo defaultInfo = Converter.Convert(productName, sensorPath);
+                        sensorInfos.Add(defaultInfo);
+                        Task.Run(() => _database.AddSensor(defaultInfo));
+                        sensorInfos.Add(defaultInfo);
+                    }
+                    else
+                    {
+                        sensorInfos.Add(existingInfo);
+                    }
                 }
                 if (info != null)
                 {
@@ -153,41 +166,48 @@ namespace HSMServer.Products
             }
         }
 
-        public void AddSensor(string productName, string path)
+        public void AddSensor(string productName, SensorValueBase sensorValue)
         {
+            var newObject = Converter.Convert(productName, sensorValue);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                 {
                     _productSensorsDictionary[productName] = new List<SensorInfo>();
                 }
-                _productSensorsDictionary[productName].Add(path);
+                _productSensorsDictionary[productName].Add(newObject);
             }
 
-            Task.Run(() => _database.AddNewSensorToList(productName, path));
+            Task.Run(() => _database.AddNewSensorToList(productName, newObject.Path));
+            Task.Run(() => _database.AddSensor(newObject));
         }
 
-        public void AddSensorIfNotRegistered(string productName, string path)
+        public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
         {
             bool needToAdd = false;
+            var newObject = Converter.Convert(productName, sensorValue);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                 {
-                    _productSensorsDictionary[productName] = new List<string>();
+                    _productSensorsDictionary[productName] = new List<SensorInfo>();
                     needToAdd = true;
                 }
 
-                if (!_productSensorsDictionary[productName].Contains(path))
+                var existingSensor = _productSensorsDictionary[productName]
+                    .FirstOrDefault(s => s.Path == sensorValue.Path);
+
+                if (existingSensor == null || !string.IsNullOrEmpty(sensorValue.Description))
                 {
-                    _productSensorsDictionary[productName].Add(path);
+                    _productSensorsDictionary[productName].Add(newObject);
                     needToAdd = true;
                 }
             }
 
             if (needToAdd)
             {
-                Task.Run(() => _database.AddNewSensorToList(productName, path));
+                Task.Run(() => _database.AddNewSensorToList(productName, newObject.Path));
+                Task.Run(() => _database.AddSensor(newObject));
             }
         }
 
@@ -197,15 +217,16 @@ namespace HSMServer.Products
             {
                 if (!_productSensorsDictionary.ContainsKey(sensorInfo.ProductName))
                 {
-                    _productSensorsDictionary[sensorInfo.ProductName] = new List<string>();
+                    _productSensorsDictionary[sensorInfo.ProductName] = new List<SensorInfo>();
                 }
-                _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo.Path);
+                _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo);
             }
 
             //ThreadPool.QueueUserWorkItem(_ => _database.AddSensor(sensorInfo));
             //ThreadPool.QueueUserWorkItem(_ =>
             //    _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
             Task.Run(() => _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            Task.Run(() => _database.AddSensor(sensorInfo));
         }
         public string GetProductKeyByName(string name)
         {
@@ -238,9 +259,9 @@ namespace HSMServer.Products
             return product;
         }
 
-        public List<string> GetProductSensors(string productName)
+        public List<SensorInfo> GetProductSensors(string productName)
         {
-            List<string> result = new List<string>();
+            List<SensorInfo> result = new List<SensorInfo>();
             lock (_dictionaryLock)
             {
                 var pair = _productSensorsDictionary.FirstOrDefault(p => p.Key == productName);

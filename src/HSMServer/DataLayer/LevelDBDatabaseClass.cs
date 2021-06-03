@@ -90,6 +90,8 @@ namespace HSMServer.DataLayer
                 //};
                 _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
                 //_database = new DB(DATABASE_NAME, options);
+                var list = GetAllSensorInfos();
+                _logger.Info($"{list.Count} sensor infos read");
             }
             catch (Exception e)
             {
@@ -97,6 +99,39 @@ namespace HSMServer.DataLayer
                 throw;
             }
             
+        }
+
+        private List<SensorInfo> GetAllSensorInfos()
+        {
+            List<SensorInfo> result = new List<SensorInfo>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(PrefixConstants.SENSOR_KEY_PREFIX);
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
+                        {
+                            try
+                            {
+                                result.Add(JsonSerializer.Deserialize<SensorInfo>(iterator.ValueAsString()));
+                                _logger.Info($"Read info for {iterator.KeyAsString()} : {iterator.ValueAsString()}");
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed convet SensorInfo");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Some shit failed");
+            }
+
+            return result;
         }
 
         #region Product
