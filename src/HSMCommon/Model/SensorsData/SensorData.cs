@@ -12,5 +12,6 @@ namespace HSMCommon.Model.SensorsData
         public string ShortValue { get; set; }
         public SensorStatus Status { get; set; }
         public TransactionType TransactionType { get; set; }
+        public string Description { get; set; }
     }
 }

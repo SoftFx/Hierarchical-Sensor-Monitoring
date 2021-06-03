@@ -16,7 +16,7 @@ namespace HSMServer.Products
         private readonly IDatabaseClass _database;
         private readonly Logger _logger;
         private readonly List<Product> _products;
-        private readonly Dictionary<string, List<string>> _productSensorsDictionary = new Dictionary<string, List<string>>();
+        private readonly Dictionary<string, List<SensorInfo>> _productSensorsDictionary = new Dictionary<string, List<SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
         public ProductManager(IDatabaseClass database)
@@ -45,7 +45,12 @@ namespace HSMServer.Products
             foreach (var productName in productNames)
             {
                 var info = _database.GetProductInfo(productName);
-                var sensors = _database.GetSensorsList(productName);
+                var sensorPaths = _database.GetSensorsList(productName);
+                List<SensorInfo> sensorInfos = new List<SensorInfo>();
+                foreach (var sensorPath in sensorPaths)
+                {
+                    sensorInfos.Add(_database.GetSensorInfo(productName, sensorPath));
+                }
                 if (info != null)
                 {
                     lock (_productsLock)
@@ -55,8 +60,8 @@ namespace HSMServer.Products
 
                     lock (_dictionaryLock)
                     {
-                        _productSensorsDictionary[productName] = new List<string>();
-                        _productSensorsDictionary[productName].AddRange(sensors);
+                        _productSensorsDictionary[productName] = new List<SensorInfo>();
+                        _productSensorsDictionary[productName].AddRange(sensorInfos);
                     }
                 }
             }
@@ -129,7 +134,7 @@ namespace HSMServer.Products
 
                 lock (_dictionaryLock)
                 {
-                    _productSensorsDictionary[product.Name] = new List<string>();
+                    _productSensorsDictionary[product.Name] = new List<SensorInfo>();
                 }
             }
             catch (Exception e)
@@ -144,7 +149,7 @@ namespace HSMServer.Products
                 if (!_productSensorsDictionary.ContainsKey(productName))
                     return false;
 
-                return _productSensorsDictionary[productName].Contains(path);
+                return _productSensorsDictionary[productName].FirstOrDefault(s => s.Path == path) != null;
             }
         }
 
@@ -154,7 +159,7 @@ namespace HSMServer.Products
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                 {
-                    _productSensorsDictionary[productName] = new List<string>();
+                    _productSensorsDictionary[productName] = new List<SensorInfo>();
                 }
                 _productSensorsDictionary[productName].Add(path);
             }

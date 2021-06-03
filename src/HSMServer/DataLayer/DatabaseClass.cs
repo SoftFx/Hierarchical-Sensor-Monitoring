@@ -786,6 +786,11 @@ namespace HSMServer.DataLayer
             }
         }
 
+        public SensorInfo GetSensorInfo(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
         public void AddUser(User user)
         {
             throw new NotImplementedException();

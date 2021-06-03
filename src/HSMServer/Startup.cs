@@ -63,9 +63,6 @@ namespace HSMServer
             //                .AllowCredentials());
             //    });
 
-            //services.AddAuthentication("BasicAuthentication")
-            //    .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
-
             services.AddSignalR(hubOptions =>
             {
                 hubOptions.EnableDetailedErrors = true;
@@ -158,7 +155,6 @@ namespace HSMServer
                     pattern: "{controller=Home}/{action=Index}/{id?}"
                 );
             });
-
 
             //app.UseForwardedHeaders(new ForwardedHeadersOptions
             //{
