@@ -33,12 +33,7 @@ namespace HSMServer
                 .AddCookie(options =>
                 {
                     options.LoginPath = new PathString("/Account/Index");
-                    //options.AccessDeniedPath = new PathString("/Account/i");
-                    options.Events.OnRedirectToReturnUrl = (context) =>
-                    {
-                        context.Response.Redirect("/Account/Index");
-                        return Task.CompletedTask;
-                    };
+                    //options.
                 });
 
             services.AddHsts(options =>
@@ -154,6 +149,14 @@ namespace HSMServer
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller=Home}/{action=Index}/{id?}"
+                );
+                endpoints.MapControllerRoute(
+                    name: "Account",
+                    pattern: "{controller=Account}/{action=Index}"
+                );
+                endpoints.MapControllerRoute(
+                    name: "Home",
+                    pattern: "{controller=Home}/{action=Index}"
                 );
             });
 

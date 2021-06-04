@@ -23,13 +23,14 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
+        [ActionName(nameof(Index))]
         public IActionResult Index()
         {
             return View(new LoginViewModel());
         }
 
         [AllowAnonymous]
-        [ActionName("Authenticate")]
+        [ActionName(nameof(Authenticate))]
         [Consumes("application/x-www-form-urlencoded")]
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm]LoginViewModel model)
@@ -39,7 +40,11 @@ namespace HSMServer.Controllers
             if (!results.IsValid) 
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return RedirectToAction("Index", "Account");
+                return RedirectToAction("Index", "Account",new
+                {
+                    controller = "Account",
+                    action = "Index"
+                });
             }
 
             var user = _userManager.Authenticate(model.Login, model.Password);
