@@ -25,6 +25,8 @@ namespace HSMServer.MonitoringServerCore
         void AddSensorValue(DoubleBarSensorValue value);
 
         void AddSensorValue(FileSensorValue value);
+
+        void AddSensorValue(FileSensorBytesValue value);
         //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);
@@ -36,6 +38,7 @@ namespace HSMServer.MonitoringServerCore
         List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
         List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model);
         string GetFileSensorValue(User user, string product, string path);
+        byte[] GetFileSensorValueBytes(User user, string product, string path);
         //public StringMessage GetFileSensorValueExtension(User user, string product, string path);
         string GetFileSensorValueExtension(User user, string product, string path);
         //public ProductsListMessage GetProductsList(User user);

@@ -267,11 +267,28 @@ namespace HSMServer.MonitoringServerCore
 
             FileSensorData typedData = new FileSensorData()
             {
-                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent
+                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent, FileName = sensorValue.FileName
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
 
+        }
+
+        public static SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
+        {
+            FillCommonFields(sensorValue, timeCollected, out var result);
+            result.DataType = SensorType.FileSensor;
+            result.Status = sensorValue.Status;
+
+            FileSensorBytesData typedData = new FileSensorBytesData()
+            {
+                Comment = sensorValue.Comment,
+                Extension = sensorValue.Extension,
+                FileContent = sensorValue.FileContent,
+                FileName = sensorValue.FileName
+            };
+            result.TypedData = JsonSerializer.Serialize(typedData);
+            return result;
         }
         public static SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
         {
@@ -286,8 +303,7 @@ namespace HSMServer.MonitoringServerCore
 
         public static SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
         {
-            SensorDataObject result;
-            FillCommonFields(sensorValue, timeCollected, out result);
+            FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.DoubleBarSensor;
 
             DoubleBarSensorData typedData = ToTypedData(sensorValue);
@@ -357,7 +373,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.BooleanSensor;
-            data.Status = value.Status;
             return data;
         }
 
@@ -366,7 +381,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.IntSensor;
-            data.Status = value.Status;
             return data;
         }
 
@@ -375,7 +389,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.DoubleSensor;
-            data.Status = value.Status;
             return data;
         }
 
@@ -384,7 +397,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.StringSensor;
-            data.Status = value.Status;
             return data;
         }
 
@@ -393,7 +405,15 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.FileSensor;
-            data.Status = value.Status;
+            return data;
+        }
+
+        public static SensorData Convert(FileSensorBytesValue value, string productName, DateTime timeCollected,
+            TransactionType type)
+        {
+            AddCommonValues(value, productName, timeCollected, type, out var data);
+            data.ShortValue = GetShortValue(value, timeCollected);
+            data.SensorType = SensorType.FileSensorBytes;
             return data;
         }
         public static SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
@@ -401,7 +421,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.IntegerBarSensor;
-            data.Status = value.Status;
             return data;
         }
         public static SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
@@ -409,7 +428,6 @@ namespace HSMServer.MonitoringServerCore
             AddCommonValues(value, productName, timeCollected, type, out var data);
             data.ShortValue = GetShortValue(value, timeCollected);
             data.SensorType = SensorType.DoubleBarSensor;
-            data.Status = value.Status;
             return data;
         }
         private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, TransactionType type, out SensorData data)
@@ -420,6 +438,7 @@ namespace HSMServer.MonitoringServerCore
             data.Time = timeCollected;
             data.TransactionType = type;
             data.Description = value.Description;
+            data.Status = value.Status;
         }
 
         #endregion
@@ -508,12 +527,27 @@ namespace HSMServer.MonitoringServerCore
                         {
                             FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
                             string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
-                            result = !string.IsNullOrEmpty(fileData?.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {fileData?.Extension.Replace(".","")}. Comment = {fileData?.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {fileData?.Extension.Replace(".", "")}.";
+                            string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
+                            result = !string.IsNullOrEmpty(fileData.Comment)
+                                ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString} Comment = {fileData.Comment}."
+                                : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString}";
                         }
                         catch { }
                         break;
+                    }
+                case SensorType.FileSensorBytes:
+                    {
+                    try
+                    {
+                        FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                        string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
+                        string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
+                        result = !string.IsNullOrEmpty(fileData.Comment)
+                            ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString} Comment = {fileData.Comment}."
+                            : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString}";
+                    }
+                    catch { }
+                    break;
                     }
                 default:
                 {
@@ -597,9 +631,28 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string sizeString = FileSizeToNormalString(value?.FileContent?.Length ?? 0);
+                string fileNameString = GetFileNameString(value.FileName, value.Extension);
                 result = !string.IsNullOrEmpty(value.Comment)
-                    ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {value.Extension.Replace(".", "")}. Comment = {value.Comment}."
-                    : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. Extension: {value.Extension.Replace(".", "")}.";
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString} Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString}";
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get short value");
+            }
+
+            return result;
+        }
+        private static string GetShortValue(FileSensorBytesValue value, DateTime timeCollected)
+        {
+            string result = string.Empty;
+            try
+            {
+                string sizeString = FileSizeToNormalString(value?.FileContent?.Length ?? 0);
+                string fileNameString = GetFileNameString(value.FileName, value.Extension);
+                result = !string.IsNullOrEmpty(value.Comment)
+                    ? $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString} Comment = {value.Comment}."
+                    : $"Time: {timeCollected.ToUniversalTime():G}. File size: {sizeString}. {fileNameString}";
             }
             catch (Exception e)
             {
@@ -743,6 +796,24 @@ namespace HSMServer.MonitoringServerCore
             return splitRes[^1];
         }
 
+        private static string GetFileNameString(string fileName, string extension)
+        {
+            if (string.IsNullOrEmpty(extension) && string.IsNullOrEmpty(fileName))
+            {
+                return "No file info specified!";
+            }
+            if (string.IsNullOrEmpty(fileName))
+            {
+                return $"Extension: {extension}.";
+            }
+
+            if (fileName.IndexOf('.') != -1)
+            {
+                return $"File name: {fileName}.";
+            }
+
+            return $"File name: {fileName}.{extension}.";
+        }
         private static string FileSizeToNormalString(int size)
         {
             if (size < SIZE_DENOMINATOR)

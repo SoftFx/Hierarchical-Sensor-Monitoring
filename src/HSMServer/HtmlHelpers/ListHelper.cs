@@ -10,6 +10,7 @@ namespace HSMServer.HtmlHelpers
     public static class ListHelper
     {
         private const string ExtensionPattern = "Extension: ";
+        private const string FileNamePattern = "File name: ";
 
         public static string CreateFullLists(TreeViewModel model)
         {
@@ -51,10 +52,10 @@ namespace HSMServer.HtmlHelpers
                 {
                     string name = sensor.Name.Replace(' ', '-');
 
-                    if (sensor.SensorType == SensorType.FileSensor)
+                    if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
                     {
                         //header
-                        string extension = GetSensorFileExtension(sensor.Value);
+                        string fileName = GetFileNameString(sensor.Value);
 
                         result.Append("<div class='accordion-item'>" +
                                       $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
@@ -74,11 +75,11 @@ namespace HSMServer.HtmlHelpers
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div>" +
                                       $"<div class='row'><div class='col-1'>" +
-                                      $"<button id='button_view_{formattedPath}_{name}_{extension}' " +
+                                      $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
                                       $"class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                       "<i class='fas fa-eye'></i></button></div>" +
                                       $"<div class='col'>" +
-                                      $"<button id='button_download_{formattedPath}_{name}_{extension}'" +
+                                      $"<button id='button_download_{formattedPath}_{name}_{fileName}'" +
                                       $" class='button-download-file-sensor-value btn btn-secondary'" +
                                       " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
 
@@ -116,12 +117,26 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string GetSensorFileExtension(string sensorValue)
+        private static string GetFileNameString(string shortValue)
         {
-            int extensionIndex = sensorValue.IndexOf(ExtensionPattern);
-            var extensionString = sensorValue.Substring(extensionIndex + ExtensionPattern.Length);
-            int dotIndex = extensionString.IndexOf('.');
-            return extensionString.Substring(0, dotIndex);
+            var ind = shortValue.IndexOf(FileNamePattern);
+            if (ind != -1)
+            {
+                var fileNameString = shortValue.Substring(ind + FileNamePattern.Length);
+                int firstDotIndex = fileNameString.IndexOf('.');
+                int secondDotIndex = fileNameString.Substring(firstDotIndex + 1).IndexOf('.');
+                return fileNameString.Substring(0, firstDotIndex + secondDotIndex + 1);
+            }
+
+            ind = shortValue.IndexOf(ExtensionPattern);
+            if (ind != -1)
+            {
+                var extensionString = shortValue.Substring(ind + ExtensionPattern.Length);
+                int dotIndex = extensionString.IndexOf('.');
+                return extensionString.Substring(0, dotIndex);
+            }
+
+            return string.Empty;
         }
 
         public static string CreateHistoryList(List<SensorHistoryData> sensors)

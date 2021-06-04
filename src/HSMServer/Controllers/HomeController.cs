@@ -10,6 +10,7 @@ using NLog;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using HSMServer.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -69,8 +70,7 @@ namespace HSMServer.Controllers
         {
             string product = model.Product.Replace('-', ' ');
             string path = model.Path.Replace('_', '/');
-            var fileContents =
-                Encoding.ASCII.GetBytes(_monitoringCore.GetFileSensorValue(HttpContext.User as User, product, path));
+            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";
@@ -82,8 +82,7 @@ namespace HSMServer.Controllers
         {
             string product = model.Product.Replace('-', ' ');
             string path = model.Path.Replace('_', '/');
-            var fileContents =
-                Encoding.ASCII.GetBytes(_monitoringCore.GetFileSensorValue(HttpContext.User as User, product, path));
+            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";

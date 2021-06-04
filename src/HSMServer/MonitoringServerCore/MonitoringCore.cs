@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -311,6 +312,30 @@ namespace HSMServer.MonitoringServerCore
                 _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
+
+        public void AddSensorValue(FileSensorBytesValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.Now;
+                SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+
+                SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
+                ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
         public void AddSensorValue(IntBarSensorValue value)
         {
             try
@@ -441,28 +466,58 @@ namespace HSMServer.MonitoringServerCore
             }
 
             var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
-            if (typedData == null)
+            if (typedData != null)
+            {
+                return typedData.FileContent;
+            }
+
+            
+            return string.Empty;
+        }
+
+        public byte[] GetFileSensorValueBytes(User user, string product, string path)
+        {
+            List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
+            if (historyList.Count < 1)
+            {
+                return new byte[1];
+            }
+
+            try
+            {
+                var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(historyList[0].TypedData);
+                return typedData2?.FileContent;
+            }
+            catch { }
+            
+
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            if (typedData != null)
+            {
+                return Encoding.Default.GetBytes(typedData.FileContent);
+            }
+            
+            return new byte[1];
+        }
+        public string GetFileSensorValueExtension(User user, string product, string path)
+        {
+            List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
+            if (historyList.Count < 1)
             {
                 return string.Empty;
             }
-
-            return typedData.FileContent;
-        }
-
-        public string GetFileSensorValueExtension(User user, string product, string path)
-        {
-            string result = string.Empty;
-            List<SensorDataObject> historyList = _database.GetSensorDataHistory(product, path, 1);
-            if (historyList.Count > 0)
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            if (typedData != null)
             {
-                var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
-                if (typedData != null)
-                {
-                    result = typedData.Extension;
-                }
+                return typedData.Extension;
+            }
+            var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(historyList[0].TypedData);
+            if (typedData2 != null)
+            {
+                return typedData2.Extension;
             }
 
-            return result;
+            return string.Empty;
         }
 
         //ToDo: product by user, not all products

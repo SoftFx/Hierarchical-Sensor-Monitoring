@@ -55,6 +55,14 @@ namespace HSMSensorDataObjects
         /// Data object also includes file extension, so the client app automatically opens the file using a proper program
         /// </summary>
         [EnumMember]
-        FileSensor = 6
+        FileSensor = 6,
+
+        /// <summary>
+        /// The sensor value is a file, as the above one. The only difference is that the file contents are represented as byte array,
+        /// not as a string. This type is used for pdf files, which really depend on encoding. You should also use this type if
+        /// you have another file, for which encoding is important. 
+        /// </summary>
+        [EnumMember]
+        FileSensorBytes = 7
     }
 }

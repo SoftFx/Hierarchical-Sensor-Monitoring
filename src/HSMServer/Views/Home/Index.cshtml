@@ -99,7 +99,7 @@
     });
 
     hubConnection.start().then(() => {
-        console.log(hubConnection.connectionId);
+        //console.log(hubConnection.connectionId);
     });
 
     function initializeTree() {
@@ -176,14 +176,52 @@
 </script>
 <script>
     //files functionality
-    function getFileName(product, path, extension) {
-        let newDate = new Date();
-        let date = newDate.toLocaleDateString("ru-RU");
-        let time = newDate.toLocaleTimeString("ru-Ru").replace(':','.');
-        return product + "_" + path + "_" + date + "_" + time + "." + extension;
+    function getMimeType(fileName) {
+        let extension = getExtensionFromName(fileName);
+        let fileType = mimeTypesMap.get(extension);
+        if (fileType === undefined) {
+            fileType = "text/html";
+        }
+        return fileType;
     }
 
-    function viewFile(product, path, extension, viewFileAction) {
+    function getExtensionFromName(fileName) {
+        let dotIndex = fileName.indexOf('.');
+        if (dotIndex === -1) {
+            return fileName;
+        }
+        return fileName.substring(dotIndex + 1, fileName.length);    }
+
+    function getFileName(product, path, fileName) {
+        let newDate = new Date();
+        let date = newDate.toLocaleDateString("ru-RU");
+        let time = newDate.toLocaleTimeString("ru-Ru").replace(':', '.');
+        let dotIndex = fileName.indexOf('.');
+        //has dot and does not start from dot
+        if (dotIndex > 0) {
+           return fileName;
+        }
+
+        if (dotIndex === 0) {
+            return product + "_" + path + "_" + date + "_" + time + fileName;
+        }
+        return product + "_" + path + "_" + date + "_" + time + "." + fileName;
+    }
+
+    function viewFile(product, path, fileName, viewFileAction) {
+        //let fileType = getMimeType(fileName);
+        //console.log(fileType);
+        //var xhr = new XMLHttpRequest();
+        //xhr.open('POST', viewFileAction, true);
+        ///*xhr.responseType = 'blob';*/
+        //xhr.onload = function () {
+        //    let blob = new Blob([this.response], { type: fileType });
+        //    console.log(blob);
+        //    let url = window.URL.createObjectURL(blob);
+        //    window.open(url);
+        //}
+        //xhr.send(JSON.stringify(fileData(product, path)));
+
         $.ajax({
             type: 'POST',
             data: JSON.stringify(fileData(product, path)),
@@ -191,18 +229,21 @@
             cache: false,
             contentType: "application/json",
             success: function (response) {
-                let fileType = mimeTypesMap.get(extension);
-                if (fileType === undefined) {
-                    fileType = "text/html";
-                }
+                let fileType = getMimeType(fileName);
+                //console.log(fileType);
+                //let decoded = atob(response.fileBytes);
+                //console.log(decoded);
+                //console.log(decoded.length);
                 let blob = new Blob([response], { type: fileType });
+                //let blob = new Blob([decoded]);
+                //console.log(blob);
                 let url = window.URL.createObjectURL(blob);
                 window.open(url);
             }
         });
     }
 
-    function downloadFile(product, path, extension, downloadFileAction) {
+    function downloadFile(product, path, fileName, downloadFileAction) {
         $.ajax({
             type: 'POST', 
             data: JSON.stringify(fileData(product, path)),
@@ -212,24 +253,17 @@
             contentType: 'application/json',
             //dataType: 'application/octet-stream',
             success: function (response) {
-                var blob = new Blob([response]);
+                let fileType = getMimeType(fileName);
+                var blob = new Blob([response], { type: fileType });
                 let url = window.URL.createObjectURL(blob);
                 let link = document.createElement('a');
                 link.href = url;
-                link.setAttribute('download', getFileName(product, path, extension));
+                link.setAttribute('download', getFileName(product, path, fileName));
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
             }
         });
-        //fetch(downloadFileAction, {
-        //    method: 'POST',
-        //    cache: 'no-cache',
-        //    body: JSON.stringify(fileData(product, path)),
-        //    headers: {
-        //        'Content-type': 'application/json'
-        //    }
-        //});
     }
 
     function fileData(product, path) {
@@ -240,12 +274,13 @@
         function () {
             id = this.id.substring("button_view".length, this.id.length);
 
+            //console.log(id);
             let splitRes = id.split('_');
             let product = splitRes[1];
-            let extension = splitRes[splitRes.length - 1];
-            let path = id.substring(product.length + 2, id.length - extension.length - 1);
+            let fileName = splitRes[splitRes.length - 1];
+            let path = id.substring(product.length + 2, id.length - fileName.length - 1);
 
-            viewFile(product, path, extension, viewFileAction);
+            viewFile(product, path, fileName, viewFileAction);
         }
     );
 
@@ -254,11 +289,11 @@
             id = this.id.substring("button_download".length, this.id.length);
 
             let splitRes = id.split('_');
-            product = splitRes[1];
-            extension = splitRes[splitRes.length - 1];
-            path = id.substring(product.length + 2, id.length - extension.length - 1);
+            let product = splitRes[1];
+            let fileName = splitRes[splitRes.length - 1];
+            let path = id.substring(product.length + 2, id.length - fileName.length - 1);
             
-            downloadFile(product, path, extension, downloadFileAction);
+            downloadFile(product, path, fileName, downloadFileAction);
         }
     );
 </script>
