@@ -70,7 +70,9 @@ namespace HSMServer.HtmlHelpers
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
                                   $"<div class='accordion-body'>");
 
-                        result.Append($"<div class='col-md-auto'>{sensor.Name} {sensor.Value}</div>" +
+                        result.Append($"<div class='container'>" +
+                                  $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
+                                  $"<div class='col'>{sensor.Value}</div></div></div>" +
                                       $"<div class='row'><div class='col-1'>" +
                                       $"<button id='button_view_{formattedPath}_{name}_{extension}' " +
                                       $"class='button-view-file-sensor btn btn-secondary' title='View'>" +
