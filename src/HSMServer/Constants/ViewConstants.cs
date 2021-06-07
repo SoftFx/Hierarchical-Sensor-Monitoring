@@ -14,8 +14,7 @@
         public const string HistoryAction = "History";
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
-        public const string ViewFileAction = "ViewFile";
-        public const string DownloadFileAction = "DownloadFile";
+        public const string GetFileAction = "GetFile";
         public const string ProductsAction = "Products";
         public const string UsersAction = "Users";
     }

@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using HSMServer.Constants;
 using HSMServer.Model.Validators;
+using System.Linq;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
 {
@@ -60,6 +62,13 @@ namespace HSMServer.Controllers
         {
             TempData.Remove(TextConstants.TempDataErrorText);
             HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties {RedirectUri = Url.Action(nameof(Index))});
+        }
+
+        public IActionResult Users()
+        {
+            var users = _userManager.Users;
+
+            return View(users.Select(x => new UserViewModel(x))?.ToList());
         }
 
         private async Task Authenticate(string login, bool keepLoggedIn)

@@ -1,4 +1,4 @@
-﻿@using HSMServer.Constants
+@using HSMServer.Constants
 @using HSMServer.HtmlHelpers
 @model HSMServer.Model.ViewModel.TreeViewModel
 
@@ -8,8 +8,7 @@
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
-    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.ViewFileAction, ViewConstants.HomeController))";
-    var downloadFileAction = "@Html.Raw(Url.Action(ViewConstants.DownloadFileAction, ViewConstants.HomeController))";
+    var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -18,20 +17,14 @@
         margin: 10px;
     }
     .button-view-file-sensor {
-        margin: 10px 20px;
+        margin-left: 20px;
+        margin-top: 10px
     }
     .button-download-file-sensor-value{
-        margin: 10px 20px;
+        margin-top: 10px;
+        margin-left: -20px;
     }
 
-/*    .button-download-file-sensor-value{
-        width: 45px;
-    }
-
-    .pseudo-accordion-item {
-        border: 1px gainsboro solid;
-        width: 120%;
-    }*/
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
@@ -42,6 +35,7 @@
 
 <div style="margin: 10px">
     <div id="updateTime"></div>
+    <div id="state"></div>
     <hr />
 </div>
 
@@ -67,6 +61,10 @@
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
         .build();
+
+    $("#state").empty();
+    $("#state").append("<span style='color: green'><i class='fas fa-wifi'></i></span>");
+
 
     hubConnection.on('SendSensorUpdates', function (newModel) {
         if (newModel == undefined) return;
@@ -95,8 +93,16 @@
 
             $('#updateTime').empty();
             $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+
+            $("#state").empty();
+            $("#state").append("<span style='color: green'><i class='fas fa-wifi'></i></span>");
         });
     });
+
+    hubConnection.onclose(error => {
+        $("#state").empty();
+        $("#state").append("<span style='color: Tomato'><i class='fas fa-wifi'></i></span>");
+    })
 
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
@@ -190,10 +196,8 @@
         if (dotIndex === -1) {
             return fileName;
         }
-        return fileName.substring(dotIndex + 1, fileName.length);
-    }
-
-
+        return fileName.substring(dotIndex + 1, fileName.length);    }
+
     function getFileName(product, path, fileName) {
         let newDate = new Date();
         let date = newDate.toLocaleDateString("ru-RU");
@@ -201,8 +205,7 @@
         let dotIndex = fileName.indexOf('.');
         //has dot and does not start from dot
         if (dotIndex > 0) {
-            return fileName;
-
+           return fileName;
         }
 
         if (dotIndex === 0) {
@@ -237,6 +240,7 @@
                 //let decoded = atob(response.fileBytes);
                 //console.log(decoded);
                 //console.log(decoded.length);
+
                 let blob = new Blob([response], { type: fileType });
                 let fileReader = new FileReader();
                 fileReader.readAsArrayBuffer(blob);
@@ -245,29 +249,6 @@
                 //console.log(blob);
                 let url = window.URL.createObjectURL(blob);
                 window.open(url);
-            }
-        });
-    }
-
-    function downloadFile(product, path, fileName, downloadFileAction) {
-        $.ajax({
-            type: 'POST', 
-            data: JSON.stringify(fileData(product, path)),
-            url: downloadFileAction,
-            cache: false,
-            async: true,
-            contentType: 'application/json',
-            //dataType: 'application/octet-stream',
-            success: function (response) {
-                let fileType = getMimeType(fileName);
-                var blob = new Blob([response], { type: fileType });
-                let url = window.URL.createObjectURL(blob);
-                let link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', getFileName(product, path, fileName));
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
             }
         });
     }
@@ -286,7 +267,8 @@
             let fileName = splitRes[splitRes.length - 1];
             let path = id.substring(product.length + 2, id.length - fileName.length - 1);
 
-            viewFile(product, path, fileName, viewFileAction);
+            window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
+            //viewFile(product, path, fileName, viewFileAction);
         }
     );
 
@@ -298,12 +280,8 @@
             let product = splitRes[1];
             let fileName = splitRes[splitRes.length - 1];
             let path = id.substring(product.length + 2, id.length - fileName.length - 1);
-            
-            downloadFile(product, path, fileName, downloadFileAction);
+
+            window.location.href = getFileAction + "?Product=" + product + "&Path=" + path;
         }
     );
-</script>
-<script>
-    //graph scripts
-
 </script>

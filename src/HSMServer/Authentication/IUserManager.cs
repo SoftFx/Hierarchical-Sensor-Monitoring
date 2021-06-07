@@ -5,7 +5,7 @@ namespace HSMServer.Authentication
     public interface IUserManager
     {
         User GetUserByCertificateThumbprint(string thumbprint);
-        void AddNewUser(string userName, string certificateThumbprint, string certificateFileName, string password, string role = "");
+        void AddUser(string userName, string certificateThumbprint, string certificateFileName, string password, UserRoleEnum role = UserRoleEnum.DataViewer);
         List<User> Users { get; }
         User GetUserByUserName(string username);
 

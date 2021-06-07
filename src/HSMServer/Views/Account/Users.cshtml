@@ -1,0 +1,15 @@
+﻿@using HSMServer.Model.ViewModel
+@using HSMServer.Constants
+@using HSMServer.HtmlHelpers
+@model List<UserViewModel>
+
+@{ ViewData["Title"] = "Users"; }
+
+<div class="container row justify-content-center">
+    @if (TempData[TextConstants.TempDataErrorText] != null)
+    {
+        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+    }
+
+    @ViewHelper.CreateUserList(Model)
+</div>
