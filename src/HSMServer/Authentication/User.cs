@@ -10,7 +10,7 @@ namespace HSMServer.Authentication
         public List<PermissionItem> UserPermissions { get; set; }
         public string CertificateFileName { get; set; }
         public string Password { get; set; }
-        public string Role { get; set; }
+        public UserRoleEnum Role { get; set; }
         public List<string> AvailableKeys { get; set; }
 
         public User(string userName, string thumbprint) : this()

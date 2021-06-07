@@ -76,19 +76,18 @@ namespace HSMServer.Authentication
             return user;
         }
 
-        public void AddNewUser(string userName, string certificateThumbprint, string certificateFileName, string password, string role = "")
+        public void AddUser(string userName, string certificateThumbprint, 
+            string certificateFileName, string password, UserRoleEnum role = UserRoleEnum.DataViewer)
         {
             User user = new User
             {
                 CertificateThumbprint = certificateThumbprint,
                 UserName = userName,
                 CertificateFileName = certificateFileName,
-                Password = password
+                Password = password,
+                Role = role
             };
-            if (!string.IsNullOrEmpty(role))
-            {
-                user.Role = role;
-            }
+
             lock (_accessLock)
             {
                 _users.Add(user);
@@ -145,10 +144,11 @@ namespace HSMServer.Authentication
         }
         private void AddDefaultUser()
         {
-            AddNewUser(CommonConstants.DefaultUserUsername,
+            AddUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
                 CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), "Admin");
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
+                UserRoleEnum.Admin);
         }
 
         private List<User> ReadUserFromDatabase()
@@ -163,7 +163,7 @@ namespace HSMServer.Authentication
             {
                 if (string.IsNullOrEmpty(user.Password))
                 {
-                    AddNewUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, HashComputer.ComputePasswordHash(user.UserName),
+                    AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, HashComputer.ComputePasswordHash(user.UserName),
                         user.Role);
                 }
             }

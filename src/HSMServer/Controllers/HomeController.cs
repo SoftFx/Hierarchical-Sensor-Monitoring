@@ -65,30 +65,17 @@ namespace HSMServer.Controllers
             return new HtmlString(ListHelper.CreateHistoryList(result));
         }
 
-        [HttpPost]
-        public IActionResult ViewFile([FromBody] GetFileSensorModel model)
+        [HttpGet]
+        public FileResult GetFile([FromQuery] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
             string path = model.Path.Replace('_', '/');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
-            var fileContentsStream = new MemoryStream(fileContents);
-            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
-            var fileName = $"{model.Path}.{extension}";
-            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
-        }
 
-        [HttpPost]
-        public IActionResult DownloadFile([FromBody] GetFileSensorModel model)
-        {
-            string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/');
-            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
-            var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";
-            //return File(fileContents, System.Net.Mime.MediaTypeNames.Application.Octet, fileName);
-            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
-            //return File(fileContentsStream, fileName);
+
+            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
         }
 
         private string GetFileTypeByExtension(string fileName)

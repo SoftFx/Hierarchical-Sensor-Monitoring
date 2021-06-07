@@ -74,7 +74,7 @@ namespace HSMServer.HtmlHelpers
                         result.Append($"<div class='container'>" +
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div>" +
-                                      $"<div class='row'><div class='col-1'>" +
+                                      $"<div class='row'><div class='col-2'>" +
                                       $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
                                       $"class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                       "<i class='fas fa-eye'></i></button></div>" +
