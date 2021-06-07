@@ -415,6 +415,7 @@ namespace HSMServer.MonitoringServerCore
 
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
+            //Show available products only
             productsList = productsList.Where(p => user.AvailableKeys.Contains(p.Key)).ToList();
             foreach (var product in productsList)
             {

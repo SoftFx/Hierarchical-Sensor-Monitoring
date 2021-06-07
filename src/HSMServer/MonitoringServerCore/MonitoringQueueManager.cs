@@ -163,11 +163,6 @@ namespace HSMServer.MonitoringServerCore
                     _currentSessions.Remove(user);
                 }
             }
-             
-            //if (user.UserName == CommonConstants.DefaultClientUserName)
-            //{
-            //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.PutFirstLoginInfo(_firstLoginInfo));
-            //}
         }
 
         public List<SensorData> GetUserUpdates(User user)

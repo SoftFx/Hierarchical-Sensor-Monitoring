@@ -84,17 +84,20 @@ namespace HSMServer.Model.ViewModel
             if (newModel.Sensors != null) 
                 foreach (var sensor in newModel.Sensors)
                 {
-                    var existingSensor = Sensors?.FirstOrDefault(x => x.Name.Equals(sensor.Name));
                     if (Sensors == null)
-                        Sensors = new List<SensorViewModel> { sensor };
-
-                    else if (existingSensor == null)
+                    {
+                        Sensors = new List<SensorViewModel>() { sensor };
+                        continue;
+                    }
+                    
+                    var existingSensor = Sensors?.FirstOrDefault(x => x.Name.Equals(sensor.Name));
+                    if (existingSensor == null)
+                    {
                         Sensors.Add(sensor);
-
+                    }
                     else
                     {
-                        existingSensor.Value = sensor.Value;
-                        existingSensor.Status = sensor.Status;
+                        existingSensor.Update(sensor);
                     }
                 }
 

@@ -190,8 +190,10 @@
         if (dotIndex === -1) {
             return fileName;
         }
-        return fileName.substring(dotIndex + 1, fileName.length);    }
-
+        return fileName.substring(dotIndex + 1, fileName.length);
+    }
+
+
     function getFileName(product, path, fileName) {
         let newDate = new Date();
         let date = newDate.toLocaleDateString("ru-RU");
@@ -199,7 +201,8 @@
         let dotIndex = fileName.indexOf('.');
         //has dot and does not start from dot
         if (dotIndex > 0) {
-           return fileName;
+            return fileName;
+
         }
 
         if (dotIndex === 0) {
@@ -299,4 +302,8 @@
             downloadFile(product, path, fileName, downloadFileAction);
         }
     );
+</script>
+<script>
+    //graph scripts
+
 </script>
