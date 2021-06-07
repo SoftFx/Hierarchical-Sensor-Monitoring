@@ -235,6 +235,9 @@
                 //console.log(decoded);
                 //console.log(decoded.length);
                 let blob = new Blob([response], { type: fileType });
+                let fileReader = new FileReader();
+                fileReader.readAsArrayBuffer(blob);
+                console.log(fileReader.result);
                 //let blob = new Blob([decoded]);
                 //console.log(blob);
                 let url = window.URL.createObjectURL(blob);
