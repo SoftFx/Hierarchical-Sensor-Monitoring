@@ -7,6 +7,7 @@ namespace HSMCommon.Model.SensorsData
     {
         public string Path { get; set; }
         public string Product { get; set; }
+        public string Key { get; set; }
         public SensorType SensorType { get; set; }
         public DateTime Time { get; set; }
         public string ShortValue { get; set; }

@@ -11,6 +11,7 @@ namespace HSMServer.Authentication
         public string CertificateFileName { get; set; }
         public string Password { get; set; }
         public string Role { get; set; }
+        public List<string> AvailableKeys { get; set; }
 
         public User(string userName, string thumbprint) : this()
         {
@@ -20,6 +21,7 @@ namespace HSMServer.Authentication
         public User()
         {
             UserPermissions = new List<PermissionItem>();
+            AvailableKeys = new List<string>();
         }
     }
 }

@@ -190,11 +190,11 @@ namespace HSMServer.MonitoringServerCore
                 foreach (var pair in _currentSessions)
                 {
                     //Use for test environment only, uncomment later
-                    //if (pair.Key.IsSensorAvailable(message.Product, message.Name))
-                    //{
-                    //    pair.Value.AddUpdate(message);
-                    //}
-                    pair.Value.AddUpdate(message);
+                    if (pair.Key.IsSensorAvailable(message.Key))
+                    {
+                        pair.Value.AddUpdate(message);
+                    }
+                    //pair.Value.AddUpdate(message);
                 }
             }
         }

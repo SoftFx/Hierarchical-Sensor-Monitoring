@@ -6,10 +6,11 @@ namespace HSMServer.Extensions
 {
     internal static class UserExtensions
     {
-        public static bool IsSensorAvailable(this User user, string server, string sensor)
+        public static bool IsSensorAvailable(this User user, string key)
         {
-            var permissionItem = user.UserPermissions.FirstOrDefault(p => p.ProductName == server);
-            return permissionItem != null && permissionItem.IgnoredSensors.Contains(sensor);
+            //var permissionItem = user.UserPermissions.FirstOrDefault(p => p.ProductName == server);
+            //return permissionItem != null && permissionItem.IgnoredSensors.Contains(sensor);
+            return user.AvailableKeys.Contains(key);
         }
 
         public static bool IsProductAvailable(this User user, string server)

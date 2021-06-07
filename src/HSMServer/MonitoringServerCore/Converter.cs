@@ -439,6 +439,7 @@ namespace HSMServer.MonitoringServerCore
             data.TransactionType = type;
             data.Description = value.Description;
             data.Status = value.Status;
+            data.Key = value.Key;
         }
 
         #endregion
