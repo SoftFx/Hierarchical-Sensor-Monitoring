@@ -51,14 +51,13 @@ namespace HSMServer.HtmlHelpers
                 foreach (var sensor in node.Sensors)
                 {
                     string name = sensor.Name.Replace(' ', '-');
+                    result.Append("<div class='accordion-item'>" +
+                                  $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
 
                     if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
                     {
                         //header
                         string fileName = GetFileNameString(sensor.Value);
-
-                        result.Append("<div class='accordion-item'>" +
-                                      $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
 
                         //button
                         result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
@@ -89,9 +88,7 @@ namespace HSMServer.HtmlHelpers
                         continue;
                     }
 
-                    result.Append("<div class='accordion-item'>" +
-                                  $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>" +
-                                  $"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
+                    result.Append($"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
                                   $"<div class='container'>" +
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +

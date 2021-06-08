@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using HSMSensorDataObjects;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.HtmlHelpers
@@ -30,12 +31,29 @@ namespace HSMServer.HtmlHelpers
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)
                 {
-                    result.Append("<ul>" + Recursion(subnode) + "</ul>");
+                    result.Append($"<ul style='color:{GetStatusHeaderColor(subnode.Status)}'>" + Recursion(subnode) + "</ul>");
                 }
 
             result.Append("</li>");
 
             return result.ToString();
+        }
+
+        public static string GetStatusHeaderColor(SensorStatus status)
+        {
+            switch (status)
+            {
+                case SensorStatus.Unknown:
+                    return "gray";
+                case SensorStatus.Ok:
+                    return "green";
+                case SensorStatus.Warning:
+                    return "yellow";
+                case SensorStatus.Error:
+                    return "red";
+                default:
+                    return "gray";
+            }
         }
     }
 }
