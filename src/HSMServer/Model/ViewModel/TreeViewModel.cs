@@ -65,7 +65,16 @@ namespace HSMServer.Model.ViewModel
                 else existingNode = existingNode.Update(node); 
             }
 
+            UpdateNodeStatuses();
             return this;
+        }
+
+        public void UpdateNodeStatuses()
+        {
+            foreach (var node in Nodes)
+            {
+                node.UpdateStatus();
+            }
         }
     }
 }
