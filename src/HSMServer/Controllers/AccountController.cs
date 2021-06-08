@@ -11,6 +11,7 @@ using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
 using HSMServer.Model.ViewModel;
+using HSMServer.MonitoringServerCore;
 
 namespace HSMServer.Controllers
 {
@@ -18,10 +19,12 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
+        private readonly IMonitoringCore _monitoringCore;
 
-        public AccountController(IUserManager userManager)
+        public AccountController(IUserManager userManager, IMonitoringCore monitoringCore)
         {
             _userManager = userManager;
+            _monitoringCore = monitoringCore;
         }
 
         [AllowAnonymous]
@@ -64,8 +67,13 @@ namespace HSMServer.Controllers
         public IActionResult Users()
         {
             var users = _userManager.Users;
+            var products = _monitoringCore.GetProducts(HttpContext.User as User);
 
-            return View(users.Select(x => new UserViewModel(x))?.ToList());
+            UsersListPageViewModel viewModel = new UsersListPageViewModel();
+            viewModel.Users = users.Select(x => new UserViewModel(x))?.ToList();
+            viewModel.Products = products.Select(x => new ProductViewModel(x)).ToList();
+
+            return View(viewModel);
         }
 
         private async Task Authenticate(string login, bool keepLoggedIn)

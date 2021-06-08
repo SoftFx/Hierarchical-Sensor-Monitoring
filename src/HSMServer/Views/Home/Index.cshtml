@@ -182,37 +182,37 @@
 </script>
 <script>
     //files functionality
-    function getMimeType(fileName) {
-        let extension = getExtensionFromName(fileName);
-        let fileType = mimeTypesMap.get(extension);
-        if (fileType === undefined) {
-            fileType = "text/html";
-        }
-        return fileType;
-    }
+    //function getMimeType(fileName) {
+    //    let extension = getExtensionFromName(fileName);
+    //    let fileType = mimeTypesMap.get(extension);
+    //    if (fileType === undefined) {
+    //        fileType = "text/html";
+    //    }
+    //    return fileType;
+    //}
 
-    function getExtensionFromName(fileName) {
-        let dotIndex = fileName.indexOf('.');
-        if (dotIndex === -1) {
-            return fileName;
-        }
-        return fileName.substring(dotIndex + 1, fileName.length);    }
+    //function getExtensionFromName(fileName) {
+    //    let dotIndex = fileName.indexOf('.');
+    //    if (dotIndex === -1) {
+    //        return fileName;
+    //    }
+    //    return fileName.substring(dotIndex + 1, fileName.length);    //}
 
-    function getFileName(product, path, fileName) {
-        let newDate = new Date();
-        let date = newDate.toLocaleDateString("ru-RU");
-        let time = newDate.toLocaleTimeString("ru-Ru").replace(':', '.');
-        let dotIndex = fileName.indexOf('.');
-        //has dot and does not start from dot
-        if (dotIndex > 0) {
-           return fileName;
-        }
+    //function getFileName(product, path, fileName) {
+    //    let newDate = new Date();
+    //    let date = newDate.toLocaleDateString("ru-RU");
+    //    let time = newDate.toLocaleTimeString("ru-Ru").replace(':', '.');
+    //    let dotIndex = fileName.indexOf('.');
+    //    //has dot and does not start from dot
+    //    if (dotIndex > 0) {
+    //       return fileName;
+    //    }
 
-        if (dotIndex === 0) {
-            return product + "_" + path + "_" + date + "_" + time + fileName;
-        }
-        return product + "_" + path + "_" + date + "_" + time + "." + fileName;
-    }
+    //    if (dotIndex === 0) {
+    //        return product + "_" + path + "_" + date + "_" + time + fileName;
+    //    }
+    //    return product + "_" + path + "_" + date + "_" + time + "." + fileName;
+    //}
 
     function viewFile(product, path, fileName, viewFileAction) {
         //let fileType = getMimeType(fileName);
@@ -228,34 +228,34 @@
         //}
         //xhr.send(JSON.stringify(fileData(product, path)));
 
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(fileData(product, path)),
-            url: viewFileAction,
-            cache: false,
-            contentType: "application/json",
-            success: function (response) {
-                let fileType = getMimeType(fileName);
-                //console.log(fileType);
-                //let decoded = atob(response.fileBytes);
-                //console.log(decoded);
-                //console.log(decoded.length);
+    //    $.ajax({
+    //        type: 'POST',
+    //        data: JSON.stringify(fileData(product, path)),
+    //        url: viewFileAction,
+    //        cache: false,
+    //        contentType: "application/json",
+    //        success: function (response) {
+    //            let fileType = getMimeType(fileName);
+    //            //console.log(fileType);
+    //            //let decoded = atob(response.fileBytes);
+    //            //console.log(decoded);
+    //            //console.log(decoded.length);
 
-                let blob = new Blob([response], { type: fileType });
-                let fileReader = new FileReader();
-                fileReader.readAsArrayBuffer(blob);
-                console.log(fileReader.result);
-                //let blob = new Blob([decoded]);
-                //console.log(blob);
-                let url = window.URL.createObjectURL(blob);
-                window.open(url);
-            }
-        });
-    }
+    //            let blob = new Blob([response], { type: fileType });
+    //            let fileReader = new FileReader();
+    //            fileReader.readAsArrayBuffer(blob);
+    //            console.log(fileReader.result);
+    //            //let blob = new Blob([decoded]);
+    //            //console.log(blob);
+    //            let url = window.URL.createObjectURL(blob);
+    //            window.open(url);
+    //        }
+    //    });
+    //}
 
-    function fileData(product, path) {
-        return { "Product": product, "Path": path };
-    }
+    //function fileData(product, path) {
+    //    return { "Product": product, "Path": path };
+    //}
 
     $('[id^="button_view"]').on("click",
         function () {

@@ -54,7 +54,7 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        public static string CreateTable(List<UserViewModel> users)
+        public static string CreateTable(UsersListPageViewModel usersListViewModel)
         {
             StringBuilder result = new StringBuilder();
 
@@ -74,25 +74,26 @@ namespace HSMServer.HtmlHelpers
 
             result.Append("<tbody>");
 
-            if (users == null || users.Count == 0) return result.ToString();
+            if (usersListViewModel.Users == null || usersListViewModel.Users.Count == 0) return result.ToString();
 
             //create 
             result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
-                $"<th>{CreateRoleSelect()}</th>" +
-                "<th>---</th>" + //todo multiselect - list products
+                $"<th>{CreateRoleSelectWithId()}</th>" +
+                $"<th>{CreateNewUserProductsSelect(usersListViewModel.Products)}</th>" + 
                 "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
 
             int index = 1;
-            foreach (var user in users)
+            foreach (var user in usersListViewModel.Users)
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{user.Username}</td>" +
                     $"<td>**************</td>" +
                     $"<td>{user.Role}</td>" +
-                    $"<td>Products</td>" + //todo products
+                    //$"<td>Products</td>" + //todo products
+                    $"<td>{CreateProductsSelect(usersListViewModel.Products, user)}</td>" +
                     $"<td><button id='delete_{user.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button></td></tr>");
                 index++;
@@ -103,6 +104,39 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        private static string CreateNewUserProductsSelect(List<ProductViewModel> products)
+        {
+            StringBuilder result = new StringBuilder();
+            result.Append($"<select id='productsSelectNewUser' class='selectpicker' multiple>");
+            foreach (var product in products)
+            {
+                result.Append($"<option value='{product.Key} ({product.Name})'>");
+                result.Append($"{product.Key} ({product.Name})");
+                result.Append("</option>");
+            }
+
+            result.Append("</select>");
+            return result.ToString();
+        }
+        private static string CreateProductsSelect(List<ProductViewModel> products, UserViewModel user)
+        {
+            StringBuilder result = new StringBuilder();
+            result.Append($"<select id='products_select_{user}' class='selectpicker' multiple>");
+            foreach (var product in products)
+            {
+                result.Append($"<option value='{product.Key}'");
+                if (user.AvailableKeys.Contains(product.Key))
+                {
+                    result.Append("selected");
+                }
+                //result.Append("selected");
+                result.Append($">{product.Key} ({product.Name})");
+                result.Append("</option>");
+            }
+
+            result.Append("</select>");
+            return result.ToString();
+        }
         private static string CreateRoleSelect()
         {
             StringBuilder result = new StringBuilder();
@@ -111,6 +145,18 @@ namespace HSMServer.HtmlHelpers
                 $"<option>{UserRoleEnum.DataViewer}</option>" +
                 $"<option>{UserRoleEnum.Admin}</option>" +
                 $"</select>");
+
+            return result.ToString();
+        }
+
+        private static string CreateRoleSelectWithId()
+        {
+            StringBuilder result = new StringBuilder();
+
+            result.Append("<select id='createRoleSelect' class='form-select'>" +
+                          $"<option>{UserRoleEnum.DataViewer}</option>" +
+                          $"<option>{UserRoleEnum.Admin}</option>" +
+                          $"</select>");
 
             return result.ToString();
         }
