@@ -42,15 +42,11 @@ namespace HSMServer.Controllers
             if (!results.IsValid) 
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return RedirectToAction("Index", "Account",new
-                {
-                    controller = "Account",
-                    action = "Index"
-                });
+                return RedirectToAction("Index", "Home");
             }
 
-            var user = _userManager.Authenticate(model.Login, model.Password);
-            if (user == null) return RedirectToAction("Index", "Account");
+            //var user = _userManager.Authenticate(model.Login, model.Password);
+            //if (user == null) return RedirectToAction("Index", "Home");
 
             TempData.Remove(TextConstants.TempDataErrorText);
             await Authenticate(model.Login, model.KeepLoggedIn);
@@ -61,7 +57,8 @@ namespace HSMServer.Controllers
         public void Logout()
         {
             TempData.Remove(TextConstants.TempDataErrorText);
-            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties {RedirectUri = Url.Action(nameof(Index))});
+            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            RedirectToAction("Index", "Home");
         }
 
         public IActionResult Users()
