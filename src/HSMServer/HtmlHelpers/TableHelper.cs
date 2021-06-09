@@ -41,7 +41,8 @@ namespace HSMServer.HtmlHelpers
 
             //create 
             result.Append("<tr><th>0</th>" +
-                "<th><input id='createName' type='text' class='form-control'/></th>" +
+                "<th><input id='createName' type='text' class='form-control'/>" +
+                "<span style='display: none;' id='new_product_name_span'></th>" +
                 "<th>---</th>" +
                 "<th>---</th>" +
                 "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +

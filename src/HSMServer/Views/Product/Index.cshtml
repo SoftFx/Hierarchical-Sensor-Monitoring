@@ -15,12 +15,21 @@
 
 
 <div class="container row justify-content-center">
-    @if (TempData[TextConstants.TempDataErrorText] != null)
+    @*@if (TempData[TextConstants.TempDataErrorText] != null)
     {
         <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-    }
+    }*@
 
     @ViewHelper.CreateProductList(Model)
+    
+    <script>
+        let errorText = '@TempData[TextConstants.TempDataErrorText]';
+        if (errorText !== undefined) {
+            let errorSpan = document.getElementById('new_product_name_span');
+            errorSpan.textContent = errorText.slice(0, errorText.length - 5);
+            errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+        }
+    </script>
 </div>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
