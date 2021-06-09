@@ -42,10 +42,60 @@
 <div class="container">
     <div id="mainContainer" class="row">
         @ViewHelper.CreateTreeWithLists(Model)
-
     </div>
     <hr />
 </div>
+
+<script>
+    //Add event listeners to buttons
+    function initializeDataHistoryRequests() {
+        $(".accordion-button").on("click", function () {
+            product = this.id.split('_')[0];
+            path = this.id.substring(product.length + 1, this.id.length);
+            totalCount = $('#inputCount_' + this.id).val();
+
+            initializeHistory(product, path, totalCount, historyAction);
+        });
+
+        $('[id^="reload_"]').on("click",
+            function () {
+                id = this.id.substring("reload_".length, this.id.length);
+                product = id.split('_')[0];
+                path = id.substring(product.length + 1, this.id.length);
+                totalCount = $('#inputCount_' + id).val();
+
+                initializeHistory(product, path, totalCount, historyAction);
+            });
+
+        $('[id^="button_view"]').on("click",
+            function () {
+                id = this.id.substring("button_view".length, this.id.length);
+
+                //console.log(id);
+                let splitRes = id.split('_');
+                let product = splitRes[1];
+                let fileName = splitRes[splitRes.length - 1];
+                let path = id.substring(product.length + 2, id.length - fileName.length - 1);
+
+                window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
+                //viewFile(product, path, fileName, viewFileAction);
+            }
+        );
+
+        $('[id^="button_download"]').on("click",
+            function () {
+                id = this.id.substring("button_download".length, this.id.length);
+
+                let splitRes = id.split('_');
+                let product = splitRes[1];
+                let fileName = splitRes[splitRes.length - 1];
+                let path = id.substring(product.length + 2, id.length - fileName.length - 1);
+
+                window.location.href = getFileAction + "?Product=" + product + "&Path=" + path;
+            }
+        );
+    }
+</script>
 
 <script>
     //Mime types map
@@ -57,6 +107,8 @@
 <script>
     //Tree functionality
     initializeTree();
+
+    initializeDataHistoryRequests();
 
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
@@ -79,6 +131,13 @@
             async: true
         }).done(function (data) {
             var node = $('#jstree').jstree().get_selected(true)[0];
+            var selectedHistory = $('[class*=accordion-collapse][class*=show]')[0];
+            if (selectedHistory !== undefined) {
+                let selectedId = selectedHistory.id;
+                var newStr = selectedId.slice("collapse_".length, selectedId.length);
+                selectedHistory = newStr;
+            }
+            //console.log('selected history item id: ', selectedHistory);
 
             data = data.replace('{"value":"', '');//fix sometime
             data = data.replace('"}', '');
@@ -88,16 +147,31 @@
 
             initializeTree();
 
+            initializeDataHistoryRequests();
+
             $('#list_' + node.id).css('display', 'block');
             $('#jstree').jstree('select_node', node.id);
+
+            openSensorHistory(selectedHistory);
 
             $('#updateTime').empty();
             $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
             $("#state").empty();
             $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+
+
         });
     });
+
+    function openSensorHistory(idToOpen) {
+        if (idToOpen === undefined) {
+            return;
+        }
+
+        //let button = document.getElementById(idToOpen);
+        //button.click();
+    }
 
     hubConnection.onclose(error => {
         $("#state").empty();
@@ -160,25 +234,6 @@
             $(`#values_${product}_${path}`).append(data);
         });
     }
-
-    $(".accordion-button").on("click", function () {
-        product = this.id.split('_')[0];
-        path = this.id.substring(product.length + 1, this.id.length);
-        totalCount = $('#inputCount_' + this.id).val();
-
-        initializeHistory(product, path, totalCount, historyAction);
-    });
-
-    $('[id^="reload_"]').on("click",
-        function() {
-            id = this.id.substring("reload_".length, this.id.length);
-            product = id.split('_')[0];
-            path = id.substring(product.length + 1, this.id.length);
-            totalCount = $('#inputCount_' + id).val();
-
-            initializeHistory(product, path, totalCount, historyAction);
-        });
-
 </script>
 <script>
     //files functionality
@@ -196,8 +251,10 @@
     //    if (dotIndex === -1) {
     //        return fileName;
     //    }
-    //    return fileName.substring(dotIndex + 1, fileName.length);    //}
-
+    //    return fileName.substring(dotIndex + 1, fileName.length);
+    //}
+
+
     //function getFileName(product, path, fileName) {
     //    let newDate = new Date();
     //    let date = newDate.toLocaleDateString("ru-RU");
@@ -205,7 +262,8 @@
     //    let dotIndex = fileName.indexOf('.');
     //    //has dot and does not start from dot
     //    if (dotIndex > 0) {
-    //       return fileName;
+    //       return fileName;
+
     //    }
 
     //    if (dotIndex === 0) {
@@ -228,60 +286,33 @@
         //}
         //xhr.send(JSON.stringify(fileData(product, path)));
 
-    //    $.ajax({
-    //        type: 'POST',
-    //        data: JSON.stringify(fileData(product, path)),
-    //        url: viewFileAction,
-    //        cache: false,
-    //        contentType: "application/json",
-    //        success: function (response) {
-    //            let fileType = getMimeType(fileName);
-    //            //console.log(fileType);
-    //            //let decoded = atob(response.fileBytes);
-    //            //console.log(decoded);
-    //            //console.log(decoded.length);
+        //    $.ajax({
+        //        type: 'POST',
+        //        data: JSON.stringify(fileData(product, path)),
+        //        url: viewFileAction,
+        //        cache: false,
+        //        contentType: "application/json",
+        //        success: function (response) {
+        //            let fileType = getMimeType(fileName);
+        //            //console.log(fileType);
+        //            //let decoded = atob(response.fileBytes);
+        //            //console.log(decoded);
+        //            //console.log(decoded.length);
 
-    //            let blob = new Blob([response], { type: fileType });
-    //            let fileReader = new FileReader();
-    //            fileReader.readAsArrayBuffer(blob);
-    //            console.log(fileReader.result);
-    //            //let blob = new Blob([decoded]);
-    //            //console.log(blob);
-    //            let url = window.URL.createObjectURL(blob);
-    //            window.open(url);
-    //        }
-    //    });
-    //}
+        //            let blob = new Blob([response], { type: fileType });
+        //            let fileReader = new FileReader();
+        //            fileReader.readAsArrayBuffer(blob);
+        //            console.log(fileReader.result);
+        //            //let blob = new Blob([decoded]);
+        //            //console.log(blob);
+        //            let url = window.URL.createObjectURL(blob);
+        //            window.open(url);
+        //        }
+        //    });
+        //}
 
-    //function fileData(product, path) {
-    //    return { "Product": product, "Path": path };
-    //}
+        //function fileData(product, path) {
+        //    return { "Product": product, "Path": path };
+        //}
 
-    $('[id^="button_view"]').on("click",
-        function () {
-            id = this.id.substring("button_view".length, this.id.length);
-
-            //console.log(id);
-            let splitRes = id.split('_');
-            let product = splitRes[1];
-            let fileName = splitRes[splitRes.length - 1];
-            let path = id.substring(product.length + 2, id.length - fileName.length - 1);
-
-            window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
-            //viewFile(product, path, fileName, viewFileAction);
-        }
-    );
-
-    $('[id^="button_download"]').on("click",
-        function () {
-            id = this.id.substring("button_download".length, this.id.length);
-
-            let splitRes = id.split('_');
-            let product = splitRes[1];
-            let fileName = splitRes[splitRes.length - 1];
-            let path = id.substring(product.length + 2, id.length - fileName.length - 1);
-
-            window.location.href = getFileAction + "?Product=" + product + "&Path=" + path;
-        }
-    );
 </script>
