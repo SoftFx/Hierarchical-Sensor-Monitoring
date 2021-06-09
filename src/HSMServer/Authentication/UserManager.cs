@@ -76,6 +76,23 @@ namespace HSMServer.Authentication
             return user;
         }
 
+        public void RemoveUser(User user)
+        {
+            lock (_accessLock)
+            {
+                _users.Remove(user);
+            }
+        }
+
+        public void AddUser(User user)
+        {
+            lock (_accessLock)
+            {
+                _users.Add(user);
+            }
+
+            ThreadPool.QueueUserWorkItem(_ => _database.AddUser(user));
+        }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string password, UserRoleEnum role)
         {
             User user = new User
@@ -87,13 +104,7 @@ namespace HSMServer.Authentication
                 Role = role
             };
 
-            lock (_accessLock)
-            {
-                _users.Add(user);
-            }
-
-            ThreadPool.QueueUserWorkItem(_ => _database.AddUser(user));
-            //ThreadPool.QueueUserWorkItem(_ => SaveUsers());
+            AddUser(user);
         }
 
         public List<User> Users
@@ -364,6 +375,18 @@ namespace HSMServer.Authentication
             //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
 
             return existingUser?.WithoutPassword();
+        }
+
+        public void UpdateUser(User user)
+        {
+            User existingUser = GetUserByUserName(user.UserName);
+
+            if (existingUser != null)
+            {
+                RemoveUser(existingUser);
+            }
+
+            AddUser(user);
         }
     }
 }

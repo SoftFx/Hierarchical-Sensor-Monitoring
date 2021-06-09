@@ -10,5 +10,6 @@ namespace HSMServer.Authentication
         User GetUserByUserName(string username);
 
         User Authenticate(string login, string password);
+        void UpdateUser(User user);
     }
 }
