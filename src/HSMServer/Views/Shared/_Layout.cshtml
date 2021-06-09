@@ -55,7 +55,7 @@
                             <a class="nav-link"
                                href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">Products</a>
                         </li>
-                         @if (Context.User is HSMServer.Authentication.User && ((User) Context.User).Role == UserRoleEnum.Admin)
+                         @if (((User) Context.User).Role == UserRoleEnum.Admin)
                          {
                              <li class="nav-item">
                                  <a class="nav-link"

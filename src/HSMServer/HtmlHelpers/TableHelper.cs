@@ -1,12 +1,23 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Constants;
+using HSMServer.DataLayer.Model;
 using HSMServer.Model.ViewModel;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
 using System.Text;
 
 namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
+        private static readonly HttpClientHandler _clientHandler = new HttpClientHandler() 
+        { 
+            ServerCertificateCustomValidationCallback = 
+            (sender, cert, chain, sslPolicyErrors) => { return true; }
+        };
+        private static readonly HttpClient _client = new HttpClient(_clientHandler);
+
         public static string CreateTable(List<ProductViewModel> products)
         {
             StringBuilder result = new StringBuilder();
@@ -54,7 +65,7 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        public static string CreateTable(UsersListPageViewModel usersListViewModel)
+        public static string CreateTable(List<UserViewModel> users)
         {
             StringBuilder result = new StringBuilder();
 
@@ -74,26 +85,25 @@ namespace HSMServer.HtmlHelpers
 
             result.Append("<tbody>");
 
-            if (usersListViewModel.Users == null || usersListViewModel.Users.Count == 0) return result.ToString();
+            if (users == null || users.Count == 0) return result.ToString();
 
             //create 
             result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
-                $"<th>{CreateRoleSelectWithId()}</th>" +
-                $"<th>{CreateNewUserProductsSelect(usersListViewModel.Products)}</th>" + 
+                $"<th>{CreateRoleSelect()}</th>" +
+                $"<th>{CreateProductSelect()}</th>" +
                 "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
 
             int index = 1;
-            foreach (var user in usersListViewModel.Users)
+            foreach (var user in users)
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{user.Username}</td>" +
                     $"<td>**************</td>" +
                     $"<td>{user.Role}</td>" +
-                    //$"<td>Products</td>" + //todo products
-                    $"<td>{CreateProductsSelect(usersListViewModel.Products, user)}</td>" +
+                    $"<td>{CreateUserProductSelect(user.ProductKeys)}</td>" +
                     $"<td><button id='delete_{user.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button></td></tr>");
                 index++;
@@ -104,39 +114,6 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateNewUserProductsSelect(List<ProductViewModel> products)
-        {
-            StringBuilder result = new StringBuilder();
-            result.Append($"<select id='productsSelectNewUser' class='selectpicker' multiple>");
-            foreach (var product in products)
-            {
-                result.Append($"<option value='{product.Key} ({product.Name})'>");
-                result.Append($"{product.Key} ({product.Name})");
-                result.Append("</option>");
-            }
-
-            result.Append("</select>");
-            return result.ToString();
-        }
-        private static string CreateProductsSelect(List<ProductViewModel> products, UserViewModel user)
-        {
-            StringBuilder result = new StringBuilder();
-            result.Append($"<select id='products_select_{user}' class='selectpicker' multiple>");
-            foreach (var product in products)
-            {
-                result.Append($"<option value='{product.Key}'");
-                if (user.AvailableKeys.Contains(product.Key))
-                {
-                    result.Append("selected");
-                }
-                //result.Append("selected");
-                result.Append($">{product.Key} ({product.Name})");
-                result.Append("</option>");
-            }
-
-            result.Append("</select>");
-            return result.ToString();
-        }
         private static string CreateRoleSelect()
         {
             StringBuilder result = new StringBuilder();
@@ -149,14 +126,53 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateRoleSelectWithId()
+        private static string CreateProductSelect()
         {
-            StringBuilder result = new StringBuilder();
+            var response = _client.GetAsync($"{ViewConstants.ApiServer}/api/view/GetProducts").Result;
 
-            result.Append("<select id='createRoleSelect' class='form-select'>" +
-                          $"<option>{UserRoleEnum.DataViewer}</option>" +
-                          $"<option>{UserRoleEnum.Admin}</option>" +
-                          $"</select>");
+            List<Product> products = null;
+            if (response.IsSuccessStatusCode)
+            {
+                products = response.Content.ReadAsAsync<List<Product>>().Result;
+            }
+
+            StringBuilder result = new StringBuilder();
+            result.Append("<select class='form-select' multiple>");
+
+            if (products != null && products.Count > 0)
+                foreach(var product in products)
+                {
+                    result.Append($"<option value='{product.Key}'>{product.Name}</option>");
+                }
+
+            result.Append("</select>");
+
+            return result.ToString();
+        }
+
+        private static string CreateUserProductSelect(List<string> userProductKeys)
+        {
+            var response = _client.GetAsync($"{ViewConstants.ApiServer}/api/view/GetProducts").Result;
+
+            List<Product> products = null;
+            if (response.IsSuccessStatusCode)
+            {
+                products = response.Content.ReadAsAsync<List<Product>>().Result;
+            }
+
+            StringBuilder result = new StringBuilder();
+            result.Append("<select class='form-select' multiple disabled>");
+
+            if (products != null && products.Count > 0)
+                foreach (var product in products)
+                {
+                    //only for test
+                    //if (userProductKeys != null
+                        //&& userProductKeys.FirstOrDefault(x => x.Equals(product.Key)) != null)
+                        result.Append($"<option value='{product.Key}' selected>{product.Name}</option>");
+                }
+
+            result.Append("</select>");
 
             return result.ToString();
         }

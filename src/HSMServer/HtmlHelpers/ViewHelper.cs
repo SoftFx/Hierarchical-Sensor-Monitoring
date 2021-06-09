@@ -22,9 +22,9 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(products));
         }
 
-        public static HtmlString CreateUserList(UsersListPageViewModel usersListViewModel)
+        public static HtmlString CreateUserList(List<UserViewModel> users)
         {
-            return new HtmlString(TableHelper.CreateTable(usersListViewModel));
+            return new HtmlString(TableHelper.CreateTable(users));
         }
     }
 }

@@ -67,13 +67,8 @@ namespace HSMServer.Controllers
         public IActionResult Users()
         {
             var users = _userManager.Users;
-            var products = _monitoringCore.GetProducts(HttpContext.User as User);
 
-            UsersListPageViewModel viewModel = new UsersListPageViewModel();
-            viewModel.Users = users.Select(x => new UserViewModel(x))?.ToList();
-            viewModel.Products = products.Select(x => new ProductViewModel(x)).ToList();
-
-            return View(viewModel);
+            return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
         private async Task Authenticate(string login, bool keepLoggedIn)

@@ -2,6 +2,9 @@
 {
     public class ViewConstants
     {
+        //ToDo: get from configuration
+        public const string ApiServer = "https://localhost:44330";
+
         public const string HomeController = "Home";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
