@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Model
+﻿namespace HSMServer.Model.ViewModel
 {
     public class LoginViewModel
     {

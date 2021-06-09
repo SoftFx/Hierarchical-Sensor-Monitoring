@@ -3,7 +3,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
-using HSMServer.Model;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -71,6 +70,30 @@ namespace HSMServer.Controllers
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
+        [HttpPost]
+        public IActionResult RemoveUser([FromBody] UserViewModel userViewModel)
+        {
+            User user = GetModelFromViewModel(userViewModel);
+            _userManager.RemoveUser(user);
+            return Ok(userViewModel);
+        }
+
+        [HttpPost]
+        public IActionResult AddUser([FromBody] UserViewModel userViewModel)
+        {
+            _userManager.AddUser(userViewModel.Username, string.Empty, string.Empty,
+                HashComputer.ComputePasswordHash(userViewModel.Password), userViewModel.Role, userViewModel.ProductKeys);
+            return Ok();
+        }
+
+        [HttpPost]
+        public IActionResult UpdateUser([FromBody] UserViewModel userViewModel)
+        {
+            User user = GetModelFromViewModel(userViewModel);
+            _userManager.UpdateUser(user);
+            return Ok();
+        }
+
         private async Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
@@ -82,6 +105,18 @@ namespace HSMServer.Controllers
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
                 properties);
   
+        }
+
+        private User GetModelFromViewModel(UserViewModel userViewModel)
+        {
+            User user = new User()
+            {
+                UserName = userViewModel.Username,
+                Password = HashComputer.ComputePasswordHash(userViewModel.Password),
+                Role = userViewModel.Role,
+                AvailableKeys = userViewModel.ProductKeys
+            };
+            return user;
         }
     }
 }

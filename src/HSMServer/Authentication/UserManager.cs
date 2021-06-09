@@ -93,7 +93,8 @@ namespace HSMServer.Authentication
 
             ThreadPool.QueueUserWorkItem(_ => _database.AddUser(user));
         }
-        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role)
+        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
+            List<string> availableKeys = null)
         {
             User user = new User
             {
@@ -103,6 +104,11 @@ namespace HSMServer.Authentication
                 Password = passwordHash,
                 Role = role
             };
+
+            if (availableKeys != null && availableKeys.Any())
+            {
+                user.AvailableKeys = availableKeys;
+            }
 
             AddUser(user);
         }
