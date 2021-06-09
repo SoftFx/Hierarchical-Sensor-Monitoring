@@ -93,14 +93,14 @@ namespace HSMServer.Authentication
 
             ThreadPool.QueueUserWorkItem(_ => _database.AddUser(user));
         }
-        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string password, UserRoleEnum role)
+        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role)
         {
             User user = new User
             {
                 CertificateThumbprint = certificateThumbprint,
                 UserName = userName,
                 CertificateFileName = certificateFileName,
-                Password = password,
+                Password = passwordHash,
                 Role = role
             };
 
