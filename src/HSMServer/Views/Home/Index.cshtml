@@ -95,14 +95,14 @@
             $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
             $("#state").empty();
-            $("#state").append("<span style='color: green'><i class='fas fa-wifi'></i></span>");
+            $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
         });
     });
 
     hubConnection.onclose(error => {
         $("#state").empty();
-        $("#state").append("<span style='color: Tomato'><i class='fas fa-wifi'></i></span>");
-    })
+        $("#state").append("<span style='color: Tomato' value='Connection lost'><i class='fas fa-wifi'></i></span>");
+    });
 
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
