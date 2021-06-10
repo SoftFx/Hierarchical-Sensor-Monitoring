@@ -156,8 +156,7 @@
 
             data = data.replace('{"value":"', '');//fix sometime
             data = data.slice(0, data.length - 2);
-
-            console.log(data);
+            data = data.replaceAll("\\", "");
 
             $("#mainContainer").empty();
             $("#mainContainer").append(data);

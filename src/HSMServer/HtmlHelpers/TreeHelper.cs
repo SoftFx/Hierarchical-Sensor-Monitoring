@@ -28,7 +28,7 @@ namespace HSMServer.HtmlHelpers
             StringBuilder result = new StringBuilder();
 
             result.Append($"<li id='{node.Path.Replace(' ', '-')}' " +
-                          "data-jstree='{\"icon\":\"fas fa-circle " +
+                          "data-jstree='{\"icon\" : \"fas fa-circle " +
                           GetStatusHeaderColorClass(node.Status) +
                           "\"}'>" + node.Name);
 
