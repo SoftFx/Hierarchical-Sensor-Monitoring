@@ -93,9 +93,10 @@ namespace HSMServer.HtmlHelpers
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
                 $"<th>{CreateRoleSelect()}</th>" +
-                $"<th>{CreateProductSelect()}</th>" +
+                $"<td>See Below</td>" +
                 "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
+            result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
 
             int index = 1;
             foreach (var user in users)
@@ -104,9 +105,12 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{user.Username}</td>" +
                     $"<td>**************</td>" +
                     $"<td>{user.Role}</td>" +
-                    $"<td>{CreateUserProductSelect(user.ProductKeys)}</td>" +
+                    $"<td>{CreateUserProductList(user.ProductKeys)}</td>" +
                     $"<td><button id='delete_{user.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button></td></tr>");
+
+                result.Append($"<tr><td colspan='6'>" +
+                    $"{CreateUserProductCheckboxs(user.Username, user.ProductKeys)}</td></tr>");
                 index++;
             }
 
@@ -115,19 +119,44 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        private static string CreateUserProductList(List<string> userProductKeys)
+        {
+            var response = _client.GetAsync($"{ViewConstants.ApiServer}/api/view/GetProducts").Result;
+
+            List<Product> products = null;
+            if (response.IsSuccessStatusCode)
+            {
+                products = response.Content.ReadAsAsync<List<Product>>().Result;
+            }
+
+            StringBuilder result = new StringBuilder();
+            if (products == null || products.Count == 0
+                || userProductKeys == null || userProductKeys.Count == 0) return "---";
+
+            if (products != null && products.Count > 0)
+                foreach (var product in products)
+                {   
+                    if (userProductKeys != null
+                    && userProductKeys.FirstOrDefault(x => x.Equals(product.Key)) != null)
+                        result.Append($"{product.Name}; ");
+                }
+
+            return result.ToString();
+        }
+
         private static string CreateRoleSelect()
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append("<select class='form-select'>" +
-                $"<option>{UserRoleEnum.DataViewer}</option>" +
-                $"<option>{UserRoleEnum.Admin}</option>" +
+            result.Append("<select class='form-select' id='createRole'>" +
+                $"<option value='{(int)UserRoleEnum.DataViewer}'>{UserRoleEnum.DataViewer}</option>" +
+                $"<option value='{(int)UserRoleEnum.Admin}'>{UserRoleEnum.Admin}</option>" +
                 $"</select>");
 
             return result.ToString();
         }
 
-        private static string CreateProductSelect()
+        private static string CreateProductCheckboxs()
         {
             var response = _client.GetAsync($"{ViewConstants.ApiServer}/api/view/GetProducts").Result;
 
@@ -138,20 +167,35 @@ namespace HSMServer.HtmlHelpers
             }
 
             StringBuilder result = new StringBuilder();
-            result.Append("<select class='form-select' multiple>");
+            if (products == null || products.Count == 0) return string.Empty;
 
-            if (products != null && products.Count > 0)
-                foreach(var product in products)
-                {
-                    result.Append($"<option value='{product.Key}'>{product.Name}</option>");
-                }
+            //header
+            result.Append("<div class='accordion' id='createAccrodion'>" +
+                "<div class='accordion-item'>" +
+                "<h2 class='accordion-header' id='createHeader'>" +
+                "<button class='accordion-button collapsed' type='button' " +
+                "data-bs-toggle='collapse' data-bs-target='#createCollapse' aria-expanded='false'" +
+                " aria-controls='createCollapse'>New user products:</button></h2>");
 
-            result.Append("</select>");
+            //body
+            result.Append("<div id='createCollapse' class='accordion-collapse collapse' " +
+                "aria-labelledby='createHeader' data-bs-parent='#createAccordion'>" +
+                "<div class='accordion-body'>");
+
+            foreach(var product in products)
+            {
+                string name = product.Name.Replace(' ', '-');
+                result.Append("<div class='form-check'>" +
+                    $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='createCheck_{name}'>" +
+                    $"<label class='form-check-label' for='createCheck_{name}'>{product.Name}</label></div>");
+            }
+
+            result.Append("</div></div></div></div>");
 
             return result.ToString();
         }
 
-        private static string CreateUserProductSelect(List<string> userProductKeys)
+        private static string CreateUserProductCheckboxs(string username, List<string> userProductKeys)
         {
             var response = _client.GetAsync($"{ViewConstants.ApiServer}/api/view/GetProducts").Result;
 
@@ -162,18 +206,43 @@ namespace HSMServer.HtmlHelpers
             }
 
             StringBuilder result = new StringBuilder();
-            result.Append("<select class='form-select' multiple disabled>");
+            if (products == null || products.Count == 0) return string.Empty;
 
-            if (products != null && products.Count > 0)
-                foreach (var product in products)
+            //header
+            result.Append($"<div class='accordion' id='createAccrodion_{username}'>" +
+                "<div class='accordion-item'>" +
+                $"<h2 class='accordion-header' id='createHeader_{username}'>" +
+                "<button class='accordion-button collapsed' type='button' " +
+                $"data-bs-toggle='collapse' data-bs-target='#createCollapse_{username}' aria-expanded='false'" +
+                $" aria-controls='createCollapse_{username}'>{username} products:</button></h2>");
+
+            //body
+            result.Append($"<div id='createCollapse_{username}' class='accordion-collapse collapse' " +
+                $"aria-labelledby='createHeader_{username}' data-bs-parent='#createAccordion_{username}'>" +
+                "<div class='accordion-body'>");
+
+            if (userProductKeys != null && userProductKeys.Count > 0)
+                foreach(var key in userProductKeys)
                 {
-                    //only for test
-                    //if (userProductKeys != null
-                        //&& userProductKeys.FirstOrDefault(x => x.Equals(product.Key)) != null)
-                        result.Append($"<option value='{product.Key}' selected>{product.Name}</option>");
+                    var product = products.First(x => x.Key.Equals(key));
+                    products.Remove(product);
+                    string name = product.Name.Replace(' ', '-');
+
+                    result.Append("<div class='form-check'>" +
+                        $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check_{name}' checked disabled>" +
+                        $"<label class='form-check-label' for='check_{name}'>{product.Name}</label></div>");
                 }
 
-            result.Append("</select>");
+            foreach (var product in products)
+            {
+                string name = product.Name.Replace(' ', '-');
+
+                result.Append("<div class='form-check'>" +
+                    $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check_{name}' disabled>" +
+                    $"<label class='form-check-label' for='check_{name}'>{product.Name}</label></div>");
+            }
+
+            result.Append("</div></div></div></div>");
 
             return result.ToString();
         }

@@ -11,6 +11,7 @@ using HSMServer.Model.Validators;
 using System.Linq;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using System.Net.Mime;
 
 namespace HSMServer.Controllers
 {
@@ -79,11 +80,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddUser([FromBody] UserViewModel userViewModel)
+        public void CreateUser([FromBody] UserViewModel model)
         {
-            _userManager.AddUser(userViewModel.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(userViewModel.Password), userViewModel.Role, userViewModel.ProductKeys);
-            return Ok();
+            UserValidator validator = new UserValidator(_userManager);
+            var results = validator.Validate(model);
+            if (!results.IsValid)
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);              
+            
+            else 
+                _userManager.AddUser(model.Username, string.Empty, string.Empty,
+                HashComputer.ComputePasswordHash(model.Password), model.Role, model.ProductKeys);
         }
 
         [HttpPost]
