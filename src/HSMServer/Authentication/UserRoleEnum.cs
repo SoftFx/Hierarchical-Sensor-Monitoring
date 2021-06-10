@@ -2,7 +2,7 @@
 {
     public enum UserRoleEnum
     {
-        Admin,
-        DataViewer
+        Admin = 0,
+        DataViewer = 1
     }
 }

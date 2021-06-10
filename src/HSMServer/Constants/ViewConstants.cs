@@ -20,5 +20,7 @@
         public const string GetFileAction = "GetFile";
         public const string ProductsAction = "Products";
         public const string UsersAction = "Users";
+        public const string CreateUserAction = "CreateUser";
+        public const string RemoveUserAction = "RemoveUser";
     }
 }

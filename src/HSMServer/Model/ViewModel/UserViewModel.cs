@@ -16,5 +16,9 @@ namespace HSMServer.Model.ViewModel
             Role = user.Role;
             ProductKeys = user.AvailableKeys;
         }
+        public UserViewModel()
+        {
+
+        }
     }
 }
