@@ -75,17 +75,15 @@ namespace HSMServer.Controllers
         //}
         public IActionResult Users()
         {
-            //var users = _userManager.Users;
-            var users = _userManager.GetUsersPage(2, 2);
+            var users = _userManager.Users;
+            //var users = _userManager.GetUsersPage(2, 2);
 
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
-        [HttpPost]
-        public IActionResult RemoveUser([FromQuery] string userName)
+        public void RemoveUser([FromQuery(Name = "Username")] string username)
         {
-            _userManager.RemoveUser(userName);
-            return Ok(userName);
+            _userManager.RemoveUser(username);
         }
 
         [HttpPost]

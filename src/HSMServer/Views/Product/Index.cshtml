@@ -59,7 +59,7 @@
     $('[id^="delete_"]').on("click",
         function () {
             name = this.id.substring("delete_".length, this.id.length);
-            console.log(name);
+            //console.log(name);
 
             $('#modalDeleteBody').empty();
             $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');

@@ -10,6 +10,7 @@
 
 <script>
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
+    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveUserAction, ViewConstants.AccountController))";
 </script>
 
 <div class="container row justify-content-center">
@@ -21,17 +22,38 @@
     @ViewHelper.CreateUserList(Model)
 </div>
 
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function createData(userName, password, role, products) {
         return { "Username": userName, "Password": password, "Role": Number(role), "ProductKeys": products }
     }
 
+    //fix checked attribut
     $('[id^=createCheck_]').on('click', function () {
         if (this.checked)
             this.setAttribute("checked", "checked");
         else this.removeAttribute("checked");
-    })
+    });
 
+    //create action
     $('#createButton').on('click', function () {
         username = $('#createName').val();
         password = $('#createPassword').val();
@@ -55,6 +77,38 @@
         }).done(function (result) {
             window.location.href = "Users"; //AccountController -> Users
         })
-    })
+    });
+
+    //delete action
+    $('[id^=delete_]').on('click', function () {
+        username = this.id.substring('delete_'.length, this.id.length);
+        //console.log(username);
+
+        $('#modalDeleteBody').empty();
+        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user?');
+
+        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        modal.show();
+
+        //modal confirm
+        $('#confirmDeleteButton').on('click', function () {
+            modal.hide();
+
+            $.ajax({//AccountController -> RemoveUser
+                type: 'GET',
+                url: deleteAction + "?Username=" + username,
+                cache: false,
+                async: true,
+                success: function () {
+                    window.location.href = "Users"; //AccountController -> Users
+                }
+            });
+        });
+
+        //modal close
+        $('#closeDeleteButton').on('click', function () {
+            modal.hide();
+        });
+    });
 
 </script>
