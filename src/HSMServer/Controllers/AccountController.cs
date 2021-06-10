@@ -82,11 +82,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult RemoveUser([FromBody] UserViewModel userViewModel)
+        public IActionResult RemoveUser([FromQuery] string userName)
         {
-            User user = GetModelFromViewModel(userViewModel);
-            _userManager.RemoveUser(user);
-            return Ok(userViewModel);
+            _userManager.RemoveUser(userName);
+            return Ok(userName);
         }
 
         [HttpPost]

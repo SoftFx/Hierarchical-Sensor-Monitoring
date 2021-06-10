@@ -29,6 +29,11 @@ namespace HSMServer.Authentication
         /// <param name="user"></param>
         void RemoveUser(User user);
         /// <summary>
+        /// Remove user with the specified userName
+        /// </summary>
+        /// <param name="userName">Name of the user to remove.</param>
+        void RemoveUser(string userName);
+        /// <summary>
         /// Get users from (page - 1) * pageSize to page * pageSize
         /// </summary>
         /// <param name="page">Page number, must not be less than zero</param>

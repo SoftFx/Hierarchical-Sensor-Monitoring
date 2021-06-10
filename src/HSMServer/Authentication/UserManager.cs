@@ -84,6 +84,20 @@ namespace HSMServer.Authentication
             }
         }
 
+        public void RemoveUser(string userName)
+        {
+            User correspondingUser = default(User);
+            lock (_accessLock)
+            {
+                correspondingUser = _users.FirstOrDefault(u => u.UserName == userName);
+            }
+
+            if (correspondingUser != null)
+            {
+                RemoveUser(correspondingUser);
+            }
+        }
+
         public List<User> GetUsersPage(int page = 1, int pageSize = 1)
         {
             if (page < 1 || pageSize < 1)
