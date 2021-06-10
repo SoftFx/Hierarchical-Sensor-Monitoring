@@ -48,8 +48,8 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var newModel = new TreeViewModel(sensors);
-            var model = oldModel.Update(newModel);
+            //var newModel = new TreeViewModel(sensors);
+            var model = oldModel.Update(sensors);
 
             return ViewHelper.CreateTreeWithLists(model);
         }

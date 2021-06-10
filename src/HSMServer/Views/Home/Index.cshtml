@@ -25,6 +25,21 @@
         margin-left: -20px;
     }
 
+    .tree-icon-unknown {
+        color: gray;
+    }
+
+    .tree-icon-ok {
+        color: green;
+    }
+
+    .tree-icon-warning {
+        color: yellow;
+    }
+
+    .tree-icon-error {
+        color: red;
+    }
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
@@ -115,7 +130,7 @@
         .build();
 
     $("#state").empty();
-    $("#state").append("<span style='color: green'><i class='fas fa-wifi'></i></span>");
+    $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
 
     hubConnection.on('SendSensorUpdates', function (newModel) {
@@ -140,7 +155,9 @@
             //console.log('selected history item id: ', selectedHistory);
 
             data = data.replace('{"value":"', '');//fix sometime
-            data = data.replace('"}', '');
+            data = data.slice(0, data.length - 2);
+
+            console.log(data);
 
             $("#mainContainer").empty();
             $("#mainContainer").append(data);
@@ -150,7 +167,17 @@
             initializeDataHistoryRequests();
 
             $('#list_' + node.id).css('display', 'block');
-            $('#jstree').jstree('select_node', node.id);
+            $('#jstree').jstree(
+                {
+                    'select_node': node.id,
+                    //'plugins': ["types"],
+                    //'types': {
+                    //    'default' : {
+                    //        'icon' : 'fas fa-circle'
+                    //    }
+                    //}
+                }
+            );
 
             openSensorHistory(selectedHistory);
 
