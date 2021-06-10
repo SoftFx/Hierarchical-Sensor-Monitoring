@@ -7,5 +7,7 @@
         public const string ClientVersionFileName = "version.txt";
         public const string ClientAppFolderName = "Client";
         public const string TempDataErrorText = "ErrorMessage";
+        public const string ViewDataPageNumber = "PageNumber";
+        public const string ViewDataPageSize = "PageSize";
     }
 }

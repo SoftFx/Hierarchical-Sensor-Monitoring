@@ -44,6 +44,7 @@ namespace HSMServer.DataLayer
         void AddUser(User user);
         List<User> ReadUsers();
         void RemoveUser(User user);
+        List<User> ReadUsersPage(int page, int pageSize);
 
         ConfigurationObject ReadConfigurationObject();
         void WriteConfigurationObject(ConfigurationObject obj);

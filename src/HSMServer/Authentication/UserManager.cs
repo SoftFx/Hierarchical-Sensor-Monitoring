@@ -84,6 +84,14 @@ namespace HSMServer.Authentication
             }
         }
 
+        public List<User> GetUsersPage(int page = 1, int pageSize = 1)
+        {
+            if (page < 1 || pageSize < 1)
+                return new List<User>();
+            
+            return _database.ReadUsersPage(page, pageSize);
+        }
+
         public void AddUser(User user)
         {
             lock (_accessLock)

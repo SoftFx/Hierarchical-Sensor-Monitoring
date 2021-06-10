@@ -63,9 +63,19 @@ namespace HSMServer.Controllers
             RedirectToAction("Index", "Home");
         }
 
+        //public IActionResult GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        //{
+        //    var pagedUsers = _userManager.GetUsersPage(page, pageSize);
+
+        //    ViewData[TextConstants.ViewDataPageNumber] = page;
+        //    ViewData[TextConstants.ViewDataPageSize] = pageSize;
+
+        //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
+        //}
         public IActionResult Users()
         {
-            var users = _userManager.Users;
+            //var users = _userManager.Users;
+            var users = _userManager.GetUsersPage(2, 2);
 
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }

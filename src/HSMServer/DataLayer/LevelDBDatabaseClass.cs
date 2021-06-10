@@ -490,6 +490,45 @@ namespace HSMServer.DataLayer
             }
         }
 
+        public List<User> ReadUsersPage(int page, int pageSize)
+        {
+            var skip = (page - 1) * pageSize;
+            int index = 1;
+            var lastIndex = page * pageSize;
+            List<User> users = new List<User>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey) &&
+                                                       index <= lastIndex; iterator.Next(), ++index)
+                        {
+                            if (index <= skip)
+                                continue;
+
+                            try
+                            {
+                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                users.Add(user);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read ");
+            }
+
+            return users;
+        }
         public List<User> ReadUsers()
         {
             List<User> users = new List<User>();

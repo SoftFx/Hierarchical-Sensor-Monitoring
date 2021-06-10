@@ -28,5 +28,12 @@ namespace HSMServer.Authentication
         /// </summary>
         /// <param name="user"></param>
         void RemoveUser(User user);
+        /// <summary>
+        /// Get users from (page - 1) * pageSize to page * pageSize
+        /// </summary>
+        /// <param name="page">Page number, must not be less than zero</param>
+        /// <param name="pageSize">Page size, must not be less than zero</param>
+        /// <returns>Users list if the amount of users is bigger than (page - 1) * pageSize, empty list otherwise</returns>
+        List<User> GetUsersPage(int page = 1, int pageSize = 1);
     }
 }

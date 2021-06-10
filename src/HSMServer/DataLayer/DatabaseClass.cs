@@ -806,6 +806,11 @@ namespace HSMServer.DataLayer
             throw new NotImplementedException();
         }
 
+        public List<User> ReadUsersPage(int page, int pageSize)
+        {
+            throw new NotImplementedException();
+        }
+
         public ConfigurationObject ReadConfigurationObject()
         {
             throw new NotImplementedException();
