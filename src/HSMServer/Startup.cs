@@ -21,6 +21,7 @@ using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using FluentValidation.AspNetCore;
+using HSMServer.Cache;
 
 namespace HSMServer
 {
@@ -74,6 +75,7 @@ namespace HSMServer
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
+            services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<IUpdateService, UpdateServiceCore>();

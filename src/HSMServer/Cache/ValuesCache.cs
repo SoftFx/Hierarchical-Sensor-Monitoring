@@ -1,4 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.Cache
@@ -6,28 +10,31 @@ namespace HSMServer.Cache
     internal class ValuesCache : IValuesCache
     {
         private readonly object _syncRoot = new object();
-        private readonly Dictionary<string, Dictionary<string, SensorData>> _productSensorDictionary;
+        private readonly Dictionary<string, SortedList<string, SensorData>> _productSensorDictionary;
 
         public ValuesCache()
         {
-            _productSensorDictionary = new Dictionary<string, Dictionary<string, SensorData>>();
+            _productSensorDictionary = new Dictionary<string, SortedList<string, SensorData>>();
         }
         public void AddValue(string productName, SensorData sensorData)
         {
+            //var dict = _productSensorDictionary.GetOrAdd(productName, new ConcurrentDictionary<string, SensorData>());
+            //var newVal = dict.AddOrUpdate(sensorData.Path, sensorData, (key, oldValue) => sensorData);
             lock (_syncRoot)
             {
-                Dictionary<string, SensorData> dict;
+                SortedList<string, SensorData> list;
+
                 if (!_productSensorDictionary.ContainsKey(productName))
                 {
-                    dict = new Dictionary<string, SensorData>();
-                    _productSensorDictionary[productName] = dict;
+                    list = new SortedList<string, SensorData>();
+                    _productSensorDictionary[productName] = list;
                 }
                 else
                 {
-                    dict = _productSensorDictionary[productName];
+                    list = _productSensorDictionary[productName];
                 }
 
-                dict[sensorData.Path] = sensorData;
+                list[sensorData.Path] = sensorData.Clone();
             }
         }
 
@@ -38,9 +45,17 @@ namespace HSMServer.Cache
             {
                 lock (_syncRoot)
                 {
-                    result.AddRange(_productSensorDictionary[productName].Values);
+                    result.AddRange(_productSensorDictionary[productName].Values.Select(v => v.Clone()));
                 }
             }
+            //foreach (var product in products)
+            //{
+            //    bool res = _productSensorDictionary.TryGetValue(product, out var dict);
+            //    if (res)
+            //    {
+            //        result.AddRange(dict.Values);
+            //    }
+            //}
 
             return result;
         }
@@ -49,9 +64,29 @@ namespace HSMServer.Cache
         {
             lock (_syncRoot)
             {
-                var productDictionary = _productSensorDictionary[productName];
-                productDictionary.Remove(path);
+                var productsList = _productSensorDictionary[productName];
+                productsList.Remove(path);
             }
+            //bool res = _productSensorDictionary.TryGetValue(productName, out var dict);
+            //if (res)
+            //{
+            //    bool removeRes = dict.TryRemove(path, out var data);
+            //    if (!removeRes)
+            //    {
+            //        //TODO: throw exception
+            //    }
+            //}
+        }
+
+        public SensorData GetValue(string productName, string path)
+        {
+            //bool res = _productSensorDictionary.TryGetValue(productName, out var dict);
+            //if (!res)
+            //    return null;
+
+            //bool getValueRes = dict.TryGetValue(path, out var data);
+            //return data;
+            throw new NotImplementedException();
         }
     }
 }

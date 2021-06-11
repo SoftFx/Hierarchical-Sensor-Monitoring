@@ -14,6 +14,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Authentication;
+using HSMServer.Cache;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
@@ -79,10 +80,10 @@ namespace HSMServer.MonitoringServerCore
         private readonly IProductManager _productManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly Logger _logger;
-        public readonly char[] _pathSeparator = new[] { '/' };
+        private readonly IValuesCache _valuesCache;
 
         public MonitoringCore(IDatabaseClass database, IUserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager, IConfigurationProvider configurationProvider)
+            IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache)
         {
             _logger = LogManager.GetCurrentClassLogger();
             _database = database;
@@ -93,7 +94,26 @@ namespace HSMServer.MonitoringServerCore
             _queueManager = new MonitoringQueueManager();
             _productManager = productManager;
             _configurationProvider = configurationProvider;
+            _valuesCache = valuesVCache;
+            FillValuesCache();
             _logger.Debug("Monitoring core initialized");
+        }
+
+        private void FillValuesCache()
+        {
+            var productsList = _productManager.Products;
+            foreach (var product in productsList)
+            {
+                var sensors = _productManager.GetProductSensors(product.Name);
+                foreach (var sensor in sensors)
+                {
+                    var lastVal = _database.GetLastSensorValue(product.Name, sensor.Path);
+                    if (lastVal != null)
+                    {
+                        _valuesCache.AddValue(product.Name, Converter.Convert(lastVal, sensor, product.Name));
+                    }
+                }
+            }
         }
 
         #region Sensor saving
@@ -207,6 +227,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
@@ -231,6 +252,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
@@ -255,6 +277,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
@@ -279,6 +302,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
@@ -303,6 +327,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
@@ -327,6 +352,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
                 ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
@@ -350,6 +376,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 //Skip 
                 if (value.EndTime == DateTime.MinValue)
@@ -382,6 +409,7 @@ namespace HSMServer.MonitoringServerCore
                 DateTime timeCollected = DateTime.Now;
                 SensorData updateMessage = Converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
 
                 if (value.EndTime == DateTime.MinValue)
                 {
@@ -417,18 +445,26 @@ namespace HSMServer.MonitoringServerCore
             var productsList = _productManager.Products;
             //Show available products only
             productsList = productsList.Where(p => user.AvailableKeys.Contains(p.Key)).ToList();
-            foreach (var product in productsList)
-            {
-                var sensorsList = _productManager.GetProductSensors(product.Name);
-                foreach (var sensor in sensorsList)
-                {
-                    var lastVal = _database.GetLastSensorValue(product.Name, sensor.Path);
-                    if (lastVal != null)
-                    {
-                        result.Add(Converter.Convert(lastVal, product.Name));
-                    }
-                }
-            }
+            //foreach (var product in productsList)
+            //{
+                //result.AddRange();
+                //var sensorsList = _productManager.GetProductSensors(product.Name);
+                //foreach (var sensor in sensorsList)
+                //{
+                //    var cachedVal = _valuesCache.GetValue(product.Name, sensor.Path);
+                //    if (cachedVal != null)
+                //    {
+                //        result.Add(cachedVal);
+                //        continue;
+                //    }
+                //    var lastVal = _database.GetLastSensorValue(product.Name, sensor.Path);
+                //    if (lastVal != null)
+                //    {
+                //        result.Add(Converter.Convert(lastVal, product.Name));
+                //    }
+                //}
+            //}
+            result.AddRange(_valuesCache.GetValues(productsList.Select(p => p.Name).ToList()));
 
             return result;
         }

@@ -8,5 +8,6 @@ namespace HSMServer.Cache
         void AddValue(string productName, SensorData sensorData);
         List<SensorData> GetValues(List<string> products);
         void RemoveSensorValue(string productName, string path);
+        SensorData GetValue(string productName, string path);
     }
 }
