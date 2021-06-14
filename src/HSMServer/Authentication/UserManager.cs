@@ -70,7 +70,8 @@ namespace HSMServer.Authentication
             User user = null;
             lock (_accessLock)
             {
-                user = _users.FirstOrDefault(u => u.CertificateThumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
+                user = _users.FirstOrDefault(u => u.CertificateThumbprint != null 
+                    && u.CertificateThumbprint.Equals(thumbprint, StringComparison.InvariantCultureIgnoreCase));
             }
 
             return user;

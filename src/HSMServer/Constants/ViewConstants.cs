@@ -22,5 +22,6 @@
         public const string UsersAction = "Users";
         public const string CreateUserAction = "CreateUser";
         public const string RemoveUserAction = "RemoveUser";
+        public const string UpdateUserAction = "UpdateUser";
     }
 }

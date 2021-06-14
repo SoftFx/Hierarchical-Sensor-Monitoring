@@ -11,6 +11,7 @@
 <script>
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveUserAction, ViewConstants.AccountController))";
+    var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
 </script>
 
 <div class="container row justify-content-center">
@@ -109,6 +110,50 @@
         $('#closeDeleteButton').on('click', function () {
             modal.hide();
         });
+    });
+
+    //change action
+    $('[id^=change_]').on('click', function () {
+        username = this.id.substring('change_'.length, this.id.length);
+
+        $('[id^=role_]').attr('disabled', true);
+        $('[id^=ok_]').attr('disabled', true);
+        $('[id^=cancel_]').attr('disabled', true);
+        $('[id^=check' + username + '_]').attr('disabled', true);
+
+        $('#role_' + username).removeAttr("disabled");
+        $('#ok_' + username).removeAttr("disabled");
+        $('#cancel_' + username).removeAttr("disabled");
+        $('[id^=check' + username + '_]').removeAttr("disabled");
+        //$('#accordionButton_' + username).click();
+
+    });
+
+    $('[id^=cancel_]').on('click', function() {
+        window.location.href = "Users";
+    });
+
+    $('[id^=ok_]').on('click', function () {
+        username = this.id.substring('ok_'.length, this.id.length);
+        role = $('#role_' + username).val();
+
+        products = []
+        $('[id^=check' + username + '_]').each(function () {
+            if ($(this).is(":checked"))
+                products.push(`${$(this).val()}`);
+        });
+
+        var data = createData(username, null, role, products);
+        $.ajax({
+            type: 'POST',
+            url: updateAction,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (result) {
+            window.location.href = "Users"; //AccountController -> Users
+        })
     });
 
 </script>

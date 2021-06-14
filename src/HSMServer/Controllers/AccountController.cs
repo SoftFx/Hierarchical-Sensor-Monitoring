@@ -100,11 +100,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateUser([FromBody] UserViewModel userViewModel)
+        public void UpdateUser([FromBody] UserViewModel userViewModel)
         {
+            var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
+            userViewModel.Password = currentUser.Password;
             User user = GetModelFromViewModel(userViewModel);
+
             _userManager.UpdateUser(user);
-            return Ok();
         }
 
         private async Task Authenticate(string login, bool keepLoggedIn)
@@ -125,7 +127,7 @@ namespace HSMServer.Controllers
             User user = new User()
             {
                 UserName = userViewModel.Username,
-                Password = HashComputer.ComputePasswordHash(userViewModel.Password),
+                Password = userViewModel.Password,//HashComputer.ComputePasswordHash(userViewModel.Password),
                 Role = userViewModel.Role,
                 AvailableKeys = userViewModel.ProductKeys
             };

@@ -2,6 +2,7 @@
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model.ViewModel;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -104,10 +105,16 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{user.Username}</td>" +
                     $"<td>**************</td>" +
-                    $"<td>{user.Role}</td>" +
+                    $"<td>{CreateUserRoleSelect(user.Username, user.Role)}</td>" +
                     $"<td>{CreateUserProductList(user.ProductKeys)}</td>" +
                     $"<td><button id='delete_{user.Username}' type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td></tr>");
+                    $"<i class='fas fa-trash-alt'></i></button>" +
+                    $"<button style='margin-left: 10px' id='change_{user.Username}' type='button' class='btn btn-secondary' title='change'>" +
+                    $"<i class='fas fa-user-edit'></i>" +
+                    $"<button disabled style='margin-left: 10px' id='ok_{user.Username}' type='button' class='btn btn-secondary' title='ok'>" +
+                    $"<i class='fas fa-check'></i></button>" +
+                    $"<button disabled style='margin-left: 10px' id='cancel_{user.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
+                    $"<i class='fas fa-times'></i></button></td></tr>");
 
                 result.Append($"<tr><td colspan='6'>" +
                     $"{CreateUserProductCheckboxs(user.Username, user.ProductKeys)}</td></tr>");
@@ -148,10 +155,28 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append("<select class='form-select' id='createRole'>" +
-                $"<option value='{(int)UserRoleEnum.DataViewer}'>{UserRoleEnum.DataViewer}</option>" +
-                $"<option value='{(int)UserRoleEnum.Admin}'>{UserRoleEnum.Admin}</option>" +
-                $"</select>");
+            result.Append("<select class='form-select' id='createRole'>");
+
+            foreach (UserRoleEnum role in Enum.GetValues(typeof(UserRoleEnum)))
+                result.Append($"<option value='{(int)role}'>{role}</option>");
+            
+            result.Append("</select>");
+
+            return result.ToString();
+        }
+
+        private static string CreateUserRoleSelect(string username, UserRoleEnum userRole)
+        {
+            StringBuilder result = new StringBuilder();
+            result.Append($"<select class='form-select' disabled id='role_{username}'>");
+
+            foreach (UserRoleEnum role in Enum.GetValues(typeof(UserRoleEnum)))
+            {
+                if (role == userRole)
+                    result.Append($"<option selected value='{(int)role}'>{role}</option>");
+                else
+                    result.Append($"<option value='{(int)role}'>{role}</option>");
+            }
 
             return result.ToString();
         }
@@ -212,7 +237,7 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<div class='accordion' id='createAccrodion_{username}'>" +
                 "<div class='accordion-item'>" +
                 $"<h2 class='accordion-header' id='createHeader_{username}'>" +
-                "<button class='accordion-button collapsed' type='button' " +
+                $"<button id='accordionButton_{username}' class='accordion-button collapsed' type='button' " +
                 $"data-bs-toggle='collapse' data-bs-target='#createCollapse_{username}' aria-expanded='false'" +
                 $" aria-controls='createCollapse_{username}'>{username} products:</button></h2>");
 
@@ -229,8 +254,8 @@ namespace HSMServer.HtmlHelpers
                     string name = product.Name.Replace(' ', '-');
 
                     result.Append("<div class='form-check'>" +
-                        $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check_{name}' checked disabled>" +
-                        $"<label class='form-check-label' for='check_{name}'>{product.Name}</label></div>");
+                        $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check{username}_{name}' checked disabled>" +
+                        $"<label class='form-check-label' for='check{username}_{name}'>{product.Name}</label></div>");
                 }
 
             foreach (var product in products)
@@ -238,8 +263,8 @@ namespace HSMServer.HtmlHelpers
                 string name = product.Name.Replace(' ', '-');
 
                 result.Append("<div class='form-check'>" +
-                    $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check_{name}' disabled>" +
-                    $"<label class='form-check-label' for='check_{name}'>{product.Name}</label></div>");
+                    $"<input class='form-check-input' type='checkbox' value='{product.Key}' id='check{username}_{name}' disabled>" +
+                    $"<label class='form-check-label' for='check{username}_{name}'>{product.Name}</label></div>");
             }
 
             result.Append("</div></div></div></div>");
