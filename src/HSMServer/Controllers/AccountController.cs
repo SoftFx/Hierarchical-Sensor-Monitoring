@@ -10,8 +10,6 @@ using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
 using HSMServer.Model.ViewModel;
-using HSMServer.MonitoringServerCore;
-using System.Net.Mime;
 
 namespace HSMServer.Controllers
 {
@@ -19,12 +17,10 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
-        private readonly IMonitoringCore _monitoringCore;
 
-        public AccountController(IUserManager userManager, IMonitoringCore monitoringCore)
+        public AccountController(IUserManager userManager)
         {
             _userManager = userManager;
-            _monitoringCore = monitoringCore;
         }
 
         [AllowAnonymous]
@@ -57,11 +53,11 @@ namespace HSMServer.Controllers
             return RedirectToAction("Index", "Home");
         }
 
-        public void Logout()
+        public async Task<IActionResult> Logout()
         {
             TempData.Remove(TextConstants.TempDataErrorText);
-            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            RedirectToAction("Index", "Home");
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Index", "Home");
         }
 
         //public IActionResult GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
