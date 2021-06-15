@@ -560,10 +560,9 @@ namespace HSMServer.MonitoringServerCore
 
         public List<Product> GetProducts(User user)
         {
-            var products = _productManager.Products.Where(p => 
-                user?.AvailableKeys.FirstOrDefault(key => key.Equals(p.Key)) != null).ToList();
+            if (user.AvailableKeys == null || user.AvailableKeys.Count == 0) return null;
 
-            return products;
+            return _productManager.Products.Where(p => user.AvailableKeys.Contains(p.Key)).ToList();
         }
 
         public List<Product> GetAllProducts()
