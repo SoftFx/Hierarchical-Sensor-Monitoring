@@ -62,24 +62,25 @@ namespace HSMServer.HtmlHelpers
                         //button
                         result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  $"<div class='container'>" +
+                                  "<div class='container'>" +
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div></button></h2>");
                         //body
-                        result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse'" +
+                        result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
-                                  $"<div class='accordion-body'>");
+                                  "<div class='accordion-body'>");
 
-                        result.Append($"<div class='container'>" +
-                                  $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
+                        result.Append("<div class='container'>" +
+                                  $"<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div>" +
-                                      $"<div class='row'><div class='col-2'>" +
+                                      "<div class='row'><div class='col-2'>" +
                                       $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
-                                      $"class='button-view-file-sensor btn btn-secondary' title='View'>" +
+                                      "class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                       "<i class='fas fa-eye'></i></button></div>" +
-                                      $"<div class='col'>" +
+                                      "<div class='col'>" +
                                       $"<button id='button_download_{formattedPath}_{name}_{fileName}'" +
-                                      $" class='button-download-file-sensor-value btn btn-secondary'" +
+                                      " class='button-download-file-sensor-value btn btn-secondary'" +
                                       " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
 
 
@@ -90,20 +91,21 @@ namespace HSMServer.HtmlHelpers
 
                     result.Append($"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  $"<div class='container'>" +
-                                  $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
+                                  "<div class='container'>" +
+                                  "<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div></button></h2>");
 
                     result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
-                                  $"<div class='accordion-body'>" +
-                                  $"<div class='mb-3 row'>" +
+                                  "<div class='accordion-body'>" +
+                                  "<div class='mb-3 row'>" +
                                   $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
-                                  $"<div class='col-sm-2'>" +
+                                  "<div class='col-sm-2'>" +
                                   $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
-                                  $"<div class='col-sm-2'>" +
+                                  "<div class='col-sm-2'>" +
                                   $"<button id='reload_{formattedPath}_{name}' type='button' class='btn btn-secondary'>" +
-                                  $"<i class='fas fa-redo-alt'></i></button></div>" +
+                                  "<i class='fas fa-redo-alt'></i></button></div>" +
                                   $"<div id='values_{formattedPath}_{name}'></div></div></div></div></div>");
 
 

@@ -29,7 +29,7 @@ namespace HSMServer.HtmlHelpers
 
             result.Append($"<li id='{node.Path.Replace(' ', '-')}' " +
                           "data-jstree='{\"icon\" : \"fas fa-circle " +
-                          GetStatusHeaderColorClass(node.Status) +
+                          ViewHelper.GetStatusHeaderColorClass(node.Status) + 
                           "\"}'>" + node.Name);
 
             if (node.Nodes != null)
@@ -41,23 +41,6 @@ namespace HSMServer.HtmlHelpers
             result.Append("</li>");
 
             return result.ToString();
-        }
-
-        public static string GetStatusHeaderColorClass(SensorStatus status)
-        {
-            switch (status)
-            {
-                case SensorStatus.Unknown:
-                    return "tree-icon-unknown";
-                case SensorStatus.Ok:
-                    return "tree-icon-ok";
-                case SensorStatus.Warning:
-                    return "tree-icon-warning";
-                case SensorStatus.Error:
-                    return "tree-icon-error";
-                default:
-                    return "tree-icon-unknown";
-            }
         }
     }
 }

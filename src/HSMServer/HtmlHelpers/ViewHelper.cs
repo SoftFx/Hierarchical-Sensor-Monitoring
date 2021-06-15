@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Html;
 using System.Collections.Generic;
 using System.Text;
+using HSMSensorDataObjects;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -25,6 +26,23 @@ namespace HSMServer.HtmlHelpers
         public static HtmlString CreateUserList(List<UserViewModel> users)
         {
             return new HtmlString(TableHelper.CreateTable(users));
+        }
+
+        public static string GetStatusHeaderColorClass(SensorStatus status)
+        {
+            switch (status)
+            {
+                case SensorStatus.Unknown:
+                    return "tree-icon-unknown";
+                case SensorStatus.Ok:
+                    return "tree-icon-ok";
+                case SensorStatus.Warning:
+                    return "tree-icon-warning";
+                case SensorStatus.Error:
+                    return "tree-icon-error";
+                default:
+                    return "tree-icon-unknown";
+            }
         }
     }
 }
