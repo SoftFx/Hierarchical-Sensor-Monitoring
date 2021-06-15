@@ -35,8 +35,8 @@ namespace HSMServer.Extensions
                 return false;
             }
 
-            return user.CertificateThumbprint.Equals(user2.CertificateThumbprint) &&
-                   user.UserName.Equals(user2.UserName);
+            
+            return user.UserName.Equals(user2.UserName);
         }
 
         public static User WithoutPassword(this User user)
