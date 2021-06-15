@@ -19,7 +19,7 @@ namespace HSMServer.HtmlHelpers
         };
         private static readonly HttpClient _client = new HttpClient(_clientHandler);
 
-        public static string CreateTable(List<ProductViewModel> products)
+        public static string CreateTable(User user, List<ProductViewModel> products)
         {
             StringBuilder result = new StringBuilder();
             //header template
@@ -33,20 +33,23 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>#</th>" +
                 "<th scope='col'>Name</th>" +
                 "<th scope='col'>Key</th>" +
-                "<th scope='col'>Creation Date</th>" +
-                "<th scope='col'>Action</th></tr></thead>");
+                "<th scope='col'>Creation Date</th>");
 
-            result.Append("<tbody>");
+            if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+                result.Append("<th scope='col'>Action</th></tr>");
+
+            result.Append("</thead><tbody>");
 
             if (products == null || products.Count == 0) return result.ToString();
 
             //create 
-            result.Append("<tr><th>0</th>" +
-                "<th><input id='createName' type='text' class='form-control'/>" +
-                "<span style='display: none;' id='new_product_name_span'></th>" +
-                "<th>---</th>" +
-                "<th>---</th>" +
-                "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
+            if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+                result.Append("<tr><th>0</th>" +
+                    "<th><input id='createName' type='text' class='form-control'/>" +
+                    "<span style='display: none;' id='new_product_name_span'></th>" +
+                    "<th>---</th>" +
+                    "<th>---</th>" +
+                    "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
 
             int index = 1;
@@ -56,9 +59,14 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{product.Name}</td><td id='key_{name}'>{product.Key} " +
                     $"<button id='copy_{name}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
-                    $"<i class='far fa-copy'></i></button></td><td>{product.DateAdded}</td>" +
-                    $"<td><button id='delete_{name}' type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td></tr>");
+                    $"<i class='far fa-copy'></i></button></td><td>{product.DateAdded}</td>");
+
+                if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+                    result.Append($"<td><button id='delete_{name}' type='button' class='btn btn-secondary' title='delete'>" +
+                        $"<i class='fas fa-trash-alt'></i></button></td>");
+
+                result.Append("</tr>");
+                
                 index++;
             }
 
@@ -67,7 +75,7 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        public static string CreateTable(List<UserViewModel> users)
+        public static string CreateTable(User user, List<UserViewModel> users)
         {
             StringBuilder result = new StringBuilder();
 
@@ -90,34 +98,45 @@ namespace HSMServer.HtmlHelpers
             if (users == null || users.Count == 0) return result.ToString();
 
             //create 
-            result.Append("<tr><th>0</th>" +
+            if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+            {
+                result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
                 $"<th>{CreateRoleSelect()}</th>" +
                 $"<td>See Below</td>" +
                 "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
-            result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
+                result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
+            }
 
             int index = 1;
-            foreach (var user in users)
+            foreach (var userItem in users)
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
-                    $"<td>{user.Username}</td>" +
-                    $"<td>**************</td>" +
-                    $"<td>{CreateUserRoleSelect(user.Username, user.Role)}</td>" +
-                    $"<td>{CreateUserProductList(user.ProductKeys)}</td>" +
-                    $"<td><button id='delete_{user.Username}' type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button>" +
-                    $"<button style='margin-left: 10px' id='change_{user.Username}' type='button' class='btn btn-secondary' title='change'>" +
+                    $"<td>{userItem.Username}</td>" +
+                    $"<td>**************</td>");
+
+                if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+                    result.Append($"<td>{CreateUserRoleSelect(userItem.Username, userItem.Role.Value)}</td>");
+                else
+                    result.Append($"<td>{userItem.Role}</td>");
+
+                result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td>");
+
+                if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+                    result.Append("<button id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
+                    $"<i class='fas fa-trash-alt'></i></button>");
+
+                result.Append($"<button style='margin-left: 10px' id='change_{userItem.Username}' type='button' class='btn btn-secondary' title='change'>" +
                     $"<i class='fas fa-user-edit'></i>" +
-                    $"<button disabled style='margin-left: 10px' id='ok_{user.Username}' type='button' class='btn btn-secondary' title='ok'>" +
+                    $"<button disabled style='margin-left: 10px' id='ok_{userItem.Username}' type='button' class='btn btn-secondary' title='ok'>" +
                     $"<i class='fas fa-check'></i></button>" +
-                    $"<button disabled style='margin-left: 10px' id='cancel_{user.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
+                    $"<button disabled style='margin-left: 10px' id='cancel_{userItem.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
                     $"<i class='fas fa-times'></i></button></td></tr>");
 
                 result.Append($"<tr><td colspan='6'>" +
-                    $"{CreateUserProductCheckboxs(user.Username, user.ProductKeys)}</td></tr>");
+                    $"{CreateUserProductCheckboxs(userItem.Username, userItem.ProductKeys)}</td></tr>");
                 index++;
             }
 
@@ -234,16 +253,16 @@ namespace HSMServer.HtmlHelpers
             if (products == null || products.Count == 0) return string.Empty;
 
             //header
-            result.Append($"<div class='accordion' id='createAccrodion_{username}'>" +
+            result.Append($"<div class='accordion' id='accrodion_{username}'>" +
                 "<div class='accordion-item'>" +
-                $"<h2 class='accordion-header' id='createHeader_{username}'>" +
+                $"<h2 class='accordion-header' id='header_{username}'>" +
                 $"<button id='accordionButton_{username}' class='accordion-button collapsed' type='button' " +
-                $"data-bs-toggle='collapse' data-bs-target='#createCollapse_{username}' aria-expanded='false'" +
-                $" aria-controls='createCollapse_{username}'>{username} products:</button></h2>");
+                $"data-bs-toggle='collapse' data-bs-target='#collapse_{username}' aria-expanded='false'" +
+                $" aria-controls='collapse_{username}'>{username} products:</button></h2>");
 
             //body
-            result.Append($"<div id='createCollapse_{username}' class='accordion-collapse collapse' " +
-                $"aria-labelledby='createHeader_{username}' data-bs-parent='#createAccordion_{username}'>" +
+            result.Append($"<div id='collapse_{username}' class='accordion-collapse collapse' " +
+                $"aria-labelledby='header_{username}' data-bs-parent='#accordion_{username}'>" +
                 "<div class='accordion-body'>");
 
             if (userProductKeys != null && userProductKeys.Count > 0)

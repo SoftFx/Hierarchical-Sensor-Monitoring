@@ -92,7 +92,7 @@ namespace HSMServer.Controllers
             
             else 
                 _userManager.AddUser(model.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(model.Password), model.Role, model.ProductKeys);
+                HashComputer.ComputePasswordHash(model.Password), model.Role.Value, model.ProductKeys);
         }
 
         [HttpPost]
@@ -100,6 +100,9 @@ namespace HSMServer.Controllers
         {
             var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
             userViewModel.Password = currentUser.Password;
+            if (userViewModel.Role == null) 
+                userViewModel.Role = currentUser.Role;
+
             User user = GetModelFromViewModel(userViewModel);
 
             _userManager.UpdateUser(user);
@@ -124,7 +127,7 @@ namespace HSMServer.Controllers
             {
                 UserName = userViewModel.Username,
                 Password = userViewModel.Password,//HashComputer.ComputePasswordHash(userViewModel.Password),
-                Role = userViewModel.Role,
+                Role = userViewModel.Role.Value,
                 AvailableKeys = userViewModel.ProductKeys
             };
             return user;

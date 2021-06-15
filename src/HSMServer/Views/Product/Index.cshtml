@@ -20,7 +20,7 @@
         <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
     }*@
 
-    @ViewHelper.CreateProductList(Model)
+    @ViewHelper.CreateProductList(Context.User, Model)
     
     <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';

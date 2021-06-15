@@ -1,6 +1,8 @@
-﻿using HSMServer.Model.ViewModel;
+﻿using HSMServer.Authentication;
+using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Html;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Text;
 using HSMSensorDataObjects;
 
@@ -18,14 +20,18 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(result.ToString());
         }
 
-        public static HtmlString CreateProductList(List<ProductViewModel> products)
+        public static HtmlString CreateProductList(ClaimsPrincipal claims, List<ProductViewModel> products)
         {
-            return new HtmlString(TableHelper.CreateTable(products));
+            var user = claims as User;
+
+            return new HtmlString(TableHelper.CreateTable(user, products));
         }
 
-        public static HtmlString CreateUserList(List<UserViewModel> users)
+        public static HtmlString CreateUserList(ClaimsPrincipal claims, List<UserViewModel> users)
         {
-            return new HtmlString(TableHelper.CreateTable(users));
+            var user = claims as User;
+
+            return new HtmlString(TableHelper.CreateTable(user, users));
         }
 
         public static string GetStatusHeaderColorClass(SensorStatus status)

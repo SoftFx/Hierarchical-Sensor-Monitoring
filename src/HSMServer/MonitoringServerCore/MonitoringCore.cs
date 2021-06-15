@@ -558,10 +558,10 @@ namespace HSMServer.MonitoringServerCore
             return string.Empty;
         }
 
-        //ToDo: product by user, not all products
         public List<Product> GetProducts(User user)
         {
-            var products = _productManager.Products;
+            var products = _productManager.Products.Where(p => 
+                user?.AvailableKeys.FirstOrDefault(key => key.Equals(p.Key)) != null).ToList();
 
             return products;
         }
