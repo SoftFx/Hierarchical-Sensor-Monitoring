@@ -45,7 +45,11 @@ namespace HSMServer.Cache
             {
                 lock (_syncRoot)
                 {
-                    result.AddRange(_productSensorDictionary[productName].Values.Select(v => v.Clone()));
+                    bool doSensorsExist = _productSensorDictionary.TryGetValue(productName, out var data);
+                    if (doSensorsExist)
+                    {
+                        result.AddRange(data.Values.Select(v => v.Clone()));
+                    }
                 }
             }
             //foreach (var product in products)
