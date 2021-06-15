@@ -36,6 +36,7 @@ namespace HSMServer.DataLayer
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorFromList(string productName, string sensorName);
         SensorInfo GetSensorInfo(string productName, string path);
+        void RemoveSensorValues(string productName, string path);
 
         #endregion
 
