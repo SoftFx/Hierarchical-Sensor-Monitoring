@@ -17,7 +17,7 @@ namespace HSMServer.Model.ViewModel
                 AddSensor(sensor);
             }
 
-            UpdateNodeStatuses();
+            UpdateNodeCharacteristics();
         }
 
         private void AddSensor(SensorData sensor)
@@ -48,7 +48,7 @@ namespace HSMServer.Model.ViewModel
             {
                 AddSensor(sensor);   
             }
-            UpdateNodeStatuses();
+            UpdateNodeCharacteristics();
             return this;
         }
         public TreeViewModel Update(TreeViewModel newModel)
@@ -72,15 +72,16 @@ namespace HSMServer.Model.ViewModel
                 else existingNode = existingNode.Update(node); 
             }
 
-            UpdateNodeStatuses();
+            UpdateNodeCharacteristics();
             return this;
         }
 
-        public void UpdateNodeStatuses()
+        public void UpdateNodeCharacteristics()
         {
             foreach (var node in Nodes)
             {
                 node.UpdateStatus();
+                node.UpdateSensorsCount();
             }
         }
     }

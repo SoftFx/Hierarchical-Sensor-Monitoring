@@ -7,6 +7,7 @@ namespace HSMServer.Model.ViewModel
 {
     public class NodeViewModel
     {
+        public int Count { get; set; }
         public string Name { get; set; }
 
         public string Path { get; set; }
@@ -124,6 +125,21 @@ namespace HSMServer.Model.ViewModel
             }
 
             Status = new List<SensorStatus> {statusFromNodes, statusFromSensors}.Max();
+        }
+
+        public void UpdateSensorsCount()
+        {
+            int count = 0;
+            if (Nodes != null && Nodes.Any())
+            {
+                foreach (var node in Nodes)
+                {
+                    node.UpdateSensorsCount();
+                    count += node.Count;
+                }
+            }
+
+            Count = count + (Sensors?.Count ?? 0);
         }
     }
 }
