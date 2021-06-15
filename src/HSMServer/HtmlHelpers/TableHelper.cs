@@ -35,7 +35,7 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Key</th>" +
                 "<th scope='col'>Creation Date</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                 result.Append("<th scope='col'>Action</th></tr>");
 
             result.Append("</thead><tbody>");
@@ -43,7 +43,7 @@ namespace HSMServer.HtmlHelpers
             if (products == null || products.Count == 0) return result.ToString();
 
             //create 
-            if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                 result.Append("<tr><th>0</th>" +
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
@@ -61,7 +61,7 @@ namespace HSMServer.HtmlHelpers
                     $"<button id='copy_{name}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
                     $"<i class='far fa-copy'></i></button></td><td>{product.DateAdded}</td>");
 
-                if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                     result.Append($"<td><button id='delete_{name}' type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button></td>");
 
@@ -98,7 +98,7 @@ namespace HSMServer.HtmlHelpers
             if (users == null || users.Count == 0) return result.ToString();
 
             //create 
-            if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+            if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
             {
                 result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
@@ -117,14 +117,14 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{userItem.Username}</td>" +
                     $"<td>**************</td>");
 
-                if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+                if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
                     result.Append($"<td>{CreateUserRoleSelect(userItem.Username, userItem.Role.Value)}</td>");
                 else
                     result.Append($"<td>{userItem.Role}</td>");
 
                 result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td>");
 
-                if (UserRoleHelper.IsUserCRUDAllow(user.Role))
+                if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
                     result.Append("<button id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button>");
 

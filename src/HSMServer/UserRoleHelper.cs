@@ -4,7 +4,7 @@ namespace HSMServer
 {
     public static class UserRoleHelper
     {
-        public static bool IsProductCRUDAllow(UserRoleEnum role)
+        public static bool IsProductCRUDAllowed(UserRoleEnum role)
         {
             return role switch
             {
@@ -14,7 +14,7 @@ namespace HSMServer
             };
         }
 
-        public static bool IsUsersPageAllow(UserRoleEnum role)
+        public static bool IsUsersPageAllowed(UserRoleEnum role)
         {
             return role switch
             {
@@ -24,7 +24,7 @@ namespace HSMServer
             };
         }
 
-        public static bool IsUserCRUDAllow(UserRoleEnum role)
+        public static bool IsUserCRUDAllowed(UserRoleEnum role)
         {
             return role switch
             {
