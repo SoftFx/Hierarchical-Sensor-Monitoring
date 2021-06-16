@@ -8,6 +8,7 @@ using HSMServer.Keys;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.MonitoringServerCore;
+using Microsoft.Extensions.Logging;
 using NLog;
 using Product = HSMServer.DataLayer.Model.Product;
 
@@ -16,14 +17,14 @@ namespace HSMServer.Products
     public class ProductManager : IProductManager
     {
         private readonly IDatabaseClass _database;
-        private readonly Logger _logger;
+        private readonly ILogger<ProductManager> _logger;
         private readonly List<Product> _products;
         private readonly Dictionary<string, List<SensorInfo>> _productSensorsDictionary = new Dictionary<string, List<SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager(IDatabaseClass database)
+        public ProductManager(IDatabaseClass database, ILogger<ProductManager> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _database = database;
             _products = new List<Product>();
             InitializeProducts();
@@ -86,7 +87,7 @@ namespace HSMServer.Products
 
             lock (_productsLock)
             {
-                _logger.Info($"{_products.Count} products read, ProductManager initialized");
+                _logger.LogInformation($"{_products.Count} products read, ProductManager initialized");
             }
             
         }
@@ -123,13 +124,13 @@ namespace HSMServer.Products
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove product, name = {name}");
+                _logger.LogError(e, $"Failed to remove product, name = {name}");
             }
         }
         public void AddProduct(string name)
         {
             string key = KeyGenerator.GenerateProductKey(name);
-            _logger.Info($"Created product key = '{key}' for product = '{name}'");
+            _logger.LogInformation($"Created product key = '{key}' for product = '{name}'");
             Product product = new Product {Key = key, Name = name, DateAdded = DateTime.Now};
             AddProduct(product);
         }
@@ -152,7 +153,7 @@ namespace HSMServer.Products
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add new product, name = {product.Name}");
+                _logger.LogError(e, $"Failed to add new product, name = {product.Name}");
             }
         }
         public bool IsSensorRegistered(string productName, string path)

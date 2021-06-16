@@ -6,11 +6,7 @@ using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
-using NLog;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using HSMServer.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -22,11 +18,9 @@ namespace HSMServer.Controllers
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
-        private readonly Logger _logger;
 
         public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager)
         {
-            _logger = LogManager.GetCurrentClassLogger();
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;

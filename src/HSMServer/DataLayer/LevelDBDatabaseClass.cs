@@ -8,8 +8,7 @@ using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
 using LevelDB;
-using NLog;
-using Logger = NLog.Logger;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.DataLayer
 {
@@ -70,30 +69,22 @@ namespace HSMServer.DataLayer
         #endregion
 
         private readonly object _accessLock;
-        private readonly Logger _logger;
+        private readonly ILogger<LevelDBDatabaseClass> _logger;
         private readonly char[] _keysSeparator = { '_' };
         private const string DATABASE_NAME = "MonitoringData";
         private DB _database;
-        public LevelDBDatabaseClass()
+        public LevelDBDatabaseClass(ILogger<LevelDBDatabaseClass> logger)
         {
             _accessLock = new object();
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             try
             {
                 Options dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
-                //Options options = new Options()
-                //{
-                //    CreateIfMissing = true,
-                //    CompressionLevel = CompressionLevel.SnappyCompression,
-                //    BlockSize = 204800,
-                //    WriteBufferSize = 8388608
-                //};
                 _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
-                //_database = new DB(DATABASE_NAME, options);
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to create LevelDB database");
+                _logger.LogError(e, "Failed to create LevelDB database");
                 throw;
             }
             
@@ -112,14 +103,14 @@ namespace HSMServer.DataLayer
                     var prodList = string.IsNullOrEmpty(currentValue)
                         ? new List<string>()
                         : JsonSerializer.Deserialize<List<string>>(currentValue);
-                    _logger.Info($"Products list read: {currentValue}");
+                    _logger.LogInformation($"Products list read: {currentValue}");
                     prodList.Add(productName);
                     _database.Put(PrefixConstants.PRODUCTS_LIST_PREFIX, JsonSerializer.Serialize(prodList));
                 }
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to add product to list");
+                _logger.LogError(e, "Failed to add product to list");
                 throw;
             }
         }
@@ -137,7 +128,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get products list");
+                _logger.LogError(e, "Failed to get products list");
             }
 
             return result;
@@ -156,7 +147,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to get product info for product = {productName}");
+                _logger.LogError(e, $"Failed to get product info for product = {productName}");
             }
 
             return result;
@@ -175,7 +166,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to add product info");
+                _logger.LogError(e, "Failed to add product info");
             }
         }
 
@@ -191,7 +182,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove product info for product = {name}");
+                _logger.LogError(e, $"Failed to remove product info for product = {name}");
             }
         }
 
@@ -210,7 +201,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failer to remove prodcut from list");
+                _logger.LogError(e, "Failer to remove prodcut from list");
             }
         }
 
@@ -230,7 +221,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove sensor info for {info.Path}");
+                _logger.LogError(e, $"Failed to remove sensor info for {info.Path}");
             }
         }
 
@@ -247,7 +238,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add sensor info for {info.Path}");
+                _logger.LogError(e, $"Failed to add sensor info for {info.Path}");
             }
         }
         public SensorInfo GetSensorInfo(string productName, string path)
@@ -266,7 +257,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to read SensorInfo for {productName}:{path}");
+                _logger.LogError(e, $"Failed to read SensorInfo for {productName}:{path}");
             }
 
             return sensorInfo;
@@ -292,11 +283,11 @@ namespace HSMServer.DataLayer
                     }
                 
                 }
-                _logger.Info($"Removed {count} values of sensor {path}");
+                _logger.LogInformation($"Removed {count} values of sensor {path}");
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove values of sensors {path}");
+                _logger.LogError(e, $"Failed to remove values of sensors {path}");
             }
         }
 
@@ -313,7 +304,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
@@ -330,7 +321,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
@@ -362,7 +353,7 @@ namespace HSMServer.DataLayer
                         //    }
                         //    catch (Exception e)
                         //    {
-                        //        _logger.Error(e, "Failed to read SensorDataObject");
+                        //        _logger.LogError(e, "Failed to read SensorDataObject");
                         //    }
 
                         //}
@@ -379,7 +370,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.Error(e, "Failed to read SensorDataObject");
+                                _logger.LogError(e, "Failed to read SensorDataObject");
                             }
                         }
                     }
@@ -389,7 +380,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to get last value for sensor = {path}, product = {productName}");
+                _logger.LogError(e, $"Failed to get last value for sensor = {path}, product = {productName}");
             }
 
             return sensorDataObject;
@@ -420,7 +411,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.Error(e, "Failed to read SensorDataObject");
+                                _logger.LogError(e, "Failed to read SensorDataObject");
                             }
 
                         }
@@ -429,7 +420,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to get sensor history {path}");
+                _logger.LogError(e, $"Failed to get sensor history {path}");
             }
 
             return result;
@@ -450,7 +441,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to get sensors list for {productName}");
+                _logger.LogError(e, $"Failed to get sensors list for {productName}");
             }
 
             return result;
@@ -474,7 +465,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add new sensor {path} to list for product {productName}");
+                _logger.LogError(e, $"Failed to add new sensor {path} to list for product {productName}");
             }
         }
 
@@ -494,7 +485,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove sensor {sensorName} from list for {productName}");
+                _logger.LogError(e, $"Failed to remove sensor {sensorName} from list for {productName}");
             }
         }
 
@@ -515,7 +506,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write user data for user = '{user.UserName}'");
+                _logger.LogError(e, $"Failed to write user data for user = '{user.UserName}'");
             }
         }
 
@@ -545,7 +536,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -553,7 +544,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to read ");
+                _logger.LogError(e, "Failed to read ");
             }
 
             return users;
@@ -577,7 +568,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -585,7 +576,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to read ");
+                _logger.LogError(e, "Failed to read ");
             }
 
             return users;
@@ -603,7 +594,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove user = '{user.UserName}'");
+                _logger.LogError(e, $"Failed to remove user = '{user.UserName}'");
             }
         }
 
@@ -622,7 +613,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to read ConfigurationObject!");
+                _logger.LogError(e, "Failed to read ConfigurationObject!");
                 return null;
             }
         }
@@ -641,7 +632,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to save ConfigurationObject!");
+                _logger.LogError(e, "Failed to save ConfigurationObject!");
             }
         }
 
@@ -705,7 +696,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                //_logger.Error(e, $"Error parsing datetime: {str}");
+                //_logger.LogError(e, $"LogError parsing datetime: {str}");
             }
             //Back compatibility
             str = splitRes.Last();
@@ -715,7 +706,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Error parsing datetime from prev version: {str}");
+                _logger.LogError(e, $"LogError parsing datetime from prev version: {str}");
                 return DateTime.MinValue;
             }
         }

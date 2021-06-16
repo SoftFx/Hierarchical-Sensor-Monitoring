@@ -15,22 +15,22 @@ using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using HSMServer.MonitoringServerCore;
 using HSMService;
-using NLog;
+using Microsoft.Extensions.Logging;
 using SensorStatus = HSMService.SensorStatus;
 
 namespace HSMServer.Services
 {
     internal class HSMService : Sensors.SensorsBase
     {
-        private readonly Logger _logger;
+        private readonly ILogger<HSMService> _logger;
         private readonly IMonitoringCore _monitoringCore;
         private const int BLOCK_SIZE = 1048576;
-        public HSMService(IMonitoringCore monitoringCore)
+        public HSMService(IMonitoringCore monitoringCore, ILogger<HSMService> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _monitoringCore = monitoringCore;
 
-            _logger.Info("Sensors service started");
+            _logger.LogInformation("Sensors service started");
         }
 
         public override Task<SensorsUpdateMessage> GetMonitoringUpdates(Empty request, ServerCallContext context)

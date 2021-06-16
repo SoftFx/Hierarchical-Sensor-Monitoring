@@ -10,7 +10,7 @@ using HSMCommon;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.Extensions;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Authentication
 {
@@ -19,7 +19,7 @@ namespace HSMServer.Authentication
         #region Private fields
 
         private readonly List<User> _users;
-        private readonly Logger _logger;
+        private readonly ILogger<UserManager> _logger;
         private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(60);
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
@@ -30,9 +30,9 @@ namespace HSMServer.Authentication
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass)
+        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass, ILogger<UserManager> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _certificateManager = certificateManager;
             _users = new List<User>();
             _database = databaseClass;
@@ -43,7 +43,7 @@ namespace HSMServer.Authentication
                 Thread.Sleep(300); 
                 MigrateUsersToDatabase();
                 File.Delete(_usersFilePath);
-                _logger.Info("Users file deleted");
+                _logger.LogInformation("Users file deleted");
             }
 
             int count = dataBaseUsers.Count;
@@ -55,12 +55,12 @@ namespace HSMServer.Authentication
             if (count == 0)
             {
                 AddDefaultUser();
-                _logger.Info("Default user added");
+                _logger.LogInformation("Default user added");
             }
 
             CheckUsersUpToDate();
 
-            _logger.Info("UserManager initialized");
+            _logger.LogInformation("UserManager initialized");
         }
 
         #region Interface implementation
@@ -180,7 +180,7 @@ namespace HSMServer.Authentication
                 count = _users.Count;
             }
 
-            _logger.Info($"Users read, users count = {count}");
+            _logger.LogInformation($"Users read, users count = {count}");
         }
         private void AddDefaultUser()
         {
@@ -207,7 +207,7 @@ namespace HSMServer.Authentication
                 }
             }
 
-            _logger.Info($"{usersFromFile.Count} successfully migrated from file to database");
+            _logger.LogInformation($"{usersFromFile.Count} successfully migrated from file to database");
         }
 
         #region File work
@@ -237,7 +237,7 @@ namespace HSMServer.Authentication
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to parse users file!");
+                _logger.LogError(e, "Failed to parse users file!");
             }
 
             return users;
@@ -320,7 +320,7 @@ namespace HSMServer.Authentication
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to save users file!");
+                _logger.LogError(e, "Failed to save users file!");
             }
         }
         [Obsolete]

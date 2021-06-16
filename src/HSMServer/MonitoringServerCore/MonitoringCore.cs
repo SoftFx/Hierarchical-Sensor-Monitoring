@@ -19,7 +19,7 @@ using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using HSMServer.Products;
-using NLog;
+using Microsoft.Extensions.Logging;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
@@ -78,13 +78,14 @@ namespace HSMServer.MonitoringServerCore
         private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
         private readonly IConfigurationProvider _configurationProvider;
-        private readonly Logger _logger;
+        private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
 
         public MonitoringCore(IDatabaseClass database, IUserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache)
+            IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache,
+            ILogger<MonitoringCore> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _database = database;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
@@ -95,7 +96,7 @@ namespace HSMServer.MonitoringServerCore
             _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
             FillValuesCache();
-            _logger.Debug("Monitoring core initialized");
+            _logger.LogInformation("Monitoring core initialized");
         }
 
         private void FillValuesCache()
@@ -166,7 +167,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 if (value == null)
                 {
-                    _logger.Warn("Received null value in list!");
+                    _logger.LogWarning("Received null value in list!");
                     continue;
                 }
                 switch (value.SensorType)
@@ -233,7 +234,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
         public void AddSensorValue(IntSensorValue value)
@@ -258,7 +259,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -283,7 +284,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -308,7 +309,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -333,7 +334,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -358,7 +359,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
         public void AddSensorValue(IntBarSensorValue value)
@@ -390,7 +391,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -422,7 +423,7 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add value for sensor '{value?.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
             }
         }
 
@@ -584,7 +585,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 result = false;
                 error = e.Message;
-                _logger.Error(e, $"Failed to add new product name = {productName}, user = {user.UserName}");
+                _logger.LogError(e, $"Failed to add new product name = {productName}, user = {user.UserName}");
             }
 
             return result;
@@ -605,7 +606,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 result = false;
                 error = e.Message;
-                _logger.Error(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
+                _logger.LogError(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
             }
 
             return result;

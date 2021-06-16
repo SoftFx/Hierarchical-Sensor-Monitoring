@@ -6,7 +6,7 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -20,17 +20,17 @@ namespace HSMServer.Controllers
     [ApiController]
     public class SensorsController : ControllerBase
     {
-        private readonly Logger _logger;
+        private readonly ILogger<SensorsController> _logger;
         private readonly IMonitoringCore _monitoringCore;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="monitoringCore"></param>
-        public SensorsController(IMonitoringCore monitoringCore)
+        public SensorsController(IMonitoringCore monitoringCore, ILogger<SensorsController> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _monitoringCore = monitoringCore;
-            _logger.Info("Sensors controller started");
+            _logger.LogInformation("Sensors controller started");
         }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace HSMServer.Controllers
         //    }
         //    catch (Exception e)
         //    {
-        //        _logger.Error(e, "Failed to put data!");
+        //        _logger.LogError(e, "Failed to put data!");
         //        return BadRequest(sensorValue);
         //    }
         //}
@@ -69,7 +69,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -92,7 +92,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -115,7 +115,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -161,7 +161,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -184,7 +184,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -208,7 +208,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -233,7 +233,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -257,7 +257,7 @@ namespace HSMServer.Controllers
                 }
                 catch (Exception e)
                 {
-                    _logger.Error(e, "Failed to put data");
+                    _logger.LogError(e, "Failed to put data");
                     return BadRequest(values);
                 }
             }
@@ -273,7 +273,7 @@ namespace HSMServer.Controllers
         //    }
         //    catch (Exception e)
         //    {
-        //        _logger.Error(e, "Failed to add new sensor!");
+        //        _logger.LogError(e, "Failed to add new sensor!");
         //        return e.Message.ToString();
         //    }
         //}
