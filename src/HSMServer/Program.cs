@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 using NLog.Web;
 
 namespace HSMServer
@@ -95,6 +96,7 @@ namespace HSMServer
                 {
                     logging.ClearProviders();
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+                    logging.AddNLog();
                 }).UseNLog().UseConsoleLifetime();
         }
 
