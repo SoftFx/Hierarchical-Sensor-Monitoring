@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using HSMSensorDataObjects;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.HtmlHelpers
