@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Xml;
 using HSMCommon;
 using HSMCommon.Certificates;
@@ -177,7 +178,7 @@ namespace HSMServer.Configuration
             X509Certificate2 serverCert = new X509Certificate2(certOriginalPath);
             try
             {
-                ThreadPool.QueueUserWorkItem(_ => FileManager.SafeCopy(certOriginalPath, Path.Combine(_certificatesFolderPath,
+                Task.Run(() => FileManager.SafeCopy(certOriginalPath, Path.Combine(_certificatesFolderPath,
                     CommonConstants.DefaultServerPfxCertificateName)));
                 CertificatesProcessor.InstallCertificate(serverCert);
             }

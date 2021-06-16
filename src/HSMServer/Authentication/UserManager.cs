@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
@@ -114,7 +115,7 @@ namespace HSMServer.Authentication
                 _users.Add(user);
             }
 
-            ThreadPool.QueueUserWorkItem(_ => _database.AddUser(user));
+            Task.Run(() => _database.AddUser(user));
         }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
             List<string> availableKeys = null)
