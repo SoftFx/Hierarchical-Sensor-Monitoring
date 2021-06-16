@@ -142,6 +142,7 @@ namespace HSMServer.HtmlHelpers
                 index++;
             }
 
+           
             result.Append("</tbody></table></div></div>");
 
             return result.ToString();
@@ -255,20 +256,21 @@ namespace HSMServer.HtmlHelpers
             if (products == null || products.Count == 0) return string.Empty;
 
             //header
-            result.Append($"<div class='accordion' id='accrodion_{username}'>" +
+            result.Append($"<div class='accordion' id='accordion_{username}'>" +
                 "<div class='accordion-item'>" +
-                $"<h2 class='accordion-header' id='header_{username}'>" +
+                $"<h2 class='accordion-header' id='heading_{username}'>" +
                 $"<button id='accordionButton_{username}' class='accordion-button collapsed' type='button' " +
                 $"data-bs-toggle='collapse' data-bs-target='#collapse_{username}' aria-expanded='false'" +
-                $" aria-controls='collapse_{username}'>{username} products:</button></h2>");
+                $" aria-controls='collapse_{username}'>" +
+                $"<div class='container'>{username} products:</div></button></h2>");
 
             //body
             result.Append($"<div id='collapse_{username}' class='accordion-collapse collapse' " +
-                $"aria-labelledby='header_{username}' data-bs-parent='#accordion_{username}'>" +
+                $"aria-labelledby='heading_{username}' data-bs-parent='#accordion_{username}'>" +
                 "<div class='accordion-body'>");
 
             if (userProductKeys != null && userProductKeys.Count > 0)
-                foreach(var key in userProductKeys)
+                foreach (var key in userProductKeys)
                 {
                     var product = products.First(x => x.Key.Equals(key));
                     products.Remove(product);
