@@ -27,8 +27,6 @@ namespace HSMServer.Configuration
                 _certificateThumbprints = new List<string>();
             }
             _logger.LogInformation("ClientCertificateValidator initialized");
-
-            //UpdateCertificates();
         }
 
         private void UpdateCertificates()
@@ -61,16 +59,6 @@ namespace HSMServer.Configuration
         {
             try
             {
-                //if (connection.ClientCertificate.Thumbprint == _defaultClientCertificateThumbprint)
-                //{
-                //    if (!IsDefaultClientForbidden(connection))
-                //    {
-                //        throw new DefaultClientCertificateRejectedException("Default client certificate for the current address rejected!");
-                //    }
-
-                //    return;
-                //}
-
                 if (DateTime.Now - _lastUpdate > _updateInterval)
                 {
                     UpdateCertificates();

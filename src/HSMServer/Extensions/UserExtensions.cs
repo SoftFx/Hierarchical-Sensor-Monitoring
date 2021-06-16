@@ -8,8 +8,6 @@ namespace HSMServer.Extensions
     {
         public static bool IsSensorAvailable(this User user, string key)
         {
-            //var permissionItem = user.UserPermissions.FirstOrDefault(p => p.ProductName == server);
-            //return permissionItem != null && permissionItem.IgnoredSensors.Contains(sensor);
             return user.AvailableKeys.Contains(key);
         }
 

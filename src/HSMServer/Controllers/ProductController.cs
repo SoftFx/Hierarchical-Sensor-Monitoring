@@ -1,5 +1,4 @@
-﻿using FluentValidation.Results;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model.Validators;
@@ -8,7 +7,6 @@ using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Web.Http;
 
 namespace HSMServer.Controllers

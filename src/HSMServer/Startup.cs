@@ -15,7 +15,6 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using HSMServer.Services;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -34,7 +33,6 @@ namespace HSMServer
                 .AddCookie(options =>
                 {
                     options.LoginPath = new PathString("/Account/Index");
-                    //options.
                 });
 
             services.AddHsts(options =>
@@ -54,19 +52,12 @@ namespace HSMServer
             });
             services.AddControllers();
             services.AddControllersWithViews();
-            //services.AddCors(options =>
-            //    {
-            //        options.AddDefaultPolicy(builder =>
-            //            builder.SetIsOriginAllowed(_ => true)
-            //                .AllowCredentials());
-            //    });
 
             services.AddSignalR(hubOptions =>
             {
                 hubOptions.EnableDetailedErrors = true;
             });
 
-            //services.AddSingleton<IDatabaseClass, DatabaseClass>();
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
@@ -80,10 +71,8 @@ namespace HSMServer
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<IUpdateService, UpdateServiceCore>();
             services.AddSingleton<Services.HSMService>();
-            services.AddSingleton<Services.AdminService>();
+            services.AddSingleton<AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
-            //services.AddSingleton<SensorsController>();
-            //services.AddSingleton<ValuesController>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
@@ -137,11 +126,6 @@ namespace HSMServer
                 endpoints.MapGrpcService<Services.HSMService>();
                 endpoints.MapGrpcService<Services.AdminService>();
 
-                //endpoints.MapGet("/Protos/sensors_service.proto", async context =>
-                //{
-                //    await context.Response.WriteAsync(
-                //        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
-                //});
                 endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
                     {
                         options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages
@@ -163,10 +147,6 @@ namespace HSMServer
                 );
             });
 
-            //app.UseForwardedHeaders(new ForwardedHeadersOptions
-            //{
-            //    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-            //});
             app.UseHttpsRedirection();
         }
 

@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using HSMCommon.Model.SensorsData;
 
@@ -18,8 +16,6 @@ namespace HSMServer.Cache
         }
         public void AddValue(string productName, SensorData sensorData)
         {
-            //var dict = _productSensorDictionary.GetOrAdd(productName, new ConcurrentDictionary<string, SensorData>());
-            //var newVal = dict.AddOrUpdate(sensorData.Path, sensorData, (key, oldValue) => sensorData);
             lock (_syncRoot)
             {
                 SortedList<string, SensorData> list;
@@ -52,15 +48,7 @@ namespace HSMServer.Cache
                     }
                 }
             }
-            //foreach (var product in products)
-            //{
-            //    bool res = _productSensorDictionary.TryGetValue(product, out var dict);
-            //    if (res)
-            //    {
-            //        result.AddRange(dict.Values);
-            //    }
-            //}
-
+            
             return result;
         }
 
