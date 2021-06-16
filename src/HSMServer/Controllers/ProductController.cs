@@ -28,7 +28,7 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
 
             List<Product> products = null;
-            if (UserRoleHelper.IsProductCRUDAllow(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                 products = _monitoringCore.GetAllProducts();
             else
                 products = _monitoringCore.GetProducts(user);

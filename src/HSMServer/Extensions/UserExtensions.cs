@@ -23,20 +23,20 @@ namespace HSMServer.Extensions
             return user.UserPermissions.Select(p => p.ProductName);
         }
 
-        public static bool IsSame(this User user, User user2)
+        public static bool IsSame(this User user, User comparedUser)
         {
-            if (user == null && user2 == null)
+            if (user == null && comparedUser == null)
             {
                 return true;
             }
 
-            if (user == null || user2 == null)
+            if (user == null || comparedUser == null)
             {
                 return false;
             }
 
-            return user.CertificateThumbprint.Equals(user2.CertificateThumbprint) &&
-                   user.UserName.Equals(user2.UserName);
+            
+            return user.UserName.Equals(comparedUser.UserName);
         }
 
         public static User WithoutPassword(this User user)

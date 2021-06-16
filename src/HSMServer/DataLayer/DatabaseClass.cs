@@ -791,6 +791,12 @@ namespace HSMServer.DataLayer
             throw new NotImplementedException();
         }
 
+        public void RemoveSensorValues(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+
         public void AddUser(User user)
         {
             throw new NotImplementedException();

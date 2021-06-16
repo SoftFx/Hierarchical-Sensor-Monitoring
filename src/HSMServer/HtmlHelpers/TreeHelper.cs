@@ -30,7 +30,7 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<li id='{node.Path.Replace(' ', '-')}' " +
                           "data-jstree='{\"icon\" : \"fas fa-circle " +
                           ViewHelper.GetStatusHeaderColorClass(node.Status) + 
-                          "\"}'>" + node.Name);
+                          "\"}'>" + $"{node.Name} ({node.Count} sensors)");
 
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)

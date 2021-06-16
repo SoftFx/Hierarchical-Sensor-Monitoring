@@ -271,6 +271,35 @@ namespace HSMServer.DataLayer
 
             return sensorInfo;
         }
+
+        public void RemoveSensorValues(string productName, string path)
+        {
+            try
+            {
+                string readKey = GetSensorReadValueKey(productName, path);
+                byte[] bytesKey = Encoding.UTF8.GetBytes(readKey);
+                int count = 0;
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.Seek(bytesKey); iterator.IsValid() && iterator.Key().StartsWith(bytesKey);
+                            iterator.Next())
+                        {
+                            _database.Delete(iterator.Key());
+                            ++count;
+                        }    
+                    }
+                
+                }
+                _logger.Info($"Removed {count} values of sensor {path}");
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove values of sensors {path}");
+            }
+        }
+
         public void WriteSensorData(SensorDataObject dataObject, string productName)
         {
             try
