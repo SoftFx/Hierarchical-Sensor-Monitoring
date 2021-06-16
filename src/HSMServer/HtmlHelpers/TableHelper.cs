@@ -105,7 +105,7 @@ namespace HSMServer.HtmlHelpers
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
                 $"<th>{CreateRoleSelect()}</th>" +
                 $"<td>See Below</td>" +
-                "<th><button id='createButton' type='button' class='btn btn-secondary' title='create'>" +
+                "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
                 result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
             }
@@ -122,17 +122,17 @@ namespace HSMServer.HtmlHelpers
                 else
                     result.Append($"<td>{userItem.Role}</td>");
 
-                result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td>");
+                result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td style='width: 20%'>");
 
                 if (UserRoleHelper.IsUserCRUDAllow(user.Role))
-                    result.Append("<button id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
+                    result.Append("<button style='margin-left: 5px' id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button>");
 
-                result.Append($"<button style='margin-left: 10px' id='change_{userItem.Username}' type='button' class='btn btn-secondary' title='change'>" +
+                result.Append($"<button style='margin-left: 5px' id='change_{userItem.Username}' type='button' class='btn btn-secondary' title='change'>" +
                     $"<i class='fas fa-user-edit'></i>" +
-                    $"<button disabled style='margin-left: 10px' id='ok_{userItem.Username}' type='button' class='btn btn-secondary' title='ok'>" +
+                    $"<button disabled style='margin-left: 5px' id='ok_{userItem.Username}' type='button' class='btn btn-secondary' title='ok'>" +
                     $"<i class='fas fa-check'></i></button>" +
-                    $"<button disabled style='margin-left: 10px' id='cancel_{userItem.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
+                    $"<button disabled style='margin-left: 5px' id='cancel_{userItem.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
                     $"<i class='fas fa-times'></i></button></td></tr>");
 
                 result.Append($"<tr><td colspan='6'>" +

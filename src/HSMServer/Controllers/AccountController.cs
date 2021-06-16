@@ -71,7 +71,7 @@ namespace HSMServer.Controllers
         //}
         public IActionResult Users()
         {
-            var users = _userManager.Users;
+            var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
             //var users = _userManager.GetUsersPage(2, 2);
 
             return View(users.Select(x => new UserViewModel(x)).ToList());

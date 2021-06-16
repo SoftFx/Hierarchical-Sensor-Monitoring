@@ -33,6 +33,8 @@ namespace HSMServer.Controllers
             else
                 products = _monitoringCore.GetProducts(user);
 
+            products = products.OrderBy(x => x.Name).ToList();
+
             return View(products.Select(x => new ProductViewModel(x))?.ToList());
         }
 
