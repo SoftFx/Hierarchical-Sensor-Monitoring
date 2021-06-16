@@ -151,7 +151,7 @@
         }).done(function (data) {
             var node = $('#jstree').jstree().get_selected(true)[0];
             var selectedHistory = $('[class*=accordion-collapse][class*=show]')[0];
-            if (selectedHistory !== undefined) {
+            if (selectedHistory !== undefined && selectedHistory != undefined) {
                 let selectedId = selectedHistory.id;
                 var newStr = selectedId.slice("collapse_".length, selectedId.length);
                 selectedHistory = newStr;
@@ -169,18 +169,10 @@
 
             initializeDataHistoryRequests();
 
-            $('#list_' + node.id).css('display', 'block');
-            $('#jstree').jstree(
-                {
-                    'select_node': node.id,
-                    //'plugins': ["types"],
-                    //'types': {
-                    //    'default' : {
-                    //        'icon' : 'fas fa-circle'
-                    //    }
-                    //}
-                }
-            );
+            if (node !== undefined && node != undefined) {
+                $('#list_' + node.id).css('display', 'block');
+                $('#jstree').jstree('select_node', node.id);    
+            }
 
             openSensorHistory(selectedHistory);
 
