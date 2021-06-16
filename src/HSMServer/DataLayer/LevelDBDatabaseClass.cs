@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -72,15 +73,16 @@ namespace HSMServer.DataLayer
         private readonly ILogger<LevelDBDatabaseClass> _logger;
         private readonly char[] _keysSeparator = { '_' };
         private const string DATABASE_NAME = "MonitoringData";
+        private readonly Options _dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
         private DB _database;
+        private string _currentDatabaseName = DATABASE_NAME;
         public LevelDBDatabaseClass(ILogger<LevelDBDatabaseClass> logger)
         {
             _accessLock = new object();
             _logger = logger;
             try
             {
-                Options dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
-                _database = new DB(dbOptions, DATABASE_NAME, Encoding.UTF8);
+                _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
             }
             catch (Exception e)
             {
@@ -89,6 +91,69 @@ namespace HSMServer.DataLayer
             }
             
         }
+
+        #region Management
+
+        public void CloseDatabase()
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    _database.Close();
+                    _database.Dispose();
+                    _database = null;
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("Failed to close the database", e);
+            }
+            
+        }
+
+        public void OpenDatabase(string databaseName)
+        {
+            try
+            {
+                lock (_accessLock)
+                {
+                    //Required Db is already opened
+                    if (_database?.PropertyValue("name") == databaseName)
+                        return;
+
+                    if (_database != null)
+                    {
+                        _database.Close();
+                        _database.Dispose();
+                        _database = null;
+                    }
+
+                    _database = new DB(_dbOptions, databaseName, Encoding.UTF8);
+                    _currentDatabaseName = databaseName;
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("Failed to open new database", e);
+            }
+            
+        }
+
+        public void DeleteDatabase()
+        {
+            CloseDatabase();
+            try
+            {
+                Directory.Delete(_currentDatabaseName, true);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("Failed to delete database directory", e);
+            }
+        }
+
+        #endregion
 
         #region Product
 

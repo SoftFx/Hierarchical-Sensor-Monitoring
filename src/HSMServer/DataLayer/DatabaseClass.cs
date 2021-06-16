@@ -260,6 +260,22 @@ namespace HSMServer.DataLayer
         #region Sync code
 
         #region Products' methods
+
+        public void CloseDatabase()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void OpenDatabase(string databaseName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeleteDatabase()
+        {
+            throw new NotImplementedException();
+        }
+
         public void AddProductToList(string productName)
         {
             try

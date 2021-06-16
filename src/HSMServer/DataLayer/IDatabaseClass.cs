@@ -8,6 +8,13 @@ namespace HSMServer.DataLayer
 {
     public interface IDatabaseClass : IDisposable
     {
+        #region Management
+
+        void CloseDatabase();
+        void OpenDatabase(string databaseName);
+        void DeleteDatabase();
+
+        #endregion
         #region Products
 
         void AddProductToList(string productName);
