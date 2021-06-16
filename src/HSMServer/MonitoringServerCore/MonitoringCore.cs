@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
@@ -230,7 +229,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -255,7 +254,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -280,7 +279,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -305,7 +304,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -330,7 +329,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -355,7 +354,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.AddValue(productName, updateMessage);
 
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveOneValueSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -387,7 +386,7 @@ namespace HSMServer.MonitoringServerCore
                 
                 _barsStorage.Remove(productName, value.Path);
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
@@ -419,7 +418,7 @@ namespace HSMServer.MonitoringServerCore
 
                 _barsStorage.Remove(productName, value.Path);
                 SensorDataObject dataObject = Converter.ConvertToDatabase(value, timeCollected);
-                ThreadPool.QueueUserWorkItem(_ => SaveSensorValue(dataObject, productName));
+                Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
