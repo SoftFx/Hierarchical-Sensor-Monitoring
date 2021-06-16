@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace HSMServer.DataLayer
 {
-    internal class LevelDBDatabaseClass : IDatabaseClass
+    public class LevelDBDatabaseClass : IDatabaseClass
     {
         #region IDisposable implementation
 
