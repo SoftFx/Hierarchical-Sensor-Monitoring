@@ -126,7 +126,8 @@ namespace HSMServer.Authentication
                 UserName = userName,
                 CertificateFileName = certificateFileName,
                 Password = passwordHash,
-                Role = role
+                Role = role,
+                Id = Guid.NewGuid()
             };
 
             if (availableKeys != null && availableKeys.Any())
