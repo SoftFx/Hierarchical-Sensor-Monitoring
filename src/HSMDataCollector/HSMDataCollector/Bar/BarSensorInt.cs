@@ -121,8 +121,16 @@ namespace HSMDataCollector.Bar
 
         private void FillNumericData(IntBarSensorValue value, List<int> values)
         {
-            value.Max = values.Last();
-            value.Min = values.First();
+            if (values.Any())
+            {
+                value.Max = values.Last();
+                value.Min = values.First();
+            }
+            else
+            {
+                value.Max = 0;
+                value.Min = 0;
+            }
             value.Count = values.Count;
             value.Mean = CountMean(values);
             value.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.25), 0.25));
