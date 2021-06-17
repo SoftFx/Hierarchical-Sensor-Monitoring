@@ -127,7 +127,7 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td style='width: 20%'>");
 
                 if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
-                    result.Append("<button style='margin-left: 5px' id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
+                    result.Append($"<button style='margin-left: 5px' id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button>");
 
                 result.Append($"<button style='margin-left: 5px' id='change_{userItem.Username}' type='button' class='btn btn-secondary' title='change'>" +
