@@ -8,6 +8,13 @@ namespace HSMServer.DataLayer
 {
     public interface IDatabaseClass : IDisposable
     {
+        #region Management
+
+        void CloseDatabase();
+        void OpenDatabase(string databaseName);
+        void DeleteDatabase();
+
+        #endregion
         #region Products
 
         void AddProductToList(string productName);
@@ -35,6 +42,8 @@ namespace HSMServer.DataLayer
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorFromList(string productName, string sensorName);
+        SensorInfo GetSensorInfo(string productName, string path);
+        void RemoveSensorValues(string productName, string path);
 
         #endregion
 
@@ -43,6 +52,7 @@ namespace HSMServer.DataLayer
         void AddUser(User user);
         List<User> ReadUsers();
         void RemoveUser(User user);
+        List<User> ReadUsersPage(int page, int pageSize);
 
         ConfigurationObject ReadConfigurationObject();
         void WriteConfigurationObject(ConfigurationObject obj);

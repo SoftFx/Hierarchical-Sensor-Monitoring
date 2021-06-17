@@ -8,6 +8,7 @@
         public const string DefaultCACrtCertificateName = "default.ca.crt";
         public const string DefaultCAPfxCertificateName = "default.ca.pfx";
         public const string DefaultClientUserName = "DefaultClient";
+        public const string DefaultUserUsername = "default";
         public const string DefaultClientCertificateThumbprint = "a563183e1fec784f45bc8f3aa47c40eba1a26df9";
         public const string DefaultCertificatesFolderName = "DefaultCertificates";
     }

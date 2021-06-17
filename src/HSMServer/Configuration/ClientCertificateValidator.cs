@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using HSMServer.Exceptions;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Configuration
 {
     public class ClientCertificateValidator
     {
-        private readonly Logger _logger;
+        private readonly ILogger<ClientCertificateValidator> _logger;
         private readonly CertificateManager _certificateManager;
         private readonly TimeSpan _updateInterval;
         private readonly List<string> _certificateThumbprints;
         private DateTime _lastUpdate;
         private object _syncRoot;
-        public ClientCertificateValidator(CertificateManager certificateManager)
+        public ClientCertificateValidator(CertificateManager certificateManager, ILogger<ClientCertificateValidator> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _syncRoot = new object();
             _lastUpdate = DateTime.MinValue;
             _updateInterval = TimeSpan.FromSeconds(20);
@@ -26,9 +26,7 @@ namespace HSMServer.Configuration
             {
                 _certificateThumbprints = new List<string>();
             }
-            _logger.Info("ClientCertificateValidator initialized");
-
-            //UpdateCertificates();
+            _logger.LogInformation("ClientCertificateValidator initialized");
         }
 
         private void UpdateCertificates()
@@ -61,16 +59,6 @@ namespace HSMServer.Configuration
         {
             try
             {
-                //if (connection.ClientCertificate.Thumbprint == _defaultClientCertificateThumbprint)
-                //{
-                //    if (!IsDefaultClientForbidden(connection))
-                //    {
-                //        throw new DefaultClientCertificateRejectedException("Default client certificate for the current address rejected!");
-                //    }
-
-                //    return;
-                //}
-
                 if (DateTime.Now - _lastUpdate > _updateInterval)
                 {
                     UpdateCertificates();
@@ -88,7 +76,7 @@ namespace HSMServer.Configuration
                     return;
                 }
 
-                _logger.Warn($"Rejecting certificate: '{clientCertificate.SubjectName.Name}'");
+                _logger.LogWarning($"Rejecting certificate: '{clientCertificate.SubjectName.Name}'");
 
                 throw new UserRejectedException(
                     $"User certificate '{clientCertificate.SubjectName.Name}' is wrong, authorization failed.");
@@ -99,7 +87,7 @@ namespace HSMServer.Configuration
             }
             catch (Exception ex)
             {
-                _logger.Error($"ClientCertificateValidator: validate error = {ex}");
+                _logger.LogError($"ClientCertificateValidator: validate error = {ex}");
             }
         }
     }

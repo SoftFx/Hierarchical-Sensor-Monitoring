@@ -1,32 +1,36 @@
-﻿using Microsoft.AspNetCore.Html;
-using System.Text;
+﻿using System.Text;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.HtmlHelpers
 {
     public static class TreeHelper
     {
-        public static HtmlString CreateTree(TreeViewModel model)
+        public static string CreateTree(TreeViewModel model)
         {
-            StringBuilder result = new StringBuilder();
+            if (model == null) return string.Empty;
 
-            result.Append("<ul>");
+            StringBuilder result = new StringBuilder();
+            result.Append("<div class='col-md-auto'><div id='jstree'><ul>");
             if (model.Nodes != null)
                 foreach (var node in model.Nodes)
                 {
                     result.Append(Recursion(node));
                 }
 
-            result.Append("</ul>");
+            result.Append("</ul></div></div>");
 
-            return new HtmlString(result.ToString());
+            return result.ToString();
         }
 
         public static string Recursion(NodeViewModel node)
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append($"<li id=\"{node.Path}\">" + node.Name);
+            result.Append($"<li id='{node.Path.Replace(' ', '-')}' " +
+                          "data-jstree='{\"icon\" : \"fas fa-circle " +
+                          ViewHelper.GetStatusHeaderColorClass(node.Status) + 
+                          "\"}'>" + $"{node.Name} ({node.Count} sensors)");
+
             if (node.Nodes != null)
                 foreach (var subnode in node.Nodes)
                 {
@@ -39,3 +43,4 @@ namespace HSMServer.HtmlHelpers
         }
     }
 }
+//style = 'color:{GetStatusHeaderColor(subnode.Status)}'

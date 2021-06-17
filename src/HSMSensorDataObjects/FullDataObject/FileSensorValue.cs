@@ -9,5 +9,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public string Extension { get; set; }
         [DataMember]
         public string FileContent { get; set; }
+        [DataMember]
+        public string FileName { get; set; }
     }
 }

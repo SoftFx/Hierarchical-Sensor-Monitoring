@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using HSMServer.Configuration;
 using HSMServer.Model;
-using HSMServer.MonitoringServerCore;
 using HSMService;
 using Microsoft.Extensions.Logging;
 
@@ -12,8 +11,8 @@ namespace HSMServer.ClientUpdateService
     public class UpdateServiceCore : IUpdateService
     {
         private readonly ILogger<UpdateServiceCore> _logger;
-        private string _updatePath;
-        private ClientUpdateInfo _updateInfo;
+        private readonly string _updatePath;
+        private readonly ClientUpdateInfo _updateInfo;
         private List<string> _filesList;
         public UpdateServiceCore(ILogger<UpdateServiceCore> logger, IConfigurationProvider configurationProvider)
         {

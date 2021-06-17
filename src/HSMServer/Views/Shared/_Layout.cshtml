@@ -1,9 +1,14 @@
-﻿<!DOCTYPE html>
+﻿@using HSMServer.Authentication
+@using HSMServer.Constants
+@using Microsoft.AspNetCore.Http
+@using HSMServer
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - HSMServer</title>
+    <title>@ViewData["Title"] - HSM</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" />
 
@@ -12,31 +17,86 @@
     <script src="https://unpkg.com/@@material-ui/core@latest/umd/material-ui.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/babel-standalone@latest/babel.min.js" crossorigin="anonymous"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.min.js"></script>
+
     <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin="anonymous"></script>
     <!-- Fonts to support Material Design -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
     <!-- Icons to support Material Design -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script src="https://kit.fontawesome.com/96e197af10.js" crossorigin="anonymous"></script>
+    <link href="~/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
 </head>
 <body>
-    <header>
 
+    <header>
     </header>
+@if (Context.User is HSMServer.Authentication.User)
+    {
+        <nav class="navbar navbar-expand-lg navbar-light" style=" background-color: #edf0f5">
+            <div class="container-fluid">
+
+
+                <div class="collapse navbar-collapse" id="nabarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="@Url.Action(ViewConstants.IndexAction,ViewConstants.HomeController)">
+                                Tree
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">Products</a>
+                        </li>
+                         @if (UserRoleHelper.IsUsersPageAllowed(((User)Context.User).Role))
+                         {
+                             <li class="nav-item">
+                                 <a class="nav-link"
+                                    href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
+                                     Users
+                                 </a>
+                             </li>
+                         }
+
+                        <li class="nav-item" style="position: absolute; right: 10px; bottom: 3px">
+
+                            <a class="nav-link"
+                               href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
+                                Logout
+                                <i class="fas fa-sign-out-alt" style="margin: 10px"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </nav>
+    }
+
+
     <div class="container">
-        <main role="main" class="pb-3">
+        <main role="main" class="pb-3" style="margin-bottom: 50px">
             @RenderBody()
         </main>
     </div>
 
+
+
     <footer class="border-top footer text-muted">
-        <div class="container" >
-            &copy; 2021 - HSMServer - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        <div class="container">
+            &copy; 2021 - Soft-FX
         </div>
+
     </footer>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+
     @RenderSection("Scripts", required: false)
 </body>
 </html>

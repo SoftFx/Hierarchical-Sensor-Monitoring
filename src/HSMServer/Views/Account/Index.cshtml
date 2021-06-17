@@ -1,0 +1,34 @@
+﻿@using HSMServer.Constants
+@model HSMServer.Model.ViewModel.LoginViewModel
+@{
+    ViewData["Title"] = "Login";
+}
+
+<script>
+    var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
+    var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
+</script>
+
+<h4 style="margin: 20px 0px">Login</h4>
+
+<div class="login-form-div">
+    <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded" >
+        <div class="mb-1">
+            <input class="form-control" placeholder="Login" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
+        </div>
+        <div class="mb-3">
+            <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" />
+        </div>
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
+            <label class="form-check-label" for="keepLoggedInInput">Keep logged in</label>
+        </div>
+
+        <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-sign-in-alt"></i></button>
+    </form>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <span style="color: red;font-size: large;font-weight:normal">@TempData["ErrorMessage"].ToString()</span>
+    }
+</div>

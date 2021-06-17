@@ -16,7 +16,7 @@ namespace HSMServer.MonitoringServerCore
     {
         //public void AddSensorValue(JobResult value);
         void AddSensorsValues(IEnumerable<CommonSensorValue> values);
-        Task<bool> AddSensorValueAsync(BoolSensorValue value);
+        //Task<bool> AddSensorValueAsync(BoolSensorValue value);
         void AddSensorValue(BoolSensorValue value);
         void AddSensorValue(IntSensorValue value);
         void AddSensorValue(DoubleSensorValue value);
@@ -25,6 +25,8 @@ namespace HSMServer.MonitoringServerCore
         void AddSensorValue(DoubleBarSensorValue value);
 
         void AddSensorValue(FileSensorValue value);
+
+        void AddSensorValue(FileSensorBytesValue value);
         //public void AddSensorValue(SensorValueBase value);
 
         //public string AddSensorValue(NewJobResult value);
@@ -36,10 +38,12 @@ namespace HSMServer.MonitoringServerCore
         List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
         List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model);
         string GetFileSensorValue(User user, string product, string path);
+        byte[] GetFileSensorValueBytes(User user, string product, string path);
         //public StringMessage GetFileSensorValueExtension(User user, string product, string path);
         string GetFileSensorValueExtension(User user, string product, string path);
         //public ProductsListMessage GetProductsList(User user);
-        List<Product> GetProductsList(User user);
+        List<Product> GetProducts(User user);
+        List<Product> GetAllProducts();
         //public AddProductResultMessage AddProduct(User user, string productName);
         bool AddProduct(User user, string productName, out Product product, out string error);
         //public RemoveProductResultMessage RemoveProduct(User user, string productName);

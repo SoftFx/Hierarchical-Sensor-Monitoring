@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "defaultProvider": "unpkg",
+  "libraries": [
+    {
+      "library": "@microsoft/signalr@latest",
+      "destination": "wwwroot/js/signalr/",
+      "files": [
+        "dist/browser/signalr.min.js"
+      ]
+    },
+    {
+      "library": "bootstrap@5.0.1",
+      "destination": "wwwroot/bootstrap/",
+      "files": [
+        "dist/css/bootstrap.min.css"
+      ]
+    },
+    {
+      "library": "clipboard@2.0.8",
+      "destination": "wwwroot/clipboard/",
+      "files": [
+        "dist/clipboard.min.js"
+      ]
+    }
+  ]
+}

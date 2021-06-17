@@ -3,7 +3,7 @@ using System.IO;
 using HSMCommon.Model;
 using HSMServer.Constants;
 using HSMServer.DataLayer;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Configuration
 {
@@ -12,16 +12,17 @@ namespace HSMServer.Configuration
         #region Private fields
 
         private readonly IDatabaseClass _database;
-        private readonly ILogger _logger;
+        private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
         private ConfigurationObject _currentConfigurationObject;
         #endregion
 
-        public ConfigurationProvider(IDatabaseClass database)
+        public ConfigurationProvider(IDatabaseClass database, ILogger<ConfigurationProvider> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _database = database;
+            _logger.LogInformation("ConfigurationProvider initialized.");
         }
 
         #region Public interface implementation
@@ -65,7 +66,7 @@ namespace HSMServer.Configuration
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to read client app version!");
+                _logger.LogError(e, "Failed to read client app version!");
             }
             return new ClientVersionModel() {ExtraVersion = 0, MainVersion = 0, SubVersion = 0, Postfix = "Failed to read!"};            
         }
