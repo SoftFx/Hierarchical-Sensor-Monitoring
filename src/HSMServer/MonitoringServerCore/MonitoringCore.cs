@@ -612,6 +612,11 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
+        public void UpdateProduct(User user, Product product)
+        {
+            _productManager.UpdateProduct(product);
+        }
+
         public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
             RSAParameters rsaParameters)
         {

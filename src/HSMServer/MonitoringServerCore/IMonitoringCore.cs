@@ -48,6 +48,7 @@ namespace HSMServer.MonitoringServerCore
         bool AddProduct(User user, string productName, out Product product, out string error);
         //public RemoveProductResultMessage RemoveProduct(User user, string productName);
         bool RemoveProduct(User user, string productName, out Product product, out string error);
+        void UpdateProduct(User user, Product product);
         (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
             RSAParameters rsaParameters);
         //public ClientVersionMessage GetLastAvailableClientVersion();

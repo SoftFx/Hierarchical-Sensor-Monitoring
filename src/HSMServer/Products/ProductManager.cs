@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMSensorDataObjects.FullDataObject;
@@ -155,6 +156,32 @@ namespace HSMServer.Products
             {
                 _logger.LogError(e, $"Failed to add new product, name = {product.Name}");
             }
+        }
+        public void UpdateProduct(Product product)
+        {
+            Product currentProduct;
+            lock (_productsLock)
+            {
+                currentProduct = _products.FirstOrDefault(p => p.Name == product.Key && p.Name == product.Name);
+            }
+
+            if (currentProduct == null)
+            {
+                AddProduct(product);
+                return;
+            }
+
+            if (product.ExtraKeys != null && product.ExtraKeys.Any())
+            {
+                currentProduct.ExtraKeys = new List<ExtraProductKey>();
+                currentProduct.ExtraKeys.AddRange(product.ExtraKeys);
+            }
+            currentProduct.ManagerId = product.ManagerId;
+            Task.Run(() =>
+            {
+                _database.RemoveProductInfo(currentProduct.Name);
+                _database.PutProductInfo(currentProduct);
+            });
         }
         public bool IsSensorRegistered(string productName, string path)
         {

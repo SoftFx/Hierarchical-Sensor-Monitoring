@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 
 namespace HSMServer.Authentication
@@ -12,6 +13,7 @@ namespace HSMServer.Authentication
         public string Password { get; set; }
         public UserRoleEnum Role { get; set; }
         public List<string> AvailableKeys { get; set; }
+        public Guid Id { get; set; }
 
         public User(string userName, string thumbprint) : this()
         {

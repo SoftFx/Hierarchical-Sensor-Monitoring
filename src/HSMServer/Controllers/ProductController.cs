@@ -1,4 +1,5 @@
-﻿using HSMServer.Authentication;
+﻿using System;
+using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model.Validators;
@@ -7,7 +8,7 @@ using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web.Http;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HSMServer.Controllers
 {
@@ -58,6 +59,28 @@ namespace HSMServer.Controllers
         {
             _monitoringCore.RemoveProduct(HttpContext.User as User, productName,
                 out Product product, out string error);
+        }
+
+
+        [HttpPost]
+        public void UpdateProduct([FromBody] ProductViewModel productViewModel)
+        {
+            Product product = GetModelFromViewModel(productViewModel);
+            _monitoringCore.UpdateProduct(HttpContext.User as User, product);
+        }
+
+        private Product GetModelFromViewModel(ProductViewModel productViewModel)
+        {
+            Product product = new Product()
+            {
+                DateAdded = productViewModel.DateAdded,
+                Name = productViewModel.Name,
+                Key = productViewModel.Key,
+                ExtraKeys = productViewModel.ExtraProductKeys,
+                ManagerId = Guid.NewGuid()
+            };
+
+            return product;
         }
     }
 }
