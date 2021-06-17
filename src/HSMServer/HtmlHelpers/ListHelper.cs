@@ -26,10 +26,6 @@ namespace HSMServer.HtmlHelpers
                 "<ul id='noData' style='display: none;' class='list-group'>" +
                 "<li class='list-group-item'>No Data</li></ul></div>");
 
-
-
-
-
             foreach (var path in model.Paths)
             {
                 result.Append(CreateList(path, path, model));
