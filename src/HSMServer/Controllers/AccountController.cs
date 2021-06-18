@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
+using HSMServer.Attributes;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
@@ -69,6 +70,7 @@ namespace HSMServer.Controllers
 
         //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
         //}
+        [AuthorizeRole(UserRoleEnum.Admin)]
         public IActionResult Users()
         {
             var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
