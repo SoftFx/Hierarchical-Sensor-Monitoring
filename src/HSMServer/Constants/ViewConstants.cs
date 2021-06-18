@@ -18,6 +18,7 @@
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
         public const string GetFileAction = "GetFile";
+        public const string GetFileStreamAction = "GetFileStream";
         public const string ProductsAction = "Products";
         public const string UsersAction = "Users";
         public const string CreateUserAction = "CreateUser";

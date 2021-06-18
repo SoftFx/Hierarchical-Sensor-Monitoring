@@ -9,6 +9,7 @@
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
+    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -96,8 +97,8 @@
                 let fileName = splitRes[splitRes.length - 1];
                 let path = id.substring(product.length + 2, id.length - fileName.length - 1);
 
-                window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
-                //viewFile(product, path, fileName, viewFileAction);
+                //window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
+                viewFile(product, path, fileName, viewFileAction);
             }
         );
 
@@ -263,22 +264,22 @@
 </script>
 <script>
     //files functionality
-    //function getMimeType(fileName) {
-    //    let extension = getExtensionFromName(fileName);
-    //    let fileType = mimeTypesMap.get(extension);
-    //    if (fileType === undefined) {
-    //        fileType = "text/html";
-    //    }
-    //    return fileType;
-    //}
+    function getMimeType(fileName) {
+        let extension = getExtensionFromName(fileName);
+        let fileType = mimeTypesMap.get(extension);
+        if (fileType === undefined) {
+            fileType = "text/html";
+        }
+        return fileType;
+    }
 
-    //function getExtensionFromName(fileName) {
-    //    let dotIndex = fileName.indexOf('.');
-    //    if (dotIndex === -1) {
-    //        return fileName;
-    //    }
-    //    return fileName.substring(dotIndex + 1, fileName.length);
-    //}
+    function getExtensionFromName(fileName) {
+        let dotIndex = fileName.indexOf('.');
+        if (dotIndex === -1) {
+            return fileName;
+        }
+        return fileName.substring(dotIndex + 1, fileName.length);
+    }
 
 
     //function getFileName(product, path, fileName) {
@@ -298,8 +299,8 @@
     //    return product + "_" + path + "_" + date + "_" + time + "." + fileName;
     //}
 
-    //function viewFile(product, path, fileName, viewFileAction) {
-        //let fileType = getMimeType(fileName);
+    function viewFile(product, path, fileName, viewFileAction) {
+        let fileType = getMimeType(fileName);
         //console.log(fileType);
         //var xhr = new XMLHttpRequest();
         //xhr.open('POST', viewFileAction, true);
@@ -311,33 +312,26 @@
         //    window.open(url);
         //}
         //xhr.send(JSON.stringify(fileData(product, path)));
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(fileData(product, path)),
+            url: viewFileAction,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                let extension = getExtensionFromName(fileName);
+                let fileType = mimeTypesMap.get(extension);
+                if (fileType === undefined) {
+                    fileType = "text/html";
+                }
+                let blob = new Blob([response], { type: fileType });
+                let url = window.URL.createObjectURL(blob);
+                window.open(url);
+            }
+        });
+    }
 
-        //    $.ajax({
-        //        type: 'POST',
-        //        data: JSON.stringify(fileData(product, path)),
-        //        url: viewFileAction,
-        //        cache: false,
-        //        contentType: "application/json",
-        //        success: function (response) {
-        //            let fileType = getMimeType(fileName);
-        //            //console.log(fileType);
-        //            //let decoded = atob(response.fileBytes);
-        //            //console.log(decoded);
-        //            //console.log(decoded.length);
-
-        //            let blob = new Blob([response], { type: fileType });
-        //            let fileReader = new FileReader();
-        //            fileReader.readAsArrayBuffer(blob);
-        //            console.log(fileReader.result);
-        //            //let blob = new Blob([decoded]);
-        //            //console.log(blob);
-        //            let url = window.URL.createObjectURL(blob);
-        //            window.open(url);
-        //        }
-        //    });
-        //}
-
-        //function fileData(product, path) {
-        //    return { "Product": product, "Path": path };
-        //}
+        function fileData(product, path) {
+            return { "Product": product, "Path": path };
+        }
 </script>
