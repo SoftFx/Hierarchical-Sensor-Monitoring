@@ -92,7 +92,7 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Username</th>" +
                 "<th scope='col'>Password</th>" +
                 "<th scope='col'>Role</th>" +
-                "<th scope='col'>Products</th>" + 
+                //"<th scope='col'>Products</th>" + 
                 "<th scope='col'>Action</th></tr></thead>");
 
             result.Append("<tbody>");
@@ -106,10 +106,10 @@ namespace HSMServer.HtmlHelpers
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
                 $"<th>{CreateRoleSelect()}</th>" +
-                $"<td>See Below</td>" +
+                //$"<td>See Below</td>" +
                 "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
-                result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
+                //result.Append($"<tr><td colspan='6'>{CreateProductCheckboxs()}</td></tr>");
             }
 
             int index = 1;
@@ -124,21 +124,22 @@ namespace HSMServer.HtmlHelpers
                 else
                     result.Append($"<td>{userItem.Role}</td>");
 
-                result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td style='width: 20%'>");
+                //result.Append($"<td>{CreateUserProductList(userItem.ProductKeys)}</td><td style='width: 20%'>");
 
+                result.Append("<td style='width: 25%'>");
                 if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
                     result.Append($"<button style='margin-left: 5px' id='delete_{userItem.Username}' type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button>");
+                    "<i class='fas fa-trash-alt'></i></button>");
 
                 result.Append($"<button style='margin-left: 5px' id='change_{userItem.Username}' type='button' class='btn btn-secondary' title='change'>" +
-                    $"<i class='fas fa-user-edit'></i>" +
+                    "<i class='fas fa-user-edit'></i>" +
                     $"<button disabled style='margin-left: 5px' id='ok_{userItem.Username}' type='button' class='btn btn-secondary' title='ok'>" +
-                    $"<i class='fas fa-check'></i></button>" +
+                    "<i class='fas fa-check'></i></button>" +
                     $"<button disabled style='margin-left: 5px' id='cancel_{userItem.Username}' type='button' class='btn btn-secondary' title='cancel'>" +
-                    $"<i class='fas fa-times'></i></button></td></tr>");
+                    "<i class='fas fa-times'></i></button></td></tr>");
 
-                result.Append($"<tr><td colspan='6'>" +
-                    $"{CreateUserProductCheckboxs(userItem.Username, userItem.ProductKeys)}</td></tr>");
+                //result.Append($"<tr><td colspan='6'>" +
+                //    $"{CreateUserProductCheckboxs(userItem.Username, userItem.ProductKeys)}</td></tr>");
                 index++;
             }
 
