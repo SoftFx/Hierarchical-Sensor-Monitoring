@@ -1,13 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore

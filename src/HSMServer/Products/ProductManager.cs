@@ -1,16 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Constants;
-using HSMServer.Keys;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
+using HSMServer.Keys;
 using HSMServer.MonitoringServerCore;
 using Microsoft.Extensions.Logging;
-using NLog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Product = HSMServer.DataLayer.Model.Product;
 
 namespace HSMServer.Products
@@ -19,14 +17,16 @@ namespace HSMServer.Products
     {
         private readonly IDatabaseClass _database;
         private readonly ILogger<ProductManager> _logger;
+        private readonly IConverter _converter;
         private readonly List<Product> _products;
         private readonly Dictionary<string, List<SensorInfo>> _productSensorsDictionary = new Dictionary<string, List<SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager(IDatabaseClass database, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseClass database, IConverter converter, ILogger<ProductManager> logger)
         {
             _logger = logger;
             _database = database;
+            _converter = converter;
             _products = new List<Product>();
             InitializeProducts();
         }
@@ -56,7 +56,7 @@ namespace HSMServer.Products
                     var existingInfo = _database.GetSensorInfo(productName, sensorPath);
                     if (existingInfo == null)
                     {
-                        SensorInfo defaultInfo = Converter.Convert(productName, sensorPath);
+                        SensorInfo defaultInfo = _converter.Convert(productName, sensorPath);
                         sensorInfos.Add(defaultInfo);
                         Task.Run(() => _database.AddSensor(defaultInfo));
                         sensorInfos.Add(defaultInfo);
@@ -196,7 +196,7 @@ namespace HSMServer.Products
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
-            var newObject = Converter.Convert(productName, sensorValue);
+            var newObject = _converter.Convert(productName, sensorValue);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
@@ -213,7 +213,7 @@ namespace HSMServer.Products
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
         {
             bool needToAdd = false;
-            var newObject = Converter.Convert(productName, sensorValue);
+            var newObject = _converter.Convert(productName, sensorValue);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))

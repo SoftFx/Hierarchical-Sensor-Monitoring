@@ -59,6 +59,7 @@ namespace HSMServer
             });
 
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
+            services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
