@@ -40,5 +40,8 @@ namespace HSMServer.Authentication
         /// <param name="pageSize">Page size, must not be less than zero</param>
         /// <returns>Users list if the amount of users is bigger than (page - 1) * pageSize, empty list otherwise</returns>
         List<User> GetUsersPage(int page = 1, int pageSize = 1);
+        List<User> GetViewers(string productKey);
+        List<User> GetAllViewers();
+        List<User> GetAllManagers();
     }
 }

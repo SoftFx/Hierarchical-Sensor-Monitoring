@@ -164,6 +164,48 @@ namespace HSMServer.Authentication
             return result;
         }
 
+        public List<User> GetViewers(string productKey)
+        {
+            if (_users == null || _users.Count == 0) return null;
+
+            List<User> result = new List<User>();
+            foreach (var user in _users)
+            {
+                if (user.AvailableKeys?.FirstOrDefault(x => x.Equals(productKey)) != null)
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetAllViewers()
+        {
+            if (_users == null || _users.Count == 0) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (user.Role == UserRoleEnum.DataViewer)
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetAllManagers()
+        {
+            if (_users == null || _users.Count == 0) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (user.Role == UserRoleEnum.Admin) continue;
+                result.Add(user);
+            }
+
+            return result;
+        }
+
         #endregion
 
         private void CheckUsersUpToDate()

@@ -83,6 +83,7 @@ namespace HSMServer.DataLayer
             try
             {
                 _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
+
             }
             catch (Exception e)
             {
@@ -91,6 +92,7 @@ namespace HSMServer.DataLayer
             }
             
         }
+
 
         #region Management
 

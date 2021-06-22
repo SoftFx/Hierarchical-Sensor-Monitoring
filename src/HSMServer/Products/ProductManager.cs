@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Product = HSMServer.DataLayer.Model.Product;
+using HSMServer.Authentication;
 
 namespace HSMServer.Products
 {
@@ -162,7 +163,8 @@ namespace HSMServer.Products
             Product currentProduct;
             lock (_productsLock)
             {
-                currentProduct = _products.FirstOrDefault(p => p.Name == product.Key && p.Name == product.Name);
+                currentProduct = _products.FirstOrDefault(p => p.Key.Equals(product.Key)
+                && p.Name.Equals(product.Name, StringComparison.InvariantCultureIgnoreCase));
             }
 
             if (currentProduct == null)
@@ -176,7 +178,14 @@ namespace HSMServer.Products
                 currentProduct.ExtraKeys = new List<ExtraProductKey>();
                 currentProduct.ExtraKeys.AddRange(product.ExtraKeys);
             }
-            currentProduct.ManagerId = product.ManagerId;
+
+            if (product.UsersRights != null && product.UsersRights.Any())
+            {
+                currentProduct.UsersRights = new List<KeyValuePair<Guid, UserRoleEnum>>();
+                currentProduct.UsersRights.AddRange(product.UsersRights);
+            }
+
+            //currentProduct.ManagerId = product.ManagerId;
             Task.Run(() =>
             {
                 _database.RemoveProductInfo(currentProduct.Name);

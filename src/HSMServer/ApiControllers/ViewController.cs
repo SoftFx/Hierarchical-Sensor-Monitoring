@@ -1,4 +1,5 @@
-﻿using HSMServer.DataLayer.Model;
+﻿using HSMServer.Authentication;
+using HSMServer.DataLayer.Model;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
@@ -10,16 +11,30 @@ namespace HSMServer.ApiControllers
     public class ViewController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
+        private readonly IUserManager _userManager;
 
-        public ViewController(IMonitoringCore monitoringCore)
+        public ViewController(IMonitoringCore monitoringCore, IUserManager userManager)
         {
             _monitoringCore = monitoringCore;
+            _userManager = userManager;
         }
 
-        [HttpGet("GetProducts")]
-        public ActionResult<List<Product>> GetProducts()
+        [HttpGet("GetAllProducts")]
+        public ActionResult<List<Product>> GetAllProducts()
         {
             return _monitoringCore.GetAllProducts();
+        }
+
+        [HttpGet("GetAllViewers")]
+        public ActionResult<List<User>> GetAllViewers()
+        {
+            return _userManager.GetAllViewers();
+        }
+
+        [HttpGet("GetAllManagers")]
+        public ActionResult<List<User>> GetAllManagers()
+        {
+            return _userManager.GetAllManagers();
         }
     }
 }
