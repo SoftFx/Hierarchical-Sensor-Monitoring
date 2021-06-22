@@ -560,6 +560,11 @@ namespace HSMServer.MonitoringServerCore
             return string.Empty;
         }
 
+        public Product GetProduct(string productKey)
+        {
+            return _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
+        }
+
         public List<Product> GetProducts(User user)
         {
             if (user.AvailableKeys == null || user.AvailableKeys.Count == 0) return null;
@@ -611,6 +616,26 @@ namespace HSMServer.MonitoringServerCore
                 _logger.LogError(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
             }
 
+            return result;
+        }
+
+        public bool RemoveProduct(string productKey, out string error)
+        {           
+            bool result;
+            error = string.Empty;
+            string productName = string.Empty;
+            try
+            {
+                productName = _productManager.GetProductNameByKey(productKey);
+                _productManager.RemoveProduct(productName);
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to remove product name = {productName}");
+            }
             return result;
         }
 

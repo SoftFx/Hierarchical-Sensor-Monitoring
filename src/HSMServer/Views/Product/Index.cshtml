@@ -16,11 +16,6 @@
 
 
 <div class="container row justify-content-center">
-    @*@if (TempData[TextConstants.TempDataErrorText] != null)
-    {
-        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-    }*@
-
     @ViewHelper.CreateProductList(Context.User, Model)
     
     <script>
@@ -52,30 +47,6 @@
     </div>
 </div>
 
-<div class="modal fade" id="modaleAddExtraKey" tabindex="-1" aria-labelledby="modaleAddLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalAddLabel">Add extra Key</h5>
-            </div>
-
-            <div id="modalAddBody" class="modal-body">
-                <form>
-                    <div class="mb-3">
-                        <label for="extraKeyName" class="col-form-label">Extra Key Name:</label>
-                        <input type="text" class="form-control" id="extraKeyName"/>
-                    </div>
-                </form>
-            </div>
-
-            <div class="modal-footer">
-                <button id="closeAddButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
-                <button id="confirmAddButton" type="button" class="btn btn-secondary">Confirm</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
     //copy buttons
     var clipboard = new ClipboardJS('[id^="copy_"]');
@@ -83,8 +54,8 @@
     //delete buttons
     $('[id^="delete_"]').on("click",
         function () {
-            name = this.id.substring("delete_".length, this.id.length);
-            //console.log(name);
+            key = this.id.substring("delete_".length, this.id.length);
+            name = $('#inputName_' + key).val();
 
             $('#modalDeleteBody').empty();
             $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
@@ -98,7 +69,7 @@
 
                 $.ajax({//ProductController -> RemoveProduct
                     type: 'GET',
-                    url: deleteAction + "?Product=" + name,
+                    url: deleteAction + "?Product=" + key,
                     cache: false,
                     async: true,
                     success: function () {
@@ -128,45 +99,45 @@
         })
     });
 
-    function createExtraKeyData(productKey, extraKeyName) {
-        return { "ProductKey": productKey, "ExtraKeyName": extraKeyName }
-    }
+    //function createExtraKeyData(productKey, extraKeyName) {
+    //    return { "ProductKey": productKey, "ExtraKeyName": extraKeyName }
+    //}
 
-    $('[id^="createExtraKeyButton_"]').on('click', function () {
-        productName = this.id.substring('createExtraKeyButton_'.length, this.id.legth);
-        productKey = $('#inputKey_' + productName).val();
+    //$('[id^="createExtraKeyButton_"]').on('click', function () {
+    //    productName = this.id.substring('createExtraKeyButton_'.length, this.id.legth);
+    //    productKey = $('#inputKey_' + productName).val();
         
-        $('#modalAddLabel').empty();
-        $('#modalAddLabel').append('Add extra key to "' + productName + '" product');
+    //    $('#modalAddLabel').empty();
+    //    $('#modalAddLabel').append('Add extra key to "' + productName + '" product');
 
-        var modal = new bootstrap.Modal(document.getElementById('modaleAddExtraKey'));
-        modal.show();
+    //    var modal = new bootstrap.Modal(document.getElementById('modaleAddExtraKey'));
+    //    modal.show();
 
-        //modal confirm
-        $('#confirmAddButton').on('click', function () {
-            modal.hide();
+    //    //modal confirm
+    //    $('#confirmAddButton').on('click', function () {
+    //        modal.hide();
 
-            extraKeyName = $('#extraKeyName').val();
-            data = createExtraKeyData(productKey, extraKeyName);
+    //        extraKeyName = $('#extraKeyName').val();
+    //        data = createExtraKeyData(productKey, extraKeyName);
 
-            $.ajax({
-                type: 'POST',
-                url: addKeyAction,
-                data: JSON.stringify(data),
-                contentType: 'application/json',
-                cache: false,
-                async: true,
-                success: function () {
-                    window.location.href = "Product"; //ProductController -> Index
-                }
-            });
-        });
+    //        $.ajax({
+    //            type: 'POST',
+    //            url: addKeyAction,
+    //            data: JSON.stringify(data),
+    //            contentType: 'application/json',
+    //            cache: false,
+    //            async: true,
+    //            success: function () {
+    //                window.location.href = "Product"; //ProductController -> Index
+    //            }
+    //        });
+    //    });
 
-        //modal close
-        $('#closeAddButton').on('click', function () {
-            modal.hide();
-        });
-    })
+    //    //modal close
+    //    $('#closeAddButton').on('click', function () {
+    //        modal.hide();
+    //    });
+    //})
 
 
 </script>

@@ -64,12 +64,9 @@ namespace HSMServer.Controllers
                 out Product newProduct, out string error);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productName)
+        public void RemoveProduct([FromQuery(Name = "Product")] string productKey)
         {
-            productName = productName.Replace('-', ' ');
-
-            _monitoringCore.RemoveProduct(HttpContext.User as User, productName,
-                out Product product, out string error);
+            _monitoringCore.RemoveProduct(productKey, out string error);
         }
 
 
