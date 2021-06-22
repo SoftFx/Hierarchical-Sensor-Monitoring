@@ -8,6 +8,7 @@
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
 </script>
@@ -51,6 +52,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
 
+<script src="https://cdn.plot.ly/plotly-2.0.0-rc.3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
 
 <div style="margin: 10px">
@@ -85,6 +89,19 @@
                 totalCount = $('#inputCount_' + id).val();
 
                 initializeHistory(product, path, totalCount, historyAction);
+            });
+
+        $('[id^="button_graph_"]').on("click",
+            function () {
+                id = this.id.substring("button_graph_".length, this.id.length);
+                splitResults = id.split('_');
+                product = splitResults[0];
+                path = id.substring(product.length + 1, id.length - 2);
+                totalCount = $('#inputCount_' + id).val();
+                type = splitResults[splitResults.length - 1];
+                noNumberId = id.substring(0, id.length - 2);
+
+                initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
             });
 
         $('[id^="button_view"]').on("click",
@@ -232,6 +249,103 @@
     }
 </script>
 <script>
+    //graphs functionality
+
+    function initializeGraph(id, product, path, type, totalCount, rawHistoryAction) {
+        if (totalCount == undefined)
+            totalCount = 10;
+
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(data(product, path, totalCount)),
+            url: rawHistoryAction,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function(data) {
+            console.log(data);
+
+            let escapedData = JSON.parse(data);
+            let graphData = getGraphData(escapedData, type);
+
+            $('#values_'+id).css('display', 'none');
+
+            let graphDivId = "graph_" + id;
+            $('#' + graphDivId).css('display', 'block');
+            Plotly.newPlot(graphDivId, graphData);
+
+        });
+    }
+
+
+    function getGraphData(escapedItems, type) {
+        dateList = escapedItems.map(function(i) {
+            return i.time;
+        });
+
+        let dataList;
+        let chartType;
+        switch (type) {
+            case '1':
+                dataList = getIntegersData(escapedItems);
+                chartType = 'scatter';
+                return getSimpleGraphData(dateList, dataList, chartType);
+                //break;
+            case '2':
+                dataList = getDoublesData(escapedItems);
+                chartType = 'scatter';
+                return getSimpleGraphData(dateList, dataList, chartType);
+                //break;
+            case '3':
+                let dataObjects = getDeserializedIntBarsData;
+                break;
+            default:
+        }
+    }
+
+    function getSimpleGraphData(dateList, dataList, chartType) {
+        let data = [
+            {
+                x: dateList,
+                y: dataList,
+                type: chartType,
+                mode: "lines"
+            }
+        ];
+        return data;
+    }
+
+    function getIntegersData(escapedItems) {
+        let integers = escapedItems.map(function (i) {
+            return JSON.parse(i.typedData).IntValue;
+        });
+        
+        //console.log('Integers:', integers);
+
+        return integers;
+    }
+
+    function getDoublesData(escapedItems) {
+        let doubles = escapedItems.map(function (i) {
+            return JSON.parse(i.typedData).DoubleValue;
+        });
+        return doubles;
+    }
+
+    function getDeserializedIntBarsData(escapedItems) {
+        let deserialized = escapedItems.map(function (i) {
+            return JSON.parse(i.typedData);
+        });
+
+        return deserialized;
+    }
+
+    function getDoubleBarsData(escapedItems) {
+        
+    }
+</script>
+<script>
     //request history functionality 
     function data(product, path, totalCount) {
         return { "Path": path, "Product": product, "TotalCount": totalCount };
@@ -304,7 +418,7 @@
         //console.log(fileType);
         //var xhr = new XMLHttpRequest();
         //xhr.open('POST', viewFileAction, true);
-        ///*xhr.responseType = 'blob';*/
+        //xhr.responseType = 'blob';
         //xhr.onload = function () {
         //    let blob = new Blob([this.response], { type: fileType });
         //    console.log(blob);
@@ -319,8 +433,6 @@
             cache: false,
             contentType: "application/json",
             success: function (response) {
-                let extension = getExtensionFromName(fileName);
-                let fileType = mimeTypesMap.get(extension);
                 if (fileType === undefined) {
                     fileType = "text/html";
                 }
@@ -331,7 +443,7 @@
         });
     }
 
-        function fileData(product, path) {
-            return { "Product": product, "Path": path };
-        }
+    function fileData(product, path) {
+        return { "Product": product, "Path": path };
+    }
 </script>

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -58,6 +59,17 @@ namespace HSMServer.Controllers
             var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
 
             return new HtmlString(ListHelper.CreateHistoryList(result));
+        }
+
+        [HttpPost]
+        public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
+        {
+            model.Product = model.Product.Replace('-', ' ');
+            model.Path = model.Path?.Replace('_', '/').Replace('-', ' ');
+            var commonHistory = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+            //var selected = commonHistory.Select(h => h.TypedData).ToList();
+
+            return new JsonResult(commonHistory);
         }
 
         [HttpGet]

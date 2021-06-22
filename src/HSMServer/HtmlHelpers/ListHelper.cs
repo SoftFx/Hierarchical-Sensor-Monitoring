@@ -108,10 +108,13 @@ namespace HSMServer.HtmlHelpers
                                   $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
                                   "<div class='col-sm-2'>" +
                                   $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
-                                  "<div class='col-sm-2'>" +
+                                  "<div class='col-sm-1'>" +
                                   $"<button id='reload_{formattedPath}_{name}' type='button' class='btn btn-secondary'>" +
                                   "<i class='fas fa-redo-alt'></i></button></div>" +
-                                  $"<div id='values_{formattedPath}_{name}'></div></div></div></div></div>");
+                                  $"<div class='col-sm-1'><button id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}' type='button' class='btn btn-secondary'>" +
+                                  "<i class='fas fa-chart-bar'></i></div>" +
+                                  $"<div id='values_{formattedPath}_{name}'></div>" +
+                                  $"<div id='graph_{formattedPath}_{name}' style='display: none'></div></div></div></div></div>");
 
 
 

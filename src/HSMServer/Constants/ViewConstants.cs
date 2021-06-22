@@ -15,6 +15,7 @@
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
         public const string HistoryAction = "History";
+        public const string RawHistoryAction = "RawHistory";
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
         public const string GetFileAction = "GetFile";

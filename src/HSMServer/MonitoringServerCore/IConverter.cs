@@ -60,5 +60,6 @@ namespace HSMServer.MonitoringServerCore
 
         SensorInfo Convert(string productName, string path);
         SensorInfo Convert(string productName, SensorValueBase sensorValue);
+
     }
 }
