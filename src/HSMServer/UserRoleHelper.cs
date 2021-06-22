@@ -24,6 +24,8 @@ namespace HSMServer
             };
         }
 
+        #region [ Admin rools ]
+
         public static bool IsUserCRUDAllowed(UserRoleEnum role)
         {
             return role switch
@@ -32,5 +34,25 @@ namespace HSMServer
                 _ => false
             };
         }
+
+        public static bool IsAllProductsTreeAllowed(UserRoleEnum role)
+        {
+            return role switch
+            {
+                UserRoleEnum.Admin => true,
+                _ => false
+            };
+        }
+
+        public static bool IsAllSensorsAllowed(UserRoleEnum role)
+        {
+            return role switch
+            {
+                UserRoleEnum.Admin => true,
+                _ => false
+            };
+        }
+
+        #endregion
     }
 }

@@ -177,12 +177,11 @@ namespace HSMServer.MonitoringServerCore
             {
                 foreach (var pair in _currentSessions)
                 {
-                    //Use for test environment only, uncomment later
-                    if (pair.Key.IsSensorAvailable(message.Key))
-                    {
+                    if (UserRoleHelper.IsAllSensorsAllowed(pair.Key.Role))
                         pair.Value.AddUpdate(message);
-                    }
-                    //pair.Value.AddUpdate(message);
+
+                    else if (pair.Key.IsSensorAvailable(message.Key))
+                        pair.Value.AddUpdate(message);
                 }
             }
         }
