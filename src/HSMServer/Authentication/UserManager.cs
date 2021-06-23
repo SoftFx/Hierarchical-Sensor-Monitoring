@@ -118,7 +118,7 @@ namespace HSMServer.Authentication
             Task.Run(() => _database.AddUser(user));
         }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
-            List<string> availableKeys = null)
+            List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
         {
             User user = new User
             {
@@ -130,9 +130,9 @@ namespace HSMServer.Authentication
                 Id = Guid.NewGuid()
             };
 
-            if (availableKeys != null && availableKeys.Any())
+            if (productRoles != null && productRoles.Any())
             {
-                user.AvailableKeys = availableKeys;
+                user.ProductsRoles = productRoles;
             }
 
             AddUser(user);
@@ -171,21 +171,21 @@ namespace HSMServer.Authentication
             List<User> result = new List<User>();
             foreach (var user in _users)
             {
-                if (user.AvailableKeys?.FirstOrDefault(x => x.Equals(productKey)) != null)
+                if (user.ProductsRoles?.FirstOrDefault(x => x.Key.Equals(productKey)) != null)
                     result.Add(user);
             }
 
             return result;
         }
 
-        public List<User> GetAllViewers()
+        public List<User> GetAllViewers(string productKey)
         {
             if (_users == null || _users.Count == 0) return null;
 
             List<User> result = new List<User>();
             foreach(var user in _users)
             {
-                if (user.Role == UserRoleEnum.DataViewer)
+                if (ProductRoleHelper.IsViewer(productKey, user.ProductsRoles))
                     result.Add(user);
             }
 
@@ -332,11 +332,6 @@ namespace HSMServer.Authentication
                     //{
                     //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
                     //}
-
-                    if (!string.IsNullOrEmpty(permissionItem.ProductName))
-                    {
-                        user.UserPermissions.Add(permissionItem);
-                    }
                 }
             }
 
@@ -427,19 +422,6 @@ namespace HSMServer.Authentication
             return productsElement;
         }
         #endregion
-
-
-        public List<PermissionItem> GetUserPermissions(string userName)
-        {
-            CheckUsersUpToDate();
-            User correspondingUser = null;
-            lock (_accessLock)
-            {
-                correspondingUser = _users.FirstOrDefault(u => u.UserName == userName);
-            }
-
-            return correspondingUser != null ? correspondingUser.UserPermissions : new List<PermissionItem>();
-        }
 
         public User Authenticate(string login, string password)
         {

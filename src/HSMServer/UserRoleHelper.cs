@@ -9,7 +9,6 @@ namespace HSMServer
             return role switch
             {
                 UserRoleEnum.Admin => true,
-                UserRoleEnum.ProductManager => true,
                 _ => false
             };
         }
@@ -19,12 +18,9 @@ namespace HSMServer
             return role switch
             {
                 UserRoleEnum.Admin => true,
-                UserRoleEnum.ProductManager => true,
                 _ => false
             };
         }
-
-        #region [ Admin rools ]
 
         public static bool IsUserCRUDAllowed(UserRoleEnum role)
         {
@@ -52,7 +48,5 @@ namespace HSMServer
                 _ => false
             };
         }
-
-        #endregion
     }
 }

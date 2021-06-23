@@ -447,7 +447,8 @@ namespace HSMServer.MonitoringServerCore
             var productsList = _productManager.Products;
             //Show available products only
             if (!UserRoleHelper.IsAllProductsTreeAllowed(user.Role))
-                productsList = productsList.Where(p => user.AvailableKeys.Contains(p.Key)).ToList();
+                productsList = productsList.Where(p => 
+                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
             //foreach (var product in productsList)
             //{
@@ -569,9 +570,10 @@ namespace HSMServer.MonitoringServerCore
 
         public List<Product> GetProducts(User user)
         {
-            if (user.AvailableKeys == null || user.AvailableKeys.Count == 0) return null;
+            if (user.ProductsRoles == null || !user.ProductsRoles.Any()) return null;
 
-            return _productManager.Products.Where(p => user.AvailableKeys.Contains(p.Key)).ToList();
+            return _productManager.Products.Where(p => 
+                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
         }
 
         public List<Product> GetAllProducts()
@@ -658,7 +660,8 @@ namespace HSMServer.MonitoringServerCore
             string fileName = $"{commonName}.crt";
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
-            _userManager.AddUser(commonName, clientCert.Thumbprint, fileName, HashComputer.ComputePasswordHash(commonName));
+            _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
+                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.Admin);
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;

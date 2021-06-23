@@ -498,5 +498,75 @@ namespace HSMServer.HtmlHelpers
         //}
 
         #endregion
-    }
+
+        #region [ Edit Product ]
+
+        //public static string CreateTable(string productName, User user, List<KeyValuePair<Guid, string>> UsersRights)
+        //{
+        //    StringBuilder result = new StringBuilder();
+        //    //header template
+        //    result.Append("<div style='margin: 10px'>" +
+        //        "<div class='row justify-content-start'><div class='col-2'>" +
+        //        $"<h5 style='margin: 10px 20px 10px;'>Edit Product {productName} Users Rights</h5></div></div></div>");
+
+
+        //    result.Append("<div class='col-xxl'>");
+        //    //table template
+        //    result.Append("<table class='table table-striped'><thead><tr>" +
+        //        "<th scope='col'>#</th>" +
+        //        "<th scope='col'>Username</th>" +
+        //        "<th scope='col'>Role</th>" +
+        //        "<th scope='col'>Action</th></tr>");
+
+        //    if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+        //        result.Append("<th scope='col'>Action</th></tr>");
+
+        //    result.Append("</thead><tbody>");
+
+        //    if (products == null || products.Count == 0) return result.ToString();
+
+        //    //create 
+
+        //    if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+        //        result.Append("<tr><th>0</th>" +
+        //            "<th><input id='createName' type='text' class='form-control'/>" +
+        //            "<span style='display: none;' id='new_product_name_span'></th>" +
+        //            "<th>---</th>" +
+        //            $"<th>---</th>" +
+        //            $"<th>---</th>" +
+        //            "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
+        //            $"<i class='fas fa-plus'></i></button></th></tr>");
+
+        //    int index = 1;
+        //    foreach (var product in products)
+        //    {
+        //        string manager = product.ExtraProductKeys == null
+        //            || product.ExtraProductKeys.Any() == false ? "---" :
+        //            product.ExtraProductKeys.First().Name;
+
+        //        result.Append($"<tr><th scope='row'>{index}</th>" +
+        //            $"<td>{product.Name}</td>" +
+        //            $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
+        //            $"<button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
+        //            $"<i class='far fa-copy'></i></button>" +
+        //            $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
+        //            $"<td>{product.CreationDate}</td>" +
+        //            $"<td>{manager}</td>");
+
+
+        //        if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+        //            result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
+        //            $"type='button' class='btn btn-secondary' title='edit'>" +
+        //            "<i class='fas fa-edit'></i></button>" +
+
+        //            $"<button id='delete_{product.Key}' style='margin-left: 5px' " +
+        //            $"type='button' class='btn btn-secondary' title='delete'>" +
+        //            $"<i class='fas fa-trash-alt'></i></button></td>");
+
+        //        result.Append("</tr>");
+        //        index++;
+        //    }
+
+            #endregion
+        }
 }

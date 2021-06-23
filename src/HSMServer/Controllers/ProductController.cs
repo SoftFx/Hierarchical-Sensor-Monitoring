@@ -46,6 +46,12 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
+        public IActionResult EditProduct([FromQuery(Name = "Product")]string productKey)
+        {
+            var product = _monitoringCore.GetProduct(productKey);
+            return View(new EditProductViewModel(product));
+        }
+
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
             Product product = new Product();

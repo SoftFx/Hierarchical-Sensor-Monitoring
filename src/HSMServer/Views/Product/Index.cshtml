@@ -10,7 +10,7 @@
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.ProductController))";
-    var addKeyAction = "@Html.Raw(Url.Action(ViewConstants.AddExtraKeyToProductAction, ViewConstants.ProductController))";
+    var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
 
@@ -99,12 +99,17 @@
         })
     });
 
+    $('[id^=change_]').on('click', function () {
+        key = this.id.substring("change_".length, this.id.length);
+        window.location.href = editAction + "?Product=" + key
+    });
+
     //function createExtraKeyData(productKey, extraKeyName) {
     //    return { "ProductKey": productKey, "ExtraKeyName": extraKeyName }
     //}
 
     //$('[id^="createExtraKeyButton_"]').on('click', function () {
-    //    productName = this.id.substring('createExtraKeyButton_'.length, this.id.legth);
+    //   HtmlproductName = this.id.substring('createExtraKeyButton_'.length, this.id.legth);
     //    productKey = $('#inputKey_' + productName).val();
         
     //    $('#modalAddLabel').empty();
