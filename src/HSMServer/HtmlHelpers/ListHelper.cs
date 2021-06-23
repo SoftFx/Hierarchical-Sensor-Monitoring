@@ -94,7 +94,7 @@ namespace HSMServer.HtmlHelpers
                         continue;
                     }
 
-                    result.Append($"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
+                    result.Append($"<button id='{formattedPath}_{name}_{(int)sensor.SensorType}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
                                   "<div class='container'>" +
                                   "<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
@@ -106,15 +106,17 @@ namespace HSMServer.HtmlHelpers
                                   "<div class='accordion-body'>" +
                                   "<div class='mb-3 row'>" +
                                   $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
-                                  "<div class='col-sm-2'>" +
+                                  "<div class='col-sm-3'>" +
                                   $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
                                   "<div class='col-sm-1'>" +
-                                  $"<button id='reload_{formattedPath}_{name}' type='button' class='btn btn-secondary'>" +
+                                  $"<button id='reload_{formattedPath}_{name}_{(int)sensor.SensorType}' type='button' class='btn btn-secondary'>" +
                                   "<i class='fas fa-redo-alt'></i></button></div>" +
-                                  $"<div class='col-sm-1'><button id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}' type='button' class='btn btn-secondary'>" +
-                                  "<i class='fas fa-chart-bar'></i></div>" +
-                                  $"<div id='values_{formattedPath}_{name}'></div>" +
-                                  $"<div id='graph_{formattedPath}_{name}' style='display: none'></div></div></div></div></div>");
+                                  $"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                  "type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
+                                  $"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                  "type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
+                                  $"<div id='values_{formattedPath}_{name}' style='display: none'></div>" +
+                                  $"<div id='graph_{formattedPath}_{name}'></div></div></div></div></div>");
 
 
 

@@ -75,11 +75,15 @@
     //Add event listeners to buttons
     function initializeDataHistoryRequests() {
         $(".accordion-button").on("click", function () {
-            product = this.id.split('_')[0];
-            path = this.id.substring(product.length + 1, this.id.length);
-            totalCount = $('#inputCount_' + this.id).val();
+            id = this.id;
+            splitResults = id.split('_');
+            product = splitResults[0];
+            path = id.substring(product.length + 1, id.length - 2);
+            totalCount = getCountForId(id);
+            type = splitResults[splitResults.length - 1];
+            noNumberId = id.substring(0, id.length - 2);
 
-            initializeHistory(product, path, totalCount, historyAction);
+            initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
         });
 
         $('[id^="reload_"]').on("click",
@@ -141,7 +145,17 @@
     mimeTypesMap.set('html', 'text/html');
     mimeTypesMap.set('pdf', 'application/pdf');
 </script>
+<script>
+    //Sub-methods
 
+    function getCountForId(id) {
+        let inputCount = $('#inputCount_' + id).val();
+        if (inputCount === undefined) {
+            inputCount = 10;
+        }
+
+        return inputCount;     }
+</script>
 <script>
     //Tree functionality
     initializeTree();
@@ -265,85 +279,14 @@
             cache: false,
             async: true
         }).done(function(data) {
-            console.log(data);
-
-            let escapedData = JSON.parse(data);
-            let graphData = getGraphData(escapedData, type);
-
+            
             $('#values_'+id).css('display', 'none');
 
             let graphDivId = "graph_" + id;
             $('#' + graphDivId).css('display', 'block');
-            Plotly.newPlot(graphDivId, graphData);
 
+            displayGraph(data, type, graphDivId, path);
         });
-    }
-
-
-    function getGraphData(escapedItems, type) {
-        dateList = escapedItems.map(function(i) {
-            return i.time;
-        });
-
-        let dataList;
-        let chartType;
-        switch (type) {
-            case '1':
-                dataList = getIntegersData(escapedItems);
-                chartType = 'scatter';
-                return getSimpleGraphData(dateList, dataList, chartType);
-                //break;
-            case '2':
-                dataList = getDoublesData(escapedItems);
-                chartType = 'scatter';
-                return getSimpleGraphData(dateList, dataList, chartType);
-                //break;
-            case '3':
-                let dataObjects = getDeserializedIntBarsData;
-                break;
-            default:
-        }
-    }
-
-    function getSimpleGraphData(dateList, dataList, chartType) {
-        let data = [
-            {
-                x: dateList,
-                y: dataList,
-                type: chartType,
-                mode: "lines"
-            }
-        ];
-        return data;
-    }
-
-    function getIntegersData(escapedItems) {
-        let integers = escapedItems.map(function (i) {
-            return JSON.parse(i.typedData).IntValue;
-        });
-        
-        //console.log('Integers:', integers);
-
-        return integers;
-    }
-
-    function getDoublesData(escapedItems) {
-        let doubles = escapedItems.map(function (i) {
-            return JSON.parse(i.typedData).DoubleValue;
-        });
-        return doubles;
-    }
-
-    function getDeserializedIntBarsData(escapedItems) {
-        let deserialized = escapedItems.map(function (i) {
-            return JSON.parse(i.typedData);
-        });
-
-        return deserialized;
-    }
-
-    function getDoubleBarsData(escapedItems) {
-        
     }
 </script>
 <script>
