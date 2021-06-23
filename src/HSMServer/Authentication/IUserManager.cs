@@ -42,6 +42,7 @@ namespace HSMServer.Authentication
         List<User> GetUsersPage(int page = 1, int pageSize = 1);
         List<User> GetViewers(string productKey);
         List<User> GetAllViewers(string productKey);
+        List<User> GetManagers(string productKey);
         List<User> GetAllManagers();
     }
 }

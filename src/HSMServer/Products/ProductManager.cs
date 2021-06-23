@@ -179,12 +179,6 @@ namespace HSMServer.Products
                 currentProduct.ExtraKeys.AddRange(product.ExtraKeys);
             }
 
-            if (product.UsersRights != null && product.UsersRights.Any())
-            {
-                currentProduct.UsersRights = new List<KeyValuePair<Guid, UserRoleEnum>>();
-                currentProduct.UsersRights.AddRange(product.UsersRights);
-            }
-
             //currentProduct.ManagerId = product.ManagerId;
             Task.Run(() =>
             {

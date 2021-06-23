@@ -166,12 +166,27 @@ namespace HSMServer.Authentication
 
         public List<User> GetViewers(string productKey)
         {
-            if (_users == null || _users.Count == 0) return null;
+            if (_users == null || !_users.Any()) return null;
 
             List<User> result = new List<User>();
             foreach (var user in _users)
             {
-                if (user.ProductsRoles?.FirstOrDefault(x => x.Key.Equals(productKey)) != null)
+                var pair = user.ProductsRoles?.FirstOrDefault(x => x.Key.Equals(productKey));
+                if (pair.Value.Key != null)
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetManagers(string productKey)
+        {
+            if (_users == null || !_users.Any()) return null;
+
+            List<User> result = new List<User>();
+            foreach (var user in _users)
+            {
+                if (ProductRoleHelper.IsManager(productKey, user.ProductsRoles))
                     result.Add(user);
             }
 

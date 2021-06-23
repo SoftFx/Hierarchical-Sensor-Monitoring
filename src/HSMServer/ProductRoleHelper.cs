@@ -10,7 +10,7 @@ namespace HSMServer
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
             var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.HasValue) return true;
+            if (pair.Value.Key != null) return true;
 
             return false;
         }
@@ -19,7 +19,7 @@ namespace HSMServer
             List<KeyValuePair<string, ProductRoleEnum>> productsRigths)
         {
             var pair = productsRigths?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.HasValue && pair.Value.Value == ProductRoleEnum.Viewer)
+            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.Viewer)
                 return true;
 
             return false;
@@ -29,7 +29,7 @@ namespace HSMServer
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
             var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.HasValue && pair.Value.Value == ProductRoleEnum.Manager)
+            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.Manager)
                 return true;
 
             return false;

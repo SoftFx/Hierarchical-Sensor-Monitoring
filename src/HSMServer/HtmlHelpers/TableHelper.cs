@@ -286,10 +286,6 @@ namespace HSMServer.HtmlHelpers
             int index = 1;
             foreach (var product in products)
             {
-                string manager =  product.ExtraProductKeys == null 
-                    || product.ExtraProductKeys.Any() == false ? "---" :
-                    product.ExtraProductKeys.First().Name;
-
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{product.Name}</td>" +
                     $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
@@ -297,7 +293,7 @@ namespace HSMServer.HtmlHelpers
                     $"<i class='far fa-copy'></i></button>" +
                     $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
                     $"<td>{product.CreationDate}</td>" +
-                    $"<td>{manager}</td>");
+                    $"<td>{product.ManagerName}</td>");
 
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user.Role))

@@ -40,8 +40,9 @@ namespace HSMServer.Controllers
                 products = _monitoringCore.GetProducts(user);
 
             products = products.OrderBy(x => x.Name).ToList();
-            var result = products.Select(x => new ProductViewModel(x,
-                _userManager.GetViewers(x.Key).Select(x => x.UserName)?.ToList()))?.ToList();
+
+            var result = products.Select(x => new ProductViewModel(
+                _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
         }
@@ -49,7 +50,17 @@ namespace HSMServer.Controllers
         public IActionResult EditProduct([FromQuery(Name = "Product")]string productKey)
         {
             var product = _monitoringCore.GetProduct(productKey);
-            return View(new EditProductViewModel(product));
+            var users = _userManager.GetViewers(productKey);
+
+            var pairs = new List<KeyValuePair<Guid, ProductRoleEnum>>();
+            if (users != null || !users.Any())
+                foreach(var user in users)
+                {
+                    pairs.Add(new KeyValuePair<Guid, ProductRoleEnum>(user.Id,
+                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
+                }
+
+            return View(new EditProductViewModel(product, pairs));
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
@@ -111,13 +122,14 @@ namespace HSMServer.Controllers
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)
         {
+            Product existingProduct = _monitoringCore.GetProduct(productViewModel.Key);
+
             Product product = new Product()
             {
                 DateAdded = productViewModel.CreationDate,
                 Name = productViewModel.Name,
                 Key = productViewModel.Key,
-                ExtraKeys = productViewModel.ExtraProductKeys,
-                //ManagerId = Guid.NewGuid() // TODO0000000000000000000000
+                ExtraKeys = existingProduct.ExtraKeys
             };
 
             return product;
