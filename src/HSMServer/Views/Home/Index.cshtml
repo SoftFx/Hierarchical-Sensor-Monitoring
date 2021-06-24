@@ -79,9 +79,9 @@
             splitResults = id.split('_');
             product = splitResults[0];
             path = id.substring(product.length + 1, id.length - 2);
-            totalCount = getCountForId(id);
             type = splitResults[splitResults.length - 1];
             noNumberId = id.substring(0, id.length - 2);
+            totalCount = getCountForId(noNumberId);
 
             initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
         });
@@ -89,11 +89,20 @@
         $('[id^="reload_"]').on("click",
             function () {
                 id = this.id.substring("reload_".length, this.id.length);
-                product = id.split('_')[0];
-                path = id.substring(product.length + 1, this.id.length);
-                totalCount = $('#inputCount_' + id).val();
+                splitResults = id.split('_');
+                product = splitResults[0];
+                path = id.substring(product.length + 1, id.length - 2);
+                type = splitResults[splitResults.length - 1];
+                noNumberId = id.substring(0, id.length - 2);
+                totalCount = getCountForId(noNumberId);
 
-                initializeHistory(product, path, totalCount, historyAction);
+                var graphVisible = $('#graph_' + product + "_" + path).css("display") !== "none";
+                if (graphVisible) {
+                    initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+                }
+                else {
+                    initializeHistory(product, path, totalCount, historyAction);
+                }
             });
 
         $('[id^="button_graph_"]').on("click",
