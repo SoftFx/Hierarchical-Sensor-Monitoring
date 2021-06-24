@@ -30,7 +30,7 @@ namespace HSMServer.Controllers
         }
 
         public IActionResult Index()
-        {          
+        {
             var user = HttpContext.User as User;
 
             List<Product> products = null;
@@ -47,14 +47,14 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
-        public IActionResult EditProduct([FromQuery(Name = "Product")]string productKey)
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
             var product = _monitoringCore.GetProduct(productKey);
             var users = _userManager.GetViewers(productKey);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || !users.Any())
-                foreach(var user in users)
+                foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
                         user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
@@ -114,7 +114,7 @@ namespace HSMServer.Controllers
             var extraProduct = new ExtraProductKey(model.ExtraKeyName, model.ExtraProductKey);
             if (product.ExtraKeys == null || product.ExtraKeys.Count == 0)
                 product.ExtraKeys = new List<ExtraProductKey> { extraProduct };
-            else 
+            else
                 product.ExtraKeys.Add(extraProduct);
 
             _monitoringCore.UpdateProduct(HttpContext.User as User, product);
@@ -132,15 +132,43 @@ namespace HSMServer.Controllers
             }
 
             var user = _userManager.GetUser(Guid.Parse(model.UserId));
-            var product = _monitoringCore.GetProduct(model.ProductKey);
-            var pair = new KeyValuePair<string, ProductRoleEnum>(product.Key, (ProductRoleEnum)model.ProductRole);
+            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
                 user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
-            else 
+            else
                 user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
+        }
+
+        [HttpPost]
+        public void RemoveUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager.GetUser(Guid.Parse(model.UserId));
+  
+            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            user.ProductsRoles.Remove(role);
+
+            _userManager.UpdateUser(user);
+        }
+
+        [HttpPost]
+        public void EditUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager.GetUser(Guid.Parse(model.UserId));
+            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
+
+            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            user.ProductsRoles.Remove(role);
+
+            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
+                user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
+            else
+                user.ProductsRoles.Add(pair);
+
+            _userManager.UpdateUser(user);
+
         }
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)

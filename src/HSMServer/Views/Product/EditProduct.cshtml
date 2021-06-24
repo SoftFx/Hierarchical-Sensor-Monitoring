@@ -7,6 +7,8 @@
 
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
+    var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
+    var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
 </script>
 
 <input id="productKey" value="@Model.ProductKey" style="display: none"/>
@@ -24,16 +26,36 @@
     </script>
 </div>
 
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove user right</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function createUserRightData(userId, role, productKey) {
         return { "ProductKey": productKey, "UserId": userId, "ProductRole": role }
     }
 
+    //create
     $('#createButton').on('click', function () {
         userId = $('#createUser').val();
         role = $('#createProductRole').val();
         productKey = $('#productKey').val();
-        
+
         data = createUserRightData(userId, role, productKey);
         console.log(JSON.stringify(data));
 
@@ -46,8 +68,82 @@
             async: true,
             success: function () {
                 document.location.reload();
-                //window.location.href = ""
             }
-        })
-    })
+        });
+    });
+
+    $('[id^=delete_]').on('click', function () {
+        username = this.id.substring('delete_'.length, this.id.length);
+        userId = $('#userId_' + username).val();
+        productKey = $('#productKey').val();
+
+        var data = createUserRightData(userId, 0, productKey);
+
+        $('#modalDeleteBody').empty();
+        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user right?');
+
+        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        modal.show();
+
+        //modal confirm
+        $('#confirmDeleteButton').on('click', function () {
+            modal.hide();
+
+            $.ajax({
+                type: 'POST',
+                url: deleteUserRole,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
+                cache: false,
+                async: true,
+                success: function () {
+                    document.location.reload();
+                }
+            });
+        });
+
+        //modal close
+        $('#closeDeleteButton').on('click', function () {
+            modal.hide();
+        });
+    });
+
+    //change
+    $('[id^=change_]').on('click', function () {
+        username = this.id.substring('change_'.length, this.id.length);
+
+        $('[id^=role_]').attr('disabled', true);
+        $('[id^=ok_]').attr('disabled', true);
+        $('[id^=cancel_]').attr('disabled', true);
+
+        $('#role_' + username).removeAttr("disabled");
+        $('#ok_' + username).removeAttr("disabled");
+        $('#cancel_' + username).removeAttr("disabled");
+    });
+
+    $('[id^=cancel_]').on('click', function () {
+        document.location.reload();
+    });
+
+    $('[id^=ok_]').on('click', function () {
+        username = this.id.substring('ok_'.length, this.id.length);
+
+        userId = $('#userId_' + username).val();
+        role = $('#role_' + username).val();
+        productKey = $('#productKey').val();
+
+        var data = createUserRightData(userId, role, productKey);
+        $.ajax({
+            type: 'POST',
+            url: editUserRole,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true,
+            success: function () {
+                document.location.reload();
+            }
+        });
+    });
+
 </script>

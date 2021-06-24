@@ -535,8 +535,9 @@ namespace HSMServer.HtmlHelpers
             foreach (var userRight in usersRights)
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
-                    $"<td>{userRight.Key.Username}</td>" +
-                    $"<td>{userRight.Value}");
+                    $"<td>{userRight.Key.Username}" +
+                    $"<input id='userId_{userRight.Key.Username}' value='{userRight.Key.UserId}' style='display: none'/></td>" +
+                    $"<td>{CreateProductRoleSelect(userRight.Key.Username, userRight.Value)}");
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{userRight.Key.Username}' " +
@@ -545,7 +546,17 @@ namespace HSMServer.HtmlHelpers
 
                     $"<button id='delete_{userRight.Key.Username}' style='margin-left: 5px' " +
                     $"type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td>");
+                    $"<i class='fas fa-trash-alt'></i></button>" +
+
+                    $"<button disabled style='margin-left: 5px' id='ok_{userRight.Key.Username}' " +
+                    $"type='button' class='btn btn-secondary' title='ok'>" +
+                    "<i class='fas fa-check'></i></button>" +
+
+                    $"<button disabled style='margin-left: 5px' id='cancel_{userRight.Key.Username}' " +
+                    $"type='button' class='btn btn-secondary' title='cancel'>" +
+                    "<i class='fas fa-times'></i></button></td></tr>");
+
+
 
                 result.Append("</tr>");
                 index++;
@@ -597,6 +608,22 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<option value='{(int)role}'>{role}</option>");
 
             result.Append("</select>");
+
+            return result.ToString();
+        }
+
+        private static string CreateProductRoleSelect(string username, ProductRoleEnum productRole)
+        {
+            StringBuilder result = new StringBuilder();
+            result.Append($"<select class='form-select' disabled id='role_{username}'>");
+
+            foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
+            {
+                if (role == productRole)
+                    result.Append($"<option selected value='{(int)role}'>{role}</option>");
+                else
+                    result.Append($"<option value='{(int)role}'>{role}</option>");
+            }
 
             return result.ToString();
         }
