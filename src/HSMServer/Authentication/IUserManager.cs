@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Authentication
 {
@@ -16,6 +17,7 @@ namespace HSMServer.Authentication
         void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
             List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
         List<User> Users { get; }
+        User GetUser(Guid id);
         User GetUserByUserName(string username);
         User Authenticate(string login, string password);
         /// <summary>
@@ -44,5 +46,6 @@ namespace HSMServer.Authentication
         List<User> GetAllViewers(string productKey);
         List<User> GetManagers(string productKey);
         List<User> GetAllManagers();
+        List<User> GetUsersNotAdmin();
     }
 }

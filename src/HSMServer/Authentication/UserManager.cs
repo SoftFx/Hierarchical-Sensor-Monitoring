@@ -152,6 +152,15 @@ namespace HSMServer.Authentication
                 return users;
             }
         }
+        public User GetUser(Guid id)
+        {
+            User result = default(User);
+            lock (_accessLock)
+            {
+                result = _users.FirstOrDefault(u => u.Id == id);
+            }
+            return result;
+        }
 
         public User GetUserByUserName(string username)
         {
@@ -188,6 +197,20 @@ namespace HSMServer.Authentication
             {
                 if (ProductRoleHelper.IsManager(productKey, user.ProductsRoles))
                     result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetUsersNotAdmin()
+        {
+            if (_users == null || !_users.Any()) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (user.Role == UserRoleEnum.Admin) continue;
+                result.Add(user);
             }
 
             return result;

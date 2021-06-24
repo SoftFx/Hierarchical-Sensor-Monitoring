@@ -28,5 +28,6 @@
         public const string UpdateUserAction = "UpdateUser";
 
         public const string AddExtraKeyToProductAction = "AddExtraKeyToProduct";
+        public const string AddUserRightAction = "AddUserRight";
     }
 }

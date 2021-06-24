@@ -13,9 +13,9 @@ namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
-        private static readonly HttpClientHandler _clientHandler = new HttpClientHandler() 
-        { 
-            ServerCertificateCustomValidationCallback = 
+        private static readonly HttpClientHandler _clientHandler = new HttpClientHandler()
+        {
+            ServerCertificateCustomValidationCallback =
             (sender, cert, chain, sslPolicyErrors) => { return true; }
         };
         private static readonly HttpClient _client = new HttpClient(_clientHandler);
@@ -84,7 +84,7 @@ namespace HSMServer.HtmlHelpers
                 index++;
             }
 
-           
+
             result.Append("</tbody></table></div></div>");
 
             return result.ToString();
@@ -126,7 +126,7 @@ namespace HSMServer.HtmlHelpers
 
             foreach (UserRoleEnum role in Enum.GetValues(typeof(UserRoleEnum)))
                 result.Append($"<option value='{(int)role}'>{role}</option>");
-            
+
             result.Append("</select>");
 
             return result.ToString();
@@ -269,7 +269,7 @@ namespace HSMServer.HtmlHelpers
 
             result.Append("</thead><tbody>");
 
-            if (products == null || products.Count == 0) return result.ToString();
+            
 
             //create 
 
@@ -282,6 +282,8 @@ namespace HSMServer.HtmlHelpers
                     $"<th>---</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
+
+            if (products == null || products.Count == 0) return result.ToString();
 
             int index = 1;
             foreach (var product in products)
@@ -497,72 +499,107 @@ namespace HSMServer.HtmlHelpers
 
         #region [ Edit Product ]
 
-        //public static string CreateTable(string productName, User user, List<KeyValuePair<Guid, string>> UsersRights)
-        //{
-        //    StringBuilder result = new StringBuilder();
-        //    //header template
-        //    result.Append("<div style='margin: 10px'>" +
-        //        "<div class='row justify-content-start'><div class='col-2'>" +
-        //        $"<h5 style='margin: 10px 20px 10px;'>Edit Product {productName} Users Rights</h5></div></div></div>");
+        public static string CreateTable(string productName, User user,
+            List<KeyValuePair<UserViewModel, ProductRoleEnum>> usersRights)
+        {
+            StringBuilder result = new StringBuilder();
+            //header template
+            result.Append("<div style='margin: 10px'>" +
+                "<div class='row justify-content-start'>" +
+                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Users Rights</h5></div></div>");
 
 
-        //    result.Append("<div class='col-xxl'>");
-        //    //table template
-        //    result.Append("<table class='table table-striped'><thead><tr>" +
-        //        "<th scope='col'>#</th>" +
-        //        "<th scope='col'>Username</th>" +
-        //        "<th scope='col'>Role</th>" +
-        //        "<th scope='col'>Action</th></tr>");
+            result.Append("<div class='col-xxl'>");
+            //table template
+            result.Append("<table class='table table-striped'><thead><tr>" +
+                "<th scope='col'>#</th>" +
+                "<th scope='col'>Username</th>" +
+                "<th scope='col'>Role</th>" +
+                "<th scope='col'>Action</th></tr>");
 
-        //    if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-        //        result.Append("<th scope='col'>Action</th></tr>");
+            result.Append("</thead><tbody>");
 
-        //    result.Append("</thead><tbody>");
+            var usedUsers = usersRights.Select(ur => ur.Key)?.ToList();
+            //create 
+            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+                result.Append("<tr><th>0</th>" +
+                    $"<th>{CreateUserSelect(usedUsers)}" +
+                    $"<span style='display: none;' id='new_user_span'></th>" +
+                    $"<th>{CreateProductRoleSelect()}</th>" +
+                    "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
+                    $"<i class='fas fa-plus'></i></button></th></tr>");
 
-        //    if (products == null || products.Count == 0) return result.ToString();
+            if (usersRights == null || usersRights.Count == 0) return result.ToString();
 
-        //    //create 
+            int index = 1;
+            foreach (var userRight in usersRights)
+            {
+                result.Append($"<tr><th scope='row'>{index}</th>" +
+                    $"<td>{userRight.Key.Username}</td>" +
+                    $"<td>{userRight.Value}");
 
-        //    if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-        //        result.Append("<tr><th>0</th>" +
-        //            "<th><input id='createName' type='text' class='form-control'/>" +
-        //            "<span style='display: none;' id='new_product_name_span'></th>" +
-        //            "<th>---</th>" +
-        //            $"<th>---</th>" +
-        //            $"<th>---</th>" +
-        //            "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
-        //            $"<i class='fas fa-plus'></i></button></th></tr>");
+                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+                    result.Append($"<td><button style='margin-left: 5px' id='change_{userRight.Key.Username}' " +
+                    $"type='button' class='btn btn-secondary' title='edit'>" +
+                    "<i class='fas fa-edit'></i></button>" +
 
-        //    int index = 1;
-        //    foreach (var product in products)
-        //    {
-        //        string manager = product.ExtraProductKeys == null
-        //            || product.ExtraProductKeys.Any() == false ? "---" :
-        //            product.ExtraProductKeys.First().Name;
+                    $"<button id='delete_{userRight.Key.Username}' style='margin-left: 5px' " +
+                    $"type='button' class='btn btn-secondary' title='delete'>" +
+                    $"<i class='fas fa-trash-alt'></i></button></td>");
 
-        //        result.Append($"<tr><th scope='row'>{index}</th>" +
-        //            $"<td>{product.Name}</td>" +
-        //            $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
-        //            $"<button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
-        //            $"<i class='far fa-copy'></i></button>" +
-        //            $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
-        //            $"<td>{product.CreationDate}</td>" +
-        //            $"<td>{manager}</td>");
-
-
-        //        if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-        //            result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
-        //            $"type='button' class='btn btn-secondary' title='edit'>" +
-        //            "<i class='fas fa-edit'></i></button>" +
-
-        //            $"<button id='delete_{product.Key}' style='margin-left: 5px' " +
-        //            $"type='button' class='btn btn-secondary' title='delete'>" +
-        //            $"<i class='fas fa-trash-alt'></i></button></td>");
-
-        //        result.Append("</tr>");
-        //        index++;
-        //    }
-
-            #endregion
+                result.Append("</tr>");
+                index++;
+            }
+            return result.ToString();
         }
+
+
+        private static string CreateUserSelect(List<UserViewModel> usedUsers)
+        {
+            var response = _client.GetAsync(
+                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetUsersNotAdmin)}").Result;
+
+            List<User> users = null;
+            if (response.IsSuccessStatusCode)
+            {
+                users = response.Content.ReadAsAsync<List<User>>().Result;
+            }
+
+            StringBuilder result = new StringBuilder();
+            if (usedUsers != null && usedUsers.Any())
+                foreach (var usedUser in usedUsers)
+                {
+                    var user = users.First(u => u.UserName.Equals(usedUser.Username));
+                    users.Remove(user);
+                }
+
+            if (users != null && users.Any())
+            {
+                result.Append("<select class='form-select' id='createUser'>");
+
+                foreach (var user in users)
+                    result.Append($"<option value='{user.Id}'>{user.UserName}</option>");
+            }
+            else result.Append("<select disabled class='form-select' id='createUser'>");
+
+            result.Append("</select>");
+
+            return result.ToString();
+        }
+
+        private static string CreateProductRoleSelect()
+        {
+            StringBuilder result = new StringBuilder();
+
+            result.Append("<select class='form-select' id='createProductRole'>");
+
+            foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
+                result.Append($"<option value='{(int)role}'>{role}</option>");
+
+            result.Append("</select>");
+
+            return result.ToString();
+        }
+        #endregion
+    }
 }

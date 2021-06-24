@@ -5,4 +5,49 @@
 
 @{ ViewData["Title"] = "Products " + Model.ProductName; }
 
-<div class="container row justify-content-center"></div>
+<script>
+    var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
+</script>
+
+<input id="productKey" value="@Model.ProductKey" style="display: none"/>
+
+<div class="container row justify-content-center">
+    @ViewHelper.CreateEditProductTables(Context.User, Model)
+
+    <script>
+        let errorText = '@TempData[TextConstants.TempDataErrorText]';
+        if (errorText !== undefined) {
+            let errorSpan = document.getElementById('new_user_span');
+            errorSpan.textContent = errorText.slice(0, errorText.length - 5);
+            errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+        }
+    </script>
+</div>
+
+<script>
+    function createUserRightData(userId, role, productKey) {
+        return { "ProductKey": productKey, "UserId": userId, "ProductRole": role }
+    }
+
+    $('#createButton').on('click', function () {
+        userId = $('#createUser').val();
+        role = $('#createProductRole').val();
+        productKey = $('#productKey').val();
+        
+        data = createUserRightData(userId, role, productKey);
+        console.log(JSON.stringify(data));
+
+        $.ajax({
+            type: 'POST',
+            url: addUserRight,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true,
+            success: function () {
+                document.location.reload();
+                //window.location.href = ""
+            }
+        })
+    })
+</script>
