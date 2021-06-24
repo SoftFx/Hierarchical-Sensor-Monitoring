@@ -30,6 +30,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             deserialized = getDeserializedBarsData(escapedData);
             return createBarGraphData(deserialized, graphName);
         default:
+            return undefined;
     }
 }
 
