@@ -1,5 +1,5 @@
 ﻿function displayGraph(graphData, graphType, graphElementId, graphName) {
-    let convertedData = convertToGraphData(graphData, graphType, graphName);
+  let convertedData = convertToGraphData(graphData, graphType, graphName);
 
     Plotly.newPlot(graphElementId, convertedData);
 }
@@ -11,6 +11,10 @@ function convertToGraphData(graphData, graphType, graphName) {
     let deserialized;
     let timeList;
     switch (graphType) {
+        case "0":
+            data = getBoolData(escapedData);
+            timeList = getTimeList(escapedData);
+            return getSimpleGraphData(timeList, data, "bar");
         case "1":
             data = getIntegersData(escapedData);
             timeList = getTimeList(escapedData);
@@ -26,6 +30,18 @@ function convertToGraphData(graphData, graphType, graphName) {
             deserialized = getDeserializedBarsData(escapedData);
             return createBarGraphData(deserialized, graphName);
         default:
+    }
+}
+
+//Boolean 
+{
+    function getBoolData(escapedItems) {
+        let bools = escapedItems.map(function(i) {
+            let currentBoolean = JSON.parse(i.typedData).BoolValue === true;
+            return currentBoolean ? 1 : 0;
+        });
+
+        return bools;
     }
 }
 
@@ -167,8 +183,6 @@ function convertToGraphData(graphData, graphType, graphName) {
     }
 }
 
-
-//function g
 
 // plot type
 function getPlotType(graphType) {

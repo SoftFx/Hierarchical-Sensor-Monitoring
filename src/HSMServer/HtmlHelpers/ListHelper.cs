@@ -111,10 +111,10 @@ namespace HSMServer.HtmlHelpers
                                   "<div class='col-sm-1'>" +
                                   $"<button id='reload_{formattedPath}_{name}_{(int)sensor.SensorType}' type='button' class='btn btn-secondary'>" +
                                   "<i class='fas fa-redo-alt'></i></button></div>" +
-                                  $"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                  "type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
-                                  $"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                  "type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
+                                  //$"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                  //"type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
+                                  //$"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                  //"type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
                                   $"<div id='values_{formattedPath}_{name}' style='display: none'></div>" +
                                   $"<div id='graph_{formattedPath}_{name}'></div></div></div></div></div>");
 
