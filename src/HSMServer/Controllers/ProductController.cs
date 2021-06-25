@@ -1,5 +1,4 @@
-﻿using System;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model.Validators;
@@ -11,6 +10,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Authorization;
 using HSMServer.Products;
 using HSMServer.Keys;
+using System;
 
 namespace HSMServer.Controllers
 {
@@ -30,7 +30,7 @@ namespace HSMServer.Controllers
         }
 
         public IActionResult Index()
-        {          
+        {
             var user = HttpContext.User as User;
 
             List<Product> products = null;
@@ -40,10 +40,27 @@ namespace HSMServer.Controllers
                 products = _monitoringCore.GetProducts(user);
 
             products = products.OrderBy(x => x.Name).ToList();
-            var result = products.Select(x => new ProductViewModel(x,
-                _userManager.GetViewers(x.Key).Select(x => x.UserName)?.ToList()))?.ToList();
+
+            var result = products.Select(x => new ProductViewModel(
+                _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
+        }
+
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
+        {
+            var product = _monitoringCore.GetProduct(productKey);
+            var users = _userManager.GetViewers(productKey);
+
+            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
+            if (users != null || !users.Any())
+                foreach (var user in users.OrderBy(x => x.UserName))
+                {
+                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
+                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
+                }
+
+            return View(new EditProductViewModel(product, pairs));
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
@@ -71,47 +88,99 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void UpdateProduct([FromBody] ProductViewModel productViewModel)
+        public void UpdateProduct([FromBody] ProductViewModel model)
         {
-            productViewModel.Name = productViewModel.Name.Replace('-', ' ');
+            model.Name = model.Name.Replace('-', ' ');
 
-            Product product = GetModelFromViewModel(productViewModel);
+            Product product = GetModelFromViewModel(model);
             _monitoringCore.UpdateProduct(HttpContext.User as User, product);
         }
 
         [HttpPost]
-        public void AddExtraKeyToProduct([FromBody] ExtraKeyViewModel extraKeyViewModel)
+        public void AddExtraKeyToProduct([FromBody] ExtraKeyViewModel model)
         {
             ExtraKeyValidator validator = new ExtraKeyValidator(_monitoringCore);
-            var results = validator.Validate(extraKeyViewModel);
+            var results = validator.Validate(model);
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
                 return;
             }
 
-            Product product = _monitoringCore.GetProduct(extraKeyViewModel.ProductKey);
-            extraKeyViewModel.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
-                product.Name, extraKeyViewModel.ExtraKeyName);
+            Product product = _monitoringCore.GetProduct(model.ProductKey);
+            model.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
+                product.Name, model.ExtraKeyName);
 
-            var extraProduct = new ExtraProductKey(extraKeyViewModel.ExtraKeyName, extraKeyViewModel.ExtraProductKey);
+            var extraProduct = new ExtraProductKey(model.ExtraKeyName, model.ExtraProductKey);
             if (product.ExtraKeys == null || product.ExtraKeys.Count == 0)
                 product.ExtraKeys = new List<ExtraProductKey> { extraProduct };
-            else 
+            else
                 product.ExtraKeys.Add(extraProduct);
 
             _monitoringCore.UpdateProduct(HttpContext.User as User, product);
         }
 
+        [HttpPost]
+        public void AddUserRight([FromBody] UserRightViewModel model)
+        {
+            UserRightValidator validator = new UserRightValidator();
+            var results = validator.Validate(model);
+            if (!results.IsValid)
+            {
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                return;
+            }
+
+            var user = _userManager.GetUser(Guid.Parse(model.UserId));
+            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
+
+            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
+                user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
+            else
+                user.ProductsRoles.Add(pair);
+
+            _userManager.UpdateUser(user);
+        }
+
+        [HttpPost]
+        public void RemoveUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager.GetUser(Guid.Parse(model.UserId));
+  
+            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            user.ProductsRoles.Remove(role);
+
+            _userManager.UpdateUser(user);
+        }
+
+        [HttpPost]
+        public void EditUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager.GetUser(Guid.Parse(model.UserId));
+            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
+
+            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            user.ProductsRoles.Remove(role);
+
+            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
+                user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
+            else
+                user.ProductsRoles.Add(pair);
+
+            _userManager.UpdateUser(user);
+
+        }
+
         private Product GetModelFromViewModel(ProductViewModel productViewModel)
         {
+            Product existingProduct = _monitoringCore.GetProduct(productViewModel.Key);
+
             Product product = new Product()
             {
                 DateAdded = productViewModel.CreationDate,
                 Name = productViewModel.Name,
                 Key = productViewModel.Key,
-                ExtraKeys = productViewModel.ExtraProductKeys,
-                //ManagerId = Guid.NewGuid() // TODO0000000000000000000000
+                ExtraKeys = existingProduct.ExtraKeys
             };
 
             return product;

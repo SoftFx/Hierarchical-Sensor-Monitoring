@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 
 namespace HSMServer.Extensions
 {
@@ -8,18 +6,18 @@ namespace HSMServer.Extensions
     {
         public static bool IsSensorAvailable(this User user, string key)
         {
-            return user.AvailableKeys.Contains(key);
+            return ProductRoleHelper.IsAvailable(key, user.ProductsRoles);
         }
 
-        public static bool IsProductAvailable(this User user, string server)
-        {
-            return user.UserPermissions.FirstOrDefault(p => p.ProductName == server) != null;
-        }
+        //public static bool IsProductAvailable(this User user, string server)
+        //{
+        //    return user.UserPermissions.FirstOrDefault(p => p.ProductName == server) != null;
+        //}
 
-        public static IEnumerable<string> GetAvailableServers(this User user)
-        {
-            return user.UserPermissions.Select(p => p.ProductName);
-        }
+        //public static IEnumerable<string> GetAvailableServers(this User user)
+        //{
+        //    return user.UserPermissions.Select(p => p.ProductName);
+        //}
 
         public static bool IsSame(this User user, User comparedUser)
         {
@@ -44,7 +42,8 @@ namespace HSMServer.Extensions
             copy.Password = null;
             copy.CertificateThumbprint = user.CertificateThumbprint;
             copy.Role = user.Role;
-            copy.UserPermissions = user.UserPermissions;
+            copy.ProductsRoles = user.ProductsRoles;
+
             return copy;
         }
     }

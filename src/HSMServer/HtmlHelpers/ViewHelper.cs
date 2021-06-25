@@ -34,6 +34,15 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(user, users));
         }
 
+        public static HtmlString CreateEditProductTables(ClaimsPrincipal claims,
+            EditProductViewModel model)
+        {
+            var user = claims as User;
+
+            return new HtmlString(TableHelper.CreateTable(model.ProductName,
+                user, model.UsersRights));
+        }
+
         public static string GetStatusHeaderColorClass(SensorStatus status)
         {
             switch (status)

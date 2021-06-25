@@ -9,19 +9,14 @@ namespace HSMServer.Model.ViewModel
         public string Key { get; set; }
         public string Name { get; set; }
         public DateTime CreationDate { get; set; }
-        //public Guid ManagerId { get; set; }
-        public List<ExtraProductKey> ExtraProductKeys { get; set; }
+        public string ManagerName { get; set; }
 
-        public List<string> Viewers { get;set; }
-
-        public ProductViewModel(Product product, List<string> viewers)
+        public ProductViewModel(string manager, Product product)
         {
             Key = product.Key;
             Name = product.Name;
             CreationDate = product.DateAdded;
-            Viewers = viewers;
-            //ManagerId = product.ManagerId;
-            ExtraProductKeys = product.ExtraKeys;
+            ManagerName = manager;
         }
     }
 }

@@ -19,22 +19,28 @@ namespace HSMServer.ApiControllers
             _userManager = userManager;
         }
 
-        [HttpGet("GetAllProducts")]
+        [HttpGet(nameof(GetAllProducts))]
         public ActionResult<List<Product>> GetAllProducts()
         {
             return _monitoringCore.GetAllProducts();
         }
 
-        [HttpGet("GetAllViewers")]
-        public ActionResult<List<User>> GetAllViewers()
+        [HttpGet(nameof(GetUsersNotAdmin))]
+        public ActionResult<List<User>> GetUsersNotAdmin()
         {
-            return _userManager.GetAllViewers();
+            return _userManager.GetUsersNotAdmin();
         }
 
-        [HttpGet("GetAllManagers")]
-        public ActionResult<List<User>> GetAllManagers()
-        {
-            return _userManager.GetAllManagers();
-        }
+        //[HttpGet("GetAllViewers")]
+        //public ActionResult<List<User>> GetAllViewers()
+        //{
+        //    return _userManager.GetAllViewers();
+        //}
+
+        //[HttpGet("GetAllManagers")]
+        //public ActionResult<List<User>> GetAllManagers()
+        //{
+        //    return _userManager.GetAllManagers();
+        //}
     }
 }
