@@ -82,7 +82,8 @@ namespace HSMServer.Authentication
         {
             lock (_accessLock)
             {
-                _users.Remove(user);
+                var existingUser = _users.First(x => x.Id.Equals(user.Id));
+                _users.Remove(existingUser);
             }
         }
 
@@ -159,7 +160,7 @@ namespace HSMServer.Authentication
             {
                 result = _users.FirstOrDefault(u => u.Id == id);
             }
-            return result;
+            return new User(result);
         }
 
         public User GetUserByUserName(string username)
@@ -170,7 +171,7 @@ namespace HSMServer.Authentication
                 result = _users.FirstOrDefault(u => u.UserName == username);
             }
 
-            return result;
+            return new User(result);
         }
 
         public List<User> GetViewers(string productKey)

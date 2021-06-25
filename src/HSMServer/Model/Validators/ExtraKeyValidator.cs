@@ -15,6 +15,7 @@ namespace HSMServer.Model.Validators
 
             RuleFor(x => x.ExtraKeyName)
                 .NotNull()
+                .NotEmpty()
                 .WithMessage(ErrorConstants.ExtraKeyNameNotNull);
 
             When(x => x.ExtraKeyName != null, () =>

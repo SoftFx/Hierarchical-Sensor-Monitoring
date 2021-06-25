@@ -9,22 +9,9 @@
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
     var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
+    var addExtraKey = "@Html.Raw(Url.Action(ViewConstants.AddExtraKeyAction, ViewConstants.ProductController))";
+    var deleteExtraKey = "@Html.Raw(Url.Action(ViewConstants.RemoveExtraKeyAction, ViewConstants.ProductController))";
 </script>
-
-<input id="productKey" value="@Model.ProductKey" style="display: none"/>
-
-<div class="container row justify-content-center">
-    @ViewHelper.CreateEditProductTables(Context.User, Model)
-
-    <script>
-        let errorText = '@TempData[TextConstants.TempDataErrorText]';
-        if (errorText !== undefined) {
-            let errorSpan = document.getElementById('new_user_span');
-            errorSpan.textContent = errorText.slice(0, errorText.length - 5);
-            errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-        }
-    </script>
-</div>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -45,19 +32,42 @@
     </div>
 </div>
 
+<input id="productKey" value="@Model.ProductKey" style="display: none" />
+
+<div class="container row justify-content-center">
+    @ViewHelper.CreateEditProductTables(Context.User, Model)
+</div>
+
+<script>
+    let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';
+    if (userErrorText !== undefined) {
+        let userErrorSpan = document.getElementById('new_user_span');
+        userErrorSpan.textContent = userErrorText.slice(0, userErrorText.length - 5);
+        userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    }
+
+    let keyErrorText = '@TempData[TextConstants.TempDataKeyErrorText]';
+    if (keyErrorText !== undefined) {
+        let keyErrorSpan = document.getElementById('new_key_span');
+        keyErrorSpan.textContent = keyErrorText.slice(0, keyErrorText.length - 5);
+        keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    }
+</script>
+
+
 <script>
     function createUserRightData(userId, role, productKey) {
         return { "ProductKey": productKey, "UserId": userId, "ProductRole": role }
     }
 
-    //create
+    //create user
     $('#createButton').on('click', function () {
         userId = $('#createUser').val();
         role = $('#createProductRole').val();
         productKey = $('#productKey').val();
 
         data = createUserRightData(userId, role, productKey);
-        console.log(JSON.stringify(data));
+        //console.log(JSON.stringify(data));
 
         $.ajax({
             type: 'POST',
@@ -72,6 +82,7 @@
         });
     });
 
+    //delete user
     $('[id^=delete_]').on('click', function () {
         username = this.id.substring('delete_'.length, this.id.length);
         userId = $('#userId_' + username).val();
@@ -79,6 +90,8 @@
 
         var data = createUserRightData(userId, 0, productKey);
 
+        $('#modalDeleteLabel').empty();
+        $('#modalDeleteLabel').append('Remove user right');
         $('#modalDeleteBody').empty();
         $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user right?');
 
@@ -108,8 +121,8 @@
         });
     });
 
-    //change
-    $('[id^=change_]').on('click', function () {
+    //change user
+    $('[id^=change_]').on('Htmlli★ Urlck', function () {
         username = this.id.substring('change_'.length, this.id.length);
 
         $('[id^=role_]').attr('disabled', true);
@@ -146,4 +159,69 @@
         });
     });
 
+</script>
+
+<script>
+    function createKeyData(productKey, keyName, extraKey) {
+        return { "ExtraProductKey": extraKey, "ProductKey": productKey, "ExtraKeyName": keyName }
+    }
+
+    //create key
+    $('#createKeyButton').on('click', function () {
+        keyName = $('#createKeyName').val();
+        productKey = $('#productKey').val();
+
+        data = createKeyData(productKey, keyName, null);
+
+        $.ajax({
+            type: 'POST',
+            url: addExtraKey,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true,
+            success: function () {
+                document.location.reload();
+            }
+        });
+    });
+
+    //delete key
+    $('[id^=deleteKey_]').on('click', function () {
+        extraProductKey = this.id.substring('deleteKey_'.length, this.id.length);
+        productKey = $('#productKey').val();
+        extraProductName = $('#keyName_' + extraProductKey).val();
+
+        var data = createKeyData(productKey, extraProductName, extraProductKey);
+
+        $('#modalDeleteLabel').empty();
+        $('#modalDeleteLabel').append('Remove extra key');
+        $('#modalDeleteBody').empty();
+        $('#modalDeleteBody').append('Do you really want to remove "' + extraProductName + '" extra key?');
+
+        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        modal.show();
+
+        //modal confirm
+        $('#confirmDeleteButton').on('click', function () {
+            modal.hide();
+
+            $.ajax({
+                type: 'POST',
+                url: deleteExtraKey,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
+                cache: false,
+                async: true,
+                success: function () {
+                    document.location.reload();
+                }
+            });
+        });
+
+        //modal close
+        $('#closeDeleteButton').on('click', function () {
+            modal.hide();
+        });
+    });
 </script>

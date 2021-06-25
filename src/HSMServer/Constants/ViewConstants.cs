@@ -27,9 +27,10 @@
         public const string RemoveUserAction = "RemoveUser";
         public const string UpdateUserAction = "UpdateUser";
 
-        public const string AddExtraKeyToProductAction = "AddExtraKeyToProduct";
+        public const string AddExtraKeyAction = "AddExtraKey";
         public const string AddUserRightAction = "AddUserRight";
         public const string EditUserRoleAction = "EditUserRole";
         public const string RemoveUserRoleAction = "RemoveUserRole";
+        public const string RemoveExtraKeyAction = "RemoveExtraKey";
     }
 }

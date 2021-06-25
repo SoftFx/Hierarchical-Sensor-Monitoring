@@ -24,6 +24,19 @@ namespace HSMServer.Authentication
             UserName = userName;
             CertificateThumbprint = thumbprint;
         }
+
+        public User(User user)
+        {
+            Id = user.Id;
+            UserName = user.UserName;
+            Password = user.Password;
+            CertificateThumbprint = user.CertificateThumbprint;
+            CertificateFileName = user.CertificateFileName;
+            Role = user.Role;
+            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
+            if (user.ProductsRoles != null && user.ProductsRoles.Any())
+                ProductsRoles.AddRange(user.ProductsRoles);
+        }
         
     }
 }

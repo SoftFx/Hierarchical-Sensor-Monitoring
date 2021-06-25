@@ -13,8 +13,6 @@
     var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
-
-
 <div class="container row justify-content-center">
     @ViewHelper.CreateProductList(Context.User, Model)
     
@@ -102,47 +100,5 @@
     $('[id^=change_]').on('click', function () {
         key = this.id.substring("change_".length, this.id.length);
         window.location.href = editAction + "?Product=" + key
-    });
-
-    //function createExtraKeyData(productKey, extraKeyName) {
-    //    return { "ProductKey": productKey, "ExtraKeyName": extraKeyName }
-    //}
-
-    //$('[id^="createExtraKeyButton_"]').on('click', function () {
-    //   HtmlproductName = this.id.substring('createExtraKeyButton_'.length, this.id.legth);
-    //    productKey = $('#inputKey_' + productName).val();
-        
-    //    $('#modalAddLabel').empty();
-    //    $('#modalAddLabel').append('Add extra key to "' + productName + '" product');
-
-    //    var modal = new bootstrap.Modal(document.getElementById('modaleAddExtraKey'));
-    //    modal.show();
-
-    //    //modal confirm
-    //    $('#confirmAddButton').on('click', function () {
-    //        modal.hide();
-
-    //        extraKeyName = $('#extraKeyName').val();
-    //        data = createExtraKeyData(productKey, extraKeyName);
-
-    //        $.ajax({
-    //            type: 'POST',
-    //            url: addKeyAction,
-    //            data: JSON.stringify(data),
-    //            contentType: 'application/json',
-    //            cache: false,
-    //            async: true,
-    //            success: function () {
-    //                window.location.href = "Product"; //ProductController -> Index
-    //            }
-    //        });
-    //    });
-
-    //    //modal close
-    //    $('#closeAddButton').on('click', function () {
-    //        modal.hide();
-    //    });
-    //})
-
-
+    }); 
 </script>

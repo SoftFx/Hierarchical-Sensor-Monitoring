@@ -1,6 +1,6 @@
-﻿using HSMServer.Authentication;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.DataLayer.Model
 {
@@ -10,5 +10,16 @@ namespace HSMServer.DataLayer.Model
         public string Name { get; set; }
         public DateTime DateAdded { get; set; }
         public List<ExtraProductKey> ExtraKeys { get; set; }
+
+        public Product() { }
+        public Product(Product product)
+        {
+            Key = product.Key;
+            Name = product.Name;
+            DateAdded = product.DateAdded;
+            ExtraKeys = new List<ExtraProductKey>();
+            if (product.ExtraKeys != null && product.ExtraKeys.Any())
+                ExtraKeys.AddRange(product.ExtraKeys);
+        }
     }
 }
