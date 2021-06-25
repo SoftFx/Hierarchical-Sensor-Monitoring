@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
@@ -109,21 +110,61 @@ namespace HSMServer.HtmlHelpers
                                   "<div class='col-sm-3'>" +
                                   $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
                                   "<div class='col-sm-1'>" +
-                                  $"<button id='reload_{formattedPath}_{name}_{(int)sensor.SensorType}' type='button' class='btn btn-secondary'>" +
-                                  "<i class='fas fa-redo-alt'></i></button></div>" +
-                                  //$"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                  //"type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
-                                  //$"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                  //"type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
-                                  $"<div id='values_{formattedPath}_{name}' style='display: none'></div>" +
-                                  $"<div id='graph_{formattedPath}_{name}'></div></div></div></div></div>");
+                                  $"<button id='reload_{formattedPath}_{name}_{(int) sensor.SensorType}' type='button' class='btn btn-secondary'>" +
+                                  "<i class='fas fa-redo-alt'></i></button></div>");
+                                //$"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                //"type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
+                                //$"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
+                                //"type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
 
+                    result.Append(isPlottingSupported(sensor.SensorType)
+                                    ? GetNavTabsForHistory(formattedPath, name)
+                                    : GetValuesDivForHistory(formattedPath, name));
 
-
+                    result.Append("</div></div></div></div>");
                 }
             result.Append("</div>");
 
             return result.ToString();
+        }
+
+
+        private static string GetNavTabsForHistory(string formattedPath, string name)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("<ul class='nav nav-tabs'>");
+
+            //Graph tab
+            string graphElementId = $"graph_{formattedPath}_{name}";
+            sb.Append($"<li class='nav-item'><a class='nav-link active' data-toggle='tab' href='#{graphElementId}'>Graph</a></li>");
+
+            //Values tab
+            string valuesElementId = $"values_{formattedPath}_{name}";
+            sb.Append($"<li class='nav-item'><a class='nav-link' data-toggle='tab' href='#{valuesElementId}'>Table</a></li></ul>");
+
+            sb.Append("<div class='tab-content'>");
+            sb.Append($"<div class='tab-pane fade show active' id={graphElementId}></div>");
+            sb.Append($"<div class='tab-pane fade' id={valuesElementId}><h1>AOLDHGLDHJNFKADJFKADHJf</h1></div></div>");
+
+            return sb.ToString();
+        }
+
+        private static string GetValuesDivForHistory(string formattedPath, string name)
+        {
+            return $"<div id='values_{formattedPath}_{name}'></div>";
+        }
+        private static bool isPlottingSupported(SensorType sensorType)
+        {
+            if (sensorType == SensorType.IntSensor || sensorType == SensorType.DoubleSensor)
+                return true;
+
+            if (sensorType == SensorType.DoubleBarSensor || sensorType == SensorType.IntegerBarSensor)
+                return true;
+
+            if (sensorType == SensorType.BooleanSensor)
+                return true;
+
+            return false;
         }
 
         private static string GetFileNameString(string shortValue)
