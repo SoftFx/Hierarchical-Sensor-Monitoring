@@ -41,8 +41,8 @@ namespace HSMServer.HtmlHelpers
 
             StringBuilder result = new StringBuilder();
 
-            result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
             result.Append(TableHelper.CreateTable(model.ProductName, user, model.ExtraKeys));
+            result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
             
             return new HtmlString(result.ToString());
         }
