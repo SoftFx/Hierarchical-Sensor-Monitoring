@@ -223,7 +223,11 @@ namespace HSMServer.HtmlHelpers
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
 
-            if (usersRights == null || usersRights.Count == 0) return result.ToString();
+            if (usersRights == null || usersRights.Count == 0)
+            {
+                result.Append("</tbody></table></div>");
+                return result.ToString();
+            }
 
             int index = 1;
             foreach (var userRight in usersRights)
@@ -248,7 +252,7 @@ namespace HSMServer.HtmlHelpers
 
                     $"<button disabled style='margin-left: 5px' id='cancel_{userRight.Key.Username}' " +
                     $"type='button' class='btn btn-secondary' title='cancel'>" +
-                    "<i class='fas fa-times'></i></button></td></tr>");
+                    "<i class='fas fa-times'></i></button></td>");
 
 
 
@@ -354,7 +358,11 @@ namespace HSMServer.HtmlHelpers
                     "<th><button id='createKeyButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     $"<i class='fas fa-plus'></i></button></th></tr>");
 
-            if (extraKeys == null || !extraKeys.Any()) return result.ToString();
+            if (extraKeys == null || !extraKeys.Any())
+            {
+                result.Append("</tbody></table></div>");
+                return result.ToString();
+            }
 
             int index = 1;
             foreach (var extraKey in extraKeys)
@@ -367,7 +375,7 @@ namespace HSMServer.HtmlHelpers
                 if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
                     result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
                     $"type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td></tr>");
+                    $"<i class='fas fa-trash-alt'></i></button></td>");
 
                 result.Append("</tr>");
                 index++;

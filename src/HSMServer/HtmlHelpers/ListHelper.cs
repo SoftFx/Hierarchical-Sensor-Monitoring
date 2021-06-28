@@ -24,7 +24,7 @@ namespace HSMServer.HtmlHelpers
                 "<h5 style='margin: 0px 20px 10px;'>Sensors</h5></div>");
 
             result.Append("<div style='width: 700px'>" +
-                "<ul id='noData' style='display: none;' class='list-group'>" +
+                "<ul id='noData' class='list-group'>" +
                 "<li class='list-group-item'>No Data</li></ul></div>");
 
             foreach (var path in model.Paths)
