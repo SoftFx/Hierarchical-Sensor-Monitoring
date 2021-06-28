@@ -84,6 +84,7 @@
             totalCount = getCountForId(noNumberId);
 
             initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+            initializeHistory(product, path, totalCount, historyAction);
         });
 
         $('[id^="reload_"]').on("click",
@@ -96,27 +97,29 @@
                 noNumberId = id.substring(0, id.length - 2);
                 totalCount = getCountForId(noNumberId);
 
-                var graphVisible = $('#graph_' + product + "_" + path).css("display") !== "none";
-                if (graphVisible) {
-                    initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
-                }
-                else {
-                    initializeHistory(product, path, totalCount, historyAction);
-                }
-            });
-
-        $('[id^="button_graph_"]').on("click",
-            function () {
-                id = this.id.substring("button_graph_".length, this.id.length);
-                splitResults = id.split('_');
-                product = splitResults[0];
-                path = id.substring(product.length + 1, id.length - 2);
-                totalCount = $('#inputCount_' + id).val();
-                type = splitResults[splitResults.length - 1];
-                noNumberId = id.substring(0, id.length - 2);
-
+                //var graphVisible = $('#graph_' + product + "_" + path).css("display") !== "none";
+                //if (graphVisible) {
+                //    initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+                //}
+                //else {
+                //    initializeHistory(product, path, totalCount, historyAction);
+                //}
                 initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+                initializeHistory(product, path, totalCount, historyAction);
             });
+
+        //$('[id^="button_graph_"]').on("click",
+        //    function () {
+        //        id = this.id.substring("button_graph_".length, this.id.length);
+        //        splitResults = id.split('_');
+        //        product = splitResults[0];
+        //        path = id.substring(product.length + 1, id.length - 2);
+        //        totalCount = $('#inputCount_' + id).val();
+        //        type = splitResults[splitResults.length - 1];
+        //        noNumberId = id.substring(0, id.length - 2);
+
+        //        initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+        //    });
 
         $('[id^="button_view"]').on("click",
             function () {
@@ -291,10 +294,10 @@
             async: true
         }).done(function(data) {
             
-            $('#values_'+id).css('display', 'none');
+            //$('#values_'+id).css('display', 'none');
 
             let graphDivId = "graph_" + id;
-            $('#' + graphDivId).css('display', 'block');
+            //$('#' + graphDivId).css('display', 'block');
 
             displayGraph(data, type, graphDivId, path);
         });
@@ -327,6 +330,7 @@
             console.log(`#values_${product}_${path}`);
 
             $(`#values_${product}_${path}`).empty();
+            console.log(`#values_${product}_${path}`);
             $(`#values_${product}_${path}`).append(data);
         });
     }

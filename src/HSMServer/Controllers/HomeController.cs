@@ -58,7 +58,8 @@ namespace HSMServer.Controllers
             model.Path = model.Path?.Replace('_', '/').Replace('-', ' ');
             var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
 
-            return new HtmlString(ListHelper.CreateHistoryList(result));
+            //return new HtmlString(ListHelper.CreateHistoryList(result));
+            return new HtmlString(TableHelper.CreateHistoryTable(result));
         }
 
         [HttpPost]

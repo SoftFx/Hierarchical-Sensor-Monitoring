@@ -1,10 +1,9 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Net.NetworkInformation;
-using System.Text;
-using HSMCommon.Model.SensorsData;
+﻿using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMServer.Model.ViewModel;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -117,11 +116,12 @@ namespace HSMServer.HtmlHelpers
                                 //$"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
                                 //"type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
 
+                                result.Append("<div style='margin-top: 15px'>");
                     result.Append(isPlottingSupported(sensor.SensorType)
                                     ? GetNavTabsForHistory(formattedPath, name)
                                     : GetValuesDivForHistory(formattedPath, name));
 
-                    result.Append("</div></div></div></div>");
+                    result.Append("</div></div></div></div></div>");
                 }
             result.Append("</div>");
 
@@ -136,15 +136,17 @@ namespace HSMServer.HtmlHelpers
 
             //Graph tab
             string graphElementId = $"graph_{formattedPath}_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link active' data-toggle='tab' href='#{graphElementId}'>Graph</a></li>");
+            string graphParentDivId = $"graph_parent_{formattedPath}_{name}";
+            sb.Append($"<li class='nav-item'><a class='nav-link active' data-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
             string valuesElementId = $"values_{formattedPath}_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link' data-toggle='tab' href='#{valuesElementId}'>Table</a></li></ul>");
+            string valuesParentDivId = $"values_parent_{formattedPath}_{name}";
+            sb.Append($"<li class='nav-item'><a class='nav-link' data-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
-            sb.Append($"<div class='tab-pane fade show active' id={graphElementId}></div>");
-            sb.Append($"<div class='tab-pane fade' id={valuesElementId}><h1>AOLDHGLDHJNFKADJFKADHJf</h1></div></div>");
+            sb.Append($"<div class='tab-pane fade show active' id={graphParentDivId}><div id='{graphElementId}'></div></div>");
+            sb.Append($"<div class='tab-pane fade' id={valuesParentDivId}><div id='{valuesElementId}'></div></div></div>");
 
             return sb.ToString();
         }
