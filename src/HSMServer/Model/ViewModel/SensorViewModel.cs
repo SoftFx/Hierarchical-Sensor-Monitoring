@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
+using System;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -14,6 +15,7 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
         public string Description { get; set; }
+        public DateTime Time { get; set; }
 
         public SensorViewModel(string name, SensorData sensor)
         {
@@ -22,6 +24,7 @@ namespace HSMServer.Model.ViewModel
             Status = sensor.Status;
             Value = sensor.ShortValue;
             Description = sensor.Description;
+            Time = sensor.Time;
         }
 
         public void Update(SensorData sensorData)
@@ -29,6 +32,7 @@ namespace HSMServer.Model.ViewModel
             Status = sensorData.Status;
             Value = sensorData.ShortValue;
             Description = sensorData.Description;
+            Time = sensorData.Time;
         }
 
         public void Update(SensorViewModel viewModel)
@@ -36,6 +40,7 @@ namespace HSMServer.Model.ViewModel
             Status = viewModel.Status;
             Value = viewModel.Value;
             Description = viewModel.Description;
+            Time = viewModel.Time;
         }
     }
 }
