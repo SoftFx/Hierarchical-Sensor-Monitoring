@@ -173,7 +173,7 @@ namespace HSMServer.Authentication
                 result = _users.FirstOrDefault(u => u.UserName == username);
             }
 
-            return new User(result);
+            return result == null ? result : new User(result);
         }
 
         public List<User> GetViewers(string productKey)
