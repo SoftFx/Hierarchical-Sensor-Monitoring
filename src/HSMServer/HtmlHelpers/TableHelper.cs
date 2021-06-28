@@ -403,131 +403,156 @@ namespace HSMServer.HtmlHelpers
             switch (type)
             {
                 case SensorType.BooleanSensor:
-                    return CreateBooleanTable(sensorHistory.Select(h => JsonSerializer.Deserialize<BoolSensorData>(h.TypedData)));
+                    return CreateBooleanTable(sensorHistory.Select(h =>
+                    JsonSerializer.Deserialize<BoolSensorData>(h.TypedData)).ToList(), 
+                    sensorHistory.Select(h => h.Time).ToList());
                 case SensorType.IntSensor:
                     return CreateIntegerTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<IntSensorData>(h.TypedData)));
+                        JsonSerializer.Deserialize<IntSensorData>(h.TypedData)).ToList(),
+                        sensorHistory.Select(h => h.Time).ToList());
                 case SensorType.DoubleSensor:
                     return CreateDoubleTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<DoubleSensorData>(h.TypedData)));
+                        JsonSerializer.Deserialize<DoubleSensorData>(h.TypedData)).ToList(),
+                        sensorHistory.Select(h => h.Time).ToList());
                 case SensorType.StringSensor:
                     return CreateStringTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<StringSensorData>(h.TypedData)));
+                        JsonSerializer.Deserialize<StringSensorData>(h.TypedData)).ToList(),
+                        sensorHistory.Select(h => h.Time).ToList());
                 case SensorType.IntegerBarSensor:
                     return CreateIntBarTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<IntBarSensorData>(h.TypedData)));
+                        JsonSerializer.Deserialize<IntBarSensorData>(h.TypedData)).ToList(),
+                        sensorHistory.Select(h => h.Time).ToList());
                 case SensorType.DoubleBarSensor:
                     return CreateDoubleBarData(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<DoubleBarSensorData>(h.TypedData)));
+                        JsonSerializer.Deserialize<DoubleBarSensorData>(h.TypedData)).ToList(),
+                        sensorHistory.Select(h => h.Time).ToList());
                 default:
                     return string.Empty;
             }
         }
 
-        private static string CreateBooleanTable(IEnumerable<BoolSensorData> boolHistory)
+        private static string CreateBooleanTable(List<BoolSensorData> boolHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th scope='col'>Date</th>" +
                       "<th scope='col'>Value</th>" +
                       "<th scope='col'>Comment</th></tr></thead><tbody>");
 
-            foreach (var historyItem in boolHistory)
+            for(int i = 0; i < boolHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.BoolValue}</td><td>{historyItem.Comment}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                    $"<td>{boolHistory[i].BoolValue}</td>" +
+                    $"<td>{boolHistory[i].Comment}</td></tr>");
             }
 
             sb.Append("</tbody>");
             return sb.ToString();
         }
 
-        private static string CreateIntegerTable(IEnumerable<IntSensorData> intHistory)
+        private static string CreateIntegerTable(List<IntSensorData> intHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th>Date</th>" +
                       "<th scope='col'>Number</th>" +
                       "<th scope='col'>Comment</th></tr></thead><tbody>");
 
-            foreach (var historyItem in intHistory)
+            for(int i=0; i < intHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.IntValue}</td><td>{historyItem.Comment}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                    $"<td scope='row'>{intHistory[i].IntValue}</td>" +
+                    $"<td>{intHistory[i].Comment}</td></tr>");
             }
 
             sb.Append("</tbody>");
             return sb.ToString();
         }
 
-        private static string CreateDoubleTable(IEnumerable<DoubleSensorData> doubleHistory)
+        private static string CreateDoubleTable(List<DoubleSensorData> doubleHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th>Date</th>" +
                       "<th scope='col'>Number</th>" +
                       "<th scope='col'>Comment</th></tr></thead><tbody>");
 
-            foreach (var historyItem in doubleHistory)
+            for (int i=0; i < doubleHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.DoubleValue}</td><td>{historyItem.Comment}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                    $"<td scope='row'>{doubleHistory[i].DoubleValue}</td>" +
+                    $"<td>{doubleHistory[i].Comment}</td></tr>");
             }
 
             sb.Append("</tbody>");
             return sb.ToString();
         }
 
-        private static string CreateStringTable(IEnumerable<StringSensorData> stringHistory)
+        private static string CreateStringTable(List<StringSensorData> stringHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th>Date</th>" +
                       "<th scope='col'>String value</th>" +
                       "<th scope='col'>Comment</th></tr></thead><tbody>");
 
-            foreach (var historyItem in stringHistory)
+            for (int i = 0; i< stringHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.StringValue}</td><td>{historyItem.Comment}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                    $"<td scope='row'>{stringHistory[i].StringValue}</td>" +
+                    $"<td>{stringHistory[i].Comment}</td></tr>");
             }
 
             sb.Append("</tbody>");
             return sb.ToString();
         }
 
-        private static string CreateIntBarTable(IEnumerable<IntBarSensorData> intBarHistory)
+        private static string CreateIntBarTable(List<IntBarSensorData> intBarHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th>Date</th>" +
                       "<th scope='col'>Min</th>" +
                       "<th scope='col'>Mean</th>" +
                       "<th scope='col'>Median</th>" +
                       "<th scope='col'>Max</th></tr></thead><tbody>");
 
-            foreach (var historyItem in intBarHistory)
+            for (int i=0; i < intBarHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.Min}</td><td>{historyItem.Mean}</td><td>" +
-                          $"{historyItem.Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
-                          $"</td><td>{historyItem.Max}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                    $"<td scope='row'>{intBarHistory[i].Min}</td>" +
+                    $"<td>{intBarHistory[i].Mean}</td>" +
+                    $"<td>{intBarHistory[i].Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
+                    $"</td><td>{intBarHistory[i].Max}</td></tr>");
             }
 
             sb.Append("</tbody>");
             return sb.ToString();
         }
 
-        private static string CreateDoubleBarData(IEnumerable<DoubleBarSensorData> doubleBarHistory)
+        private static string CreateDoubleBarData(List<DoubleBarSensorData> doubleBarHistory,
+            List<DateTime> dates)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<table class='table table-striped'><thead><tr>" +
+                      "<th>Date</th>" +
                       "<th scope='col'>Min</th>" +
                       "<th scope='col'>Mean</th>" +
                       "<th scope='col'>Median</th>" +
                       "<th scope='col'>Max</th></tr></thead><tbody>");
 
-            foreach (var historyItem in doubleBarHistory)
+            for (int i = 0; i < doubleBarHistory.Count; i++)
             {
-                sb.Append("<tr><td scope='row'>");
-                sb.Append($"{historyItem.Min}</td><td>{historyItem.Mean}</td><td>" +
-                          $"{historyItem.Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
-                          $"</td><td>{historyItem.Max}</td></tr>");
+                sb.Append($"<tr><td>{dates[i]}</td>" +
+                          $"<td scope='row'>{doubleBarHistory[i].Min}</td>" +
+                          $"<td>{doubleBarHistory[i].Mean}</td><td>" +
+                          $"{doubleBarHistory[i].Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
+                          $"</td><td>{doubleBarHistory[i].Max}</td></tr>");
             }
 
             sb.Append("</tbody>");
