@@ -141,7 +141,8 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.Role) 
+                || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
                 result.Append("<th scope='col'>Action</th></tr>");
 
             result.Append("</thead><tbody>");
@@ -176,13 +177,14 @@ namespace HSMServer.HtmlHelpers
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
-                    "<i class='fas fa-edit'></i></button>" +
+                    "<i class='fas fa-edit'></i></button>");
 
-                    $"<button id='delete_{product.Key}' style='margin-left: 5px' " +
-                    $"type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td>");
+                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+                    result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
+                        $"type='button' class='btn btn-secondary' title='delete'>" +
+                        $"<i class='fas fa-trash-alt'></i></button>");
 
-                result.Append("</tr>");
+                    result.Append("</tr>");
                 index++;
             }
 
@@ -217,8 +219,7 @@ namespace HSMServer.HtmlHelpers
 
             var usedUsers = usersRights.Select(ur => ur.Key)?.ToList();
             //create 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-                result.Append("<tr><th>0</th>" +
+            result.Append("<tr><th>0</th>" +
                     $"<th>{CreateUserSelect(usedUsers)}" +
                     $"<span style='display: none;' id='new_user_span'></th>" +
                     $"<th>{CreateProductRoleSelect()}</th>" +
@@ -239,8 +240,7 @@ namespace HSMServer.HtmlHelpers
                     $"<input id='userId_{userRight.Key.Username}' value='{userRight.Key.UserId}' style='display: none'/></td>" +
                     $"<td>{CreateProductRoleSelect(userRight.Key.Username, userRight.Value)}");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-                    result.Append($"<td><button style='margin-left: 5px' id='change_{userRight.Key.Username}' " +
+                result.Append($"<td><button style='margin-left: 5px' id='change_{userRight.Key.Username}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>" +
 
@@ -255,8 +255,6 @@ namespace HSMServer.HtmlHelpers
                     $"<button disabled style='margin-left: 5px' id='cancel_{userRight.Key.Username}' " +
                     $"type='button' class='btn btn-secondary' title='cancel'>" +
                     "<i class='fas fa-times'></i></button></td>");
-
-
 
                 result.Append("</tr>");
                 index++;
@@ -352,8 +350,7 @@ namespace HSMServer.HtmlHelpers
             result.Append("</thead><tbody>");
 
             //create 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-                result.Append("<tr><th>0</th>" +
+            result.Append("<tr><th>0</th>" +
                     $"<th><input id='createKeyName' type='text' class='form-control'/>" +
                     $"<span style='display: none;' id='new_key_span'></th>" +
                     $"<th>---</th>" +
@@ -374,8 +371,7 @@ namespace HSMServer.HtmlHelpers
                     $"<input id='keyName_{extraKey.ExtraProductKey}' value='{extraKey.ExtraKeyName}' style='display: none'/></td>" +
                     $"<td>{extraKey.ExtraProductKey}</td>");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
-                    result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
+                result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
                     $"type='button' class='btn btn-secondary' title='delete'>" +
                     $"<i class='fas fa-trash-alt'></i></button></td>");
 

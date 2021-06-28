@@ -6,6 +6,11 @@ namespace HSMServer
 {
     public static class ProductRoleHelper
     {
+        public static bool IsProductActionAllowed(List<KeyValuePair<string, ProductRoleEnum>> productsRights)
+        {
+            return productsRights.FirstOrDefault(x => x.Value == ProductRoleEnum.Manager).Key != null;
+        }
+
         public static bool IsAvailable(string productKey,
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
