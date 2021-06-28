@@ -28,6 +28,8 @@ namespace HSMServer.Authentication
 
         public User(User user)
         {
+            if (user == null) return;
+
             Id = user.Id;
             UserName = user.UserName;
             Password = user.Password;

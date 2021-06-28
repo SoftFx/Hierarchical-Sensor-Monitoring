@@ -34,7 +34,8 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>#</th>" +
                 "<th scope='col'>Username</th>" +
                 "<th scope='col'>Password</th>" +
-                "<th scope='col'>Role</th>");
+                "<th scope='col'>Role</th>" + 
+                "<th scope='col'>Action</th>");
 
             result.Append("<tbody>");
 
@@ -171,7 +172,8 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.ManagerName}</td>");
 
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+                if (UserRoleHelper.IsProductCRUDAllowed(user.Role) || 
+                    ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>" +

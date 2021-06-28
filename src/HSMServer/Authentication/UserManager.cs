@@ -84,6 +84,8 @@ namespace HSMServer.Authentication
             {
                 var existingUser = _users.First(x => x.Id.Equals(user.Id));
                 _users.Remove(existingUser);
+
+                _database.RemoveUser(existingUser);
             }
         }
 
