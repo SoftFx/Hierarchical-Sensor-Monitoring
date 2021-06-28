@@ -5,6 +5,8 @@
 
 @{ ViewData["Title"] = "Products " + Model.ProductName; }
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
@@ -52,6 +54,9 @@
         keyErrorSpan.textContent = keyErrorText.slice(0, keyErrorText.length - 5);
         keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
+
+    //copy buttons
+    var clipboard = new ClipboardJS('[id^="copy_"]');
 </script>
 
 

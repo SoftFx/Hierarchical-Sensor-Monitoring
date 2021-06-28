@@ -369,7 +369,10 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{extraKey.ExtraKeyName}" +
                     $"<input id='keyName_{extraKey.ExtraProductKey}' value='{extraKey.ExtraKeyName}' style='display: none'/></td>" +
-                    $"<td>{extraKey.ExtraProductKey}</td>");
+                    $"<td>{extraKey.ExtraProductKey} " +
+                    $"<button id='copy_{extraKey.ExtraProductKey}' data-clipboard-text='{extraKey.ExtraProductKey}' title='copy key' type='button' class='btn btn-secondary'>" +
+                    $"<i class='far fa-copy'></i></button>" +
+                    $"</td>");
 
                 result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
                     $"type='button' class='btn btn-secondary' title='delete'>" +
