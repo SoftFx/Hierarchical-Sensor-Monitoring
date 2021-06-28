@@ -173,13 +173,12 @@ namespace HSMServer.Products
                 return;
             }
 
+            currentProduct.ExtraKeys = new List<ExtraProductKey>();
             if (product.ExtraKeys != null && product.ExtraKeys.Any())
             {
-                currentProduct.ExtraKeys = new List<ExtraProductKey>();
                 currentProduct.ExtraKeys.AddRange(product.ExtraKeys);
             }
 
-            //currentProduct.ManagerId = product.ManagerId;
             Task.Run(() =>
             {
                 _database.RemoveProductInfo(currentProduct.Name);

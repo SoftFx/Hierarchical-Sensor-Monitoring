@@ -39,8 +39,12 @@ namespace HSMServer.HtmlHelpers
         {
             var user = claims as User;
 
-            return new HtmlString(TableHelper.CreateTable(model.ProductName,
-                user, model.UsersRights));
+            StringBuilder result = new StringBuilder();
+
+            result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
+            result.Append(TableHelper.CreateTable(model.ProductName, user, model.ExtraKeys));
+            
+            return new HtmlString(result.ToString());
         }
 
         public static string GetStatusHeaderColorClass(SensorStatus status)

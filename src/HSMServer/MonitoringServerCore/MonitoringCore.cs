@@ -565,7 +565,8 @@ namespace HSMServer.MonitoringServerCore
 
         public Product GetProduct(string productKey)
         {
-            return _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
+            return new Product(_productManager.Products.FirstOrDefault(
+                x => x.Key.Equals(productKey)));
         }
 
         public List<Product> GetProducts(User user)

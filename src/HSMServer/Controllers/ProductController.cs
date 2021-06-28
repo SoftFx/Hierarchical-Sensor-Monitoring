@@ -97,13 +97,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void AddExtraKeyToProduct([FromBody] ExtraKeyViewModel model)
+        public void AddExtraKey([FromBody] ExtraKeyViewModel model)
         {
             ExtraKeyValidator validator = new ExtraKeyValidator(_monitoringCore);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                TempData[TextConstants.TempDataKeyErrorText] = ValidatorHelper.GetErrorString(results.Errors);
                 return;
             }
 
@@ -121,13 +121,22 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void RemoveExtraKey([FromBody] ExtraKeyViewModel model)
+        {
+            Product product = _monitoringCore.GetProduct(model.ProductKey);
+            product.ExtraKeys.Remove(product.ExtraKeys.First(x => x.Key.Equals(model.ExtraProductKey)));
+
+            _monitoringCore.UpdateProduct(HttpContext.User as User, product);
+        }
+
+        [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
         {
             UserRightValidator validator = new UserRightValidator();
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                TempData[TextConstants.TempDataUserErrorText] = ValidatorHelper.GetErrorString(results.Errors);
                 return;
             }
 

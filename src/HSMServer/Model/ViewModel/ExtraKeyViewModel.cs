@@ -15,5 +15,7 @@ namespace HSMServer.Model.ViewModel
             ExtraKeyName = extraKey.Name;
             ProductKey = productKey;
         }
+
+        public ExtraKeyViewModel() { }
     }
 }
