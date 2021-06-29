@@ -10,11 +10,11 @@ namespace HSMCommon.Model.SensorsData
         public string Key { get; set; }
         public SensorType SensorType { get; set; }
         public DateTime Time { get; set; }
-        public string ShortValue { get; set; }
+        public string StringValue { get; set; }
         public SensorStatus Status { get; set; }
         public TransactionType TransactionType { get; set; }
         public string Description { get; set; }
-
+        public string ShortStringValue { get; set; }
         public SensorData Clone()
         {
             SensorData copy = new SensorData();
@@ -23,10 +23,11 @@ namespace HSMCommon.Model.SensorsData
             copy.Key = Key;
             copy.SensorType = SensorType;
             copy.Time = Time;
-            copy.ShortValue = ShortValue;
+            copy.StringValue = StringValue;
             copy.Status = Status;
             copy.TransactionType = TransactionType;
             copy.Description = Description;
+            copy.ShortStringValue = ShortStringValue;
             return copy;
         }
     }

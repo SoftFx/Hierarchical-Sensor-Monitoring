@@ -65,23 +65,24 @@ namespace HSMServer.HtmlHelpers
                     if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
                     {
                         //header
-                        string fileName = GetFileNameString(sensor.Value);
+                        string fileName = GetFileNameString(sensor.StringValue);
 
                         //button
                         result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
                                   "<div>" +
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
-                                  $"<div class='col'>{sensor.Value}</div></div></div></button></h2>");
+                                  $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                         //body
                         result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
                                   "<div class='accordion-body'>");
 
                         result.Append("<div class='container'>" +
-                                  $"<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
-                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name} Time: {GetTime(time)}</div>" +
-                                  $"<div class='col'>{sensor.Value}</div></div></div>" +
+                                  $"<div class='row'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
+                                  $"<div class='col-md-auto time-ago-div'>updated {GetTimeAgo(time)}</div><div class='w-100'></div>" +
+                                  $"<div class='col'>{sensor.ShortStringValue}</div></div></div>" +
                                       "<div class='row'><div class='col-2'>" +
                                       $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
                                       "class='button-view-file-sensor btn btn-secondary' title='View'>" +
@@ -99,11 +100,12 @@ namespace HSMServer.HtmlHelpers
 
                     result.Append($"<button id='{formattedPath}_{name}_{(int)sensor.SensorType}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  "<div>" +
-                                  "<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                                  //"<div>" +
+                                  "<div class='row'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
                                   $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
-                                  $"{sensor.Name} Time: {GetTime(time)}</div>" +
-                                  $"<div class='col'>{sensor.Value}</div></div></div></button></h2>");
+                                  $"{sensor.Name}</div>" +
+                                  $"<div class='col-md-auto time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div><div class='w-100'></div>" +
+                                  $"<div class='col'>{sensor.ShortStringValue}</div></div></button></h2>");
 
                     result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
@@ -132,18 +134,35 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string GetTime(TimeSpan time)
+        private static string GetTimeAgo(TimeSpan time)
         {
             if (time.TotalDays > 30)
-                return "more then a month ago";
+                return "> a month ago";
 
             if (time.TotalDays > 0)
-                return $"{time:%d} day(s) {time:%h} hours {time:%m} minutes";
+                //return $"{time:%d} day(s) {time:%h} hours {time:%m} minutes";
+                return $"> {UnitsToString(time.TotalDays, "day")} ago";
+
+            if (time.TotalHours > 0)
+            {
+                return $"> {UnitsToString(time.TotalHours, "hour")} ago";
+            }
+
+            if (time.TotalMinutes > 0)
+            {
+                return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
+            }
 
             if (time.TotalSeconds < 60)
-                return $"less then a minute";
+                return "< 1 minute ago";
 
             return "no info";
+        }
+
+        private static string UnitsToString(double value, string unit)
+        {
+            int intValue = Convert.ToInt32(value);
+            return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
         private static string GetNavTabsForHistory(string formattedPath, string name)

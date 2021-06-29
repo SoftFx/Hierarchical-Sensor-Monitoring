@@ -171,7 +171,7 @@ namespace HSMServer.Services
             SensorUpdateMessage result = new SensorUpdateMessage();
             result.Status = Convert(data.Status);
             result.Time = Timestamp.FromDateTime(data.Time.ToUniversalTime());
-            result.ShortValue = data.ShortValue;
+            result.ShortValue = data.StringValue;
             result.Product = data.Product;
             result.ObjectType = Convert(data.SensorType);
             result.Path = data.Path;

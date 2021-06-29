@@ -8,21 +8,19 @@ namespace HSMServer.Model.ViewModel
     {
         //ToDo: add path
         public string Name { get; set; }
-
-        public string Value { get; set; }
-
+        public string StringValue { get; set; }
         public SensorType SensorType { get; set; }
-
         public SensorStatus Status { get; set; }
         public string Description { get; set; }
         public DateTime Time { get; set; }
-
+        public string ShortStringValue { get; set; }
         public SensorViewModel(string name, SensorData sensor)
         {
             Name = name;
             SensorType = sensor.SensorType;
             Status = sensor.Status;
-            Value = sensor.ShortValue;
+            StringValue = sensor.StringValue;
+            ShortStringValue = sensor.ShortStringValue;
             Description = sensor.Description;
             Time = sensor.Time;
         }
@@ -30,7 +28,8 @@ namespace HSMServer.Model.ViewModel
         public void Update(SensorData sensorData)
         {
             Status = sensorData.Status;
-            Value = sensorData.ShortValue;
+            StringValue = sensorData.StringValue;
+            ShortStringValue = sensorData.ShortStringValue;
             Description = sensorData.Description;
             Time = sensorData.Time;
         }
@@ -38,7 +37,8 @@ namespace HSMServer.Model.ViewModel
         public void Update(SensorViewModel viewModel)
         {
             Status = viewModel.Status;
-            Value = viewModel.Value;
+            StringValue = viewModel.StringValue;
+            ShortStringValue = viewModel.ShortStringValue;
             Description = viewModel.Description;
             Time = viewModel.Time;
         }
