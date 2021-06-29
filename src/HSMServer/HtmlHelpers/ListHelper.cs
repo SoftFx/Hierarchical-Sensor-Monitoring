@@ -70,7 +70,7 @@ namespace HSMServer.HtmlHelpers
                         //button
                         result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  "<div class='container'>" +
+                                  "<div>" +
                                   $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.Value}</div></div></div></button></h2>");
                         //body
@@ -99,7 +99,7 @@ namespace HSMServer.HtmlHelpers
 
                     result.Append($"<button id='{formattedPath}_{name}_{(int)sensor.SensorType}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  "<div class='container'>" +
+                                  "<div>" +
                                   "<div class='row row-cols-1'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
                                   $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
                                   $"{sensor.Name} Time: {GetTime(time)}</div>" +
