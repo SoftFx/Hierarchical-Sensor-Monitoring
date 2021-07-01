@@ -9,7 +9,7 @@ using NLog;
 
 namespace HSMServer.MonitoringServerCore
 {
-    public class MonitoringQueueManager : IMonitoringQueueManager, IDisposable
+    internal class MonitoringQueueManager : IMonitoringQueueManager, IDisposable
     {
         #region IDisposable implementation
 
@@ -65,10 +65,8 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
-        //private readonly Dictionary<UserSensorKey, HistoryMonitoringQueue> _historySessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        //private readonly object _historyAccessLock = new object();
         public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
@@ -77,11 +75,6 @@ namespace HSMServer.MonitoringServerCore
                 _currentSessions = new Dictionary<User, ClientMonitoringQueue>();
             }
             
-            //lock (_historyAccessLock)
-            //{
-            //    _historySessions = new Dictionary<UserSensorKey, HistoryMonitoringQueue>(new UserSensorKey.EqualityComparer());
-            //}
-
             _logger.Info("Monitoring queue manager initialized");
         }
 
@@ -163,11 +156,6 @@ namespace HSMServer.MonitoringServerCore
                     _currentSessions.Remove(user);
                 }
             }
-             
-            //if (user.UserName == CommonConstants.DefaultClientUserName)
-            //{
-            //    ThreadPool.QueueUserWorkItem(_ => DatabaseClass.Instance.PutFirstLoginInfo(_firstLoginInfo));
-            //}
         }
 
         public List<SensorData> GetUserUpdates(User user)
@@ -189,12 +177,11 @@ namespace HSMServer.MonitoringServerCore
             {
                 foreach (var pair in _currentSessions)
                 {
-                    //Use for test environment only, uncomment later
-                    //if (pair.Key.IsSensorAvailable(message.Product, message.Name))
-                    //{
-                    //    pair.Value.AddUpdate(message);
-                    //}
-                    pair.Value.AddUpdate(message);
+                    if (UserRoleHelper.IsAllSensorsAllowed(pair.Key.Role))
+                        pair.Value.AddUpdate(message);
+
+                    else if (pair.Key.IsSensorAvailable(message.Key))
+                        pair.Value.AddUpdate(message);
                 }
             }
         }
@@ -205,48 +192,7 @@ namespace HSMServer.MonitoringServerCore
         }
 
         #endregion
-
-        #region Sensor history queue
-
-        //public bool ISensorHistoryStarted(User user, string productName, string path)
-        //{
-        //    bool isRegistered;
-        //    lock (_historyAccessLock)
-        //    {
-        //        isRegistered = _historySessions.ContainsKey(new UserSensorKey(user.UserName, productName, path));
-        //    }
-
-        //    return isRegistered;
-        //}
-
-        //public void StartSensorHistory(User user, string productName, string path)
-        //{
-        //    HistoryMonitoringQueue queue = new HistoryMonitoringQueue();
-        //    lock (_historyAccessLock)
-        //    {
-        //        _historySessions[new UserSensorKey(user.UserName, productName, path)] = queue;
-        //    }
-        //}
-
-        //public List<SensorHistoryMessage> GetHistoryUpdates(User user, string productName, string path, int n)
-        //{
-        //    var queue = GetHistoryQueue(user, productName, path);
-        //    return queue.GetHistoryMessages(n);
-        //}
-
-        #endregion
-
-        //private HistoryMonitoringQueue GetHistoryQueue(User user, string productName, string path)
-        //{
-        //    UserSensorKey key = new UserSensorKey(user.UserName, productName, path);
-        //    HistoryMonitoringQueue res;
-        //    lock (_historyAccessLock)
-        //    {
-        //        _historySessions.TryGetValue(key, out res);
-        //    }
-
-        //    return res;
-        //}
+        
         private ClientMonitoringQueue GetUserQueue(User user)
         {
             lock (_accessLock)

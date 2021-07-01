@@ -1,0 +1,157 @@
+﻿@using HSMServer.Model.ViewModel
+@using HSMServer.Constants
+@using HSMServer.HtmlHelpers
+@model List<UserViewModel>
+
+@{ ViewData["Title"] = "Users"; }
+
+
+<script>
+    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
+    var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveUserAction, ViewConstants.AccountController))";
+    var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
+</script>
+
+<div class="container row justify-content-center">
+    @if (TempData[TextConstants.TempDataErrorText] != null)
+    {
+        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+    }
+
+    @ViewHelper.CreateUserList(Context.User, Model)
+</div>
+
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove user</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function createData(userName, password, role, products) {
+        return { "Username": userName, "Password": password, "Role": Number(role), "ProductKeys": products }
+    }
+
+    //fix checked attribut
+    $('[id^=createCheck_]').on('click', function () {
+        if (this.checked)
+            this.setAttribute("checked", "checked");
+        else this.removeAttribute("checked");
+    });
+
+    //create action
+    $('#createButton').on('click', function () {
+        username = $('#createName').val();
+        password = $('#createPassword').val();
+        role = $('#createRole').val();
+
+        products = []
+        $('[id^=createCheck_]').each(function () {
+            if ($(this).is(":checked"))
+                products.push(`${$(this).val()}`);
+        });
+
+        var data = createData(username, password, role, products);
+        console.log(data);
+        $.ajax({
+            type: 'POST',
+            url: createAction,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (result) {
+            window.location.href = "Users"; //AccountController -> Users
+        })
+    });
+
+    //delete action
+    $('[id^=delete_]').on('click', function () {
+        username = this.id.substring('delete_'.length, this.id.length);
+        //console.log(username);
+
+        $('#modalDeleteBody').empty();
+        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user?');
+
+        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        modal.show();
+
+        //modal confirm
+        $('#confirmDeleteButton').on('click', function () {
+            modal.hide();
+
+            $.ajax({//AccountController -> RemoveUser
+                type: 'GET',
+                url: deleteAction + "?Username=" + username,
+                cache: false,
+                async: true,
+                success: function () {
+                    window.location.href = "Users"; //AccountController -> Users
+                }
+            });
+        });
+
+        //modal close
+        $('#closeDeleteButton').on('click', function () {
+            modal.hide();
+        });
+    });
+
+    //change action
+    $('[id^=change_]').on('click', function () {
+        username = this.id.substring('change_'.length, this.id.length);
+
+        $('[id^=role_]').attr('disabled', true);
+        $('[id^=ok_]').attr('disabled', true);
+        $('[id^=cancel_]').attr('disabled', true);
+        $('[id^=check' + username + '_]').attr('disabled', true);
+
+        $('#role_' + username).removeAttr("disabled");
+        $('#ok_' + username).removeAttr("disabled");
+        $('#cancel_' + username).removeAttr("disabled");
+        $('[id^=check' + username + '_]').removeAttr("disabled");
+        //$('#accordionButton_' + username).click();
+
+    });
+
+    $('[id^=cancel_]').on('click', function() {
+        window.location.href = "Users";
+    });
+
+    $('[id^=ok_]').on('click', function () {
+        username = this.id.substring('ok_'.length, this.id.length);
+        role = $('#role_' + username).val();
+
+        products = []
+        $('[id^=check' + username + '_]').each(function () {
+            if ($(this).is(":checked"))
+                products.push(`${$(this).val()}`);
+        });
+
+        var data = createData(username, null, role, products);
+        $.ajax({
+            type: 'POST',
+            url: updateAction,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (result) {
+            window.location.href = "Users"; //AccountController -> Users
+        })
+    });
+
+</script>

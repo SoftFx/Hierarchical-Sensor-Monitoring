@@ -5,7 +5,7 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Model.SensorDialog;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
-using LiveCharts.Defaults;
+//using LiveCharts.Defaults;
 using OxyPlot.Series;
 
 namespace HSMClient.Dialog
@@ -13,14 +13,14 @@ namespace HSMClient.Dialog
     public abstract class ClientBarSensorModel : ClientDialogTimerModel, IBarSensorModel
     {
         private Collection<BoxPlotItem> _items;
-        private Collection<OhlcPoint> _points;
+        //private Collection<OhlcPoint> _points;
         private Collection<string> _labels;
         private Collection<DefaultSensorModel> _defaultList;
 
         protected ClientBarSensorModel(ISensorHistoryConnector connector, MonitoringSensorViewModel sensor) : base(connector, sensor)
         {
             Items = new Collection<BoxPlotItem>();
-            Points = new Collection<OhlcPoint>();
+            //Points = new Collection<OhlcPoint>();
             Labels = new Collection<string>();
             Count = 5;
             Title = _path;
@@ -48,15 +48,15 @@ namespace HSMClient.Dialog
             }
         }
 
-        public Collection<OhlcPoint> Points
-        {
-            get => _points;
-            set
-            {
-                _points = value;
-                OnPropertyChanged(nameof(Points));
-            }
-        }
+        //public Collection<OhlcPoint> Points
+        //{
+        //    get => _points;
+        //    set
+        //    {
+        //        _points = value;
+        //        OnPropertyChanged(nameof(Points));
+        //    }
+        //}
 
         public Collection<string> Labels
         {

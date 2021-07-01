@@ -20,7 +20,6 @@ namespace HSMDataCollector.Base
         public abstract CommonSensorValue GetLastValue();
         public abstract void Dispose();
 
-        protected abstract byte[] GetBytesData(SensorValueBase data);
         protected abstract string GetStringData(SensorValueBase data);
         protected void SendData(CommonSensorValue value)
         {

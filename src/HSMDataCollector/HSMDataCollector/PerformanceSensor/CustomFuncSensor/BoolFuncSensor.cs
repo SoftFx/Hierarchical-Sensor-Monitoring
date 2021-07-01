@@ -11,12 +11,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
         public BoolFuncSensor(Func<bool> function, string path, string productKey, IValuesQueue queue, int timeout = 15000) : base(function, path, productKey, queue, timeout)
         {
         }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
-        }
-
+        
         protected override string GetStringData(SensorValueBase data)
         {
             throw new NotImplementedException();

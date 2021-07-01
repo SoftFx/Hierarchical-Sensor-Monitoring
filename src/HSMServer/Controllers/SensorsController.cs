@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Mime;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -21,17 +20,17 @@ namespace HSMServer.Controllers
     [ApiController]
     public class SensorsController : ControllerBase
     {
-        private readonly Logger _logger;
+        private readonly ILogger<SensorsController> _logger;
         private readonly IMonitoringCore _monitoringCore;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="monitoringCore"></param>
-        public SensorsController(IMonitoringCore monitoringCore)
+        public SensorsController(IMonitoringCore monitoringCore, ILogger<SensorsController> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _monitoringCore = monitoringCore;
-            _logger.Info("Sensors controller started");
+            _logger.LogInformation("Sensors controller started");
         }
 
         /// <summary>
@@ -52,7 +51,7 @@ namespace HSMServer.Controllers
         //    }
         //    catch (Exception e)
         //    {
-        //        _logger.Error(e, "Failed to put data!");
+        //        _logger.LogError(e, "Failed to put data!");
         //        return BadRequest(sensorValue);
         //    }
         //}
@@ -70,7 +69,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -93,7 +92,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -116,7 +115,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -139,7 +138,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -162,7 +161,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -185,7 +184,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
@@ -209,11 +208,35 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to put data!");
+                _logger.LogError(e, "Failed to put data!");
                 return BadRequest(sensorValue);
             }
         }
 
+        /// <summary>
+        /// Receives the value of file sensor, where the file contents are presented as byte array.
+        /// Recommended to use for pdf files in order to keep the pdf file encoding.
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("fileBytes")]
+        [RequestSizeLimit(41943040)]//make limit up to 40 MB
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<FileSensorBytesValue> Post([FromBody] FileSensorBytesValue sensorValue)
+        {
+            try
+            {
+                _monitoringCore.AddSensorValue(sensorValue);
+                return Ok(sensorValue);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
         /// <summary>
         /// Endpoint used by HSMDataCollector services, which sends data in portions
         /// </summary>
@@ -234,7 +257,7 @@ namespace HSMServer.Controllers
                 }
                 catch (Exception e)
                 {
-                    _logger.Error(e, "Failed to put data");
+                    _logger.LogError(e, "Failed to put data");
                     return BadRequest(values);
                 }
             }
@@ -250,7 +273,7 @@ namespace HSMServer.Controllers
         //    }
         //    catch (Exception e)
         //    {
-        //        _logger.Error(e, "Failed to add new sensor!");
+        //        _logger.LogError(e, "Failed to add new sensor!");
         //        return e.Message.ToString();
         //    }
         //}

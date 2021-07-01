@@ -62,22 +62,5 @@ namespace HSMDataCollector.InstantValue
                 return string.Empty;
             }
         }
-        
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                BoolSensorValue typedData = (BoolSensorValue)data;
-                //string convertedString = JsonSerializer.Serialize(typedData);
-                string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
-        }
     }
 }

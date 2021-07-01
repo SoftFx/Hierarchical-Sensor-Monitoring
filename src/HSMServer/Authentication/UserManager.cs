@@ -4,54 +4,299 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Xml;
 using HSMCommon;
 using HSMServer.Configuration;
-using NLog;
+using HSMServer.DataLayer;
+using HSMServer.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Authentication
 {
-    public class UserManager
+    public class UserManager : IUserManager
     {
         #region Private fields
 
         private readonly List<User> _users;
-        private readonly Logger _logger;
+        private readonly ILogger<UserManager> _logger;
         private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(60);
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
+        private readonly IDatabaseClass _database;
         private readonly string _usersFileName = "users.xml";
         private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager)
+        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass, ILogger<UserManager> logger)
         {
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = logger;
             _certificateManager = certificateManager;
             _users = new List<User>();
-            _usersFilePath = Path.Combine(Config.ConfigFolderPath, _usersFileName);
-            if (!File.Exists(_usersFilePath))
+            _database = databaseClass;
+            _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
+            List<User> dataBaseUsers = ReadUserFromDatabase();
+            if (File.Exists(_usersFilePath))
             {
-                _logger.Info("First launch, users file does not exist");
-                AddDefaultUser();
+                Thread.Sleep(300); 
+                MigrateUsersToDatabase();
+                File.Delete(_usersFilePath);
+                _logger.LogInformation("Users file deleted");
             }
-            //else
-            //{
-            //    CheckUsersUpToDate();
-            //}
-            
-            _logger.Info("UserManager initialized");
+
+            int count = dataBaseUsers.Count;
+            lock (_accessLock)
+            {
+                count += _users.Count;
+            }
+
+            if (count == 0)
+            {
+                AddDefaultUser();
+                _logger.LogInformation("Default user added");
+            }
+
+            CheckUsersUpToDate();
+
+            _logger.LogInformation("UserManager initialized");
         }
 
+        #region Interface implementation
+
+        public User GetUserByCertificateThumbprint(string thumbprint)
+        {
+            CheckUsersUpToDate();
+            User user = null;
+            lock (_accessLock)
+            {
+                user = _users.FirstOrDefault(u => u.CertificateThumbprint != null 
+                    && u.CertificateThumbprint.Equals(thumbprint, StringComparison.InvariantCultureIgnoreCase));
+            }
+
+            return user;
+        }
+
+        public void RemoveUser(User user)
+        {
+            lock (_accessLock)
+            {
+                var existingUser = _users.First(x => x.Id.Equals(user.Id));
+                _users.Remove(existingUser);
+
+                _database.RemoveUser(existingUser);
+            }
+        }
+
+        public void RemoveUser(string userName)
+        {
+            User correspondingUser = default(User);
+            lock (_accessLock)
+            {
+                correspondingUser = _users.FirstOrDefault(u => u.UserName == userName);
+            }
+
+            if (correspondingUser != null)
+            {
+                RemoveUser(correspondingUser);
+            }
+        }
+
+        public List<User> GetUsersPage(int page = 1, int pageSize = 1)
+        {
+            if (page < 1 || pageSize < 1)
+                return new List<User>();
+            
+            return _database.ReadUsersPage(page, pageSize);
+        }
+
+        public void AddUser(User user)
+        {
+            lock (_accessLock)
+            {
+                _users.Add(user);
+            }
+
+            Task.Run(() => _database.AddUser(user));
+        }
+        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
+            List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
+        {
+            User user = new User
+            {
+                CertificateThumbprint = certificateThumbprint,
+                UserName = userName,
+                CertificateFileName = certificateFileName,
+                Password = passwordHash,
+                Role = role,
+                Id = Guid.NewGuid()
+            };
+
+            if (productRoles != null && productRoles.Any())
+            {
+                user.ProductsRoles = productRoles;
+            }
+
+            AddUser(user);
+        }
+
+        public List<User> Users
+        {
+            get
+            {
+                CheckUsersUpToDate();
+                List<User> users = new List<User>();
+                lock (_accessLock)
+                {
+                    users.AddRange(_users);
+                }
+
+                return users;
+            }
+        }
+        public User GetUser(Guid id)
+        {
+            User result = default(User);
+            lock (_accessLock)
+            {
+                result = _users.FirstOrDefault(u => u.Id == id);
+            }
+            return new User(result);
+        }
+
+        public User GetUserByUserName(string username)
+        {
+            User result = default(User);
+            lock (_accessLock)
+            {
+                result = _users.FirstOrDefault(u => u.UserName == username);
+            }
+
+            return result == null ? result : new User(result);
+        }
+
+        public List<User> GetViewers(string productKey)
+        {
+            if (_users == null || !_users.Any()) return null;
+
+            List<User> result = new List<User>();
+            foreach (var user in _users)
+            {
+                var pair = user.ProductsRoles?.FirstOrDefault(x => x.Key.Equals(productKey));
+                if (pair.Value.Key != null)
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetManagers(string productKey)
+        {
+            if (_users == null || !_users.Any()) return null;
+
+            List<User> result = new List<User>();
+            foreach (var user in _users)
+            {
+                if (ProductRoleHelper.IsManager(productKey, user.ProductsRoles))
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetUsersNotAdmin()
+        {
+            if (_users == null || !_users.Any()) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (user.Role == UserRoleEnum.SystemAdmin) continue;
+                result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetAllViewers(string productKey)
+        {
+            if (_users == null || _users.Count == 0) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (ProductRoleHelper.IsViewer(productKey, user.ProductsRoles))
+                    result.Add(user);
+            }
+
+            return result;
+        }
+
+        public List<User> GetAllManagers()
+        {
+            if (_users == null || _users.Count == 0) return null;
+
+            List<User> result = new List<User>();
+            foreach(var user in _users)
+            {
+                if (user.Role == UserRoleEnum.SystemAdmin) continue;
+                result.Add(user);
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        private void CheckUsersUpToDate()
+        {
+            if (DateTime.Now - _lastUsersUpdate <= _usersUpdateTimeSpan)
+                return;
+
+            int count = -1;
+            lock (_accessLock)
+            {
+                _users.Clear();
+                //_users.AddRange(ParseUsersFile());
+                _users.AddRange(ReadUserFromDatabase());
+                _lastUsersUpdate = DateTime.Now;
+                count = _users.Count;
+            }
+
+            _logger.LogInformation($"Users read, users count = {count}");
+        }
         private void AddDefaultUser()
         {
-            AddNewUser(CommonConstants.DefaultClientUserName,
+            AddUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
-                CommonConstants.DefaultClientCrtCertificateName);
+                CommonConstants.DefaultClientCrtCertificateName,
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), UserRoleEnum.SystemAdmin);
         }
 
+        private List<User> ReadUserFromDatabase()
+        {
+            return _database.ReadUsers();
+        }
+
+        private void MigrateUsersToDatabase()
+        {
+            List<User> usersFromFile = ParseUsersFile();
+            foreach (var user in usersFromFile)
+            {
+                if (string.IsNullOrEmpty(user.Password))
+                {
+                    AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, HashComputer.ComputePasswordHash(user.UserName),
+                        user.Role);
+                }
+            }
+
+            _logger.LogInformation($"{usersFromFile.Count} successfully migrated from file to database");
+        }
+
+        #region File work
+
+        [Obsolete]
         private List<User> ParseUsersFile()
         {
             List<User> users = new List<User>();
@@ -76,25 +321,25 @@ namespace HSMServer.Authentication
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to parse users file!");
+                _logger.LogError(e, "Failed to parse users file!");
             }
 
             return users;
         }
-
+        [Obsolete]
         private void CreateDefaultUsersFile()
         {
             User defaultUser = new User()
             {
-                CertificateFileName = "default.client.crt", 
+                CertificateFileName = "default.client.crt",
                 CertificateThumbprint = CommonConstants.DefaultClientCertificateThumbprint,
                 UserName = "default.client"
             };
-            string content = GetUsersXml(new List<User>() {defaultUser});
+            string content = GetUsersXml(new List<User>() { defaultUser });
             FileManager.SafeCreateFile(_usersFilePath);
             FileManager.SafeWriteText(_usersFilePath, content);
         }
-
+        [Obsolete]
         private User ParseUserNode(XmlNode node)
         {
             User user = new User();
@@ -128,11 +373,6 @@ namespace HSMServer.Authentication
                     //{
                     //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
                     //}
-
-                    if (!string.IsNullOrEmpty(permissionItem.ProductName))
-                    {
-                        user.UserPermissions.Add(permissionItem);
-                    }
                 }
             }
 
@@ -140,62 +380,7 @@ namespace HSMServer.Authentication
             return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
         }
 
-        private void CheckUsersUpToDate()
-        {
-            if (DateTime.Now - _lastUsersUpdate <= _usersUpdateTimeSpan) 
-                return;
-
-            int count = -1;
-            lock (_accessLock)
-            {
-                _users.Clear();
-                _users.AddRange(ParseUsersFile());
-                _lastUsersUpdate = DateTime.Now;
-                count = _users.Count;
-            }
-
-            _logger.Info($"Users read, users count = {count}");
-        }
-
-        public List<PermissionItem> GetUserPermissions(string userName)
-        {
-            CheckUsersUpToDate();
-            User correspondingUser = null;
-            lock (_accessLock)
-            {
-                correspondingUser = _users.FirstOrDefault(u => u.UserName == userName);
-            }
-
-            return correspondingUser != null ? correspondingUser.UserPermissions : new List<PermissionItem>();
-        }
-
-        public User GetUserByCertificateThumbprint(string thumbprint)
-        {
-            CheckUsersUpToDate();
-            User user = null;
-            lock (_accessLock)
-            {
-                user = _users.FirstOrDefault(u => u.CertificateThumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return user;
-        }
-
-        public void AddNewUser(string userName, string certificateThumbprint, string certificateFileName)
-        {
-            User user = new User
-            {
-                CertificateThumbprint = certificateThumbprint, UserName = userName,
-                CertificateFileName = certificateFileName
-            };
-            lock (_accessLock)
-            {
-                _users.Add(user);
-            }
-
-            ThreadPool.QueueUserWorkItem(_ => SaveUsers());
-        }
-
+        [Obsolete]
         private void SaveUsers()
         {
             try
@@ -214,10 +399,10 @@ namespace HSMServer.Authentication
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to save users file!");   
+                _logger.LogError(e, "Failed to save users file!");
             }
         }
-
+        [Obsolete]
         private string GetUsersXml(List<User> users)
         {
             XmlDocument document = new XmlDocument();
@@ -239,7 +424,7 @@ namespace HSMServer.Authentication
 
             return sb.ToString();
         }
-
+        [Obsolete]
         private XmlElement UserToXml(XmlDocument document, User user)
         {
             XmlElement rootElement = document.CreateElement("user");
@@ -260,7 +445,7 @@ namespace HSMServer.Authentication
 
             return rootElement;
         }
-
+        [Obsolete]
         private XmlElement UserPermissionsToXml(XmlDocument document, List<PermissionItem> items)
         {
             XmlElement productsElement = document.CreateElement("products");
@@ -276,6 +461,28 @@ namespace HSMServer.Authentication
             }
 
             return productsElement;
+        }
+        #endregion
+
+        public User Authenticate(string login, string password)
+        {
+            var passwordHash = HashComputer.ComputePasswordHash(password);
+            var existingUser = Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
+            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
+
+            return existingUser?.WithoutPassword();
+        }
+
+        public void UpdateUser(User user)
+        {
+            User existingUser = GetUserByUserName(user.UserName);
+
+            if (existingUser != null)
+            {
+                RemoveUser(existingUser);
+            }
+
+            AddUser(user);
         }
     }
 }

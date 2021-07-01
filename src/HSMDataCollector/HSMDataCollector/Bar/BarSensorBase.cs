@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
-using HSMDataCollector.Base;
+﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 namespace HSMDataCollector.Bar
 {
@@ -37,7 +37,7 @@ namespace HSMDataCollector.Bar
         {
             RestartInternal(barPeriod, smallPeriod);
         }
-        public void RestartInternal(int barTimerPeriod, int smallTimerPeriod)
+        private void RestartInternal(int barTimerPeriod, int smallTimerPeriod)
         {
             if (_barTimerPeriod != barTimerPeriod || _smallTimerPeriod != smallTimerPeriod)
             {
@@ -48,8 +48,8 @@ namespace HSMDataCollector.Bar
         }
         private void StartTimer(int barTimePeriod, int smallTimerPeriod)
         {
-            _barTimer?.Dispose();
-            _smallTimer?.Dispose();
+            Stop();
+
             _smallTimer = new Timer(SmallTimerTick, null, TimeSpan.FromMilliseconds(smallTimerPeriod), TimeSpan.FromMilliseconds(smallTimerPeriod));
 
             _barTimer = new Timer(SendDataTimer, null, GetSpanUntilFirstTick(barTimePeriod), TimeSpan.FromMilliseconds(barTimePeriod));
@@ -101,6 +101,9 @@ namespace HSMDataCollector.Bar
 
         protected double GetPercentile(List<double> values, double percent)
         {
+            if (!values.Any())
+                return 0.0;
+
             double position = (values.Count + 1) * percent / 100;
             double leftNumber = 0.0d;
             double rightNumber = 0.0d;
@@ -126,6 +129,9 @@ namespace HSMDataCollector.Bar
 
         protected int GetPercentile(List<int> values, double percent)
         {
+            if (!values.Any())
+                return 0;
+
             var count = values.Count;
             int index = (int)Math.Floor(count * percent);
             return values[index];

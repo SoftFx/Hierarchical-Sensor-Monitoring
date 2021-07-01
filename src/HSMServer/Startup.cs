@@ -1,19 +1,26 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
 using HSMServer.DataLayer;
 using HSMServer.Middleware;
 using HSMServer.MonitoringServerCore;
 using HSMServer.Products;
+using HSMServer.SignalR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
+using System;
+using System.IO;
+using System.Linq;
+using HSMServer.Services;
+using HSMServer.Model.ViewModel;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
+using FluentValidation.AspNetCore;
+using HSMServer.Cache;
 
 namespace HSMServer
 {
@@ -21,15 +28,12 @@ namespace HSMServer
     {
         private IServiceCollection services;
         public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = "CertificateValidationScheme";
-
-                options.DefaultForbidScheme = "CertificateValidationScheme";
-
-                options.AddScheme<CertificateSchemeHandler>("CertificateValidationScheme", "CertificateValidationScheme");
-            });
+        { 
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options =>
+                {
+                    options.LoginPath = new PathString("/Account/Index");
+                });
 
             services.AddHsts(options =>
             {
@@ -38,6 +42,7 @@ namespace HSMServer
                 options.MaxAge = TimeSpan.FromDays(365);
             });
 
+            services.AddMvc().AddFluentValidation();
 
             services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
             {
@@ -46,22 +51,29 @@ namespace HSMServer
                 options.EnableDetailedErrors = true;
             });
             services.AddControllers();
+            services.AddControllersWithViews();
 
-            services.AddCors();
+            services.AddSignalR(hubOptions =>
+            {
+                hubOptions.EnableDetailedErrors = true;
+            });
 
-            //services.AddSingleton<IDatabaseClass, DatabaseClass>();
             services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
+            services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
-            services.AddSingleton<UserManager>();
+            services.AddSingleton<IUserManager, UserManager>();
+            services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
+            services.AddSingleton<ITreeViewManager, TreeViewManager>();
+            services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
+            services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
             services.AddSingleton<ClientCertificateValidator>();
             services.AddSingleton<IUpdateService, UpdateServiceCore>();
             services.AddSingleton<Services.HSMService>();
-            services.AddSingleton<Services.AdminService>();
-            //services.AddSingleton<SensorsController>();
-            //services.AddSingleton<ValuesController>();
+            services.AddSingleton<AdminService>();
+            services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
@@ -85,8 +97,9 @@ namespace HSMServer
             lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
             app.UseCertificateValidator();
-            app.UseTokenAuth();
 
+
+            app.UseAuthentication();
             app.UseSwagger(c =>
             {
                 //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";
@@ -104,27 +117,38 @@ namespace HSMServer
                 app.UseDeveloperExceptionPage();
             }
 
+            app.UseStaticFiles();
             app.UseRouting();
-
+            app.UseCors();
+            app.UseAuthorization();
+            app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGrpcService<Services.HSMService>();
                 endpoints.MapGrpcService<Services.AdminService>();
-              
-                endpoints.MapGet("/Protos/sensors_service.proto", async context =>
-                {
-                    await context.Response.WriteAsync(
-                        await System.IO.File.ReadAllTextAsync("Protos/sensors_service.proto"));
-                });
+
+                endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
+                    {
+                        options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages
+                    });
 
                 endpoints.MapControllers();
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}"
+                );
+                endpoints.MapControllerRoute(
+                    name: "Account",
+                    pattern: "{controller=Account}/{action=Index}",
+                    defaults: new { controller = "Account", action = "Index" }
+                );
+                endpoints.MapControllerRoute(
+                    name: "Home",
+                    pattern: "{controller=Home}/{action=Index}"
+                );
             });
 
-            
-
             app.UseHttpsRedirection();
-
-            //app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         }
 
         public void OnShutdown(object state)

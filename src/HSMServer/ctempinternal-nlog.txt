@@ -485,3 +485,8 @@
    --- End of inner exception stack trace ---
 2021-04-06 13:56:58.3383 Info Validating config: TargetNames=allfile, ConfigItems=41, FilePath=/mnt/d/HSM/HSMServer/bin/Debug/netcoreapp3.1/nlog.config
 2021-04-06 13:56:58.3465 Warn Unused target detected. Add a rule for this target to the configuration. TargetName: errorfile
+2021-05-12 12:10:22.5967 Info Message Template Auto Format enabled
+2021-05-12 12:10:22.6373 Info Loading assembly: NLog.Web.AspNetCore
+2021-05-12 12:10:22.6891 Info Adding target FileTarget(Name=errorfile)
+2021-05-12 12:10:22.6993 Info Adding target FileTarget(Name=allfile)
+2021-05-12 12:10:22.7807 Info Validating config: TargetNames=allfile, errorfile, ConfigItems=59, FilePath=/mnt/d/HSM/src/HSMServer/bin/Debug/netcoreapp3.1/nlog.config

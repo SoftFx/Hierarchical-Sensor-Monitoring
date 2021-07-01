@@ -10,5 +10,7 @@
         public const string PRODUCT_INFO_PREFIX = "ProductInfo";
         public const string FIRST_LOGIN_PREFIX = "FirstLogin";
         public const string USER_INFO_PREFIX = "UserInfo";
+        public const string CONFIGURATION_OBJECT_PREFIX = "ConfigurationObject";
+        //public const string 
     }
 }

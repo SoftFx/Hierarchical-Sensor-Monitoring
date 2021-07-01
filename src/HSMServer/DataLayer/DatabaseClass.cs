@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
-using HSMCommon.Extensions;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using LightningDB;
 using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
+using HSMServer.Extensions;
 using NLog;
 
 namespace HSMServer.DataLayer
 {
     [Obsolete("02.04.2021 Use LevelDB database.")]
-    public class DatabaseClass : IDisposable, IDatabaseClass
+    internal class DatabaseClass : IDisposable, IDatabaseClass
     {
         #region IDisposable implementation
 
@@ -260,6 +260,22 @@ namespace HSMServer.DataLayer
         #region Sync code
 
         #region Products' methods
+
+        public void CloseDatabase()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void OpenDatabase(string databaseName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeleteDatabase()
+        {
+            throw new NotImplementedException();
+        }
+
         public void AddProductToList(string productName)
         {
             try
@@ -786,6 +802,17 @@ namespace HSMServer.DataLayer
             }
         }
 
+        public SensorInfo GetSensorInfo(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveSensorValues(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+
         public void AddUser(User user)
         {
             throw new NotImplementedException();
@@ -797,6 +824,21 @@ namespace HSMServer.DataLayer
         }
 
         public void RemoveUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<User> ReadUsersPage(int page, int pageSize)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ConfigurationObject ReadConfigurationObject()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteConfigurationObject(ConfigurationObject obj)
         {
             throw new NotImplementedException();
         }

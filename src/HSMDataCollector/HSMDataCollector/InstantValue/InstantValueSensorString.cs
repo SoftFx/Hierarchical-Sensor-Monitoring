@@ -1,12 +1,10 @@
-﻿using System;
-using System.Text;
-//using System.Text.Json;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
+using System.Text;
 
 namespace HSMDataCollector.InstantValue
 {
@@ -75,23 +73,6 @@ namespace HSMDataCollector.InstantValue
                 Console.WriteLine(e);
                 return string.Empty;
             }
-        }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                StringSensorValue typedData = (StringSensorValue)data;
-                string convertedString = JsonConvert.SerializeObject(typedData);
-                //string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
         }
     }
 }

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-//using System.Text.Json;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Serialization;
@@ -15,14 +14,14 @@ namespace HSMDataCollector.Bar
 {
     public class BarSensorInt : BarSensorBase, IIntBarSensor
     {
-        private readonly List<int> ValuesList;
+        private readonly List<int> _valuesList;
         
         public BarSensorInt(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000) : base(path, productKey, queue, collectPeriod,
             smallPeriod)
         {
-            ValuesList = new List<int>();
+            _valuesList = new List<int>();
         }
 
         public override CommonSensorValue GetLastValue()
@@ -65,7 +64,7 @@ namespace HSMDataCollector.Bar
         {
             lock (_syncObject)
             {
-                ValuesList.Add(value);
+                _valuesList.Add(value);
             }
         }
         private CommonSensorValue ToCommonSensorValue(IntBarSensorValue data)
@@ -83,7 +82,7 @@ namespace HSMDataCollector.Bar
             List<int> currentValues;
             lock (_syncObject)
             {
-                currentValues = new List<int>(ValuesList);
+                currentValues = new List<int>(_valuesList);
 
                 result.StartTime = barStart;
             }
@@ -102,8 +101,8 @@ namespace HSMDataCollector.Bar
             List<int> collected;
             lock (_syncObject)
             {
-                collected = new List<int>(ValuesList);
-                ValuesList.Clear();
+                collected = new List<int>(_valuesList);
+                _valuesList.Clear();
 
                 //New bar starts right after the previous one ends
                 result.StartTime = barStart;
@@ -121,8 +120,16 @@ namespace HSMDataCollector.Bar
 
         private void FillNumericData(IntBarSensorValue value, List<int> values)
         {
-            value.Max = values.Last();
-            value.Min = values.First();
+            if (values.Any())
+            {
+                value.Max = values.Last();
+                value.Min = values.First();
+            }
+            else
+            {
+                value.Max = 0;
+                value.Min = 0;
+            }
             value.Count = values.Count;
             value.Mean = CountMean(values);
             value.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.25), 0.25));
@@ -151,24 +158,7 @@ namespace HSMDataCollector.Bar
                 return string.Empty;
             }
         }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                IntBarSensorValue typedData = (IntBarSensorValue)data;
-                //string convertedString = JsonSerializer.Serialize(typedData);
-                string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
-        }
-
+        
         private int CountMean(List<int> values)
         {
             long sum = values.Sum();

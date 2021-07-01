@@ -16,6 +16,7 @@ using HSMClientWPFControls.ViewModel;
 using HSMCommon;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
+using HSMSensorDataObjects;
 
 namespace HSMClient.Model
 {
@@ -297,7 +298,7 @@ namespace HSMClient.Model
                 connectionStatus = ConnectionStatus.Error;
                 foreach (var node in Nodes)
                 {
-                    node.Status = TextConstants.UpdateError;
+                    node.Status = SensorStatus.Error;
                 }
             }
         }
