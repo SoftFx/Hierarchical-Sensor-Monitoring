@@ -1,15 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
 using LevelDB;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
 
 namespace HSMServer.DataLayer
 {
@@ -83,6 +83,7 @@ namespace HSMServer.DataLayer
             try
             {
                 _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
+
             }
             catch (Exception e)
             {
@@ -91,6 +92,7 @@ namespace HSMServer.DataLayer
             }
             
         }
+
 
         #region Management
 

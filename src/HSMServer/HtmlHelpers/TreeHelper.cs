@@ -43,4 +43,3 @@ namespace HSMServer.HtmlHelpers
         }
     }
 }
-//style = 'color:{GetStatusHeaderColor(subnode.Status)}'

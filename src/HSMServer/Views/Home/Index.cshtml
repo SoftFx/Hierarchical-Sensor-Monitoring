@@ -8,7 +8,9 @@
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
+    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -17,7 +19,7 @@
         margin: 10px;
     }
     .button-view-file-sensor {
-        margin-left: 20px;
+        margin-left: 0px;
         margin-top: 10px
     }
     .button-download-file-sensor-value{
@@ -44,17 +46,31 @@
     .sensor-icon-with-margin {
         margin-right: 5px;
     }
+
+    .time-ago-div {
+        color: grey;
+    }
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
 
+<script src="https://cdn.plot.ly/plotly-2.0.0-rc.3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
+<script src="js/plotting.js"></script>
 
 <div style="margin: 10px">
-    <div id="updateTime"></div>
-    <div id="state"></div>
+    <div class="row">
+        <div class="col-md-auto">
+            <div id="state"></div>
+        </div>
+        <div class="col-md-auto">
+            <div id="updateTime"></div>
+        </div>
+    </div>
     <hr />
 </div>
 
@@ -69,22 +85,51 @@
     //Add event listeners to buttons
     function initializeDataHistoryRequests() {
         $(".accordion-button").on("click", function () {
-            product = this.id.split('_')[0];
-            path = this.id.substring(product.length + 1, this.id.length);
-            totalCount = $('#inputCount_' + this.id).val();
+            id = this.id;
+            splitResults = id.split('_');
+            product = splitResults[0];
+            path = id.substring(product.length + 1, id.length - 2);
+            type = splitResults[splitResults.length - 1];
+            noNumberId = id.substring(0, id.length - 2);
+            totalCount = getCountForId(noNumberId);
 
+            initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
             initializeHistory(product, path, totalCount, historyAction);
         });
 
         $('[id^="reload_"]').on("click",
             function () {
                 id = this.id.substring("reload_".length, this.id.length);
-                product = id.split('_')[0];
-                path = id.substring(product.length + 1, this.id.length);
-                totalCount = $('#inputCount_' + id).val();
+                splitResults = id.split('_');
+                product = splitResults[0];
+                path = id.substring(product.length + 1, id.length - 2);
+                type = splitResults[splitResults.length - 1];
+                noNumberId = id.substring(0, id.length - 2);
+                totalCount = getCountForId(noNumberId);
 
+                //var graphVisible = $('#graph_' + product + "_" + path).css("display") !== "none";
+                //if (graphVisible) {
+                //    initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+                //}
+                //else {
+                //    initializeHistory(product, path, totalCount, historyAction);
+                //}
+                initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
                 initializeHistory(product, path, totalCount, historyAction);
             });
+
+        //$('[id^="button_graph_"]').on("click",
+        //    function () {
+        //        id = this.id.substring("button_graph_".length, this.id.length);
+        //        splitResults = id.split('_');
+        //        product = splitResults[0];
+        //        path = id.substring(product.length + 1, id.length - 2);
+        //        totalCount = $('#inputCount_' + id).val();
+        //        type = splitResults[splitResults.length - 1];
+        //        noNumberId = id.substring(0, id.length - 2);
+
+        //        initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
+        //    });
 
         $('[id^="button_view"]').on("click",
             function () {
@@ -96,8 +141,8 @@
                 let fileName = splitRes[splitRes.length - 1];
                 let path = id.substring(product.length + 2, id.length - fileName.length - 1);
 
-                window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
-                //viewFile(product, path, fileName, viewFileAction);
+                //window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
+                viewFile(product, path, fileName, viewFileAction);
             }
         );
 
@@ -122,7 +167,19 @@
     mimeTypesMap.set('html', 'text/html');
     mimeTypesMap.set('pdf', 'application/pdf');
 </script>
+<script>
+    //Sub-methods
 
+    function getCountForId(id) {
+        let inputCount = $('#inputCount_' + id).val();
+        if (inputCount === undefined) {
+
+            inputCount = 10;
+        }
+
+        return inputCount;
+     }
+</script>
 <script>
     //Tree functionality
     initializeTree();
@@ -231,6 +288,32 @@
     }
 </script>
 <script>
+    //graphs functionality
+
+    function initializeGraph(id, product, path, type, totalCount, rawHistoryAction) {
+        if (totalCount == undefined)
+            totalCount = 10;
+
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(data(product, path, totalCount)),
+            url: rawHistoryAction,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function(data) {
+            
+            //$('#values_'+id).css('display', 'none');
+
+            let graphDivId = "graph_" + id;
+            //$('#' + graphDivId).css('display', 'block');
+
+            displayGraph(data, type, graphDivId, path);
+        });
+    }
+</script>
+<script>
     //request history functionality 
     function data(product, path, totalCount) {
         return { "Path": path, "Product": product, "TotalCount": totalCount };
@@ -257,28 +340,29 @@
             console.log(`#values_${product}_${path}`);
 
             $(`#values_${product}_${path}`).empty();
+            console.log(`#values_${product}_${path}`);
             $(`#values_${product}_${path}`).append(data);
         });
     }
 </script>
 <script>
     //files functionality
-    //function getMimeType(fileName) {
-    //    let extension = getExtensionFromName(fileName);
-    //    let fileType = mimeTypesMap.get(extension);
-    //    if (fileType === undefined) {
-    //        fileType = "text/html";
-    //    }
-    //    return fileType;
-    //}
+    function getMimeType(fileName) {
+        let extension = getExtensionFromName(fileName);
+        let fileType = mimeTypesMap.get(extension);
+        if (fileType === undefined) {
+            fileType = "text/html";
+        }
+        return fileType;
+    }
 
-    //function getExtensionFromName(fileName) {
-    //    let dotIndex = fileName.indexOf('.');
-    //    if (dotIndex === -1) {
-    //        return fileName;
-    //    }
-    //    return fileName.substring(dotIndex + 1, fileName.length);
-    //}
+    function getExtensionFromName(fileName) {
+        let dotIndex = fileName.indexOf('.');
+        if (dotIndex === -1) {
+            return fileName;
+        }
+        return fileName.substring(dotIndex + 1, fileName.length);
+    }
 
 
     //function getFileName(product, path, fileName) {
@@ -298,12 +382,12 @@
     //    return product + "_" + path + "_" + date + "_" + time + "." + fileName;
     //}
 
-    //function viewFile(product, path, fileName, viewFileAction) {
-        //let fileType = getMimeType(fileName);
+    function viewFile(product, path, fileName, viewFileAction) {
+        let fileType = getMimeType(fileName);
         //console.log(fileType);
         //var xhr = new XMLHttpRequest();
         //xhr.open('POST', viewFileAction, true);
-        ///*xhr.responseType = 'blob';*/
+        //xhr.responseType = 'blob';
         //xhr.onload = function () {
         //    let blob = new Blob([this.response], { type: fileType });
         //    console.log(blob);
@@ -311,33 +395,24 @@
         //    window.open(url);
         //}
         //xhr.send(JSON.stringify(fileData(product, path)));
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(fileData(product, path)),
+            url: viewFileAction,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                if (fileType === undefined) {
+                    fileType = "text/html";
+                }
+                let blob = new Blob([response], { type: fileType });
+                let url = window.URL.createObjectURL(blob);
+                window.open(url);
+            }
+        });
+    }
 
-        //    $.ajax({
-        //        type: 'POST',
-        //        data: JSON.stringify(fileData(product, path)),
-        //        url: viewFileAction,
-        //        cache: false,
-        //        contentType: "application/json",
-        //        success: function (response) {
-        //            let fileType = getMimeType(fileName);
-        //            //console.log(fileType);
-        //            //let decoded = atob(response.fileBytes);
-        //            //console.log(decoded);
-        //            //console.log(decoded.length);
-
-        //            let blob = new Blob([response], { type: fileType });
-        //            let fileReader = new FileReader();
-        //            fileReader.readAsArrayBuffer(blob);
-        //            console.log(fileReader.result);
-        //            //let blob = new Blob([decoded]);
-        //            //console.log(blob);
-        //            let url = window.URL.createObjectURL(blob);
-        //            window.open(url);
-        //        }
-        //    });
-        //}
-
-        //function fileData(product, path) {
-        //    return { "Product": product, "Path": path };
-        //}
+    function fileData(product, path) {
+        return { "Product": product, "Path": path };
+    }
 </script>

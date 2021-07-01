@@ -8,8 +8,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
-                UserRoleEnum.ProductManager => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -18,8 +17,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
-                UserRoleEnum.ProductManager => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -28,7 +26,25 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
+                _ => false
+            };
+        }
+
+        public static bool IsAllProductsTreeAllowed(UserRoleEnum role)
+        {
+            return role switch
+            {
+                UserRoleEnum.SystemAdmin => true,
+                _ => false
+            };
+        }
+
+        public static bool IsAllSensorsAllowed(UserRoleEnum role)
+        {
+            return role switch
+            {
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
+using HSMServer.Attributes;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
@@ -44,9 +45,6 @@ namespace HSMServer.Controllers
                 return RedirectToAction("Index", "Home");
             }
 
-            //var user = _userManager.Authenticate(model.Login, model.Password);
-            //if (user == null) return RedirectToAction("Index", "Home");
-
             TempData.Remove(TextConstants.TempDataErrorText);
             await Authenticate(model.Login, model.KeepLoggedIn);
 
@@ -69,10 +67,10 @@ namespace HSMServer.Controllers
 
         //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
         //}
+        [AuthorizeRole(UserRoleEnum.SystemAdmin)]
         public IActionResult Users()
         {
             var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
-            //var users = _userManager.GetUsersPage(2, 2);
 
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
@@ -92,7 +90,7 @@ namespace HSMServer.Controllers
             
             else 
                 _userManager.AddUser(model.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(model.Password), model.Role.Value, model.ProductKeys);
+                HashComputer.ComputePasswordHash(model.Password), model.Role.Value);
         }
 
         [HttpPost]
@@ -104,6 +102,7 @@ namespace HSMServer.Controllers
                 userViewModel.Role = currentUser.Role;
 
             User user = GetModelFromViewModel(userViewModel);
+            user.ProductsRoles = currentUser.ProductsRoles;
 
             _userManager.UpdateUser(user);
         }
@@ -127,8 +126,7 @@ namespace HSMServer.Controllers
             {
                 UserName = userViewModel.Username,
                 Password = userViewModel.Password,//HashComputer.ComputePasswordHash(userViewModel.Password),
-                Role = userViewModel.Role.Value,
-                AvailableKeys = userViewModel.ProductKeys
+                Role = userViewModel.Role.Value
             };
             return user;
         }

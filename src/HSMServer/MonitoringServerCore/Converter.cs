@@ -7,16 +7,16 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.MonitoringServerCore
 {
-    internal static class Converter
+    internal class Converter : IConverter
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger<Converter> _logger;
         private const double SIZE_DENOMINATOR = 1024.0;
 
-        //public static SignedCertificateMessage Convert(X509Certificate2 signedCertificate,
+        //public SignedCertificateMessage Convert(X509Certificate2 signedCertificate,
         //    X509Certificate2 caCertificate)
         //{
         //    SignedCertificateMessage message = new SignedCertificateMessage();
@@ -25,40 +25,43 @@ namespace HSMServer.MonitoringServerCore
         //    return message;
         //}
 
-        
+        public Converter(ILogger<Converter> logger)
+        {
+            _logger = logger;
+        }
 
         #region Deserialize
 
-        public static BoolSensorValue GetBoolSensorValue(string json)
+        public BoolSensorValue GetBoolSensorValue(string json)
         {
             return JsonSerializer.Deserialize<BoolSensorValue>(json);
         }
 
-        public static IntSensorValue GetIntSensorValue(string json)
+        public IntSensorValue GetIntSensorValue(string json)
         {
             return JsonSerializer.Deserialize<IntSensorValue>(json);
         }
 
-        public static DoubleSensorValue GetDoubleSensorValue(string json)
+        public DoubleSensorValue GetDoubleSensorValue(string json)
         {
             return JsonSerializer.Deserialize<DoubleSensorValue>(json);
         }
 
-        public static StringSensorValue GetStringSensorValue(string json)
+        public StringSensorValue GetStringSensorValue(string json)
         {
             return JsonSerializer.Deserialize<StringSensorValue>(json);
         }
-        public static IntBarSensorValue GetIntBarSensorValue(string json)
+        public IntBarSensorValue GetIntBarSensorValue(string json)
         {
             return JsonSerializer.Deserialize<IntBarSensorValue>(json);
         }
 
-        public static DoubleBarSensorValue GetDoubleBarSensorValue(string json)
+        public DoubleBarSensorValue GetDoubleBarSensorValue(string json)
         {
             return JsonSerializer.Deserialize<DoubleBarSensorValue>(json);
         }
 
-        public static FileSensorValue GetFileSensorValue(string json)
+        public FileSensorValue GetFileSensorValue(string json)
         {
             return JsonSerializer.Deserialize<FileSensorValue>(json);
         }
@@ -67,7 +70,7 @@ namespace HSMServer.MonitoringServerCore
 
         #region Convert to history items
 
-        public static SensorHistoryData Convert(ExtendedBarSensorData data)
+        public SensorHistoryData Convert(ExtendedBarSensorData data)
         {
             switch (data.ValueType)
             {
@@ -80,7 +83,7 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
-        //private static SensorHistoryMessage Convert(IntBarSensorValue value, DateTime timeCollected)
+        //private SensorHistoryMessage Convert(IntBarSensorValue value, DateTime timeCollected)
         //{
         //    SensorHistoryMessage result = new SensorHistoryMessage();
         //    try
@@ -95,7 +98,7 @@ namespace HSMServer.MonitoringServerCore
         //    }
         //    return result;
         //}
-        private static SensorHistoryData Convert(IntBarSensorValue value, DateTime timeCollected)
+        private SensorHistoryData Convert(IntBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
@@ -109,7 +112,7 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //private static SensorHistoryMessage Convert(DoubleBarSensorValue value, DateTime timeCollected)
+        //private SensorHistoryMessage Convert(DoubleBarSensorValue value, DateTime timeCollected)
         //{
         //    SensorHistoryMessage result = new SensorHistoryMessage();
         //    try
@@ -124,7 +127,7 @@ namespace HSMServer.MonitoringServerCore
         //    }
         //    return result;
         //}
-        private static SensorHistoryData Convert(DoubleBarSensorValue value, DateTime timeCollected)
+        private SensorHistoryData Convert(DoubleBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
@@ -138,7 +141,7 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //public static SensorHistoryMessage Convert(SensorDataObject dataObject)
+        //public SensorHistoryMessage Convert(SensorDataObject dataObject)
         //{
         //    SensorHistoryMessage result = new SensorHistoryMessage();
         //    try
@@ -153,7 +156,7 @@ namespace HSMServer.MonitoringServerCore
         //    }
         //    return result;
         //}
-        public static SensorHistoryData Convert(SensorDataObject dataObject)
+        public SensorHistoryData Convert(SensorDataObject dataObject)
         {
             SensorHistoryData historyData = new SensorHistoryData();
             try
@@ -171,7 +174,7 @@ namespace HSMServer.MonitoringServerCore
         #endregion
         #region Convert to database objects
 
-        private static void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataObject dataObject)
+        private void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataObject dataObject)
         {
             dataObject = new SensorDataObject();
             dataObject.Path = value.Path;
@@ -180,7 +183,7 @@ namespace HSMServer.MonitoringServerCore
             dataObject.Timestamp = GetTimestamp(value.Time);
         }
 
-        //private static SensorType Convert(SensorObjectType type)
+        //private SensorType Convert(SensorObjectType type)
         //{
         //    switch (type)
         //    {
@@ -202,7 +205,7 @@ namespace HSMServer.MonitoringServerCore
         //            throw new InvalidEnumArgumentException($"Invalid SensorDataType: {type}");
         //    }
         //}
-        //public static SensorDataObject ConvertToDatabase(SensorUpdateMessage update, DateTime originalTime)
+        //public SensorDataObject ConvertToDatabase(SensorUpdateMessage update, DateTime originalTime)
         //{
         //    SensorDataObject result = new SensorDataObject();
         //    result.Path = update.Path;
@@ -214,7 +217,7 @@ namespace HSMServer.MonitoringServerCore
         //    return result;
         //}
 
-        public static SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
         {
             SensorDataObject result;
             FillCommonFields(sensorValue, timeCollected, out result);
@@ -226,7 +229,7 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public static SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.IntSensor;
@@ -237,7 +240,7 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public static SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.DoubleSensor;
@@ -248,7 +251,7 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public static SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.StringSensor;
@@ -259,7 +262,7 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public static SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.FileSensor;
@@ -274,7 +277,7 @@ namespace HSMServer.MonitoringServerCore
 
         }
 
-        public static SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.FileSensor;
@@ -290,7 +293,7 @@ namespace HSMServer.MonitoringServerCore
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
-        public static SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.IntegerBarSensor;
@@ -301,7 +304,7 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
-        public static SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = SensorType.DoubleBarSensor;
@@ -313,7 +316,7 @@ namespace HSMServer.MonitoringServerCore
         }
 
 
-        private static IntBarSensorData ToTypedData(IntBarSensorValue sensorValue)
+        private IntBarSensorData ToTypedData(IntBarSensorValue sensorValue)
         {
             IntBarSensorData typedData = new IntBarSensorData()
             {
@@ -330,7 +333,7 @@ namespace HSMServer.MonitoringServerCore
             return typedData;
         }
 
-        private static DoubleBarSensorData ToTypedData(DoubleBarSensorValue sensorValue)
+        private DoubleBarSensorData ToTypedData(DoubleBarSensorValue sensorValue)
         {
             DoubleBarSensorData typedData = new DoubleBarSensorData()
             {
@@ -350,87 +353,96 @@ namespace HSMServer.MonitoringServerCore
         
         #region Independent update messages
 
-        public static SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName)
+        public SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName)
         {
             var converted = Convert(dataObject, productName);
             converted.Description = sensorInfo.Description;
             return converted;
         }
-        public static SensorData Convert(SensorDataObject dataObject, string productName)
+        public SensorData Convert(SensorDataObject dataObject, string productName)
         {
             SensorData result = new SensorData();
             result.Path = dataObject.Path;
             result.SensorType = dataObject.DataType;
             result.Product = productName;
             result.Time = dataObject.TimeCollected;
-            result.ShortValue = GetShortValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+            result.StringValue = GetStringValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
+            result.ShortStringValue = GetShortStringValue(dataObject.TypedData, dataObject.DataType);
             result.Status = dataObject.Status;
             return result;
         }
 
-        public static SensorData Convert(BoolSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(BoolSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.BooleanSensor;
             return data;
         }
 
-        public static SensorData Convert(IntSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(IntSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.IntSensor;
             return data;
         }
 
-        public static SensorData Convert(DoubleSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(DoubleSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.DoubleSensor;
             return data;
         }
 
-        public static SensorData Convert(StringSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(StringSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.StringSensor;
             return data;
         }
 
-        public static SensorData Convert(FileSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(FileSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.FileSensor;
             return data;
         }
 
-        public static SensorData Convert(FileSensorBytesValue value, string productName, DateTime timeCollected,
+        public SensorData Convert(FileSensorBytesValue value, string productName, DateTime timeCollected,
             TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.FileSensorBytes;
             return data;
         }
-        public static SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.IntegerBarSensor;
             return data;
         }
-        public static SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
+        public SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, type, out var data);
-            data.ShortValue = GetShortValue(value, timeCollected);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
             data.SensorType = SensorType.DoubleBarSensor;
             return data;
         }
-        private static void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, TransactionType type, out SensorData data)
+        private void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, TransactionType type, out SensorData data)
         {
             data = new SensorData();
             data.Path = value.Path;
@@ -445,7 +457,7 @@ namespace HSMServer.MonitoringServerCore
         #endregion
         #region Typed data objects
 
-        private static string GetShortValue(string stringData, SensorType sensorType, DateTime timeCollected)
+        private string GetStringValue(string stringData, SensorType sensorType, DateTime timeCollected)
         {
             string result = string.Empty;
             switch (sensorType)
@@ -455,9 +467,10 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(boolData.Comment) 
+                            result = !string.IsNullOrEmpty(boolData.Comment)
                                 ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}, comment = {boolData.Comment}"
                                 : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}.";
+                            result = $"{boolData.BoolValue}";
                         }
                         catch { }
                         break;
@@ -558,7 +571,107 @@ namespace HSMServer.MonitoringServerCore
             }
             return result;
         }
-        private static string GetShortValue(BoolSensorValue value, DateTime timeCollected)
+
+        private string GetShortStringValue(string stringData, SensorType sensorType)
+        {
+            string result = string.Empty;
+            switch (sensorType)
+            {
+                case SensorType.BooleanSensor:
+                    {
+                        try
+                        {
+                            BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
+                            result = boolData.BoolValue.ToString();
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.IntSensor:
+                    {
+                        try
+                        {
+                            IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
+                            result = intData.IntValue.ToString();
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.DoubleSensor:
+                    {
+                        try
+                        {
+                            DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
+                            result = doubleData.DoubleValue.ToString();
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.StringSensor:
+                    {
+                        try
+                        {
+                            StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
+                            result = stringTypedData.StringValue;
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.IntegerBarSensor:
+                    {
+                        try
+                        {
+                            IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
+                            result =
+                                $"Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}.";
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.DoubleBarSensor:
+                    {
+                        try
+                        {
+                            DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
+                            result =
+                                $"Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}.";
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.FileSensor:
+                    {
+                        try
+                        {
+                            FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                            string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
+                            string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
+                            result = $"File size: {sizeString}. {fileNameString}";
+                        }
+                        catch { }
+                        break;
+                    }
+                case SensorType.FileSensorBytes:
+                    {
+                        try
+                        {
+                            FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                            string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
+                            string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
+                            result = $"File size: {sizeString}. {fileNameString}";
+                        }
+                        catch { }
+                        break;
+                    }
+                default:
+                    {
+                        result = string.Empty;
+                        break;
+                    }
+            }
+            return result;
+        }
+        private string GetStringValue(BoolSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -569,13 +682,13 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e,"Failed to get short value");
+                _logger.LogError(e,"Failed to get short value");
             }
 
             return result;
         }
 
-        private static string GetShortValue(IntSensorValue value, DateTime timeCollected)
+        private string GetStringValue(IntSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -586,13 +699,13 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
 
-        private static string GetShortValue(DoubleSensorValue value, DateTime timeCollected)
+        private string GetStringValue(DoubleSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -603,13 +716,13 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
 
-        private static string GetShortValue(StringSensorValue value, DateTime timeCollected)
+        private string GetStringValue(StringSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -620,13 +733,13 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
 
-        private static string GetShortValue(FileSensorValue value, DateTime timeCollected)
+        private string GetStringValue(FileSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -639,12 +752,12 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
-        private static string GetShortValue(FileSensorBytesValue value, DateTime timeCollected)
+        private string GetStringValue(FileSensorBytesValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -657,12 +770,12 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
-        private static string GetShortValue(IntBarSensorValue value, DateTime timeCollected)
+        private string GetStringValue(IntBarSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -673,13 +786,13 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
 
-        private static string GetShortValue(DoubleBarSensorValue value, DateTime timeCollected)
+        private string GetStringValue(DoubleBarSensorValue value, DateTime timeCollected)
         {
             string result = string.Empty;
             try
@@ -690,14 +803,98 @@ namespace HSMServer.MonitoringServerCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get short value");
+                _logger.LogError(e, "Failed to get short value");
+            }
+
+            return result;
+        }
+
+        private string GetShortStringValue(BoolSensorValue value)
+        {
+            return value.BoolValue.ToString();
+        }
+
+        private string GetShortStringValue(IntSensorValue value)
+        {
+            return value.IntValue.ToString();
+        }
+
+        private string GetShortStringValue(DoubleSensorValue value)
+        {
+            return value.DoubleValue.ToString();
+        }
+
+        private string GetShortStringValue(StringSensorValue value)
+        {
+            return value.StringValue;
+        }
+
+        private string GetShortStringValue(IntBarSensorValue value)
+        {
+            string result = string.Empty;
+            try
+            {
+                result =
+                    $"Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}.";
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get short value");
+            }
+            return result;
+        }
+
+        private string GetShortStringValue(DoubleBarSensorValue value)
+        {
+            string result = string.Empty;
+            try
+            {
+                result =
+                    $"Min = {value.Min}, Mean = {value.Mean}, Max = {value.Max}, Count = {value.Count}, Last = {value.LastValue}.";
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get short value");
+            }
+            return result;
+        }
+
+        private string GetShortStringValue(FileSensorValue value)
+        {
+            string result = string.Empty;
+            try
+            {
+                string sizeString = FileSizeToNormalString(value?.FileContent?.Length ?? 0);
+                string fileNameString = GetFileNameString(value.FileName, value.Extension);
+                result = $"File size: {sizeString}. {fileNameString}";
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get short value");
+            }
+
+            return result;
+        }
+
+        private string GetShortStringValue(FileSensorBytesValue value)
+        {
+            string result = string.Empty;
+            try
+            {
+                string sizeString = FileSizeToNormalString(value?.FileContent?.Length ?? 0);
+                string fileNameString = GetFileNameString(value.FileName, value.Extension);
+                result = $"File size: {sizeString}. {fileNameString}";
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get short value");
             }
 
             return result;
         }
         #endregion
 
-        public static SensorInfo Convert(string productName, string path)
+        public SensorInfo Convert(string productName, string path)
         {
             SensorInfo result = new SensorInfo();
             result.Path = path;
@@ -705,7 +902,7 @@ namespace HSMServer.MonitoringServerCore
             result.SensorName = ExtractSensor(path);
             return result;
         }
-        public static SensorInfo Convert(string productName, SensorValueBase sensorValue)
+        public SensorInfo Convert(string productName, SensorValueBase sensorValue)
         {
             SensorInfo result = new SensorInfo();
             result.Path = sensorValue.Path;
@@ -714,7 +911,7 @@ namespace HSMServer.MonitoringServerCore
             result.SensorName = ExtractSensor(sensorValue.Path);
             return result;
         }
-        //public static ProductDataMessage Convert(Product product)
+        //public ProductDataMessage Convert(Product product)
         //{
         //    ProductDataMessage result = new ProductDataMessage();
         //    result.Name = product.Name;
@@ -723,7 +920,7 @@ namespace HSMServer.MonitoringServerCore
         //    return result;
         //}
 
-        //public static GenerateClientCertificateModel Convert(CertificateRequestMessage requestMessage)
+        //public GenerateClientCertificateModel Convert(CertificateRequestMessage requestMessage)
         //{
         //    GenerateClientCertificateModel model = new GenerateClientCertificateModel
         //    {
@@ -738,7 +935,7 @@ namespace HSMServer.MonitoringServerCore
         //    return model;
         //}
 
-        //public static RSAParameters Convert(HSMService.RSAParameters rsaParameters)
+        //public RSAParameters Convert(HSMService.RSAParameters rsaParameters)
         //{
         //    RSAParameters result = new RSAParameters();
         //    result.D = rsaParameters.D.ToByteArray();
@@ -754,7 +951,7 @@ namespace HSMServer.MonitoringServerCore
 
         #region Sub-methods
 
-        //private static SensorObjectType Convert(SensorType type)
+        //private SensorObjectType Convert(SensorType type)
         //{
         //    //return (SensorObjectType) ((int) type);
         //    switch (type)
@@ -776,13 +973,13 @@ namespace HSMServer.MonitoringServerCore
         //    }
         //    throw new Exception($"Unknown SensorDataType = {type}!");
         //}
-        private static long GetTimestamp(DateTime dateTime)
+        private long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = (dateTime - DateTime.UnixEpoch);
             return (long)timeSpan.TotalSeconds;
         }
 
-        public static void ExtractProductAndSensor(string path, out string server, out string sensor)
+        public void ExtractProductAndSensor(string path, out string server, out string sensor)
         {
             server = string.Empty;
             sensor = string.Empty;
@@ -791,13 +988,13 @@ namespace HSMServer.MonitoringServerCore
             sensor = splitRes[^1];
         }
 
-        public static string ExtractSensor(string path)
+        public string ExtractSensor(string path)
         {
             var splitRes = path.Split("/".ToCharArray());
             return splitRes[^1];
         }
 
-        private static string GetFileNameString(string fileName, string extension)
+        private string GetFileNameString(string fileName, string extension)
         {
             if (string.IsNullOrEmpty(extension) && string.IsNullOrEmpty(fileName))
             {
@@ -815,7 +1012,7 @@ namespace HSMServer.MonitoringServerCore
 
             return $"File name: {fileName}.{extension}.";
         }
-        private static string FileSizeToNormalString(int size)
+        private string FileSizeToNormalString(int size)
         {
             if (size < SIZE_DENOMINATOR)
             {

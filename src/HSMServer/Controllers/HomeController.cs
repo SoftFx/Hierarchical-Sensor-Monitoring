@@ -7,6 +7,8 @@ using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -56,7 +58,19 @@ namespace HSMServer.Controllers
             model.Path = model.Path?.Replace('_', '/').Replace('-', ' ');
             var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
 
-            return new HtmlString(ListHelper.CreateHistoryList(result));
+            //return new HtmlString(ListHelper.CreateHistoryList(result));
+            return new HtmlString(TableHelper.CreateHistoryTable(result));
+        }
+
+        [HttpPost]
+        public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
+        {
+            model.Product = model.Product.Replace('-', ' ');
+            model.Path = model.Path?.Replace('_', '/').Replace('-', ' ');
+            var commonHistory = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+            //var selected = commonHistory.Select(h => h.TypedData).ToList();
+
+            return new JsonResult(commonHistory);
         }
 
         [HttpGet]
@@ -72,6 +86,17 @@ namespace HSMServer.Controllers
             return File(fileContents, GetFileTypeByExtension(fileName), fileName);
         }
 
+        [HttpPost]
+        public IActionResult GetFileStream([FromBody] GetFileSensorModel model)
+        {
+            string product = model.Product.Replace('-', ' ');
+            string path = model.Path.Replace('_', '/');
+            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
+            var fileContentsStream = new MemoryStream(fileContents);
+            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
+            var fileName = $"{model.Path}.{extension}";
+            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
+        }
         private string GetFileTypeByExtension(string fileName)
         {
             var provider = new FileExtensionContentTypeProvider();

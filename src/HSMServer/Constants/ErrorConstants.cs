@@ -11,5 +11,10 @@
 
         public const string UsernameNotNull = "Username must be not null.";
         public const string PasswordMinLength = "Password min lenght is 8 characters.";
+
+        public const string ExtraKeyNameNotNull = "Extra key name must be not null.";
+        public const string ExtraKeyNameUnique = "Extra key name must be unique.";
+
+        public const string UserNotNull = "User must be not null.";
     }
 }

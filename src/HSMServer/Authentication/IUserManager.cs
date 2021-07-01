@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Authentication
 {
@@ -13,9 +14,10 @@ namespace HSMServer.Authentication
         /// <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
         /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         /// <param name="role">UserRoleEnum value, defaults to the role with least rights.</param>
-        void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role = UserRoleEnum.DataViewer,
-            List<string> availableKeys = null);
+        void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
+            List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
         List<User> Users { get; }
+        User GetUser(Guid id);
         User GetUserByUserName(string username);
         User Authenticate(string login, string password);
         /// <summary>
@@ -40,5 +42,10 @@ namespace HSMServer.Authentication
         /// <param name="pageSize">Page size, must not be less than zero</param>
         /// <returns>Users list if the amount of users is bigger than (page - 1) * pageSize, empty list otherwise</returns>
         List<User> GetUsersPage(int page = 1, int pageSize = 1);
+        List<User> GetViewers(string productKey);
+        List<User> GetAllViewers(string productKey);
+        List<User> GetManagers(string productKey);
+        List<User> GetAllManagers();
+        List<User> GetUsersNotAdmin();
     }
 }

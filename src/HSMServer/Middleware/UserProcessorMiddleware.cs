@@ -1,7 +1,7 @@
-﻿using System.Threading.Tasks;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {

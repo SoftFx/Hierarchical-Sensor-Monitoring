@@ -10,16 +10,10 @@
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.ProductController))";
+    var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
-
-
 <div class="container row justify-content-center">
-    @*@if (TempData[TextConstants.TempDataErrorText] != null)
-    {
-        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-    }*@
-
     @ViewHelper.CreateProductList(Context.User, Model)
     
     <script>
@@ -58,8 +52,8 @@
     //delete buttons
     $('[id^="delete_"]').on("click",
         function () {
-            name = this.id.substring("delete_".length, this.id.length);
-            //console.log(name);
+            key = this.id.substring("delete_".length, this.id.length);
+            name = $('#inputName_' + key).val();
 
             $('#modalDeleteBody').empty();
             $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
@@ -73,7 +67,7 @@
 
                 $.ajax({//ProductController -> RemoveProduct
                     type: 'GET',
-                    url: deleteAction + "?Product=" + name,
+                    url: deleteAction + "?Product=" + key,
                     cache: false,
                     async: true,
                     success: function () {
@@ -101,7 +95,10 @@
                 window.location.href = "Product"; //ProductController -> Index
             }
         })
-    })
+    });
 
-
+    $('[id^=change_]').on('click', function () {
+        key = this.id.substring("change_".length, this.id.length);
+        window.location.href = editAction + "?Product=" + key
+    }); 
 </script>
