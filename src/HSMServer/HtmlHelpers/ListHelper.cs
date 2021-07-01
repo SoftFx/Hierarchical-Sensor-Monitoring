@@ -141,16 +141,16 @@ namespace HSMServer.HtmlHelpers
             if (time.TotalDays > 30)
                 return "> a month ago";
 
-            if (time.TotalDays > 0)
+            if (time.TotalDays > 1)
                 //return $"{time:%d} day(s) {time:%h} hours {time:%m} minutes";
                 return $"> {UnitsToString(time.TotalDays, "day")} ago";
 
-            if (time.TotalHours > 0)
+            if (time.TotalHours > 1)
             {
                 return $"> {UnitsToString(time.TotalHours, "hour")} ago";
             }
 
-            if (time.TotalMinutes > 0)
+            if (time.TotalMinutes > 1)
             {
                 return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
             }
