@@ -662,7 +662,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.Admin);
+                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.SystemAdmin);
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;

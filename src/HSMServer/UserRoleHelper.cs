@@ -8,7 +8,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -17,7 +17,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -26,7 +26,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -35,7 +35,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }
@@ -44,7 +44,7 @@ namespace HSMServer
         {
             return role switch
             {
-                UserRoleEnum.Admin => true,
+                UserRoleEnum.SystemAdmin => true,
                 _ => false
             };
         }

@@ -212,7 +212,7 @@ namespace HSMServer.Authentication
             List<User> result = new List<User>();
             foreach(var user in _users)
             {
-                if (user.Role == UserRoleEnum.Admin) continue;
+                if (user.Role == UserRoleEnum.SystemAdmin) continue;
                 result.Add(user);
             }
 
@@ -240,7 +240,7 @@ namespace HSMServer.Authentication
             List<User> result = new List<User>();
             foreach(var user in _users)
             {
-                if (user.Role == UserRoleEnum.Admin) continue;
+                if (user.Role == UserRoleEnum.SystemAdmin) continue;
                 result.Add(user);
             }
 
@@ -271,7 +271,7 @@ namespace HSMServer.Authentication
             AddUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
                 CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), UserRoleEnum.Admin);
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), UserRoleEnum.SystemAdmin);
         }
 
         private List<User> ReadUserFromDatabase()

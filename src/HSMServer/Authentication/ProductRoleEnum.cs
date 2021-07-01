@@ -2,7 +2,7 @@
 {
     public enum ProductRoleEnum
     {
-        Manager = 0,
-        Viewer = 1
+        ProductManager = 0,
+        ProductViewer = 1
     }
 }

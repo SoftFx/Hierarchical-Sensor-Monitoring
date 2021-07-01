@@ -8,7 +8,7 @@ namespace HSMServer
     {
         public static bool IsProductActionAllowed(List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
-            return productsRights.FirstOrDefault(x => x.Value == ProductRoleEnum.Manager).Key != null;
+            return productsRights.FirstOrDefault(x => x.Value == ProductRoleEnum.ProductManager).Key != null;
         }
 
         public static bool IsAvailable(string productKey,
@@ -24,7 +24,7 @@ namespace HSMServer
             List<KeyValuePair<string, ProductRoleEnum>> productsRigths)
         {
             var pair = productsRigths?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.Viewer)
+            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductViewer)
                 return true;
 
             return false;
@@ -34,7 +34,7 @@ namespace HSMServer
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
             var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.Manager)
+            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductManager)
                 return true;
 
             return false;

@@ -67,7 +67,7 @@ namespace HSMServer.Controllers
 
         //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
         //}
-        [AuthorizeRole(UserRoleEnum.Admin)]
+        [AuthorizeRole(UserRoleEnum.SystemAdmin)]
         public IActionResult Users()
         {
             var users = _userManager.Users.OrderBy(x => x.UserName).ToList();

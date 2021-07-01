@@ -19,11 +19,11 @@ namespace HSMServer.HtmlHelpers
 
             StringBuilder result = new StringBuilder();
 
-            result.Append("<div class='col-sm-7' id='list'>" +
+            result.Append("<div class='col' id='list'>" +
                 "<div id='list_sensors_header' style='display: none;'>" +
                 "<h5 style='margin: 0px 20px 10px;'>Sensors</h5></div>");
 
-            result.Append("<div style='width: 700px'>" +
+            result.Append("<div style='width: 800px'>" +
                 "<ul id='noData' class='list-group'>" +
                 "<li class='list-group-item'>No Data</li></ul></div>");
 
@@ -71,19 +71,20 @@ namespace HSMServer.HtmlHelpers
                         result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
                                   "<div>" +
-                                  $"<div class='row row-cols-1'><div class='col'>{sensor.Name}</div>" +
+                                  $"<div class='row'><div class='col-md-auto'>{sensor.Name}</div>" +
                                   $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                         //body
                         result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
                                   "<div class='accordion-body'>");
 
-                        result.Append("<div class='container'>" +
-                                  $"<div class='row'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                        result.Append("<div style='width: 100%'>" +
+                                  $"<div class='row justify-content-between'><div class='col-md-auto'>" +
+                                  $"<li class='fas fa-circle sensor-icon-with-margin " +
                                   $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
-                                  $"<div class='col-md-auto time-ago-div'>updated {GetTimeAgo(time)}</div><div class='w-100'></div>" +
-                                  $"<div class='col'>{sensor.ShortStringValue}</div></div></div>" +
-                                      "<div class='row'><div class='col-2'>" +
+                                  $"<div class='col-md-auto time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
+                                  $"{sensor.ShortStringValue}</div>" +
+                                      "<div class='row'><div class='col-md-auto'>" +
                                       $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
                                       "class='button-view-file-sensor btn btn-secondary' title='View'>" +
                                       "<i class='fas fa-eye'></i></button></div>" +
@@ -100,12 +101,13 @@ namespace HSMServer.HtmlHelpers
 
                     result.Append($"<button id='{formattedPath}_{name}_{(int)sensor.SensorType}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
                                   $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  //"<div>" +
-                                  "<div class='row'><div class='col'><li class='fas fa-circle sensor-icon-with-margin " +
+                                  "<div style='width: 100%'>" +
+                                  "<div class='row justify-content-between'>" +
+                                  "<div class='col-md-auto'><li class='fas fa-circle sensor-icon-with-margin " +
                                   $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
                                   $"{sensor.Name}</div>" +
-                                  $"<div class='col-md-auto time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div><div class='w-100'></div>" +
-                                  $"<div class='col'>{sensor.ShortStringValue}</div></div></button></h2>");
+                                  $"<div class='col-md-auto'><div class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
+                                  $"{sensor.ShortStringValue}</div></button></h2>");
 
                     result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
                                   $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +

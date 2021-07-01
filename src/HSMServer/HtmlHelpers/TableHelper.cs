@@ -208,14 +208,14 @@ namespace HSMServer.HtmlHelpers
             //header template
             result.Append("<div style='margin: 10px'>" +
                 "<div class='row justify-content-start'>" +
-                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Users Rights</h5></div></div>");
+                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Members</h5></div></div>");
 
             result.Append("<div class='col-xxl'>");
             //table template
             result.Append("<table class='table table-striped'>" +
                 "<thead><tr>" +
                 "<th scope='col'>#</th>" +
-                "<th scope='col'>Username</th>" +
+                "<th scope='col'>Account</th>" +
                 "<th scope='col'>Role</th>" +
                 "<th scope='col'>Action</th></tr>");
 
