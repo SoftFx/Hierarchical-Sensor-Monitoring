@@ -1,9 +1,9 @@
-FROM mcr.microsoft.com/dotnet/core/sdk:5.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build-env
 COPY . ./
 RUN dotnet restore src/HSMServer/HSMServer.sln
 RUN dotnet publish src/HSMServer/HSMServer.sln -c Release --no-restore -o Release
 
-FROM mcr.microsoft.com/dotnet/core/sdk:5.0
+FROM mcr.microsoft.com/dotnet/sdk:5.0
 RUN apt-get update && apt-get install -y \
 	nuget \
 	liblmdb0 \
