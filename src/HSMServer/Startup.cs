@@ -93,8 +93,17 @@ namespace HSMServer
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/error");
+            }
+
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
             app.UseCertificateValidator();
 
