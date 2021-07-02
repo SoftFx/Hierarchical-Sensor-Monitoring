@@ -279,14 +279,10 @@ namespace HSMServer.HtmlHelpers
                 users = response.Content.ReadAsAsync<List<User>>().Result;
             }
 
-            StringBuilder result = new StringBuilder();
-            if (usedUsers != null && usedUsers.Any())
-                foreach (var usedUser in usedUsers)
-                {
-                    var user = users.First(u => u.UserName.Equals(usedUser.Username));
-                    users.Remove(user);
-                }
+            RemovedUsedUsers(users, usedUsers);
 
+            StringBuilder result = new StringBuilder();
+            
             if (users != null && users.Any())
             {
                 result.Append("<select class='form-select' id='createUser'>");
@@ -301,6 +297,20 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        private static void RemovedUsedUsers(List<User> users, List<UserViewModel> usedUsers)
+        {
+            if (!(users?.Any() ?? false))
+                return;
+
+            if (!(usedUsers?.Any() ?? false))
+                return;
+
+            foreach (var usedUser in usedUsers)
+            {
+                var user = users.First(u => u.UserName.Equals(usedUser.Username));
+                users.Remove(user);
+            }
+        }
         private static string CreateProductRoleSelect()
         {
             StringBuilder result = new StringBuilder();
