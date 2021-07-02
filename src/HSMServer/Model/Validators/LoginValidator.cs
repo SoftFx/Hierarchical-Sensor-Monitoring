@@ -12,19 +12,18 @@ namespace HSMServer.Model.Validators
         {
             _userManager = userManager;
 
-            RuleFor(x => x.Login)
-                .NotNull()
-                .WithMessage(ErrorConstants.LoginNotNull);
+            RuleFor(x => x.Username)
+                .NotEmpty();
 
             RuleFor(x => x.Password)
-                .NotNull()
-                .WithMessage(ErrorConstants.PasswordNotNull);
+                .NotEmpty();
 
-            When(x => x.Login != null && x.Password != null, () =>
+            When(x => !string.IsNullOrEmpty(x.Username) 
+                && !string.IsNullOrEmpty(x.Password), () =>
             {
                 RuleFor(x => x)
-                .Must(x => _userManager.Authenticate(x.Login, x.Password) != null)
-                .WithMessage(ErrorConstants.LoginOrPassword);
+                .Must(x => _userManager.Authenticate(x.Username, x.Password) != null)
+                .WithMessage(ErrorConstants.UsernameOrPassword);
             });
                       
         }

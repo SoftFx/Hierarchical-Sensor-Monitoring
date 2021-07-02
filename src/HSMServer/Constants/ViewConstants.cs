@@ -11,6 +11,7 @@
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";
+        public const string RegistrationAction = "Registration";
 
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";

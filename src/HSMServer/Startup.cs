@@ -135,12 +135,12 @@ namespace HSMServer
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",
-                    pattern: "{controller=Home}/{action=Index}"
+                    pattern: "{controller=Home}/{action}"
                 );
                 endpoints.MapControllerRoute(
                     name: "Account",
-                    pattern: "{controller=Account}/{action=Index}",
-                    defaults: new { controller = "Account", action = "Index" }
+                    pattern: "{controller=Account}/{action}",
+                    defaults: new { controller = "Account"}
                 );
                 endpoints.MapControllerRoute(
                     name: "Home",
