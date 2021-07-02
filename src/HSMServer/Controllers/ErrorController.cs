@@ -1,8 +1,10 @@
 ﻿using HSMServer.Model.ViewModel;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers
 {
+    [AllowAnonymous]
     public class ErrorController : Controller
     {
         [Route("/error")]

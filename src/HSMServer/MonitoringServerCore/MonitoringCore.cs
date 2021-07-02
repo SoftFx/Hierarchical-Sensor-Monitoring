@@ -565,8 +565,10 @@ namespace HSMServer.MonitoringServerCore
 
         public Product GetProduct(string productKey)
         {
-            return new Product(_productManager.Products.FirstOrDefault(
-                x => x.Key.Equals(productKey)));
+            var product = _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
+            if (product == null)
+                _logger.LogError($"Failed to find the product with key {productKey}");
+            return product == null ? null : new Product(product);
         }
 
         public List<Product> GetProducts(User user)
