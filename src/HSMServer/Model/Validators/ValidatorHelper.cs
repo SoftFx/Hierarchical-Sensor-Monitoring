@@ -13,7 +13,8 @@ namespace HSMServer.Model.Validators
 
             foreach (var error in errors)
             {
-                result.Append(error.ErrorMessage + "\n");
+                result.AppendLine(error.ErrorMessage); 
+                return result.ToString();
             }
 
             return result.ToString();

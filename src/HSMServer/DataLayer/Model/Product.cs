@@ -14,6 +14,8 @@ namespace HSMServer.DataLayer.Model
         public Product() { }
         public Product(Product product)
         {
+            if (product == null) return;
+
             Key = product.Key;
             Name = product.Name;
             DateAdded = product.DateAdded;
