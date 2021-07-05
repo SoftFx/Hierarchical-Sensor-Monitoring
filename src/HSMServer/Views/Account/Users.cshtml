@@ -74,7 +74,7 @@
             cache: false,
             async: true
         }).done(function (result) {
-            window.location.href = "Users"; //AccountController -> Users
+            document.location.reload();
         })
     });
 
@@ -99,7 +99,7 @@
                 cache: false,
                 async: true,
                 success: function () {
-                    window.location.href = "Users"; //AccountController -> Users
+                    document.location.reload();
                 }
             });
         });
@@ -128,7 +128,7 @@
     });
 
     $('[id^=cancel_]').on('click', function() {
-        window.location.href = "Users";
+        document.location.reload();
     });
 
     $('[id^=ok_]').on('click', function () {
@@ -150,7 +150,7 @@
             cache: false,
             async: true
         }).done(function (result) {
-            window.location.href = "Users"; //AccountController -> Users
+            document.location.reload();
         })
     });
 
