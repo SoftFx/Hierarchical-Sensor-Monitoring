@@ -32,7 +32,12 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        [ActionName(nameof(Authenticate))]
+        public IActionResult Registration()
+        {
+            return View(new RegistrationViewModel());
+        }
+
+        [AllowAnonymous]
         [Consumes("application/x-www-form-urlencoded")]
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm]LoginViewModel model)
@@ -46,7 +51,26 @@ namespace HSMServer.Controllers
             }
 
             TempData.Remove(TextConstants.TempDataErrorText);
-            await Authenticate(model.Login, model.KeepLoggedIn);
+            await Authenticate(model.Username, model.KeepLoggedIn);
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        [AllowAnonymous]
+        [Consumes("application/x-www-form-urlencoded")]
+        public async Task<IActionResult> Registrate([FromForm]RegistrationViewModel model)
+        {
+            RegistrationValidator validator = new RegistrationValidator(_userManager);
+            var results = validator.Validate(model);
+            if (!results.IsValid)
+            {
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                return RedirectToAction("Registration", "Account");
+            }
+
+            _userManager.AddUser(model.Username, null, null,
+                HashComputer.ComputePasswordHash(model.Password), UserRoleEnum.Guest);
+            await Authenticate(model.Username, true);
 
             return RedirectToAction("Index", "Home");
         }

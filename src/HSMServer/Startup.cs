@@ -93,8 +93,17 @@ namespace HSMServer
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/error");
+            }
+
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
             app.UseCertificateValidator();
 
@@ -135,12 +144,12 @@ namespace HSMServer
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",
-                    pattern: "{controller=Home}/{action=Index}"
+                    pattern: "{controller=Home}/{action}"
                 );
                 endpoints.MapControllerRoute(
                     name: "Account",
-                    pattern: "{controller=Account}/{action=Index}",
-                    defaults: new { controller = "Account", action = "Index" }
+                    pattern: "{controller=Account}/{action}",
+                    defaults: new { controller = "Account"}
                 );
                 endpoints.MapControllerRoute(
                     name: "Home",

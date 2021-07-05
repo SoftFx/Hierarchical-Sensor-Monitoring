@@ -4,20 +4,15 @@
     ViewData["Title"] = "Login";
 }
 
-<script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.AuthenticateAction, ViewConstants.AccountController))";
-    var urlLogged = "@Html.Raw(Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController))";
-</script>
-
 <h4 style="margin: 20px 0px">Login</h4>
 
 <div class="login-form-div">
     <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded" >
         <div class="mb-1">
-            <input class="form-control" placeholder="Login" name="login" id="loginInput" value="@Model.Login" type="text" /><br/>
+            <input class="form-control" placeholder="Username" name="username" id="usernameInput" value="@Model.Username" type="text" style="width: 200px"/><br/>
         </div>
         <div class="mb-3">
-            <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" />
+            <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" style="width: 200px"/>
         </div>
         <div class="mb-3 form-check">
             <input type="checkbox" class="form-check-input" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />

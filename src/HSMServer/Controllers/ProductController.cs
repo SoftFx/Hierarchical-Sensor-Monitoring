@@ -39,9 +39,9 @@ namespace HSMServer.Controllers
             else
                 products = _monitoringCore.GetProducts(user);
 
-            products = products.OrderBy(x => x.Name).ToList();
+            products = products?.OrderBy(x => x.Name).ToList();
 
-            var result = products.Select(x => new ProductViewModel(
+            var result = products?.Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
@@ -49,6 +49,7 @@ namespace HSMServer.Controllers
 
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
+            throw new Exception(";slmfs'fksdf");
             var product = _monitoringCore.GetProduct(productKey);
             var users = _userManager.GetViewers(productKey);
 
