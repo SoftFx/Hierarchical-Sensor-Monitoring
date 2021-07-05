@@ -20,7 +20,7 @@
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
         if (errorText !== undefined) {
             let errorSpan = document.getElementById('new_product_name_span');
-            errorSpan.textContent = errorText.slice(0, errorText.length - 5);
+            errorSpan.textContent = errorText;//.slice(0, errorText.length - 5);
             errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
         }
     </script>
@@ -71,7 +71,7 @@
                     cache: false,
                     async: true,
                     success: function () {
-                        window.location.href = "Product"; //ProductController -> Index
+                        document.location.reload();
                     }
                 });
             });
@@ -92,7 +92,7 @@
             cache: false,
             async: true,
             success: function () {
-                window.location.href = "Product"; //ProductController -> Index
+                document.location.reload();
             }
         })
     });

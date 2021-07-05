@@ -44,14 +44,14 @@
     let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';
     if (userErrorText !== undefined) {
         let userErrorSpan = document.getElementById('new_user_span');
-        userErrorSpan.textContent = userErrorText.slice(0, userErrorText.length - 5);
+        userErrorSpan.textContent = userErrorText;//.slice(0, userErrorText.length - 5);
         userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
     let keyErrorText = '@TempData[TextConstants.TempDataKeyErrorText]';
     if (keyErrorText !== undefined) {
         let keyErrorSpan = document.getElementById('new_key_span');
-        keyErrorSpan.textContent = keyErrorText.slice(0, keyErrorText.length - 5);
+        keyErrorSpan.textContent = keyErrorText;//.slice(0, keyErrorText.length - 5);
         keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
