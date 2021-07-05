@@ -299,10 +299,10 @@ namespace HSMServer.HtmlHelpers
 
         private static void RemovedUsedUsers(List<User> users, List<UserViewModel> usedUsers)
         {
-            if (!(users?.Any() ?? false))
+            if (users == null || !users.Any())
                 return;
 
-            if (!(usedUsers?.Any() ?? false))
+            if (usedUsers == null || !usedUsers.Any())
                 return;
 
             foreach (var usedUser in usedUsers)

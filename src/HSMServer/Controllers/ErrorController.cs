@@ -7,17 +7,12 @@ namespace HSMServer.Controllers
     [AllowAnonymous]
     public class ErrorController : Controller
     {
-        [Route("/error")]
-        public IActionResult Error()
+        public IActionResult Index()
         {
             ErrorViewModel errorViewModel = new ErrorViewModel();
-            errorViewModel.StatusCode = $"Status code: {HttpContext.Response.StatusCode.ToString()}";
-            return Index(errorViewModel);
-        }
+            errorViewModel.StatusCode = $"Status code: {HttpContext.Response.StatusCode}";
 
-        public IActionResult Index(ErrorViewModel viewModel)
-        {
-            return View(viewModel);
+            return View(errorViewModel);
         }
     }
 }
