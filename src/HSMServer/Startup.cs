@@ -93,13 +93,14 @@ namespace HSMServer
         }       
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            //env.EnvironmentName = "Production";
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
             }
             else
             {
-                app.UseExceptionHandler("/error");
+                app.UseExceptionHandler("/Error");
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
