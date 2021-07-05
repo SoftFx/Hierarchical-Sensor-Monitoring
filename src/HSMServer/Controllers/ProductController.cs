@@ -49,7 +49,6 @@ namespace HSMServer.Controllers
 
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
-            throw new Exception(";slmfs'fksdf");
             var product = _monitoringCore.GetProduct(productKey);
             var users = _userManager.GetViewers(productKey);
 
