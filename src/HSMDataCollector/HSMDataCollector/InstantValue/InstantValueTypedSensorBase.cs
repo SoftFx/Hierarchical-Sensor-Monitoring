@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.InstantValue
 {
-    abstract class InstantValueTypedSensorBase<T> : InstantValueSensorBase where T : struct
+    abstract class InstantValueTypedSensorBase<T> : InstantValueSensorBase
     {
         protected InstantValueTypedSensorBase(string path, string productKey, IValuesQueue queue)
             : base(path, productKey, queue)

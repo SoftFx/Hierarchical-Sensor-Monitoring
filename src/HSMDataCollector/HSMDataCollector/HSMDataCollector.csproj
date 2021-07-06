@@ -74,6 +74,7 @@
     <Compile Include="DefaultValueSensor\DefaultValueSensorDouble.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorInt.cs" />
     <Compile Include="Exceptions\InvalidSensorPathException.cs" />
+    <Compile Include="InstantValue\InstantValueSensor.cs" />
     <Compile Include="InstantValue\InstantValueSensorBase.cs" />
     <Compile Include="InstantValue\InstantValueSensorBool.cs" />
     <Compile Include="InstantValue\InstantValueSensorDouble.cs" />
@@ -93,11 +94,13 @@
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessMemorySensor.cs" />
     <Compile Include="PerformanceSensor\StandardSensor\StandardPerformanceSensorBase.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PublicInterface\IBarSensor.cs" />
     <Compile Include="PublicInterface\IBoolSensor.cs" />
     <Compile Include="PublicInterface\IDefaultValueSensorDouble.cs" />
     <Compile Include="PublicInterface\IDefaultValueSensorInt.cs" />
     <Compile Include="PublicInterface\IDoubleBarSensor.cs" />
     <Compile Include="PublicInterface\IDoubleSensor.cs" />
+    <Compile Include="PublicInterface\IInstantValueSensor.cs" />
     <Compile Include="PublicInterface\IIntBarSensor.cs" />
     <Compile Include="PublicInterface\IIntSensor.cs" />
     <Compile Include="PublicInterface\IStringSensor.cs" />

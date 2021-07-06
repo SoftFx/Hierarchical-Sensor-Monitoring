@@ -42,7 +42,7 @@ namespace HSMDataCollector.Bar
         {
             IntBarSensorValue dataObject = GetDataObject();
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         protected override void SmallTimerTick(object state)
@@ -57,7 +57,7 @@ namespace HSMDataCollector.Bar
                 return;
             }
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public void AddValue(int value)

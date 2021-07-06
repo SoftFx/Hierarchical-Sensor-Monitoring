@@ -45,7 +45,7 @@ namespace HSMDataCollector.InstantValue
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.IntSensor;
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
         
         protected override string GetStringData(SensorValueBase data)

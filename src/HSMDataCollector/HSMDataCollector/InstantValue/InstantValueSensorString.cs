@@ -4,11 +4,10 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
 using System;
-using System.Text;
 
 namespace HSMDataCollector.InstantValue
 {
-    class InstantValueSensorString : InstantValueSensorBase, IStringSensor
+    class InstantValueSensorString : InstantValueTypedSensorBase<string>, IStringSensor
     {
         private string _value;
         public InstantValueSensorString(string path, string productKey, IValuesQueue queue) 

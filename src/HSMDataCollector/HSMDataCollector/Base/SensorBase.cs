@@ -18,10 +18,10 @@ namespace HSMDataCollector.Base
         }
         public abstract bool HasLastValue { get; }
         public abstract CommonSensorValue GetLastValue();
+        public abstract FullSensorValue GetLastValueNew();
         public abstract void Dispose();
-
         protected abstract string GetStringData(SensorValueBase data);
-        protected void SendData(CommonSensorValue value)
+        protected void EnqueueData(CommonSensorValue value)
         {
             _queue.Enqueue(value);
         }

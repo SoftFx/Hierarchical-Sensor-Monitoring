@@ -24,7 +24,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
             {
                 value = Function.Invoke();
                 CommonSensorValue convertedValue = ConvertValue(value);
-                SendData(convertedValue);
+                EnqueueData(convertedValue);
             }
             catch (Exception e)
             { }
