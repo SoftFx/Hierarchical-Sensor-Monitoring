@@ -7,7 +7,6 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace HSMDataCollector.Bar
 {
@@ -44,7 +43,7 @@ namespace HSMDataCollector.Bar
                 return;
             }
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public override CommonSensorValue GetLastValue()
@@ -61,11 +60,16 @@ namespace HSMDataCollector.Bar
             }
         }
 
+        public override FullSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public void AddValue(double value)

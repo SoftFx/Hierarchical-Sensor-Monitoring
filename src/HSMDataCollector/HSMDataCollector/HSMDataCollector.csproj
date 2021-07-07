@@ -70,6 +70,7 @@
     <Compile Include="Core\IDataCollector.cs" />
     <Compile Include="Core\IDataQueue.cs" />
     <Compile Include="Core\IValuesQueue.cs" />
+    <Compile Include="DefaultValueSensor\DefaultValueSensor.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorBase.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorDouble.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorInt.cs" />
@@ -103,6 +104,7 @@
     <Compile Include="PublicInterface\IInstantValueSensor.cs" />
     <Compile Include="PublicInterface\IIntBarSensor.cs" />
     <Compile Include="PublicInterface\IIntSensor.cs" />
+    <Compile Include="PublicInterface\ILastValueSensor.cs" />
     <Compile Include="PublicInterface\IStringSensor.cs" />
     <Compile Include="Serialization\Serializer.cs" />
     <Compile Include="TextConstants.cs" />

@@ -1,9 +1,11 @@
-﻿using HSMDataCollector.Base;
+﻿using System;
+using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.InstantValue
 {
+    [Obsolete("Use InstantValueSensor class")]
     abstract class InstantValueSensorBase : SensorBase
     {
         protected object _syncObject;

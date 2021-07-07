@@ -7,6 +7,7 @@ using System;
 
 namespace HSMDataCollector.InstantValue
 {
+    [Obsolete("Use InstantValueSensor class")]
     class InstantValueSensorString : InstantValueTypedSensorBase<string>, IStringSensor
     {
         private string _value;
@@ -43,7 +44,7 @@ namespace HSMDataCollector.InstantValue
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.StringSensor;
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
         private StringSensorValue GetDataObject()
         {
@@ -57,6 +58,11 @@ namespace HSMDataCollector.InstantValue
             result.Key = ProductKey;
             result.Time = DateTime.Now;
             return result;
+        }
+
+        public override FullSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
         }
 
         protected override string GetStringData(SensorValueBase data)

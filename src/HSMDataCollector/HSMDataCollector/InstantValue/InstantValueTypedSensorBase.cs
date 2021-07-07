@@ -1,7 +1,9 @@
-﻿using HSMDataCollector.Core;
+﻿using System;
+using HSMDataCollector.Core;
 
 namespace HSMDataCollector.InstantValue
 {
+    [Obsolete("Use InstantValueSensor class")]
     abstract class InstantValueTypedSensorBase<T> : InstantValueSensorBase
     {
         protected InstantValueTypedSensorBase(string path, string productKey, IValuesQueue queue)

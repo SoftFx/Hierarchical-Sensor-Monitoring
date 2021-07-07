@@ -1,10 +1,16 @@
 ﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
+using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
+using HSMDataCollector.Logging;
 using HSMDataCollector.PerformanceSensor.Base;
+using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
+using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
+using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,15 +21,12 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
-using HSMDataCollector.DefaultValueSensor;
-using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
-using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
-using HSMDataCollector.PerformanceSensor.SystemMonitoring;
-using Newtonsoft.Json;
-using HSMDataCollector.Logging;
 
 namespace HSMDataCollector.Core
 {
+    /// <summary>
+    /// Main monitoring class which is used to create and control sensors' instances
+    /// </summary>
     public class DataCollector : IDataCollector
     {
         private readonly string _productKey;
@@ -32,7 +35,13 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
         private NLog.Logger _logger;
-        public DataCollector(string productKey, string address, int port)
+        /// <summary>
+        /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
+        /// </summary>
+        /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
+        /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
+        /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
+        public DataCollector(string productKey, string address, int port = 44330)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
             _listSendingAddress = $"{connectionAddress}/list";
@@ -40,13 +49,13 @@ namespace HSMDataCollector.Core
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             _client = new HttpClient();
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
             _dataQueue.SendData += DataQueue_SendData;
         }
 
         public event EventHandler ValuesQueueOverflow;
-        //Use after constructor!
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
             if (useLogging)
@@ -126,61 +135,130 @@ namespace HSMDataCollector.Core
             AddNewSensor(aliveSensor, path);
         }
 
-        public IBoolSensor CreateBoolSensor(string path)
+        #region Generic sensors functionality
+
+        public IInstantValueSensor<bool> CreateBoolSensor(string path, string description)
         {
             var existingSensor = GetExistingSensor(path);
-            var boolSensor = existingSensor as IBoolSensor;
+            var boolSensor = existingSensor as IInstantValueSensor<bool>;
             if (boolSensor != null)
             {
                 return boolSensor;
             }
-            
-            InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _dataQueue as IValuesQueue);
+
+            InstantValueSensor<bool> sensor = new InstantValueSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, 
+                SensorType.BooleanSensor, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        public IDoubleSensor CreateDoubleSensor(string path)
+        public IInstantValueSensor<int> CreateIntSensor(string path, string description)
         {
             var existingSensor = GetExistingSensor(path);
-            var doubleSensor = existingSensor as IDoubleSensor;
-            if (doubleSensor != null)
-            {
-                return doubleSensor;
-            }
-
-            InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IIntSensor CreateIntSensor(string path)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var intSensor = existingSensor as IIntSensor;
+            var intSensor = existingSensor as IInstantValueSensor<int>;
             if (intSensor != null)
             {
                 return intSensor;
             }
 
-            InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _dataQueue as IValuesQueue);
+            InstantValueSensor<int> sensor = new InstantValueSensor<int>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.IntSensor, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        public IStringSensor CreateStringSensor(string path)
+        public IInstantValueSensor<double> CreateDoubleSensor(string path, string description)
         {
             var existingSensor = GetExistingSensor(path);
-            var stringSensor = existingSensor as IStringSensor;
+            var doubleSensor = existingSensor as IInstantValueSensor<double>;
+            if (doubleSensor != null)
+            {
+                return doubleSensor;
+            }
+
+            InstantValueSensor<double> sensor = new InstantValueSensor<double>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.DoubleSensor, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IInstantValueSensor<string> CreateStringSensor(string path, string description)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var stringSensor = existingSensor as IInstantValueSensor<string>;
             if (stringSensor != null)
             {
                 return stringSensor;
             }
-            
-            InstantValueSensorString sensor = new InstantValueSensorString(path, _productKey, _dataQueue as IValuesQueue);
+
+            InstantValueSensor<string> sensor = new InstantValueSensor<string>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.StringSensor, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
+
+        #endregion
+
+        #region Old sensor creation
+
+        //public IBoolSensor CreateBoolSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var boolSensor = existingSensor as IBoolSensor;
+        //    if (boolSensor != null)
+        //    {
+        //        return boolSensor;
+        //    }
+
+        //    InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IDoubleSensor CreateDoubleSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var doubleSensor = existingSensor as IDoubleSensor;
+        //    if (doubleSensor != null)
+        //    {
+        //        return doubleSensor;
+        //    }
+
+        //    InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IIntSensor CreateIntSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var intSensor = existingSensor as IIntSensor;
+        //    if (intSensor != null)
+        //    {
+        //        return intSensor;
+        //    }
+
+        //    InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IStringSensor CreateStringSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var stringSensor = existingSensor as IStringSensor;
+        //    if (stringSensor != null)
+        //    {
+        //        return stringSensor;
+        //    }
+
+        //    InstantValueSensorString sensor = new InstantValueSensorString(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        #endregion
+
 
         public IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue)
         {
@@ -209,6 +287,8 @@ namespace HSMDataCollector.Core
             AddNewSensor(sensor, path);
             return sensor;
         }
+
+        
 
         #region Bar sensors
 

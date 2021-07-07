@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Core;
+﻿using System;
+using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 
@@ -21,9 +22,15 @@ namespace HSMDataCollector.Base
         public abstract FullSensorValue GetLastValueNew();
         public abstract void Dispose();
         protected abstract string GetStringData(SensorValueBase data);
+        [Obsolete("07.07.2021. Use another data object.")]
         protected void EnqueueData(CommonSensorValue value)
         {
             _queue.Enqueue(value);
+        }
+
+        protected void EnqueueValue(FullSensorValue value)
+        {
+            _queue.EnqueueData(value);
         }
     }
 }

@@ -9,11 +9,13 @@ namespace HSMDataCollector.InstantValue
 {
     class InstantValueSensor<T> : SensorBase, IInstantValueSensor<T>
     {
-        private string _description;
-        public InstantValueSensor(string path, string productKey, IValuesQueue queue, string description = "")
+        private readonly string _description;
+        private readonly SensorType _type;
+        public InstantValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, string description = "")
             : base(path, productKey, queue)
         {
             _description = description;
+            _type = type;
         }
 
         public override bool HasLastValue => false;
@@ -46,18 +48,22 @@ namespace HSMDataCollector.InstantValue
             valueObject.Path = Path;
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
-            //Send values
-            //SendData
+            valueObject.Type = _type;
+            EnqueueValue(valueObject);
         }
-
-        public void AddValue(T value, SensorStatus status = SensorStatus.Unknown)
-        {
-            throw new NotImplementedException();
-        }
-
+        
         public void AddValue(T value, SensorStatus status = SensorStatus.Unknown, string comment = "")
         {
-            throw new NotImplementedException();
+            FullSensorValue valueObject = new FullSensorValue();
+            valueObject.Comment = comment;
+            valueObject.Data = value.ToString();
+            valueObject.Description = _description;
+            valueObject.Path = Path;
+            valueObject.Key = ProductKey;
+            valueObject.Time = DateTime.Now;
+            valueObject.Type = _type;
+            valueObject.Status = status;
+            EnqueueValue(valueObject);
         }
     }
 }

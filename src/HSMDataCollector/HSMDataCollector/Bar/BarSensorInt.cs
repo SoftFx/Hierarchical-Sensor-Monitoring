@@ -1,14 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMDataCollector.Bar
 {
@@ -36,6 +34,11 @@ namespace HSMDataCollector.Bar
             {
                 return null;
             }
+        }
+
+        public override FullSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
         }
 
         protected override void SendDataTimer(object state)

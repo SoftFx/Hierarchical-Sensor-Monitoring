@@ -9,6 +9,12 @@ namespace HSMDataCollector.Core
         /// The method sets the sending timer up. No data will be sent without calling this method
         /// </summary>
         void Initialize();
+        /// <summary>
+        /// Initializes monitoring, starts all monitoring timers and logger
+        /// </summary>
+        /// <param name="useLogging">Specifies whether runtime errors will be logged or not</param>
+        /// <param name="folderPath">Path to logs folder, if null current folder will be used</param>
+        /// <param name="fileNameFormat">File name format, if null default file name is specified</param>
         void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null);
         /// <summary>
         /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
@@ -44,12 +50,18 @@ namespace HSMDataCollector.Core
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>
         void MonitorServiceAlive();
-        IBoolSensor CreateBoolSensor(string path);
-        IDoubleSensor CreateDoubleSensor(string path);
-        IIntSensor CreateIntSensor(string path);
-        IStringSensor CreateStringSensor(string path);
+        //07.07.2021: Use typed sensors
+        //IBoolSensor CreateBoolSensor(string path);
+        //IDoubleSensor CreateDoubleSensor(string path);
+        //IIntSensor CreateIntSensor(string path);
+        //IStringSensor CreateStringSensor(string path);
         IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue);
         IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue);
+
+        IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "");
+        IInstantValueSensor<int> CreateIntSensor(string path, string description = "");
+        IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "");
+        IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
 
         #region Bar sensors
 
