@@ -1,23 +1,17 @@
-﻿using HSMServer.Constants;
-
-namespace HSMServer.Configuration
+﻿namespace HSMServer.Configuration
 {
     public class ConfigurationObject
     {
-        public int MaxPathLength { get; set; }
+        public string Name { get; set; }
+        public string Value { get; set; }
 
-        public static ConfigurationObject CreateDefaultObject()
+        public static ConfigurationObject CreateConfiguration(string name, string value)
         {
-            return new ConfigurationObject() {MaxPathLength = ConfigurationConstants.DefaultMaxPathLength};
-        }
-
-        public override bool Equals(object? obj)
-        {
-            if (obj == null || !GetType().Equals(obj.GetType()))
-                return false;
-
-            ConfigurationObject rhs = (ConfigurationObject) obj;
-            return MaxPathLength == rhs.MaxPathLength;
+            return new ConfigurationObject()
+            {
+                Name = name,
+                Value = value
+            };
         }
     }
 }

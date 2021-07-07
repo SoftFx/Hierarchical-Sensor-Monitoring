@@ -30,13 +30,25 @@ namespace HSMServer.Configuration
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.ClientAppFolderName);
         public ClientVersionModel ClientVersion => _clientVersion ??= ReadClientVersion();
 
-        public ConfigurationObject CurrentConfigurationObject =>
-            _currentConfigurationObject ??= ReadConfigurationObject();
         public void UpdateConfigurationObject(ConfigurationObject newObject)
         {
             _currentConfigurationObject = newObject;
             SaveConfigurationObject(newObject);
             OnConfigurationObjectUpdated(newObject);
+        }
+
+        public void AddConfigurationObject(string name, string value)
+        {
+            var config = new ConfigurationObject() { Name = name, Value = value };
+            _database.WriteConfigurationObject(config);
+        }
+
+        ///Use 'name' from ConfigurationConstants! 
+        public ConfigurationObject ReadConfigurationObject(string name)
+        {
+            var currentObject = _database.ReadConfigurationObject(name);
+            return currentObject ?? ConfigurationObject.CreateConfiguration(name,
+                ConfigurationConstants.GetDefault(name));
         }
 
         public event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
@@ -51,11 +63,7 @@ namespace HSMServer.Configuration
         {
             _database.WriteConfigurationObject(configurationObject);
         }
-        private ConfigurationObject ReadConfigurationObject()
-        {
-            var currentObject = _database.ReadConfigurationObject();
-            return currentObject ?? ConfigurationObject.CreateDefaultObject();
-        }
+
         private ClientVersionModel ReadClientVersion()
         {
             try

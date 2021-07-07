@@ -11,5 +11,19 @@
         public const int DefaultMaxPathLength = 10;
 
         #endregion
+
+        #region Configuration Names
+
+        public const string MaxPathLength = nameof(MaxPathLength);
+
+        #endregion
+
+        public static string GetDefault(string name)
+        {
+            return name switch
+            {
+                MaxPathLength => DefaultMaxPathLength.ToString()
+            };
+        }
     }
 }
