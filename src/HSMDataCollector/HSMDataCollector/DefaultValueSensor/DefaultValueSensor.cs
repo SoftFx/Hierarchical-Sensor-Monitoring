@@ -11,9 +11,17 @@ namespace HSMDataCollector.DefaultValueSensor
     {
         private readonly string _description;
         private readonly SensorType _type;
-        public DefaultValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, string description = "")
+        protected readonly object _syncRoot;
+        protected T _currentValue;
+        protected string _currentComment;
+        protected SensorStatus _currentStatus;
+        public DefaultValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, T defaultValue, string description = "")
             : base(path, productKey, queue)
         {
+            lock (_syncRoot)
+            {
+                _currentValue = defaultValue;
+            }
             _description = description;
             _type = type;
         }
@@ -26,7 +34,7 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public override void Dispose()
         {
-            throw new NotImplementedException();
+            
         }
 
         protected override string GetStringData(SensorValueBase data)
@@ -36,17 +44,39 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public override FullSensorValue GetLastValueNew()
         {
-            throw new NotImplementedException();
+            FullSensorValue value = new FullSensorValue();
+            value.Type = _type;
+            value.Key = ProductKey;
+            value.Path = Path;
+            value.Time = DateTime.Now;
+            value.Description = _description;
+            lock (_syncRoot)
+            {
+                value.Data = _currentValue.ToString();
+                value.Comment = _currentComment;
+                value.Status = _currentStatus;
+            }
+
+            return value;
         }
 
         public void AddValue(T value, string comment = "")
         {
-            throw new NotImplementedException();
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+                _currentComment = comment;
+            }
         }
 
         public void AddValue(T value, SensorStatus status = SensorStatus.Unknown, string comment = "")
         {
-            throw new NotImplementedException();
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+                _currentStatus = status;
+                _currentComment = comment;
+            }
         }
     }
 }

@@ -197,6 +197,66 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
+        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var lastValueSensorBool = existingSensor as ILastValueSensor<bool>;
+            if (lastValueSensorBool != null)
+            {
+                return lastValueSensorBool;
+            }
+
+            DefaultValueSensor<bool> sensor =
+                new DefaultValueSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, SensorType.BooleanSensor, defaultValue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var lastValueSensorInt = existingSensor as ILastValueSensor<int>;
+            if (lastValueSensorInt != null)
+            {
+                return lastValueSensorInt;
+            }
+
+            DefaultValueSensor<int> sensor =
+                new DefaultValueSensor<int>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntSensor, defaultValue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var lastValueSensorDouble = existingSensor as ILastValueSensor<double>;
+            if (lastValueSensorDouble != null)
+            {
+                return lastValueSensorDouble;
+            }
+
+            DefaultValueSensor<double> sensor =
+                new DefaultValueSensor<double>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntSensor, defaultValue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var lastValueSensorString = existingSensor as ILastValueSensor<string>;
+            if (lastValueSensorString != null)
+            {
+                return lastValueSensorString;
+            }
+
+            DefaultValueSensor<string> sensor =
+                new DefaultValueSensor<string>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntSensor, defaultValue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
         #endregion
 
         #region Old sensor creation
@@ -257,38 +317,39 @@ namespace HSMDataCollector.Core
         //    return sensor;
         //}
 
+        //public IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var defaultValueSensorInt = existingSensor as IDefaultValueSensorInt;
+        //    if (defaultValueSensorInt != null)
+        //    {
+        //        return defaultValueSensorInt;
+        //    }
+
+        //    DefaultValueSensorInt sensor = new DefaultValueSensorInt(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var defaultValueSensorDouble = existingSensor as IDefaultValueSensorDouble;
+        //    if (defaultValueSensorDouble != null)
+        //    {
+        //        return defaultValueSensorDouble;
+        //    }
+
+        //    DefaultValueSensorDouble sensor = new DefaultValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
         #endregion
 
 
-        public IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var defaultValueSensorInt = existingSensor as IDefaultValueSensorInt;
-            if (defaultValueSensorInt != null)
-            {
-                return defaultValueSensorInt;
-            }
 
-            DefaultValueSensorInt sensor = new DefaultValueSensorInt(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
 
-        public IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var defaultValueSensorDouble = existingSensor as IDefaultValueSensorDouble;
-            if (defaultValueSensorDouble != null)
-            {
-                return defaultValueSensorDouble;
-            }
 
-            DefaultValueSensorDouble sensor = new DefaultValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        
 
         #region Bar sensors
 

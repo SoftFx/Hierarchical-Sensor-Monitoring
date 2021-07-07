@@ -1,9 +1,11 @@
-﻿using HSMDataCollector.Base;
+﻿using System;
+using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.DefaultValueSensor
 {
+    [Obsolete("07.07.2021. Use DefaultValueSensor")]
     internal abstract class DefaultValueSensorBase<T> : ISensor
     {
         protected readonly object _syncRoot;
