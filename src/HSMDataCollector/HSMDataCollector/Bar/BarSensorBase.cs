@@ -93,9 +93,9 @@ namespace HSMDataCollector.Bar
         }
         protected void Stop()
         {
-            _barTimer.Dispose();
+            _barTimer?.Dispose();
             _barTimer = null;
-            _smallTimer.Dispose();
+            _smallTimer?.Dispose();
             _smallTimer = null;
         }
 
