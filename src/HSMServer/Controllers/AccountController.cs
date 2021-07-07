@@ -69,7 +69,7 @@ namespace HSMServer.Controllers
             }
 
             _userManager.AddUser(model.Username, null, null,
-                HashComputer.ComputePasswordHash(model.Password), UserRoleEnum.Guest);
+                HashComputer.ComputePasswordHash(model.Password), false);
             await Authenticate(model.Username, true);
 
             return RedirectToAction("Index", "Home");
@@ -91,7 +91,7 @@ namespace HSMServer.Controllers
 
         //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
         //}
-        [AuthorizeRole(UserRoleEnum.SystemAdmin)]
+        [AuthorizeRole(true)]
         public IActionResult Users()
         {
             var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
@@ -114,7 +114,7 @@ namespace HSMServer.Controllers
             
             else 
                 _userManager.AddUser(model.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(model.Password), model.Role.Value);
+                HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
         [HttpPost]
@@ -122,8 +122,6 @@ namespace HSMServer.Controllers
         {
             var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
             userViewModel.Password = currentUser.Password;
-            if (userViewModel.Role == null) 
-                userViewModel.Role = currentUser.Role;
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
@@ -149,8 +147,8 @@ namespace HSMServer.Controllers
             User user = new User()
             {
                 UserName = userViewModel.Username,
-                Password = userViewModel.Password,//HashComputer.ComputePasswordHash(userViewModel.Password),
-                Role = userViewModel.Role.Value
+                Password = userViewModel.Password,
+                IsAdmin = userViewModel.IsAdmin
             };
             return user;
         }

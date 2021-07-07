@@ -3,7 +3,7 @@
 @using HSMServer.HtmlHelpers
 @model EditProductViewModel
 
-@{ ViewData["Title"] = "Products " + Model.ProductName; }
+@{ ViewData["Title"] = "Product " + Model.ProductName; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
 
@@ -37,7 +37,8 @@
 <input id="productKey" value="@Model.ProductKey" style="display: none" />
 
 <div class="container row justify-content-center">
-    @ViewHelper.CreateEditProductTables(Context.User, Model)
+    @ViewHelper.CreateExtraKeysTable(Context.User, Model)
+    @ViewHelper.CreateUsersRightsTable(Context.User, Model)
 </div>
 
 <script>

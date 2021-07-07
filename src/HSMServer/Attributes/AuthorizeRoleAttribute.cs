@@ -10,11 +10,11 @@ namespace HSMServer.Attributes
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
     public class AuthorizeRoleAttribute : AuthorizeAttribute, IAuthorizationFilter
     {
-        private List<UserRoleEnum> _policyRoles;
+        private List<bool> _policyRoles;
 
-        public AuthorizeRoleAttribute(params UserRoleEnum[] roles)
+        public AuthorizeRoleAttribute(params bool[] roles)
         {
-            _policyRoles = new List<UserRoleEnum>();
+            _policyRoles = new List<bool>();
             _policyRoles.AddRange(roles);
         }
         public void OnAuthorization(AuthorizationFilterContext context)
@@ -27,7 +27,7 @@ namespace HSMServer.Attributes
             var user = context.HttpContext.User;
             var convertedUser = user as User;
 
-            if (_policyRoles.Contains(convertedUser.Role))
+            if (_policyRoles.Contains(convertedUser.IsAdmin))
             {
                 return;
             }
