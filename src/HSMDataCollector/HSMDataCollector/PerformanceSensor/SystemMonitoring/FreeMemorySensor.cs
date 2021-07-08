@@ -3,38 +3,44 @@ using HSMDataCollector.Bar;
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
-    internal class FreeMemorySensor : StandardPerformanceSensorBase
+    internal class FreeMemorySensor : StandardPerformanceSensorBase<int>
     {
-        private readonly BarSensorInt _valuesSensor;
         private const string _sensorName = "Free memory MB";
         public FreeMemorySensor(string productKey, IValuesQueue queue) : base($"{TextConstants.PerformanceNodeName}/{_sensorName}",
             "Memory", "Available MBytes", string.Empty)
         {
-            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
+            InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                _valuesSensor.AddValue((int)_internalCounter.NextValue());
+                InternalBar.AddValue((int)InternalCounter.NextValue());
             }
             catch (Exception e)
             { }
             
         }
+
+        public override SensorValueBase GetLastValueNew()
+        {
+            return InternalBar.GetLastValueNew();
+        }
+
         public override CommonSensorValue GetLastValue()
         {
-            return _valuesSensor.GetLastValue();
+            return InternalBar.GetLastValue();
         }
         public override void Dispose()
         {
             _monitoringTimer?.Dispose();
-            _internalCounter?.Dispose();
-            _valuesSensor?.Dispose();
+            InternalCounter?.Dispose();
+            InternalBar?.Dispose();
         }
     }
 }

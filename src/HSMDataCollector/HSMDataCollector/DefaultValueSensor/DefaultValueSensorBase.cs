@@ -2,6 +2,7 @@
 using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.DefaultValueSensor
 {
@@ -27,6 +28,11 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public bool HasLastValue => true;
         public abstract CommonSensorValue GetLastValue();
+        public SensorValueBase GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         public void Dispose()
         {
             

@@ -60,7 +60,7 @@ namespace HSMDataCollector.InstantValue
             return result;
         }
 
-        public override SimpleSensorValue GetLastValueNew()
+        public override SensorValueBase GetLastValueNew()
         {
             throw new NotImplementedException();
         }

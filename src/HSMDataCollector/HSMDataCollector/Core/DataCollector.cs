@@ -446,7 +446,8 @@ namespace HSMDataCollector.Core
                 return intBarSensor;
             }
 
-            BarSensor<int> sensor = new BarSensor<int>(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod, SensorType.IntegerBarSensor, description);
+            BarSensor<int> sensor = new BarSensor<int>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
+                timeout, smallPeriod,  description);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -486,8 +487,8 @@ namespace HSMDataCollector.Core
                 return doubleBarSensor;
             }
 
-            BarSensor<double> sensor = new BarSensor<double>(path, _productKey, _dataQueue as IValuesQueue, 
-                timeout, smallPeriod, SensorType.IntegerBarSensor, description);
+            BarSensor<double> sensor = new BarSensor<double>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.IntegerBarSensor, timeout, smallPeriod, description);
             AddNewSensor(sensor, path);
             return sensor;
         }

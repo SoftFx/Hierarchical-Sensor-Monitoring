@@ -11,7 +11,7 @@ namespace HSMDataCollector.InstantValue
         protected object _syncObject;
         
         protected InstantValueSensorBase(string path, string productKey, IValuesQueue queue) :
-            base(path, productKey, queue)
+            base(path, productKey, queue, "")
         {
             _syncObject = new object();
         }

@@ -12,7 +12,7 @@ namespace HSMDataCollector.InstantValue
         private readonly string _description;
         private readonly SensorType _type;
         public InstantValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, string description = "")
-            : base(path, productKey, queue)
+            : base(path, productKey, queue, description)
         {
             _description = description;
             _type = type;
@@ -24,7 +24,7 @@ namespace HSMDataCollector.InstantValue
             throw new NotImplementedException();
         }
 
-        public override SimpleSensorValue GetLastValueNew()
+        public override SensorValueBase GetLastValueNew()
         {
             throw new NotImplementedException();
         }

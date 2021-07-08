@@ -18,7 +18,7 @@ namespace HSMDataCollector.Bar
         public BarSensorInt(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000) : base(path, productKey, queue, collectPeriod,
-            smallPeriod)
+            smallPeriod, "")
         {
             _valuesList = new List<int>();
         }
