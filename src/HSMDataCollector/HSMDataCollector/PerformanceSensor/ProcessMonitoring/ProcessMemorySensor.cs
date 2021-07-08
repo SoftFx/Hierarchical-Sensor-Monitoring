@@ -28,7 +28,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             
         }
 
-        public override SensorValueBase GetLastValueNew()
+        public override UnitedSensorValue GetLastValueNew()
         {
             return InternalBar.GetLastValueNew();
         }

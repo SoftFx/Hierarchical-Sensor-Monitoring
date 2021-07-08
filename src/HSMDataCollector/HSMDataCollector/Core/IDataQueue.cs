@@ -7,18 +7,18 @@ namespace HSMDataCollector.Core
 {
     public interface IDataQueue
     {
-        //void EnqueueValue(SensorValueBase value);
+        //void EnqueueValue(CommonSensorValue value);
         [Obsolete("07.07.2021. Use SendValues.")]
         event EventHandler<List<CommonSensorValue>> SendData;
 
-        event EventHandler<List<SensorValueBase>> SendValues;
+        event EventHandler<List<UnitedSensorValue>> SendValues;
         event EventHandler<DateTime> QueueOverflow;
         [Obsolete("07.07.2021. Use ReturnData.")]
         void ReturnFailedData(List<CommonSensorValue> values);
         [Obsolete("07.07.2021. Use GetCollectedData.")]
         List<CommonSensorValue> GetAllCollectedData();
-        void ReturnData(List<SensorValueBase> values);
-        List<SensorValueBase> GetCollectedData();
+        void ReturnData(List<UnitedSensorValue> values);
+        List<UnitedSensorValue> GetCollectedData();
         void InitializeTimer();
         void Stop();
         void Clear();

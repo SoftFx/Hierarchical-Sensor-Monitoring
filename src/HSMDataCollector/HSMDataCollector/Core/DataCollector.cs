@@ -83,7 +83,7 @@ namespace HSMDataCollector.Core
         {
             _logger?.Info("DataCollector stopping...");
 
-            List<SensorValueBase> allData = new List<SensorValueBase>();
+            List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
             if (_dataQueue != null)
             {
                 //allData.AddRange(_dataQueue.GetAllCollectedData());
@@ -527,7 +527,7 @@ namespace HSMDataCollector.Core
         {
             if (isCPU)
             {
-                CPUSensor cpuSensor = new CPUSensor(_productKey, _dataQueue as IValuesQueue);
+                TotalCPUSensor cpuSensor = new TotalCPUSensor(_productKey, _dataQueue as IValuesQueue);
                 AddNewSensor(cpuSensor, cpuSensor.Path);
             }
 
@@ -626,7 +626,7 @@ namespace HSMDataCollector.Core
 
             return count;
         }
-        private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
+        private void DataQueue_SendValues(object sender, List<UnitedSensorValue> e)
         {
             SendMonitoringData(e);
         }
@@ -635,7 +635,7 @@ namespace HSMDataCollector.Core
         //    SendData(e);
         //}
 
-        private void SendMonitoringData(List<SensorValueBase> values)
+        private void SendMonitoringData(List<UnitedSensorValue> values)
         {
             try
             {

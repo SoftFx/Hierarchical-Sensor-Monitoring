@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMDataCollector.PublicInterface;
+using Newtonsoft.Json;
 
 namespace HSMDataCollector.Bar
 {
@@ -58,7 +59,7 @@ namespace HSMDataCollector.Bar
                 barStart = DateTime.Now;
             }
 
-            SensorValueBase dataObject = GetSensorValueFromGenericList(collected, startTime, endTime);
+            UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime, endTime);
             EnqueueValue(dataObject);
         }
 
@@ -72,7 +73,7 @@ namespace HSMDataCollector.Bar
                 startTime = barStart;
             }
 
-            SensorValueBase dataObject = GetSensorValueFromGenericList(collected, startTime);
+            UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime);
             EnqueueValue(dataObject);
         }
 
@@ -86,7 +87,7 @@ namespace HSMDataCollector.Bar
             throw new NotImplementedException();
         }
 
-        public override SensorValueBase GetLastValueNew()
+        public override UnitedSensorValue GetLastValueNew()
         {
             try
             {
@@ -107,7 +108,7 @@ namespace HSMDataCollector.Bar
         }
 
 
-        private SensorValueBase GetSensorValueFromGenericList(List<T> values, DateTime barStart, DateTime? barEnd = null)
+        private UnitedSensorValue GetSensorValueFromGenericList(List<T> values, DateTime barStart, DateTime? barEnd = null)
         {
             try
             {
@@ -127,7 +128,7 @@ namespace HSMDataCollector.Bar
             
         }
 
-        private void FillCommonData(SensorValueBase valueBase, DateTime time)
+        private void FillCommonData(UnitedSensorValue valueBase, DateTime time)
         {
             valueBase.Key = ProductKey;
             valueBase.Path = Path;
@@ -137,36 +138,38 @@ namespace HSMDataCollector.Bar
         }
         #region Double methods
 
-        private DoubleBarSensorValue GetDoubleDataObject(List<double> values, DateTime barStartTime, DateTime barEndTime)
+        private UnitedSensorValue GetDoubleDataObject(List<double> values, DateTime barStartTime, DateTime barEndTime)
         {
-            DoubleBarSensorValue result = new DoubleBarSensorValue();
-            result.LastValue = values.Any() ? values.Last() : 0;
+            UnitedSensorValue result = new UnitedSensorValue();
             FillCommonData(result, barStartTime);
-            FillNumericData(result, values);
-            result.StartTime = barStartTime;
-            result.EndTime = barEndTime;
+            DoubleBarData barData = new DoubleBarData();
+            barData.LastValue = values.Any() ? values.Last() : 0;
+            FillNumericData(barData, values);
+            barData.StartTime = barStartTime;
+            barData.EndTime = barEndTime;
+            result.Data = JsonConvert.SerializeObject(barData);
             return result;
         }
 
-        private void FillNumericData(DoubleBarSensorValue value, List<double> values)
+        private void FillNumericData(DoubleBarData data, List<double> values)
         {
             if (values.Any())
             {
                 values.Sort();
-                value.Max = GetRoundedNumber(values.Last());
-                value.Min = GetRoundedNumber(values.First());
-                value.Count = values.Count;
-                value.Mean = GetRoundedNumber(CountMean(values));
-                value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.25)), 0.25));
-                value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.5)), 0.5));
-                value.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.75)), 0.75));
+                data.Max = GetRoundedNumber(values.Last());
+                data.Min = GetRoundedNumber(values.First());
+                data.Count = values.Count;
+                data.Mean = GetRoundedNumber(CountMean(values));
+                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.25)), 0.25));
+                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.5)), 0.5));
+                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.75)), 0.75));
                 return;
             }
 
-            value.Max = 0.0;
-            value.Min = 0.0;
-            value.Count = 0;
-            value.Mean = 0.0;
+            data.Max = 0.0;
+            data.Min = 0.0;
+            data.Count = 0;
+            data.Mean = 0.0;
         }
         private double CountMean(List<double> values)
         {
@@ -191,36 +194,38 @@ namespace HSMDataCollector.Bar
 
         #region Int methods
 
-        private IntBarSensorValue GetIntegerDataObject(List<int> values, DateTime barStartTime, DateTime barEndTime)
+        private UnitedSensorValue GetIntegerDataObject(List<int> values, DateTime barStartTime, DateTime barEndTime)
         {
-            IntBarSensorValue result = new IntBarSensorValue();
-            result.LastValue = values.Any() ? values.Last() : 0;
+            UnitedSensorValue result = new UnitedSensorValue();
             FillCommonData(result, barStartTime);
-            FillNumericData(result, values);
-            result.StartTime = barStartTime;
-            result.EndTime = barEndTime;
+            IntBarData barData = new IntBarData();
+            barData.LastValue = values.Any() ? values.Last() : 0;
+            FillNumericData(barData, values);
+            barData.StartTime = barStartTime;
+            barData.EndTime = barEndTime;
+            result.Data = JsonConvert.SerializeObject(barData);
             return result;
         }
 
-        private void FillNumericData(IntBarSensorValue value, List<int> values)
+        private void FillNumericData(IntBarData data, List<int> values)
         {
             if (values.Any())
             {
                 values.Sort();
-                value.Max = values.Last();
-                value.Min = values.First();
-                value.Count = values.Count;
-                value.Mean = CountMean(values);
-                value.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.25), 0.25));
-                value.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.5), 0.5));
-                value.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.75), 0.75));
+                data.Max = values.Last();
+                data.Min = values.First();
+                data.Count = values.Count;
+                data.Mean = CountMean(values);
+                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.25), 0.25));
+                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.5), 0.5));
+                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.75), 0.75));
                 return;
             }
 
-            value.Max = 0;
-            value.Min = 0;
-            value.Count = 0;
-            value.Mean = 0;
+            data.Max = 0;
+            data.Min = 0;
+            data.Count = 0;
+            data.Mean = 0;
         }
 
         private int CountMean(List<int> values)

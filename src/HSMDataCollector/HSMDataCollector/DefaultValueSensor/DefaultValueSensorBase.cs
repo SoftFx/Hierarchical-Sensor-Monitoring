@@ -28,7 +28,7 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public bool HasLastValue => true;
         public abstract CommonSensorValue GetLastValue();
-        public SensorValueBase GetLastValueNew()
+        public UnitedSensorValue GetLastValueNew()
         {
             throw new NotImplementedException();
         }

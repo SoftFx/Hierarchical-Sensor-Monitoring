@@ -20,7 +20,7 @@ namespace HSMDataCollector.PerformanceSensor.Base
         }
 
         protected abstract void OnMonitoringTimerTick(object state);
-        public abstract SensorValueBase GetLastValueNew();
+        public abstract UnitedSensorValue GetLastValueNew();
 
         public abstract void Dispose();
         public abstract CommonSensorValue GetLastValue();

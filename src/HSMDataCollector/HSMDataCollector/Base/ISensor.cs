@@ -7,7 +7,7 @@ namespace HSMDataCollector.Base
     {
         bool HasLastValue { get; }
         CommonSensorValue GetLastValue();
-        SensorValueBase GetLastValueNew();
+        UnitedSensorValue GetLastValueNew();
         void Dispose();
     }
 }

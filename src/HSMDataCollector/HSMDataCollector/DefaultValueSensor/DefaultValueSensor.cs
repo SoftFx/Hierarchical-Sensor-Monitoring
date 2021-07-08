@@ -40,9 +40,9 @@ namespace HSMDataCollector.DefaultValueSensor
             throw new NotImplementedException();
         }
 
-        public override SensorValueBase GetLastValueNew()
+        public override UnitedSensorValue GetLastValueNew()
         {
-            SimpleSensorValue value = new SimpleSensorValue();
+            UnitedSensorValue value = new UnitedSensorValue();
             value.Type = _type;
             value.Key = ProductKey;
             value.Path = Path;
