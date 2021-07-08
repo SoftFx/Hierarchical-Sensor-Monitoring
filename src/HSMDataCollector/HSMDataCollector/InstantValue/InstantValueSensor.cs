@@ -39,6 +39,18 @@ namespace HSMDataCollector.InstantValue
             throw new NotImplementedException();
         }
 
+        public void AddValue(T value)
+        {
+            SimpleSensorValue valueObject = new SimpleSensorValue();
+            valueObject.Data = value.ToString();
+            valueObject.Description = _description;
+            valueObject.Path = Path;
+            valueObject.Key = ProductKey;
+            valueObject.Time = DateTime.Now;
+            valueObject.Type = _type;
+            EnqueueValue(valueObject);
+        }
+
         public void AddValue(T value, string comment = "")
         {
             SimpleSensorValue valueObject = new SimpleSensorValue();

@@ -649,7 +649,7 @@ namespace HSMDataCollector.Core
                 }
                 else
                 {
-                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content}");
+                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
                 }
             }
             catch (Exception e)

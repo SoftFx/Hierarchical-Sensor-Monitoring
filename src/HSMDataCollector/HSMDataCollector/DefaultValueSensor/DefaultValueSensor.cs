@@ -58,6 +58,14 @@ namespace HSMDataCollector.DefaultValueSensor
             return value;
         }
 
+        public void AddValue(T value)
+        {
+            lock (_syncRoot)
+            {
+                _currentValue = value;
+            }
+        }
+
         public void AddValue(T value, string comment = "")
         {
             lock (_syncRoot)

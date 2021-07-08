@@ -128,7 +128,7 @@ namespace HSMDataCollector.Core
 
         public void EnqueueData(SensorValueBase value)
         {
-            throw new NotImplementedException();
+            Enqueue(value);
         }
 
         private void OnTimerTick(object state)
@@ -144,13 +144,15 @@ namespace HSMDataCollector.Core
             {
                 lock (_listLock)
                 {
-                    _failedList.Clear();
+                    //_failedList.Clear();
+                    _list.Clear();
                 }
             }
 
             lock (_lockObj)
             {
-                _valuesQueue.Clear();
+                //_valuesQueue.Clear();
+                _queue.Clear();
             }
         }
         //private List<CommonSensorValue> DequeueData()

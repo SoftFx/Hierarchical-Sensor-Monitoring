@@ -7,10 +7,10 @@ using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
-    internal class CPUSensor : StandardPerformanceSensorBase<int>
+    internal class TotalCPUSensor : StandardPerformanceSensorBase<int>
     {
-        private const string _sensorName = "CPU usage";
-        public CPUSensor(string productKey, IValuesQueue queue)
+        private const string _sensorName = "Total CPU";
+        public TotalCPUSensor(string productKey, IValuesQueue queue)
             : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
         {
             InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
