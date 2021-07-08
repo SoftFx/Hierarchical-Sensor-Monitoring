@@ -14,8 +14,8 @@ namespace HSMDataCollector.Core
         [Obsolete]
         private readonly List<CommonSensorValue> _failedList;
 
-        private readonly Queue<FullSensorValue> _queue;
-        private readonly List<FullSensorValue> _list;
+        private readonly Queue<SensorValueBase> _queue;
+        private readonly List<SensorValueBase> _list;
         private const int MAX_VALUES_MESSAGE_CAPACITY = 10000;
         private const int MAX_QUEUE_CAPACITY = 100000;
         private int _internalCount = 0;
@@ -29,15 +29,15 @@ namespace HSMDataCollector.Core
         {
             //_valuesQueue = new Queue<CommonSensorValue>();
             //_failedList = new List<CommonSensorValue>();
-            _queue = new Queue<FullSensorValue>();
-            _list = new List<FullSensorValue>();
+            _queue = new Queue<SensorValueBase>();
+            _list = new List<SensorValueBase>();
             _lockObj = new object();
             _listLock = new object();
             Disposed = false;
         }
         
         public event EventHandler<List<CommonSensorValue>> SendData;
-        public event EventHandler<List<FullSensorValue>> SendValues;
+        public event EventHandler<List<SensorValueBase>> SendValues;
         public event EventHandler<DateTime> QueueOverflow; 
         public void ReturnFailedData(List<CommonSensorValue> values)
         {
@@ -56,7 +56,7 @@ namespace HSMDataCollector.Core
             return values;
         }
 
-        public void ReturnData(List<FullSensorValue> values)
+        public void ReturnData(List<SensorValueBase> values)
         {
             lock (_listLock)
             {
@@ -66,9 +66,9 @@ namespace HSMDataCollector.Core
             _hasFailedData = true;
         }
 
-        public List<FullSensorValue> GetCollectedData()
+        public List<SensorValueBase> GetCollectedData()
         {
-            List<FullSensorValue> values = new List<FullSensorValue>();
+            List<SensorValueBase> values = new List<SensorValueBase>();
             if (_hasFailedData)
             {
                 values.AddRange(DequeueData());
@@ -108,7 +108,7 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private void Enqueue(FullSensorValue value)
+        private void Enqueue(SensorValueBase value)
         {
             lock (_lockObj)
             {
@@ -126,7 +126,7 @@ namespace HSMDataCollector.Core
             EnqueueValue(value);
         }
 
-        public void EnqueueData(FullSensorValue value)
+        public void EnqueueData(SensorValueBase value)
         {
             throw new NotImplementedException();
         }
@@ -182,9 +182,9 @@ namespace HSMDataCollector.Core
 
         //    return dataList;
         //}
-        private List<FullSensorValue> DequeueData()
+        private List<SensorValueBase> DequeueData()
         {
-            List<FullSensorValue> dataList = new List<FullSensorValue>();
+            List<SensorValueBase> dataList = new List<SensorValueBase>();
             if (_hasFailedData)
             {
                 lock (_listLock)
@@ -219,7 +219,7 @@ namespace HSMDataCollector.Core
             SendData?.Invoke(this, values);
         }
 
-        private void OnSendValues(List<FullSensorValue> values)
+        private void OnSendValues(List<SensorValueBase> values)
         {
             SendValues?.Invoke(this, values);
         }

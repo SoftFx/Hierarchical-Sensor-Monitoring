@@ -10,6 +10,7 @@ using System.Linq;
 
 namespace HSMDataCollector.Bar
 {
+    [Obsolete("08.07.2021. Use BarSensor.")]
     public class BarSensorInt : BarSensorBase, IIntBarSensor
     {
         private readonly List<int> _valuesList;
@@ -36,7 +37,7 @@ namespace HSMDataCollector.Bar
             }
         }
 
-        public override FullSensorValue GetLastValueNew()
+        public override SensorValueBase GetLastValueNew()
         {
             throw new NotImplementedException();
         }

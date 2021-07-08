@@ -9,17 +9,19 @@ namespace HSMDataCollector.Base
     {
         protected readonly string Path;
         protected readonly string ProductKey;
+        protected readonly string Description;
         private readonly IValuesQueue _queue;
 
-        protected SensorBase(string path, string productKey, IValuesQueue queue)
+        protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
         {
             _queue = queue;
             Path = path;
             ProductKey = productKey;
+            Description = description;
         }
         public abstract bool HasLastValue { get; }
         public abstract CommonSensorValue GetLastValue();
-        public abstract FullSensorValue GetLastValueNew();
+        public abstract SensorValueBase GetLastValueNew();
         public abstract void Dispose();
         protected abstract string GetStringData(SensorValueBase data);
         [Obsolete("07.07.2021. Use another data object.")]
@@ -28,7 +30,7 @@ namespace HSMDataCollector.Base
             _queue.Enqueue(value);
         }
 
-        protected void EnqueueValue(FullSensorValue value)
+        protected void EnqueueValue(SensorValueBase value)
         {
             _queue.EnqueueData(value);
         }

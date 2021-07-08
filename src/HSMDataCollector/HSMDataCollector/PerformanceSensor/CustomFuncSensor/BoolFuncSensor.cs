@@ -12,7 +12,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
         {
         }
 
-        public override FullSensorValue GetLastValueNew()
+        public override SimpleSensorValue GetLastValueNew()
         {
             throw new NotImplementedException();
         }

@@ -5,6 +5,8 @@ namespace HSMDataCollector.Core
 {
     public interface IDataCollector : IDisposable
     {
+        #region Common methods
+
         /// <summary>
         /// The method sets the sending timer up. No data will be sent without calling this method
         /// </summary>
@@ -50,6 +52,9 @@ namespace HSMDataCollector.Core
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>
         void MonitorServiceAlive();
+
+        #endregion
+
         //07.07.2021: Use typed sensors
         //IBoolSensor CreateBoolSensor(string path);
         //IDoubleSensor CreateDoubleSensor(string path);
@@ -69,19 +74,32 @@ namespace HSMDataCollector.Core
 
         #region Bar sensors
 
-        IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, int precision = 2);
-        IDoubleBarSensor Create1HrDoubleBarSensor(string path, int precision = 2);
-        IDoubleBarSensor Create30MinDoubleBarSensor(string path, int precision = 2);
-        IDoubleBarSensor Create10MinDoubleBarSensor(string path, int precision = 2);
-        IDoubleBarSensor Create5MinDoubleBarSensor(string path, int precision = 2);
-        IDoubleBarSensor Create1MinDoubleBarSensor(string path, int precision = 2);
-        IIntBarSensor CreateIntBarSensor(string path, int timeout = 300000, int smallPeriod = 15000);
-        IIntBarSensor Create1HrIntBarSensor(string path);
-        IIntBarSensor Create30MinIntBarSensor(string path);
-        IIntBarSensor Create10MinIntBarSensor(string path);
-        IIntBarSensor Create5MinIntBarSensor(string path);
-        IIntBarSensor Create1MinIntBarSensor(string path);
+        //08.07.2021. Use typed Bar sensors
+        //IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, int precision = 2);
+        //IDoubleBarSensor Create1HrDoubleBarSensor(string path, int precision = 2);
+        //IDoubleBarSensor Create30MinDoubleBarSensor(string path, int precision = 2);
+        //IDoubleBarSensor Create10MinDoubleBarSensor(string path, int precision = 2);
+        //IDoubleBarSensor Create5MinDoubleBarSensor(string path, int precision = 2);
+        //IDoubleBarSensor Create1MinDoubleBarSensor(string path, int precision = 2);
+        //IIntBarSensor CreateIntBarSensor(string path, int timeout = 300000, int smallPeriod = 15000);
+        //IIntBarSensor Create1HrIntBarSensor(string path);
+        //IIntBarSensor Create30MinIntBarSensor(string path);
+        //IIntBarSensor Create10MinIntBarSensor(string path);
+        //IIntBarSensor Create5MinIntBarSensor(string path);
+        //IIntBarSensor Create1MinIntBarSensor(string path);
 
+        IBarSensor<int> CreateIntBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, string description = "");
+        IBarSensor<int> Create1HrIntBarSensor(string path, string description = "");
+        IBarSensor<int> Create30MinIntBarSensor(string path, string description = "");
+        IBarSensor<int> Create10MinIntBarSensor(string path, string description = "");
+        IBarSensor<int> Create5MinIntBarSensor(string path, string description = "");
+        IBarSensor<int> Create1MinIntBarSensor(string path, string description = "");
+        IBarSensor<double> CreateDoubleBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, int precision = 2, string description = "");
+        IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision = 2, string description = "");
+        IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision = 2, string description = "");
+        IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision = 2, string description = "");
+        IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision = 2, string description = "");
+        IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision = 2, string description = "");
         #endregion
 
         //int GetSensorCount();

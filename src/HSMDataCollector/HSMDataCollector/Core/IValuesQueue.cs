@@ -8,6 +8,6 @@ namespace HSMDataCollector.Core
     {
         [Obsolete]
         void Enqueue(CommonSensorValue value);
-        void EnqueueData(FullSensorValue value);
+        void EnqueueData(SensorValueBase value);
     }
 }

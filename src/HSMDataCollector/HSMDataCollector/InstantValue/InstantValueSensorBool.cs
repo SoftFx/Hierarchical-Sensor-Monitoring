@@ -46,7 +46,7 @@ namespace HSMDataCollector.InstantValue
             EnqueueData(commonValue);
         }
 
-        public override FullSensorValue GetLastValueNew()
+        public override SimpleSensorValue GetLastValueNew()
         {
             throw new NotImplementedException();
         }

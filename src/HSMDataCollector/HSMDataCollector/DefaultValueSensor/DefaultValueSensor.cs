@@ -9,20 +9,18 @@ namespace HSMDataCollector.DefaultValueSensor
 {
     internal class DefaultValueSensor<T> : SensorBase, ILastValueSensor<T>
     {
-        private readonly string _description;
         private readonly SensorType _type;
         protected readonly object _syncRoot;
         protected T _currentValue;
         protected string _currentComment;
         protected SensorStatus _currentStatus;
         public DefaultValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, T defaultValue, string description = "")
-            : base(path, productKey, queue)
+            : base(path, productKey, queue, description)
         {
             lock (_syncRoot)
             {
                 _currentValue = defaultValue;
             }
-            _description = description;
             _type = type;
         }
 
@@ -42,14 +40,14 @@ namespace HSMDataCollector.DefaultValueSensor
             throw new NotImplementedException();
         }
 
-        public override FullSensorValue GetLastValueNew()
+        public override SensorValueBase GetLastValueNew()
         {
-            FullSensorValue value = new FullSensorValue();
+            SimpleSensorValue value = new SimpleSensorValue();
             value.Type = _type;
             value.Key = ProductKey;
             value.Path = Path;
             value.Time = DateTime.Now;
-            value.Description = _description;
+            value.Description = Description;
             lock (_syncRoot)
             {
                 value.Data = _currentValue.ToString();

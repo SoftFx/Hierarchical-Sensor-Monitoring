@@ -22,8 +22,8 @@ namespace HSMDataCollector.Bar
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds.</param>
         /// <param name="smallPeriod">The sensor sends intermediate bar data every smallPeriod time.</param>
         protected BarSensorBase(string path, string productKey,
-            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod)
-            : base(path, productKey, queue)
+            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod, string description)
+            : base(path, productKey, queue, description)
         {
             _syncObject = new object();
             _barTimerPeriod = barTimerPeriod;

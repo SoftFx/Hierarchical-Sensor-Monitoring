@@ -60,6 +60,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bar\BarSensor.cs" />
     <Compile Include="Bar\BarSensorBase.cs" />
     <Compile Include="Bar\BarSensorDouble.cs" />
     <Compile Include="Bar\BarSensorInt.cs" />

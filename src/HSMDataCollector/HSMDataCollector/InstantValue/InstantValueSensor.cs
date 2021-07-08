@@ -24,7 +24,7 @@ namespace HSMDataCollector.InstantValue
             throw new NotImplementedException();
         }
 
-        public override FullSensorValue GetLastValueNew()
+        public override SimpleSensorValue GetLastValueNew()
         {
             throw new NotImplementedException();
         }
@@ -41,7 +41,7 @@ namespace HSMDataCollector.InstantValue
 
         public void AddValue(T value, string comment = "")
         {
-            FullSensorValue valueObject = new FullSensorValue();
+            SimpleSensorValue valueObject = new SimpleSensorValue();
             valueObject.Comment = comment;
             valueObject.Data = value.ToString();
             valueObject.Description = _description;
@@ -54,7 +54,7 @@ namespace HSMDataCollector.InstantValue
         
         public void AddValue(T value, SensorStatus status = SensorStatus.Unknown, string comment = "")
         {
-            FullSensorValue valueObject = new FullSensorValue();
+            SimpleSensorValue valueObject = new SimpleSensorValue();
             valueObject.Comment = comment;
             valueObject.Data = value.ToString();
             valueObject.Description = _description;

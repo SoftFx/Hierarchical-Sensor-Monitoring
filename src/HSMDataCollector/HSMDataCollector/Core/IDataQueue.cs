@@ -11,14 +11,14 @@ namespace HSMDataCollector.Core
         [Obsolete("07.07.2021. Use SendValues.")]
         event EventHandler<List<CommonSensorValue>> SendData;
 
-        event EventHandler<List<FullSensorValue>> SendValues;
+        event EventHandler<List<SensorValueBase>> SendValues;
         event EventHandler<DateTime> QueueOverflow;
         [Obsolete("07.07.2021. Use ReturnData.")]
         void ReturnFailedData(List<CommonSensorValue> values);
         [Obsolete("07.07.2021. Use GetCollectedData.")]
         List<CommonSensorValue> GetAllCollectedData();
-        void ReturnData(List<FullSensorValue> values);
-        List<FullSensorValue> GetCollectedData();
+        void ReturnData(List<SensorValueBase> values);
+        List<SensorValueBase> GetCollectedData();
         void InitializeTimer();
         void Stop();
         void Clear();
