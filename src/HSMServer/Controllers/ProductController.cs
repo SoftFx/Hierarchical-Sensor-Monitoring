@@ -200,17 +200,26 @@ namespace HSMServer.Controllers
                     AESCypher.ToString(bytes));
                 keyBytes = bytes;
             }
-            else keyBytes = AESCypher.ToBytes(key.Value); 
+            else 
+                keyBytes = AESCypher.ToBytes(key.Value); 
             
-
             var (cipher, nonce, tag) = AESCypher.Encrypt(str, keyBytes);
-            var test = AESCypher.Decrypt(cipher, nonce, tag, keyBytes);
 
             var link = $"{Request.Scheme}://{Request.Host}/" +
                 $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
-                $"?Invite={cipher}";
+                $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
 
-            //send email
+            var server = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPServer).Value;
+            var port = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPort).Value;
+            var login = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPLogin).Value;
+            var password = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPassword).Value;
+            var fromEmail = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPFromEmail).Value;
+
+            EmailSender sender = new EmailSender(server, 
+                string.IsNullOrEmpty(port) ? null : Int32.Parse(port),
+                login, password, fromEmail, model.Email);
+
+            sender.Send("Invitation link HSM", link);
         }
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)
