@@ -22,7 +22,7 @@ jobs:
         uses: microsoft/setup-msbuild@v1.0.2
 
       - name: Install dependencies
-        run: dotnet restore src/HSMCppWrapper/HSMCppWrapper.sln
+        run: nuget.exe restore src/HSMCppWrapper/HSMCppWrapper.sln
 
       - name: Build
         run: msbuild src/HSMCppWrapper/HSMCppWrapper.sln /property:Configuration=Release /property:Platform=x64 /property:OutDir='${{ github.workspace }}\Release\HSMCppWrapper' 
