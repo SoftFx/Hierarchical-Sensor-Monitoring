@@ -25,7 +25,7 @@ namespace HSMCommon.Model.SensorsData
             copy.Time = Time;
             copy.StringValue = StringValue;
             copy.Status = Status;
-            copy.TransactionType = TransactionType;
+            //copy.TransactionType = TransactionType;
             copy.Description = Description;
             copy.ShortStringValue = ShortStringValue;
             return copy;
