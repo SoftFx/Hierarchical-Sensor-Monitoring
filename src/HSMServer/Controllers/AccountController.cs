@@ -10,6 +10,7 @@ using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
 using HSMServer.Attributes;
+using HSMServer.Filters;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
@@ -32,6 +33,7 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
         public IActionResult Registration([FromQuery(Name = "Invite")] string invite)
         {
             if (!string.IsNullOrEmpty(invite))
