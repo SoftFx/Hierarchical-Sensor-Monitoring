@@ -471,6 +471,49 @@ namespace HSMServer.MonitoringServerCore
         #endregion
         #region Typed data objects
 
+        private string GetStringValueForBool(bool boolValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}.";
+        }
+
+        private string GetStringValueForInt(int intValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}.";
+        }
+
+        private string GetStringValueForDouble(double doubleValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}.";
+        }
+
+        private string GetStringValueForString(string stringValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}', comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}'.";
+        }
+
+        private string GetStringValueForIntBar(int min, int max, int mean, int count, int last, DateTime timeCollected,
+            string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
+        }
+
+        private string GetStringValueForDoubleBar(double min, double max, double mean, int count, double last,
+            DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
+        }
         private string GetStringValue(string stringData, SensorType sensorType, DateTime timeCollected)
         {
             string result = string.Empty;
@@ -481,10 +524,7 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(boolData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}, comment = {boolData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}.";
-                            result = $"{boolData.BoolValue}";
+                            return GetStringValueForBool(boolData.BoolValue, timeCollected, boolData.Comment);
                         }
                         catch { }
                         break;
@@ -494,9 +534,7 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(intData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}, comment = {intData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}.";
+                            return GetStringValueForInt(intData.IntValue, timeCollected, intData.Comment);
                         }
                         catch { }
                         break;
@@ -506,11 +544,10 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(doubleData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}, comment = {doubleData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}.";
+                            return GetStringValueForDouble(doubleData.DoubleValue, timeCollected, doubleData.Comment);
                         }
-                        catch { }
+                        catch
+                        { }
                         break;
                     }
                 case SensorType.StringSensor:
@@ -518,9 +555,8 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(stringTypedData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}', comment = {stringTypedData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}'.";
+                            return GetStringValueForString(stringTypedData.StringValue, timeCollected,
+                                stringTypedData.Comment);
                         }
                         catch { }
                         break;
@@ -530,9 +566,8 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(intBarData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}. Comment = {intBarData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}.";
+                            return GetStringValueForIntBar(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.Count,
+                                intBarData.LastValue, timeCollected, intBarData.Comment);
                         }
                         catch { }
                         break;
@@ -542,9 +577,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(doubleBarData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}. Comment = {doubleBarData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}.";
+                            return GetStringValueForDoubleBar(doubleBarData.Min, doubleBarData.Max, doubleBarData.Mean,
+                                doubleBarData.Count,
+                                doubleBarData.LastValue, timeCollected, doubleBarData.Comment);
                         }
                         catch { }
                         break;
@@ -912,11 +947,38 @@ namespace HSMServer.MonitoringServerCore
         public SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected)
         {
             AddCommonValues(value, productName, timeCollected, out var data);
-            data.StringValue = "";
+            data.StringValue = GetStringValue(value, timeCollected);
             data.ShortStringValue = GetShortStringValue(value);
             return data;
         }
 
+        private string GetStringValue(UnitedSensorValue value, DateTime timeCollected)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                    bool boolRes = bool.Parse(value.Data);
+                    return GetStringValueForBool(boolRes, timeCollected, value.Comment);
+                case SensorType.IntSensor:
+                    int intRes = int.Parse(value.Data);
+                    return GetStringValueForInt(intRes, timeCollected, value.Comment);
+                case SensorType.DoubleSensor:
+                    double doubleRes = double.Parse(value.Data);
+                    return GetStringValueForDouble(doubleRes, timeCollected, value.Comment);
+                case SensorType.StringSensor:
+                    return GetStringValueForString(value.Data, timeCollected, value.Comment);
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return GetStringValueForIntBar(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.Count, intBarData.LastValue,
+                        timeCollected, value.Comment);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return GetStringValueForDoubleBar(doubleBarData.Min, doubleBarData.Max, doubleBarData.Mean, doubleBarData.Count, doubleBarData.LastValue,
+                        timeCollected, value.Comment);
+            }
+
+            return string.Empty;
+        }
         private string GetShortStringValue(UnitedSensorValue value)
         {
             switch (value.Type)
