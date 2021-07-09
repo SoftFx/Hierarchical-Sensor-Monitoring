@@ -33,5 +33,6 @@
         public const string EditUserRoleAction = "EditUserRole";
         public const string RemoveUserRoleAction = "RemoveUserRole";
         public const string RemoveExtraKeyAction = "RemoveExtraKey";
+        public const string InviteAction = "Invite";
     }
 }

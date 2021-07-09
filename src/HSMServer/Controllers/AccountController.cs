@@ -32,8 +32,16 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        public IActionResult Registration()
+        public IActionResult Registration([FromQuery(Name = "Invite")] string invite)
         {
+            if (!string.IsNullOrEmpty(invite))
+            {
+                var mathes = invite.Split('_');
+                var productKey = mathes[0];
+                var role = mathes[1];
+                var date = mathes[2];
+            }
+
             return View(new RegistrationViewModel());
         }
 

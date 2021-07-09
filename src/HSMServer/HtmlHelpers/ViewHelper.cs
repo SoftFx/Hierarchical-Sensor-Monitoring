@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Text;
 using HSMSensorDataObjects;
+using System;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -50,6 +51,20 @@ namespace HSMServer.HtmlHelpers
 
             StringBuilder result = new StringBuilder();
             result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
+
+            return new HtmlString(result.ToString());
+        }
+
+        public static HtmlString CreateProductRoleSelect()
+        {
+            StringBuilder result = new StringBuilder();
+
+            result.Append("<select style='width: 300px' class='form-select' id='productRole'>");
+
+            foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
+                result.Append($"<option value='{(int)role}'>{role}</option>");
+
+            result.Append("</select>");
 
             return new HtmlString(result.ToString());
         }

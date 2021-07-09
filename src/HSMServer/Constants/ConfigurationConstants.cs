@@ -15,6 +15,7 @@
         #region Configuration Names
 
         public const string MaxPathLength = nameof(MaxPathLength);
+        public const string AesEncryptionKey = nameof(AesEncryptionKey);
 
         #endregion
 

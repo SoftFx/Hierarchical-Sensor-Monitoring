@@ -44,11 +44,16 @@ namespace HSMServer.Configuration
         }
 
         ///Use 'name' from ConfigurationConstants! 
-        public ConfigurationObject ReadConfigurationObject(string name)
+        public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
             var currentObject = _database.ReadConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
                 ConfigurationConstants.GetDefault(name));
+        }
+
+        public ConfigurationObject ReadConfigurationObject(string name)
+        {
+            return _database.ReadConfigurationObject(name);
         }
 
         public event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;

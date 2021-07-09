@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using HSMServer.Products;
 using HSMServer.Keys;
 using System;
+using HSMServer.Configuration;
+using System.Security.Cryptography;
 
 namespace HSMServer.Controllers
 {
@@ -20,13 +22,15 @@ namespace HSMServer.Controllers
         private readonly IMonitoringCore _monitoringCore;
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
+        private readonly IConfigurationProvider _configurationProvider;
 
         public ProductController(IMonitoringCore monitoringCore, IUserManager userManager,
-            IProductManager productManager)
+            IProductManager productManager, IConfigurationProvider configurationProvider)
         {
             _monitoringCore = monitoringCore;
             _userManager = userManager;
             _productManager = productManager;
+            _configurationProvider = configurationProvider;
         }
 
         public IActionResult Index()
@@ -178,6 +182,35 @@ namespace HSMServer.Controllers
 
             _userManager.UpdateUser(user);
 
+        }
+
+        [HttpPost]
+        public void Invite([FromBody] InviteViewModel model)
+        {
+            var str = $"{model.ProductKey}_{model.Role}_{model.ExpirationDate}";
+
+            var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+            byte[] keyBytes;
+            if (key == null)
+            {
+                var bytes = new byte[32];
+                RandomNumberGenerator.Fill(bytes);
+
+                _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
+                    AESCypher.ToString(bytes));
+                keyBytes = bytes;
+            }
+            else keyBytes = AESCypher.ToBytes(key.Value); 
+            
+
+            var (cipher, nonce, tag) = AESCypher.Encrypt(str, keyBytes);
+            var test = AESCypher.Decrypt(cipher, nonce, tag, keyBytes);
+
+            var link = $"{Request.Scheme}://{Request.Host}/" +
+                $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
+                $"?Invite={cipher}";
+
+            //send email
         }
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)
