@@ -12,7 +12,7 @@ namespace HSMCommon.Model.SensorsData
         public DateTime Time { get; set; }
         public string StringValue { get; set; }
         public SensorStatus Status { get; set; }
-        public TransactionType TransactionType { get; set; }
+        //public TransactionType TransactionType { get; set; }
         public string Description { get; set; }
         public string ShortStringValue { get; set; }
         public SensorData Clone()
