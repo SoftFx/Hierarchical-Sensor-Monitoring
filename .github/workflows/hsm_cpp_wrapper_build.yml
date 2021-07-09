@@ -1,0 +1,28 @@
+name: hsm-wrapper-build
+
+on:
+  push:
+    branches: 
+      - hsm-cpp-wrapper
+  pull_request:
+    branches: 
+      - hsm-cpp-wrapper
+
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.0.2
+
+      - name: Install dependencies
+        run: dotnet restore src/HSMCppWrapper/HSMCppWrapper.sln
+
+      - name: Build
+        run: msbuild src/HSMCppWrapper/HSMCppWrapper.sln /property:Configuration=Release /property:Platform=x64 /property:OutDir='${{ github.workspace }}\Release\HSMCppWrapper' 
