@@ -60,24 +60,25 @@ namespace HSMServer.MonitoringServerCore
 
         #region UnitedSensorValue to update messages
 
-        SensorData ConvertBool(UnitedSensorValue value, string productName, DateTime timeCollected);
-        SensorData ConvertInt(UnitedSensorValue value, string productName, DateTime timeCollected);
-        SensorData ConvertDouble(UnitedSensorValue value, string productName, DateTime timeCollected);
-        SensorData ConvertString(UnitedSensorValue value, string productName, DateTime timeCollected);
-        SensorData ConvertIntBar(UnitedSensorValue value, string productName, DateTime timeCollected);
-        SensorData ConvertDoubleBar(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertBool(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertInt(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertDouble(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertString(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertIntBar(UnitedSensorValue value, string productName, DateTime timeCollected);
+        //SensorData ConvertDoubleBar(UnitedSensorValue value, string productName, DateTime timeCollected);
+        SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected);
 
         #endregion
 
         #region UnitedSensorValue to database objects
 
-        SensorDataObject ConvertBoolToDatabase(UnitedSensorValue value, DateTime timeCollected);
-        SensorDataObject ConvertIntToDatabase(UnitedSensorValue value, DateTime timeCollected);
-        SensorDataObject ConvertDoubleToDatabase(UnitedSensorValue value, DateTime timeCollected);
-        SensorDataObject ConvertStringToDatabase(UnitedSensorValue value, DateTime timeCollected);
-        SensorDataObject ConvertIntBarToDatabase(UnitedSensorValue value, DateTime timeCollected);
-        SensorDataObject ConvertDoubleBarToDatabase(UnitedSensorValue value, DateTime timeCollected);
-
+        //SensorDataObject ConvertBoolToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        //SensorDataObject ConvertIntToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        //SensorDataObject ConvertDoubleToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        //SensorDataObject ConvertStringToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        //SensorDataObject ConvertIntBarToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        //SensorDataObject ConvertDoubleBarToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected);
         #endregion
 
         SensorInfo Convert(string productName, string path);
