@@ -1,15 +1,13 @@
-﻿using System;
-using System.Text;
-//using System.Text.Json;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
 
 namespace HSMDataCollector.InstantValue
 {
+    [Obsolete("Use InstantValueSensor class")]
     class InstantValueSensorInt : InstantValueTypedSensorBase<int>, IIntSensor
     {
         public InstantValueSensorInt(string path, string productKey, IValuesQueue queue) 
@@ -45,9 +43,14 @@ namespace HSMDataCollector.InstantValue
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.IntSensor;
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
-        
+
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override string GetStringData(SensorValueBase data)
         {
             try

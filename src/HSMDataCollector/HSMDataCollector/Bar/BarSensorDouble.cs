@@ -7,10 +7,10 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace HSMDataCollector.Bar
 {
+    [Obsolete("08.07.2021. Use BarSensor.")]
     public class BarSensorDouble : BarSensorBase, IDoubleBarSensor
     {
         private readonly List<double> _valuesList;
@@ -19,7 +19,7 @@ namespace HSMDataCollector.Bar
         public BarSensorDouble(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000, int precision = 2) : base(path, productKey, queue, collectPeriod,
-            smallPeriod)
+            smallPeriod, "", 2)
         {
             _valuesList = new List<double>();
             if (precision < 1 || precision > 10)
@@ -44,7 +44,7 @@ namespace HSMDataCollector.Bar
                 return;
             }
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public override CommonSensorValue GetLastValue()
@@ -61,11 +61,16 @@ namespace HSMDataCollector.Bar
             }
         }
 
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public void AddValue(double value)

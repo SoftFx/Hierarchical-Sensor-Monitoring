@@ -560,6 +560,48 @@ namespace HSMServer.DataLayer
 
         #region Configuration
 
+        public ConfigurationObject ReadConfigurationObject(string name)
+        {
+            try
+            {
+                string key = GetUniqueConfigurationObjectKey(name);
+                string value;
+                lock (key)
+                {
+                    value = _database.Get(key);
+                }
+
+                return JsonSerializer.Deserialize<ConfigurationObject>(value);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to read ConfigurationObject!");
+                return null;
+            }
+        }
+
+        public void WriteConfigurationObject(ConfigurationObject obj)
+        {
+            try
+            {
+                string key = GetUniqueConfigurationObjectKey(obj.Name);
+                string value = JsonSerializer.Serialize(obj);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                    _database.Put(key, value);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to save ConfigurationObject!");
+            }
+        }
+
+        #endregion
+
+        #region Users
+
         public void AddUser(User user)
         {
             try
@@ -568,7 +610,7 @@ namespace HSMServer.DataLayer
                 string value = JsonSerializer.Serialize(user);
                 lock (_accessLock)
                 {
-                    _database.Put(key, value);                 
+                    _database.Put(key, value);
                 }
             }
             catch (Exception e)
@@ -665,51 +707,13 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public ConfigurationObject ReadConfigurationObject()
-        {
-            try
-            {
-                string key = GetConfigurationObjectKey();
-                string value;
-                lock (key)
-                {
-                    value = _database.Get(key);
-                }
-
-                return JsonSerializer.Deserialize<ConfigurationObject>(value);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to read ConfigurationObject!");
-                return null;
-            }
-        }
-
-        public void WriteConfigurationObject(ConfigurationObject obj)
-        {
-            try
-            {
-                string key = GetConfigurationObjectKey();
-                string value = JsonSerializer.Serialize(obj);
-                lock (_accessLock)
-                {
-                    _database.Delete(key);
-                    _database.Put(key, value);
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to save ConfigurationObject!");
-            }
-        }
-
         #endregion
 
         #region Private methods
 
-        private string GetConfigurationObjectKey()
+        private string GetUniqueConfigurationObjectKey(string name)
         {
-            return PrefixConstants.CONFIGURATION_OBJECT_PREFIX;
+            return $"{PrefixConstants.CONFIGURATION_OBJECT_PREFIX}_{name}";
         }
         private string GetUniqueUserKey(string userName)
         {

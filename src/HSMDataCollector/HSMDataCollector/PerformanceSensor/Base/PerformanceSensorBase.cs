@@ -1,8 +1,9 @@
-﻿using System;
+﻿using HSMDataCollector.Base;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
+using System;
 using System.Diagnostics;
 using System.Threading;
-using HSMDataCollector.Base;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.PerformanceSensor.Base
 {
@@ -19,6 +20,8 @@ namespace HSMDataCollector.PerformanceSensor.Base
         }
 
         protected abstract void OnMonitoringTimerTick(object state);
+        public abstract UnitedSensorValue GetLastValueNew();
+
         public abstract void Dispose();
         public abstract CommonSensorValue GetLastValue();
 

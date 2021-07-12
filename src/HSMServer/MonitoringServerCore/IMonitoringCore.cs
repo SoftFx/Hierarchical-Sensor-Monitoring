@@ -14,7 +14,9 @@ namespace HSMServer.MonitoringServerCore
     public interface IMonitoringCore : IDisposable
     {
         //public void AddSensorValue(JobResult value);
+        [Obsolete("08.07.2021. Use void AddSensorsValues(IEnumerable<CommonSensorValue> values)")]
         void AddSensorsValues(IEnumerable<CommonSensorValue> values);
+        void AddSensorsValues(IEnumerable<UnitedSensorValue> values);
         //Task<bool> AddSensorValueAsync(BoolSensorValue value);
         void AddSensorValue(BoolSensorValue value);
         void AddSensorValue(IntSensorValue value);
@@ -22,9 +24,7 @@ namespace HSMServer.MonitoringServerCore
         void AddSensorValue(StringSensorValue value);
         void AddSensorValue(IntBarSensorValue value);
         void AddSensorValue(DoubleBarSensorValue value);
-
         void AddSensorValue(FileSensorValue value);
-
         void AddSensorValue(FileSensorBytesValue value);
         //public void AddSensorValue(SensorValueBase value);
 

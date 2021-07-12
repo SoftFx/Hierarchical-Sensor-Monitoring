@@ -337,10 +337,10 @@
             data = data.replace('{"value":"', ''); //fix sometime
             data = data.replace('"}', '');
 
-            console.log(`#values_${product}_${path}`);
+            //console.log(`#values_${product}_${path}`);
 
             $(`#values_${product}_${path}`).empty();
-            console.log(`#values_${product}_${path}`);
+            //console.log(`#values_${product}_${path}`);
             $(`#values_${product}_${path}`).append(data);
         });
     }

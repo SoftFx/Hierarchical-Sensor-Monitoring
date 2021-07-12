@@ -15,6 +15,7 @@ namespace HSMDataCollector.Bar
         protected DateTime barStart;
         private int _barTimerPeriod;
         private int _smallTimerPeriod;
+        protected int _precision;
         /// <summary>
         /// </summary>
         /// <param name="path"></param>
@@ -22,13 +23,24 @@ namespace HSMDataCollector.Bar
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds.</param>
         /// <param name="smallPeriod">The sensor sends intermediate bar data every smallPeriod time.</param>
         protected BarSensorBase(string path, string productKey,
-            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod)
-            : base(path, productKey, queue)
+            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod, string description, int precision)
+            : base(path, productKey, queue, description)
         {
             _syncObject = new object();
             _barTimerPeriod = barTimerPeriod;
             _smallTimerPeriod = smallTimerPeriod;
+            FillPrecision(precision);
             StartTimer(_barTimerPeriod, _smallTimerPeriod);
+        }
+        private void FillPrecision(int precision)
+        {
+            if (precision < 1 || precision > 10)
+            {
+                _precision = 2;
+                return;
+            }
+
+            _precision = precision;
         }
         protected abstract void SendDataTimer(object state);
         protected abstract void SmallTimerTick(object state);
@@ -93,9 +105,9 @@ namespace HSMDataCollector.Bar
         }
         protected void Stop()
         {
-            _barTimer.Dispose();
+            _barTimer?.Dispose();
             _barTimer = null;
-            _smallTimer.Dispose();
+            _smallTimer?.Dispose();
             _smallTimer = null;
         }
 
@@ -124,7 +136,7 @@ namespace HSMDataCollector.Bar
                 return leftNumber;
 
             double part = n - Math.Floor(n);
-            return Math.Round(leftNumber + part * (rightNumber - leftNumber));
+            return Math.Round(leftNumber + part * (rightNumber - leftNumber), _precision, MidpointRounding.AwayFromZero);
         }
 
         protected int GetPercentile(List<int> values, double percent)

@@ -3,6 +3,7 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.PublicInterface
 {
+    [Obsolete("Use IInstantValueSensor<T>")]
     public interface IBoolSensor
     {
         void AddValue(bool value);

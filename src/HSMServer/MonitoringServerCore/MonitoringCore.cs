@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using HSMCommon.Certificates;
+﻿using HSMCommon.Certificates;
 using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
@@ -20,6 +12,14 @@ using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using HSMServer.Products;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
@@ -126,7 +126,7 @@ namespace HSMServer.MonitoringServerCore
                 case SensorType.IntegerBarSensor:
                 {
                     var typedValue = e.Value as IntBarSensorValue;
-                    typedValue.EndTime = DateTime.Now;
+                    typedValue.EndTime = DateTime.Now.ToUniversalTime();
                     SensorDataObject obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
                     SaveSensorValue(obj, e.ProductName);
                     break;
@@ -134,7 +134,7 @@ namespace HSMServer.MonitoringServerCore
                 case SensorType.DoubleBarSensor:
                 {
                     var typedValue = e.Value as DoubleBarSensorValue;
-                    typedValue.EndTime = DateTime.Now;
+                    typedValue.EndTime = DateTime.Now.ToUniversalTime();
                     SensorDataObject obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
                     SaveSensorValue(obj, e.ProductName);
                     break;
@@ -214,6 +214,86 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
+        #region Typed Sensors from UnitedSensorValue
+
+        public void AddSensorsValues(IEnumerable<UnitedSensorValue> values)
+        {
+            List<UnitedSensorValue> valuesList = values.ToList();
+            foreach (var value in valuesList)
+            {
+                try
+                {
+                    AddUnitedValue(value);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
+                }
+                
+            }
+        }
+        private void AddUnitedValue(UnitedSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.Now;
+                SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+                bool isToDB = true;
+                if (value.IsBarSensor())
+                {
+                    isToDB = ProcessBarSensor(value, timeCollected, productName);
+                }
+
+                if (!isToDB)
+                    return;
+
+                SensorDataObject dataObject = _converter.ConvertUnitedValueToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor {value?.Path}");
+            }
+        }
+
+        private bool ProcessBarSensor(UnitedSensorValue value, DateTime timeCollected, string productName)
+        {
+            try
+            {
+                var bar = _converter.GetBarSensorValue(value);
+
+                if (bar.EndTime != DateTime.MinValue)
+                {
+                    _barsStorage.Remove(productName, value.Path);
+                    return true;
+                }
+
+                if (value.Type == SensorType.IntegerBarSensor)
+                {
+                    var intBar = (IntBarSensorValue) bar;
+                    _barsStorage.Add(intBar, productName, timeCollected);
+                    return false;
+                }
+
+                var doubleBar = (DoubleBarSensorValue) bar;
+                _barsStorage.Add(doubleBar, productName, timeCollected);
+                return false;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to process bar sensor {value.Path}");
+            }
+
+            return true;
+        }
+        #endregion
         public void AddSensorValue(BoolSensorValue value)
         {
             try
@@ -446,7 +526,7 @@ namespace HSMServer.MonitoringServerCore
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
             //Show available products only
-            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.Role))
+            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.IsAdmin))
                 productsList = productsList.Where(p => 
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
@@ -664,7 +744,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.SystemAdmin);
+                HashComputer.ComputePasswordHash(commonName), true);
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;

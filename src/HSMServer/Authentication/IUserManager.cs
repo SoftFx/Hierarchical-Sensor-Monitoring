@@ -14,8 +14,8 @@ namespace HSMServer.Authentication
         /// <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
         /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         /// <param name="role">UserRoleEnum value, defaults to the role with least rights.</param>
-        void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
-            List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
+        void AddUser(string userName, string certificateThumbprint, string certificateFileName,
+            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
         List<User> Users { get; }
         User GetUser(Guid id);
         User GetUserByUserName(string username);

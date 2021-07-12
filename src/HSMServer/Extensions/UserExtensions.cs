@@ -41,7 +41,7 @@ namespace HSMServer.Extensions
             copy.CertificateFileName = user.CertificateFileName;
             copy.Password = null;
             copy.CertificateThumbprint = user.CertificateThumbprint;
-            copy.Role = user.Role;
+            copy.IsAdmin = user.IsAdmin;
             copy.ProductsRoles = user.ProductsRoles;
 
             return copy;

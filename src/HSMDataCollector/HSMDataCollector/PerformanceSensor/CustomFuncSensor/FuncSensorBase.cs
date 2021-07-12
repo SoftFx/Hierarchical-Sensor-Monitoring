@@ -11,7 +11,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
         protected Func<T> Function;
         protected Timer _valuesTimer;
         internal FuncSensorBase(Func<T> function, string path, string productKey, IValuesQueue queue,int timeout = 15000)
-            : base(path, productKey, queue)
+            : base(path, productKey, queue, "")
         {
             Function = function;
             _valuesTimer = new Timer(OnTimerTick, null, timeout, timeout);
@@ -24,7 +24,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
             {
                 value = Function.Invoke();
                 CommonSensorValue convertedValue = ConvertValue(value);
-                SendData(convertedValue);
+                EnqueueData(convertedValue);
             }
             catch (Exception e)
             { }
