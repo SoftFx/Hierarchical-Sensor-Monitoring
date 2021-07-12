@@ -9,5 +9,10 @@ namespace HSMSensorDataObjects.FullDataObject
         public SensorType Type { get; set; }
         [DataMember]
         public string Data { get; set; }
+
+        public bool IsBarSensor()
+        {
+            return Type == SensorType.DoubleBarSensor || Type == SensorType.IntegerBarSensor;
+        }
     }
 }
