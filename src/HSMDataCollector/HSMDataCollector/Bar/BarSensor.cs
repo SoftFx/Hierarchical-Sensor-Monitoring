@@ -14,19 +14,18 @@ namespace HSMDataCollector.Bar
     {
         private readonly SensorType _type;
         private readonly List<T> _valuesList;
-        private int _precision;
         public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
-            string description = "")
-            : base(path, productKey, queue, barTimerPeriod, smallTimerPeriod, description)
+            string description = "", int precision = 2)
+            : base(path, productKey, queue, barTimerPeriod, smallTimerPeriod, description, precision)
         {
             _valuesList = new List<T>();
             _type = type;
         }
         public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod = 300000,
             int smallTimerPeriod = 15000, int precision = 2, string description = "") 
-            : this(path, productKey, queue, type, barTimerPeriod, smallTimerPeriod, description)
+            : this(path, productKey, queue, type, barTimerPeriod, smallTimerPeriod, description, precision)
         {
-            FillPrecision(precision);
+            
         }
 
         public void AddValue(T value)
@@ -35,16 +34,6 @@ namespace HSMDataCollector.Bar
             {
                 _valuesList.Add(value);
             }
-        }
-        private void FillPrecision(int precision)
-        {
-            if (precision < 1 || precision > 10)
-            {
-                _precision = 2;
-                return;
-            }
-
-            _precision = precision;
         }
         protected override void SendDataTimer(object state)
         {
@@ -133,7 +122,7 @@ namespace HSMDataCollector.Bar
             valueBase.Key = ProductKey;
             valueBase.Path = Path;
             valueBase.Type = _type;
-            valueBase.Time = time;
+            valueBase.Time = time.ToUniversalTime();
             valueBase.Description = Description;
         }
         #region Double methods
@@ -143,10 +132,10 @@ namespace HSMDataCollector.Bar
             UnitedSensorValue result = new UnitedSensorValue();
             FillCommonData(result, barStartTime);
             DoubleBarData barData = new DoubleBarData();
-            barData.LastValue = values.Any() ? values.Last() : 0;
+            barData.LastValue = values.Any() ? GetRoundedNumber(values.Last()) : 0.0;
             FillNumericData(barData, values);
-            barData.StartTime = barStartTime;
-            barData.EndTime = barEndTime;
+            barData.StartTime = barStartTime.ToUniversalTime();
+            barData.EndTime = barEndTime.ToUniversalTime();
             result.Data = JsonConvert.SerializeObject(barData);
             return result;
         }
@@ -201,8 +190,8 @@ namespace HSMDataCollector.Bar
             IntBarData barData = new IntBarData();
             barData.LastValue = values.Any() ? values.Last() : 0;
             FillNumericData(barData, values);
-            barData.StartTime = barStartTime;
-            barData.EndTime = barEndTime;
+            barData.StartTime = barStartTime.ToUniversalTime();
+            barData.EndTime = barEndTime.ToUniversalTime();
             result.Data = JsonConvert.SerializeObject(barData);
             return result;
         }

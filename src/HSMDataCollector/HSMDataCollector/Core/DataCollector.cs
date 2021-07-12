@@ -488,7 +488,7 @@ namespace HSMDataCollector.Core
             }
 
             BarSensor<double> sensor = new BarSensor<double>(path, _productKey, _dataQueue as IValuesQueue,
-                SensorType.IntegerBarSensor, timeout, smallPeriod, description);
+                SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
             AddNewSensor(sensor, path);
             return sensor;
         }

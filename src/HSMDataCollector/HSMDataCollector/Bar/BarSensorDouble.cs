@@ -19,7 +19,7 @@ namespace HSMDataCollector.Bar
         public BarSensorDouble(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000, int precision = 2) : base(path, productKey, queue, collectPeriod,
-            smallPeriod, "")
+            smallPeriod, "", 2)
         {
             _valuesList = new List<double>();
             if (precision < 1 || precision > 10)
