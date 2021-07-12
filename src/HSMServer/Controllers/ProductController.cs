@@ -195,7 +195,7 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            var str = $"{model.ProductKey}_{model.Role}_{model.ExpirationDate}";
+            var str = $"{model.ProductKey}_{model.Role}_{DateTime.UtcNow + TimeSpan.FromMinutes(30)}";
 
             var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
             byte[] keyBytes;

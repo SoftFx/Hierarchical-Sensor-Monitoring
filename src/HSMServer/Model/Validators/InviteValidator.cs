@@ -12,9 +12,9 @@ namespace HSMServer.Model.Validators
                 .NotEmpty()
                 .EmailAddress();
 
-            RuleFor(x => x.ExpirationDate)
-                .NotNull()
-                .WithMessage(ErrorConstants.ExpirationDateNotNull);
+            //RuleFor(x => x.ExpirationDate)
+                //.NotNull()
+                //.WithMessage(ErrorConstants.ExpirationDateNotNull);
         }
     }
 }

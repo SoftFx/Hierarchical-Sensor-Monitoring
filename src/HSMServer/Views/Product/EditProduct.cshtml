@@ -43,17 +43,21 @@
     <div style="margin: 10px">
         <div class="row justify-content-start">
             <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'.</div>
+            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
 
 
             <div class="mb-3">
                 <label for="email" class="form-label">Email address</label>
                 <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
             </div>
-            <div class="mb-3">
+            <!--<div class="mb-3">
                 <label for="dateTime" class="form-label">Access expiration date</label>
-                <input style="width: 300px" type="datetime-local" class="form-control" id="dateTime"/>
-            </div>
+                <input style="width: 300px" type="time" class="form-control" id="dateTime"
+                       min="@DateTime.UtcNow.ToString("")"/>-->
+                @*<input style="width: 300px" type="datetime-local" class="form-control" id="dateTime"
+                       min="@DateTime.UtcNow.ToString("yyyy-MM-ddThh:mm:ss")"
+                       max="@((DateTime.UtcNow + TimeSpan.FromMinutes(30)).ToString("yyyy-MM-ddThh:mm:ss"))"/>*@
+            <!--</div>-->
 
             <div class="mb-3">
                 <label for="productRole" class="form-label">Choose a role permission</label>
@@ -111,7 +115,7 @@
     $('#inviteButton').on('click', function () {
         productKey = $('#productKey').val();
         email = $('#email').val();
-        dateTime = $('#dateTime').val();
+        dateTime = null;//$('#dateTime').val();
         productRole = $('#productRole').val();
 
         data = createInviteData(productKey, email, dateTime, productRole);
