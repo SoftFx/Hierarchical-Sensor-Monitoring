@@ -60,6 +60,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bar\BarSensor.cs" />
     <Compile Include="Bar\BarSensorBase.cs" />
     <Compile Include="Bar\BarSensorDouble.cs" />
     <Compile Include="Bar\BarSensorInt.cs" />
@@ -70,10 +71,12 @@
     <Compile Include="Core\IDataCollector.cs" />
     <Compile Include="Core\IDataQueue.cs" />
     <Compile Include="Core\IValuesQueue.cs" />
+    <Compile Include="DefaultValueSensor\DefaultValueSensor.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorBase.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorDouble.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorInt.cs" />
     <Compile Include="Exceptions\InvalidSensorPathException.cs" />
+    <Compile Include="InstantValue\InstantValueSensor.cs" />
     <Compile Include="InstantValue\InstantValueSensorBase.cs" />
     <Compile Include="InstantValue\InstantValueSensorBool.cs" />
     <Compile Include="InstantValue\InstantValueSensorDouble.cs" />
@@ -85,7 +88,7 @@
     <Compile Include="PerformanceSensor\CustomFuncSensor\FuncSensorBase.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
-    <Compile Include="PerformanceSensor\SystemMonitoring\CPUSensor.cs" />
+    <Compile Include="PerformanceSensor\SystemMonitoring\TotalCPUSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\FreeDiskSpaceSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\FreeMemorySensor.cs" />
     <Compile Include="PerformanceSensor\Base\IPerformanceSensor.cs" />
@@ -93,13 +96,16 @@
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessMemorySensor.cs" />
     <Compile Include="PerformanceSensor\StandardSensor\StandardPerformanceSensorBase.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PublicInterface\IBarSensor.cs" />
     <Compile Include="PublicInterface\IBoolSensor.cs" />
     <Compile Include="PublicInterface\IDefaultValueSensorDouble.cs" />
     <Compile Include="PublicInterface\IDefaultValueSensorInt.cs" />
     <Compile Include="PublicInterface\IDoubleBarSensor.cs" />
     <Compile Include="PublicInterface\IDoubleSensor.cs" />
+    <Compile Include="PublicInterface\IInstantValueSensor.cs" />
     <Compile Include="PublicInterface\IIntBarSensor.cs" />
     <Compile Include="PublicInterface\IIntSensor.cs" />
+    <Compile Include="PublicInterface\ILastValueSensor.cs" />
     <Compile Include="PublicInterface\IStringSensor.cs" />
     <Compile Include="Serialization\Serializer.cs" />
     <Compile Include="TextConstants.cs" />

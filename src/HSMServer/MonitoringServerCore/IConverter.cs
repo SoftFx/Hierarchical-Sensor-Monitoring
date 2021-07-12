@@ -42,7 +42,6 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         #region Independent update messages
-
         SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName);
         SensorData Convert(SensorDataObject dataObject, string productName);
         SensorData Convert(BoolSensorValue value, string productName, DateTime timeCollected, TransactionType type);
@@ -55,11 +54,12 @@ namespace HSMServer.MonitoringServerCore
         SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected, TransactionType type);
         SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected,
             TransactionType type);
-
         #endregion
 
+        SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected);
+        SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        BarSensorValueBase GetBarSensorValue(UnitedSensorValue value);
         SensorInfo Convert(string productName, string path);
         SensorInfo Convert(string productName, SensorValueBase sensorValue);
-
     }
 }

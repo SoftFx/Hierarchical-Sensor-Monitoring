@@ -1,13 +1,14 @@
-﻿using System;
-using System.Text.Json;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Text.Json;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -83,28 +84,13 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
-        //private SensorHistoryMessage Convert(IntBarSensorValue value, DateTime timeCollected)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-        //        result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
-        //        result.Type = SensorObjectType.ObjectTypeBarIntSensor;
-        //    }
-        //    catch (Exception e)
-        //    {
-
-        //    }
-        //    return result;
-        //}
         private SensorHistoryData Convert(IntBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
             {
                 result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time;
+                result.Time = value.Time.ToUniversalTime();
                 result.SensorType = SensorType.IntegerBarSensor;
             }
             catch (Exception e)
@@ -112,28 +98,13 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //private SensorHistoryMessage Convert(DoubleBarSensorValue value, DateTime timeCollected)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-        //        result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
-        //        result.Type = SensorObjectType.ObjectTypeBarDoubleSensor;
-        //    }
-        //    catch (Exception e)
-        //    {
-
-        //    }
-        //    return result;
-        //}
         private SensorHistoryData Convert(DoubleBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
             {
                 result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time;
+                result.Time = value.Time.ToUniversalTime();
                 result.SensorType = SensorType.DoubleBarSensor;
             }
             catch (Exception e)
@@ -141,21 +112,7 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //public SensorHistoryMessage Convert(SensorDataObject dataObject)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = dataObject.TypedData;
-        //        result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
-        //        result.Type = Convert(dataObject.DataType);
-        //    }
-        //    catch (Exception e)
-        //    {
-                
-        //    }
-        //    return result;
-        //}
+       
         public SensorHistoryData Convert(SensorDataObject dataObject)
         {
             SensorHistoryData historyData = new SensorHistoryData();
@@ -442,21 +399,76 @@ namespace HSMServer.MonitoringServerCore
             data.SensorType = SensorType.DoubleBarSensor;
             return data;
         }
+
         private void AddCommonValues(SensorValueBase value, string productName, DateTime timeCollected, TransactionType type, out SensorData data)
         {
             data = new SensorData();
             data.Path = value.Path;
             data.Product = productName;
             data.Time = timeCollected;
-            data.TransactionType = type;
+            //data.TransactionType = type;
             data.Description = value.Description;
             data.Status = value.Status;
             data.Key = value.Key;
         }
 
+        private void AddCommonValues(UnitedSensorValue value, string productName, DateTime timeCollected, out SensorData data)
+        {
+            data = new SensorData();
+            data.Path = value.Path;
+            data.Product = productName;
+            data.Time = timeCollected;
+            data.Description = value.Description;
+            data.Status = value.Status;
+            data.Key = value.Key;
+            data.SensorType = value.Type;
+        }
         #endregion
         #region Typed data objects
 
+        private string GetStringValueForBool(bool boolValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}.";
+        }
+
+        private string GetStringValueForInt(int intValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}.";
+        }
+
+        private string GetStringValueForDouble(double doubleValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}, comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}.";
+        }
+
+        private string GetStringValueForString(string stringValue, DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}', comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}'.";
+        }
+
+        private string GetStringValueForIntBar(int min, int max, int mean, int count, int last, DateTime timeCollected,
+            string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
+        }
+
+        private string GetStringValueForDoubleBar(double min, double max, double mean, int count, double last,
+            DateTime timeCollected, string comment)
+        {
+            return !string.IsNullOrEmpty(comment)
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
+        }
         private string GetStringValue(string stringData, SensorType sensorType, DateTime timeCollected)
         {
             string result = string.Empty;
@@ -467,10 +479,7 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(boolData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}, comment = {boolData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolData.BoolValue}.";
-                            result = $"{boolData.BoolValue}";
+                            return GetStringValueForBool(boolData.BoolValue, timeCollected, boolData.Comment);
                         }
                         catch { }
                         break;
@@ -480,9 +489,7 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(intData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}, comment = {intData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intData.IntValue}.";
+                            return GetStringValueForInt(intData.IntValue, timeCollected, intData.Comment);
                         }
                         catch { }
                         break;
@@ -492,11 +499,10 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(doubleData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}, comment = {doubleData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleData.DoubleValue}.";
+                            return GetStringValueForDouble(doubleData.DoubleValue, timeCollected, doubleData.Comment);
                         }
-                        catch { }
+                        catch
+                        { }
                         break;
                     }
                 case SensorType.StringSensor:
@@ -504,9 +510,8 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             StringSensorData stringTypedData = JsonSerializer.Deserialize<StringSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(stringTypedData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}', comment = {stringTypedData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringTypedData.StringValue}'.";
+                            return GetStringValueForString(stringTypedData.StringValue, timeCollected,
+                                stringTypedData.Comment);
                         }
                         catch { }
                         break;
@@ -516,9 +521,8 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(intBarData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}. Comment = {intBarData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {intBarData.Min}, Mean = {intBarData.Mean}, Max = {intBarData.Max}, Count = {intBarData.Count}, Last = {intBarData.LastValue}.";
+                            return GetStringValueForIntBar(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.Count,
+                                intBarData.LastValue, timeCollected, intBarData.Comment);
                         }
                         catch { }
                         break;
@@ -528,9 +532,9 @@ namespace HSMServer.MonitoringServerCore
                         try
                         {
                             DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(stringData);
-                            result = !string.IsNullOrEmpty(doubleBarData.Comment)
-                                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}. Comment = {doubleBarData.Comment}"
-                                : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarData.Min}, Mean = {doubleBarData.Mean}, Max = {doubleBarData.Max}, Count = {doubleBarData.Count}, Last = {doubleBarData.LastValue}.";
+                            return GetStringValueForDoubleBar(doubleBarData.Min, doubleBarData.Max, doubleBarData.Mean,
+                                doubleBarData.Count,
+                                doubleBarData.LastValue, timeCollected, doubleBarData.Comment);
                         }
                         catch { }
                         break;
@@ -894,6 +898,295 @@ namespace HSMServer.MonitoringServerCore
         }
         #endregion
 
+        #region UnitedSensorValue to update messages
+        public SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected)
+        {
+            AddCommonValues(value, productName, timeCollected, out var data);
+            data.StringValue = GetStringValue(value, timeCollected);
+            data.ShortStringValue = GetShortStringValue(value);
+            return data;
+        }
+
+        private string GetStringValue(UnitedSensorValue value, DateTime timeCollected)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                    bool boolRes = bool.Parse(value.Data);
+                    return GetStringValueForBool(boolRes, timeCollected, value.Comment);
+                case SensorType.IntSensor:
+                    int intRes = int.Parse(value.Data);
+                    return GetStringValueForInt(intRes, timeCollected, value.Comment);
+                case SensorType.DoubleSensor:
+                    double doubleRes = double.Parse(value.Data);
+                    return GetStringValueForDouble(doubleRes, timeCollected, value.Comment);
+                case SensorType.StringSensor:
+                    return GetStringValueForString(value.Data, timeCollected, value.Comment);
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return GetStringValueForIntBar(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.Count, intBarData.LastValue,
+                        timeCollected, value.Comment);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return GetStringValueForDoubleBar(doubleBarData.Min, doubleBarData.Max, doubleBarData.Mean, doubleBarData.Count, doubleBarData.LastValue,
+                        timeCollected, value.Comment);
+            }
+
+            return string.Empty;
+        }
+        private string GetShortStringValue(UnitedSensorValue value)
+        {
+            switch (value.Type)
+            {
+                //Simple data types store TypedValue.ToString()
+                case SensorType.BooleanSensor:
+                case SensorType.IntSensor:
+                case SensorType.DoubleSensor:
+                case SensorType.StringSensor:
+                    return value.Data;
+                case SensorType.IntegerBarSensor:
+                {
+                    try
+                    {
+                        var typedDataObj = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                        return 
+                            $"Min = {typedDataObj.Min}, Mean = {typedDataObj.Mean}, Max = {typedDataObj.Max}, Count = {typedDataObj.Count}, Last = {typedDataObj.LastValue}.";
+                    }
+                    catch (Exception e)
+                    {
+                        return string.Empty;
+                    }
+                }
+                case SensorType.DoubleBarSensor:
+                {
+                    try
+                    {
+                        var typedDataObj = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                        return
+                            $"Min = {typedDataObj.Min}, Mean = {typedDataObj.Mean}, Max = {typedDataObj.Max}, Count = {typedDataObj.Count}, Last = {typedDataObj.LastValue}.";
+                    }
+                    catch (Exception e)
+                    {
+                        return string.Empty;
+                    }
+                }
+            }
+
+            return string.Empty;
+        }
+        #endregion
+
+        #region UnitedSensorValue to database objects
+        public SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected)
+        {
+            FillCommonFields(value, timeCollected, out var result);
+            result.DataType = value.Type;
+            result.Status = value.Status;
+            result.TypedData = GetTypedData(value);
+            return result;
+        }
+
+        private string GetTypedData(UnitedSensorValue value)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                    return GetBoolTypedData(value.Data, value.Comment);
+                case SensorType.IntSensor:
+                    return GetIntTypedData(value.Data, value.Comment);
+                case SensorType.DoubleSensor:
+                    return GetDoubleTypedData(value.Data, value.Comment);
+                case SensorType.StringSensor:
+                    return GetStringTypedData(value.Data, value.Comment);
+                case SensorType.DoubleBarSensor:
+                    return GetDoubleBarTypedData(value.Data, value.Comment);
+                case SensorType.IntegerBarSensor:
+                    return GetIntBarTypedData(value.Data, value.Comment);
+                default:
+                    return "";
+            }
+        }
+
+        private string GetBoolTypedData(string val, string comment)
+        {
+            BoolSensorData data = new BoolSensorData();
+            var isParsed = bool.TryParse(val, out bool result);
+            if (isParsed)
+            {
+                data.BoolValue = result;
+            }
+            else
+            {
+                _logger.LogError($"Failed to parse boolean from '{val}'");
+            }
+
+            data.Comment = comment;
+            return JsonSerializer.Serialize(data);
+        }
+
+        private string GetIntTypedData(string val, string comment)
+        {
+            IntSensorData data = new IntSensorData();
+            var isParsed = int.TryParse(val, out var result);
+            if (isParsed)
+            {
+                data.IntValue = result;
+            }
+            else
+            {
+                _logger.LogError($"Failed to parse integer from '{val}'");
+            }
+
+            data.Comment = comment;
+            return JsonSerializer.Serialize(data);
+        }
+
+        private string GetDoubleTypedData(string val, string comment)
+        {
+            DoubleSensorData data = new DoubleSensorData();
+            var isParsed = double.TryParse(val, out var result);
+            if (isParsed)
+            {
+                data.DoubleValue = result;
+            }
+            else
+            {
+                _logger.LogError($"Failed to parse double from '{val}'");
+            }
+
+            data.Comment = comment;
+            return JsonSerializer.Serialize(data);
+        }
+
+        private string GetStringTypedData(string val, string comment)
+        {
+            StringSensorData data = new StringSensorData();
+            data.StringValue = val;
+            data.Comment = comment;
+            return JsonSerializer.Serialize(data);
+        }
+
+        private string GetIntBarTypedData(string val, string comment)
+        {
+            IntBarData data;
+            try
+            {
+                data = JsonSerializer.Deserialize<IntBarData>(val);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e,$"Failed to deserialize intBarData from {val}");
+                return "";
+            }
+
+            IntBarSensorData result = new IntBarSensorData
+            {
+                Count = data.Count,
+                Max = data.Max,
+                Min = data.Min,
+                Mean = data.Mean,
+                StartTime = data.StartTime,
+                EndTime = data.EndTime,
+                LastValue = data.LastValue,
+                Comment = comment
+            };
+            //result.Percentiles.AddRange(data.Percentiles);
+            result.Percentiles = data.Percentiles;
+            return JsonSerializer.Serialize(result);
+        }
+
+        private string GetDoubleBarTypedData(string val, string comment)
+        {
+            DoubleBarData data;
+            try
+            {
+                data = JsonSerializer.Deserialize<DoubleBarData>(val);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to deserialize intBarData from {val}");
+                return "";
+            }
+
+            DoubleBarSensorData result = new DoubleBarSensorData
+            {
+                Count = data.Count,
+                Max = data.Max,
+                Min = data.Min,
+                Mean = data.Mean,
+                StartTime = data.StartTime,
+                EndTime = data.EndTime,
+                LastValue = data.LastValue,
+                Comment = comment
+            };
+            //result.Percentiles.AddRange(data.Percentiles);
+            result.Percentiles = data.Percentiles;
+            return JsonSerializer.Serialize(result);
+        }
+        #endregion
+
+        public BarSensorValueBase GetBarSensorValue(UnitedSensorValue value)
+        {
+            BarSensorValueBase result;
+            switch (value.Type)
+            {
+                case SensorType.DoubleBarSensor:
+                    result = new DoubleBarSensorValue();
+                    CopyCommonFields(value, result);
+                    CopyDoubleBarData(value, (DoubleBarSensorValue) result);
+                    return result;
+                case SensorType.IntegerBarSensor:
+                    result = new IntBarSensorValue();
+                    CopyCommonFields(value, result);
+                    CopyIntBarData(value, (IntBarSensorValue) result);
+                    return result;
+            }
+
+            return null;
+        }
+
+        private void CopyCommonFields(UnitedSensorValue unitedObj, BarSensorValueBase barObj)
+        {
+            barObj.Comment = unitedObj.Comment;
+            barObj.Path = unitedObj.Path;
+            barObj.Description = unitedObj.Description;
+            barObj.Status = unitedObj.Status;
+            barObj.Key = unitedObj.Key;
+            barObj.Time = unitedObj.Time;
+        }
+
+        private void CopyIntBarData(UnitedSensorValue unitedObj, IntBarSensorValue intBarObj)
+        {
+            try
+            {
+                IntBarData data = JsonSerializer.Deserialize<IntBarData>(unitedObj.Data);
+                intBarObj.Max = data.Max;
+                intBarObj.Mean = data.Mean;
+                intBarObj.Min = data.Min;
+                intBarObj.Percentiles = data.Percentiles;
+                intBarObj.LastValue = data.LastValue;
+                intBarObj.StartTime = data.StartTime;
+                intBarObj.EndTime = data.EndTime;
+            }
+            catch (Exception e)
+            { }
+        }
+        private void CopyDoubleBarData(UnitedSensorValue unitedObj, DoubleBarSensorValue intBarObj)
+        {
+            try
+            {
+                DoubleBarData data = JsonSerializer.Deserialize<DoubleBarData>(unitedObj.Data);
+                intBarObj.Max = data.Max;
+                intBarObj.Mean = data.Mean;
+                intBarObj.Min = data.Min;
+                intBarObj.Percentiles = data.Percentiles;
+                intBarObj.LastValue = data.LastValue;
+                intBarObj.StartTime = data.StartTime;
+                intBarObj.EndTime = data.EndTime;
+            }
+            catch (Exception e)
+            { }
+        }
         public SensorInfo Convert(string productName, string path)
         {
             SensorInfo result = new SensorInfo();
