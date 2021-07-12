@@ -60,6 +60,8 @@
                 @ViewHelper.CreateProductRoleSelect()
             </div>
 
+            <span id="new_invite_span" style="display: none"></span>
+
             <div class="mb-3">
                 <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
                  <i class="fas fa-envelope"></i> Invite</button>
@@ -83,6 +85,13 @@
         let keyErrorSpan = document.getElementById('new_key_span');
         keyErrorSpan.textContent = keyErrorText;
         keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    }
+
+    let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
+    if (inviteErrorText !== undefined) {
+        let inviteErrorSpan = document.getElementById('new_invite_span');
+        inviteErrorSpan.textContent = inviteErrorText;
+        inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
     //copy buttons

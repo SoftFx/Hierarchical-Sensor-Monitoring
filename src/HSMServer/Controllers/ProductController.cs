@@ -187,6 +187,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void Invite([FromBody] InviteViewModel model)
         {
+            InviteValidator validator = new InviteValidator();
+            var results = validator.Validate(model);
+            if (!results.IsValid)
+            {
+                TempData[TextConstants.TempDataInviteErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                return;
+            }
+
             var str = $"{model.ProductKey}_{model.Role}_{model.ExpirationDate}";
 
             var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);

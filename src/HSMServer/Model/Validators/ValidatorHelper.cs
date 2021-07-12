@@ -13,7 +13,7 @@ namespace HSMServer.Model.Validators
 
             foreach (var error in errors)
             {
-                result.Append(error.ErrorMessage); 
+                result.Append(error.ErrorMessage.Replace('\'', ' ')); 
                 return result.ToString();
             }
 
