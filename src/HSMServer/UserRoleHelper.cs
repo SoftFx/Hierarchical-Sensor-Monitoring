@@ -1,50 +1,48 @@
-﻿using HSMServer.Authentication;
-
-namespace HSMServer
+﻿namespace HSMServer
 {
     public static class UserRoleHelper
     {
-        public static bool IsProductCRUDAllowed(UserRoleEnum role)
+        public static bool IsProductCRUDAllowed(bool isAdmin)
         {
-            return role switch
+            return isAdmin switch
             {
-                UserRoleEnum.SystemAdmin => true,
+                true => true,
                 _ => false
             };
         }
 
-        public static bool IsUsersPageAllowed(UserRoleEnum role)
+        public static bool IsUsersPageAllowed(bool isAdmin)
         {
-            return role switch
+            return isAdmin switch
             {
-                UserRoleEnum.SystemAdmin => true,
+                true => true,
                 _ => false
             };
         }
 
-        public static bool IsUserCRUDAllowed(UserRoleEnum role)
+        public static bool IsUserCRUDAllowed(bool isAdmin)
         {
-            return role switch
+            return isAdmin switch
             {
-                UserRoleEnum.SystemAdmin => true,
+                true => true,
                 _ => false
             };
         }
 
-        public static bool IsAllProductsTreeAllowed(UserRoleEnum role)
+        public static bool IsAllProductsTreeAllowed(bool isAdmin)
         {
-            return role switch
+            return isAdmin switch
             {
-                UserRoleEnum.SystemAdmin => true,
+                true => true,
                 _ => false
             };
         }
 
-        public static bool IsAllSensorsAllowed(UserRoleEnum role)
+        public static bool IsAllSensorsAllowed(bool isAdmin)
         {
-            return role switch
+            return isAdmin switch
             {
-                UserRoleEnum.SystemAdmin => true,
+                true => true,
                 _ => false
             };
         }

@@ -88,6 +88,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>..\ThirdPartyLib\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
     <Reference Include="LightningDB">
       <HintPath>..\ThirdPartyLib\LightningDB.dll</HintPath>
     </Reference>

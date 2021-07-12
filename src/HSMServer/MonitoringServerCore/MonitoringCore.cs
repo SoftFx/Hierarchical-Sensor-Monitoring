@@ -526,7 +526,7 @@ namespace HSMServer.MonitoringServerCore
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
             //Show available products only
-            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.Role))
+            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.IsAdmin))
                 productsList = productsList.Where(p => 
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
@@ -744,7 +744,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.SystemAdmin);
+                HashComputer.ComputePasswordHash(commonName), true);
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;

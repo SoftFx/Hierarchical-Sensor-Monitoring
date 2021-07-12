@@ -15,6 +15,7 @@ namespace HSMServer.DataLayer
         void DeleteDatabase();
 
         #endregion
+
         #region Products
 
         void AddProductToList(string productName);
@@ -47,14 +48,17 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Configuration
-
+        #region Users
         void AddUser(User user);
         List<User> ReadUsers();
         void RemoveUser(User user);
         List<User> ReadUsersPage(int page, int pageSize);
 
-        ConfigurationObject ReadConfigurationObject();
+        #endregion
+
+        #region Configuration
+
+        ConfigurationObject ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationObject obj);
 
         #endregion
