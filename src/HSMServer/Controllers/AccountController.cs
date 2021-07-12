@@ -95,15 +95,16 @@ namespace HSMServer.Controllers
                 return View("Registration", model);
             }
 
+            List<KeyValuePair<string, ProductRoleEnum>> products = null;
             if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
             {
-                var products = new List<KeyValuePair<string, ProductRoleEnum>>()
+                products = new List<KeyValuePair<string, ProductRoleEnum>>()
                     { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, 
                     (ProductRoleEnum)Int32.Parse(model.Role))};
             }
 
             _userManager.AddUser(model.Username, null, null,
-                HashComputer.ComputePasswordHash(model.Password), false);
+                HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             return RedirectToAction("Index", "Home");
