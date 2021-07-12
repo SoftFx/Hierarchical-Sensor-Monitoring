@@ -3,40 +3,45 @@ using HSMDataCollector.Bar;
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
-    internal class CPUSensor : StandardPerformanceSensorBase
+    internal class TotalCPUSensor : StandardPerformanceSensorBase<int>
     {
-        private readonly BarSensorInt _valuesSensor;
-        private const string _sensorName = "CPU usage";
-        public CPUSensor(string productKey, IValuesQueue queue)
+        private const string _sensorName = "Total CPU";
+        public TotalCPUSensor(string productKey, IValuesQueue queue)
             : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
         {
-            _valuesSensor = new BarSensorInt($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue);
+            InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                _valuesSensor.AddValue((int)_internalCounter.NextValue());
+                InternalBar.AddValue((int)InternalCounter.NextValue());
             }
             catch (Exception e)
             { }
             
         }
 
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            return InternalBar.GetLastValueNew();
+        }
+
         public override void Dispose()
         {
             _monitoringTimer?.Dispose();
-            _internalCounter?.Dispose();
-            _valuesSensor?.Dispose();
+            InternalCounter?.Dispose();
+            InternalBar?.Dispose();
         }
 
         public override CommonSensorValue GetLastValue()
         {
-            return _valuesSensor.GetLastValue();
+            return InternalBar.GetLastValue();
         }
     }
 }

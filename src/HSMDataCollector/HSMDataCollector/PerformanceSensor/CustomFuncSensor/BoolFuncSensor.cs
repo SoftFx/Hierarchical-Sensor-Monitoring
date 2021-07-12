@@ -1,8 +1,8 @@
-﻿using System;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
 
 namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
 {
@@ -11,7 +11,12 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
         public BoolFuncSensor(Func<bool> function, string path, string productKey, IValuesQueue queue, int timeout = 15000) : base(function, path, productKey, queue, timeout)
         {
         }
-        
+
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override string GetStringData(SensorValueBase data)
         {
             throw new NotImplementedException();

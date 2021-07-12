@@ -1,17 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMDataCollector.Bar
 {
+    [Obsolete("08.07.2021. Use BarSensor.")]
     public class BarSensorInt : BarSensorBase, IIntBarSensor
     {
         private readonly List<int> _valuesList;
@@ -19,7 +18,7 @@ namespace HSMDataCollector.Bar
         public BarSensorInt(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000) : base(path, productKey, queue, collectPeriod,
-            smallPeriod)
+            smallPeriod, "", 2)
         {
             _valuesList = new List<int>();
         }
@@ -38,11 +37,16 @@ namespace HSMDataCollector.Bar
             }
         }
 
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override void SendDataTimer(object state)
         {
             IntBarSensorValue dataObject = GetDataObject();
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         protected override void SmallTimerTick(object state)
@@ -57,7 +61,7 @@ namespace HSMDataCollector.Bar
                 return;
             }
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public void AddValue(int value)

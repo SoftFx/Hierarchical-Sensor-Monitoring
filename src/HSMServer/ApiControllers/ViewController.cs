@@ -30,17 +30,5 @@ namespace HSMServer.ApiControllers
         {
             return _userManager.GetUsersNotAdmin();
         }
-
-        //[HttpGet("GetAllViewers")]
-        //public ActionResult<List<User>> GetAllViewers()
-        //{
-        //    return _userManager.GetAllViewers();
-        //}
-
-        //[HttpGet("GetAllManagers")]
-        //public ActionResult<List<User>> GetAllManagers()
-        //{
-        //    return _userManager.GetAllManagers();
-        //}
     }
 }

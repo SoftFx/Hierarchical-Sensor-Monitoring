@@ -12,4 +12,4 @@ namespace HSMServer.MonitoringServerCore
         ExtendedBarSensorData GetLastValue(string product, string path);
         event EventHandler<ExtendedBarSensorData> IncompleteBarOutdated;
     }
-} 
+}

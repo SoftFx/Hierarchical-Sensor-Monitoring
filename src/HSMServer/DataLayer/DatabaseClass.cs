@@ -833,7 +833,7 @@ namespace HSMServer.DataLayer
             throw new NotImplementedException();
         }
 
-        public ConfigurationObject ReadConfigurationObject()
+        public ConfigurationObject ReadConfigurationObject(string name)
         {
             throw new NotImplementedException();
         }

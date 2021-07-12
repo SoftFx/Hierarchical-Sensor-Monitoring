@@ -31,6 +31,7 @@ namespace HSMServer.Controllers
         public IActionResult Index()
         {
             var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
+        
             var result = _monitoringCore.GetSensorsTree(user);
             var tree = new TreeViewModel(result);
 
