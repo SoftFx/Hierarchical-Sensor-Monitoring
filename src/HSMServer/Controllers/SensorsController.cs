@@ -271,13 +271,22 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<List<UnitedSensorValue>> Post([FromBody] IEnumerable<UnitedSensorValue> values)
+        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
         {
             if (values == null || !values.Any())
                 return BadRequest();
 
-            
-            return Ok(values);
+
+            try
+            {
+                _monitoringCore.AddSensorsValues(values);
+                return Ok(values);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data");
+                return BadRequest(values);
+            }
         }
     }
 }

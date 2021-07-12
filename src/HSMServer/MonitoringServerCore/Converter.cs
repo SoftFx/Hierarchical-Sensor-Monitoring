@@ -1134,7 +1134,8 @@ namespace HSMServer.MonitoringServerCore
                 LastValue = data.LastValue,
                 Comment = comment
             };
-            result.Percentiles.AddRange(data.Percentiles);
+            //result.Percentiles.AddRange(data.Percentiles);
+            result.Percentiles = data.Percentiles;
             return JsonSerializer.Serialize(result);
         }
 
@@ -1162,7 +1163,8 @@ namespace HSMServer.MonitoringServerCore
                 LastValue = data.LastValue,
                 Comment = comment
             };
-            result.Percentiles.AddRange(data.Percentiles);
+            //result.Percentiles.AddRange(data.Percentiles);
+            result.Percentiles = data.Percentiles;
             return JsonSerializer.Serialize(result);
         }
         #endregion
