@@ -1,6 +1,7 @@
 ﻿function displayGraph(graphData, graphType, graphElementId, graphName) {
   let convertedData = convertToGraphData(graphData, graphType, graphName);
 
+    //console.log('converted graph data:', convertedData);
     Plotly.newPlot(graphElementId, convertedData);
 }
 
@@ -96,7 +97,7 @@ function convertToGraphData(graphData, graphType, graphName) {
 
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
-            return d.EndTime;
+            return d.StartTime;
         });
     }
 

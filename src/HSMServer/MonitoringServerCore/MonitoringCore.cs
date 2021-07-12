@@ -126,7 +126,7 @@ namespace HSMServer.MonitoringServerCore
                 case SensorType.IntegerBarSensor:
                 {
                     var typedValue = e.Value as IntBarSensorValue;
-                    typedValue.EndTime = DateTime.Now;
+                    typedValue.EndTime = DateTime.Now.ToUniversalTime();
                     SensorDataObject obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
                     SaveSensorValue(obj, e.ProductName);
                     break;
@@ -134,7 +134,7 @@ namespace HSMServer.MonitoringServerCore
                 case SensorType.DoubleBarSensor:
                 {
                     var typedValue = e.Value as DoubleBarSensorValue;
-                    typedValue.EndTime = DateTime.Now;
+                    typedValue.EndTime = DateTime.Now.ToUniversalTime();
                     SensorDataObject obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
                     SaveSensorValue(obj, e.ProductName);
                     break;
@@ -221,7 +221,15 @@ namespace HSMServer.MonitoringServerCore
             List<UnitedSensorValue> valuesList = values.ToList();
             foreach (var value in valuesList)
             {
-                AddUnitedValue(value);
+                try
+                {
+                    AddUnitedValue(value);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
+                }
+                
             }
         }
         private void AddUnitedValue(UnitedSensorValue value)
@@ -237,6 +245,14 @@ namespace HSMServer.MonitoringServerCore
                 SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
+                bool isToDB = true;
+                if (value.IsBarSensor())
+                {
+                    isToDB = ProcessBarSensor(value, timeCollected, productName);
+                }
+
+                if (!isToDB)
+                    return;
 
                 SensorDataObject dataObject = _converter.ConvertUnitedValueToDatabase(value, timeCollected);
                 Task.Run(() => SaveSensorValue(dataObject, productName));
@@ -245,6 +261,37 @@ namespace HSMServer.MonitoringServerCore
             {
                 _logger.LogError(e, $"Failed to add value for sensor {value?.Path}");
             }
+        }
+
+        private bool ProcessBarSensor(UnitedSensorValue value, DateTime timeCollected, string productName)
+        {
+            try
+            {
+                var bar = _converter.GetBarSensorValue(value);
+
+                if (bar.EndTime != DateTime.MinValue)
+                {
+                    _barsStorage.Remove(productName, value.Path);
+                    return true;
+                }
+
+                if (value.Type == SensorType.IntegerBarSensor)
+                {
+                    var intBar = (IntBarSensorValue) bar;
+                    _barsStorage.Add(intBar, productName, timeCollected);
+                    return false;
+                }
+
+                var doubleBar = (DoubleBarSensorValue) bar;
+                _barsStorage.Add(doubleBar, productName, timeCollected);
+                return false;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to process bar sensor {value.Path}");
+            }
+
+            return true;
         }
         #endregion
         public void AddSensorValue(BoolSensorValue value)

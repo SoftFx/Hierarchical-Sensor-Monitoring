@@ -58,6 +58,7 @@ namespace HSMServer.MonitoringServerCore
 
         SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected);
         SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected);
+        BarSensorValueBase GetBarSensorValue(UnitedSensorValue value);
         SensorInfo Convert(string productName, string path);
         SensorInfo Convert(string productName, SensorValueBase sensorValue);
     }

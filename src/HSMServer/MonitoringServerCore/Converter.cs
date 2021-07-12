@@ -84,28 +84,13 @@ namespace HSMServer.MonitoringServerCore
             }
         }
 
-        //private SensorHistoryMessage Convert(IntBarSensorValue value, DateTime timeCollected)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-        //        result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
-        //        result.Type = SensorObjectType.ObjectTypeBarIntSensor;
-        //    }
-        //    catch (Exception e)
-        //    {
-
-        //    }
-        //    return result;
-        //}
         private SensorHistoryData Convert(IntBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
             {
                 result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time;
+                result.Time = value.Time.ToUniversalTime();
                 result.SensorType = SensorType.IntegerBarSensor;
             }
             catch (Exception e)
@@ -113,28 +98,13 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //private SensorHistoryMessage Convert(DoubleBarSensorValue value, DateTime timeCollected)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-        //        result.Time = Timestamp.FromDateTime(value.Time.ToUniversalTime());
-        //        result.Type = SensorObjectType.ObjectTypeBarDoubleSensor;
-        //    }
-        //    catch (Exception e)
-        //    {
-
-        //    }
-        //    return result;
-        //}
         private SensorHistoryData Convert(DoubleBarSensorValue value, DateTime timeCollected)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
             {
                 result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time;
+                result.Time = value.Time.ToUniversalTime();
                 result.SensorType = SensorType.DoubleBarSensor;
             }
             catch (Exception e)
@@ -142,21 +112,7 @@ namespace HSMServer.MonitoringServerCore
 
             return result;
         }
-        //public SensorHistoryMessage Convert(SensorDataObject dataObject)
-        //{
-        //    SensorHistoryMessage result = new SensorHistoryMessage();
-        //    try
-        //    {
-        //        result.TypedData = dataObject.TypedData;
-        //        result.Time = Timestamp.FromDateTime(dataObject.Time.ToUniversalTime());
-        //        result.Type = Convert(dataObject.DataType);
-        //    }
-        //    catch (Exception e)
-        //    {
-                
-        //    }
-        //    return result;
-        //}
+       
         public SensorHistoryData Convert(SensorDataObject dataObject)
         {
             SensorHistoryData historyData = new SensorHistoryData();
@@ -1168,6 +1124,69 @@ namespace HSMServer.MonitoringServerCore
             return JsonSerializer.Serialize(result);
         }
         #endregion
+
+        public BarSensorValueBase GetBarSensorValue(UnitedSensorValue value)
+        {
+            BarSensorValueBase result;
+            switch (value.Type)
+            {
+                case SensorType.DoubleBarSensor:
+                    result = new DoubleBarSensorValue();
+                    CopyCommonFields(value, result);
+                    CopyDoubleBarData(value, (DoubleBarSensorValue) result);
+                    return result;
+                case SensorType.IntegerBarSensor:
+                    result = new IntBarSensorValue();
+                    CopyCommonFields(value, result);
+                    CopyIntBarData(value, (IntBarSensorValue) result);
+                    return result;
+            }
+
+            return null;
+        }
+
+        private void CopyCommonFields(UnitedSensorValue unitedObj, BarSensorValueBase barObj)
+        {
+            barObj.Comment = unitedObj.Comment;
+            barObj.Path = unitedObj.Path;
+            barObj.Description = unitedObj.Description;
+            barObj.Status = unitedObj.Status;
+            barObj.Key = unitedObj.Key;
+            barObj.Time = unitedObj.Time;
+        }
+
+        private void CopyIntBarData(UnitedSensorValue unitedObj, IntBarSensorValue intBarObj)
+        {
+            try
+            {
+                IntBarData data = JsonSerializer.Deserialize<IntBarData>(unitedObj.Data);
+                intBarObj.Max = data.Max;
+                intBarObj.Mean = data.Mean;
+                intBarObj.Min = data.Min;
+                intBarObj.Percentiles = data.Percentiles;
+                intBarObj.LastValue = data.LastValue;
+                intBarObj.StartTime = data.StartTime;
+                intBarObj.EndTime = data.EndTime;
+            }
+            catch (Exception e)
+            { }
+        }
+        private void CopyDoubleBarData(UnitedSensorValue unitedObj, DoubleBarSensorValue intBarObj)
+        {
+            try
+            {
+                DoubleBarData data = JsonSerializer.Deserialize<DoubleBarData>(unitedObj.Data);
+                intBarObj.Max = data.Max;
+                intBarObj.Mean = data.Mean;
+                intBarObj.Min = data.Min;
+                intBarObj.Percentiles = data.Percentiles;
+                intBarObj.LastValue = data.LastValue;
+                intBarObj.StartTime = data.StartTime;
+                intBarObj.EndTime = data.EndTime;
+            }
+            catch (Exception e)
+            { }
+        }
         public SensorInfo Convert(string productName, string path)
         {
             SensorInfo result = new SensorInfo();
