@@ -229,6 +229,8 @@
             if (node !== undefined && node != undefined) {
                 $('#list_' + node.id).css('display', 'block');
                 $('#jstree').jstree('select_node', node.id);    
+                $('#noData').css('display', 'none');
+                $('#list_sensors_header').css('display', 'block');
             }
 
             openSensorHistory(selectedHistory);
