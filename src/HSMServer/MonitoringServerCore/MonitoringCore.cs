@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using HSMCommon.Certificates;
+﻿using HSMCommon.Certificates;
 using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
@@ -20,6 +12,14 @@ using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using HSMServer.Products;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.MonitoringServerCore
@@ -234,7 +234,7 @@ namespace HSMServer.MonitoringServerCore
                     _productManager.AddSensor(productName, value);
                 }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = _converter.ConvertBool(value, productName, timeCollected);
+                SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
 

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Text.Json;
-using System.Threading;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
@@ -10,6 +7,8 @@ using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.DataLayer.Model;
 using HSMServer.Model;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Text.Json;
 
 namespace HSMServer.MonitoringServerCore
 {
