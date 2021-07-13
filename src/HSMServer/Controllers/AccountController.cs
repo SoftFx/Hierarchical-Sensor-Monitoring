@@ -55,7 +55,10 @@ namespace HSMServer.Controllers
                 var role = matches[1];
                 var expidationDate = DateTime.Parse(matches[2]);
 
-                if (expidationDate < DateTime.UtcNow) return View(new RegistrationViewModel());
+                if (expidationDate < DateTime.UtcNow)
+                    return RedirectToAction("Index", "Error", new ErrorViewModel() { 
+                        ErrorText = "Link expired.",
+                        StatusCode = "500"});
 
                 model.ProductKey = productKey;
                 model.Role = role;

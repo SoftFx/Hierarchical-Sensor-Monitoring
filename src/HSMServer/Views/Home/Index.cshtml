@@ -226,14 +226,16 @@
 
             initializeDataHistoryRequests();
 
+            openSensorHistory(selectedHistory);
+
             if (node !== undefined && node != undefined) {
                 $('#list_' + node.id).css('display', 'block');
                 $('#jstree').jstree('select_node', node.id);    
                 $('#noData').css('display', 'none');
                 $('#list_sensors_header').css('display', 'block');
             }
-
-            openSensorHistory(selectedHistory);
+            //console.log(selectedHistory);
+            
 
             $('#updateTime').empty();
             $('#updateTime').append('Update Time: ' + new Date().toUTCString());
@@ -249,6 +251,8 @@
         if (idToOpen === undefined) {
             return;
         }
+
+        //$('[id^=' + idToOpen + ']').click();
 
         //let button = document.getElementById(idToOpen);
         //button.click();
