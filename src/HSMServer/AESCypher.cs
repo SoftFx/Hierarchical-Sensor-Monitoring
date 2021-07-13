@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace HSMServer
@@ -7,31 +8,33 @@ namespace HSMServer
     {
         public static (string, string, string) Encrypt(string str, byte[] key)
         {
-            RandomNumberGenerator.Fill(key);
+            using(var aes = new AesGcm(key))
+            {
+                var nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
+                RandomNumberGenerator.Fill(nonce);
 
-            using var aes = new AesGcm(key);
+                var tag = new byte[AesGcm.TagByteSizes.MaxSize];
+                RandomNumberGenerator.Fill(tag);
 
-            var nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
-            RandomNumberGenerator.Fill(nonce);
+                var textBytes = ToBytes(str);
+                var cipherText = new byte[textBytes.Length];
+                
+                aes.Encrypt(nonce, textBytes, cipherText, tag);
 
-            var textBytes = Encoding.UTF8.GetBytes(str);
-            var cipherText = new byte[textBytes.Length];
-            var tag = new byte[AesGcm.TagByteSizes.MaxSize];
-
-            aes.Encrypt(nonce, textBytes, cipherText, tag);
-
-            return (ToString(cipherText), ToString(nonce), ToString(tag));
+                return (Convert.ToBase64String(cipherText),
+                    Convert.ToBase64String(nonce), Convert.ToBase64String(tag));
+            }
         }
 
         public static string Decrypt(string cipher, string n, string t, byte[] key)
         {
-            var cipherText = ToBytes(cipher);
-            var nonce = ToBytes(n);
-            var tag = ToBytes(t);
+            var cipherText = Convert.FromBase64String(cipher);
+            var nonce = Convert.FromBase64String(n);
+            var tag = Convert.FromBase64String(t);
 
             using(var aes = new AesGcm(key))
             {
-                var textBytes = new byte[cipher.Length];
+                var textBytes = new byte[cipherText.Length];
 
                 aes.Decrypt(nonce, cipherText, tag, textBytes);
 
@@ -39,7 +42,7 @@ namespace HSMServer
             }
         }
 
-        public static byte[] ToBytes(string text) => Encoding.UTF8.GetBytes(text);
-        public static string ToString(byte[] bytes) => Encoding.UTF8.GetString(bytes);
+        public static byte[] ToBytes(string text) => Encoding.Unicode.GetBytes(text);
+        public static string ToString(byte[] bytes) => Encoding.Unicode.GetString(bytes);
     }
 }

@@ -18,5 +18,7 @@
         public const string ExtraKeyNameUnique = "Extra key name must be unique.";
 
         public const string UserNotNull = "User must be not null.";
+
+        public const string ExpirationDateNotNull = "Expiration date must be not null.";
     }
 }

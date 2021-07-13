@@ -13,5 +13,6 @@ namespace HSMServer.Configuration
         void AddConfigurationObject(string name, string value);
         void UpdateConfigurationObject(ConfigurationObject newObject);
         ConfigurationObject ReadConfigurationObject(string name);
+        ConfigurationObject ReadOrDefaultConfigurationObject(string name);
     }
 }
