@@ -12,6 +12,8 @@ using System.Linq;
 using HSMServer.Attributes;
 using HSMServer.Filters;
 using HSMServer.Model.ViewModel;
+using HSMServer.Configuration;
+using System;
 
 namespace HSMServer.Controllers
 {
@@ -19,13 +21,16 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
+        private readonly IConfigurationProvider _configurationProvider;
 
-        public AccountController(IUserManager userManager)
+        public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
+            _configurationProvider = configurationProvider;
         }
 
         [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
         [ActionName(nameof(Index))]
         public IActionResult Index()
         {
@@ -34,17 +39,32 @@ namespace HSMServer.Controllers
 
         [AllowAnonymous]
         [UnauthorizedAccessOnlyFilter]
-        public IActionResult Registration([FromQuery(Name = "Invite")] string invite)
-        {
-            if (!string.IsNullOrEmpty(invite))
+        public IActionResult Registration([FromQuery(Name = "Cipher")] string cipher,
+            [FromQuery(Name = "Tag")] string tag, [FromQuery(Name = "Nonce")] string nonce)        {
+            var model = new RegistrationViewModel();
+
+            if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce)) 
             {
-                var mathes = invite.Split('_');
-                var productKey = mathes[0];
-                var role = mathes[1];
-                var date = mathes[2];
+                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+                byte[] keyBytes = AESCypher.ToBytes(key.Value);
+
+                var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
+                var matches = result.Split('_');
+
+                var productKey = matches[0];
+                var role = matches[1];
+                var expidationDate = DateTime.Parse(matches[2]);
+
+                if (expidationDate < DateTime.UtcNow)
+                    return RedirectToAction("Index", "Error", new ErrorViewModel() { 
+                        ErrorText = "Link expired.",
+                        StatusCode = "500"});
+
+                model.ProductKey = productKey;
+                model.Role = role;
             }
 
-            return View(new RegistrationViewModel());
+            return View(model);
         }
 
         [AllowAnonymous]
@@ -75,11 +95,19 @@ namespace HSMServer.Controllers
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return RedirectToAction("Registration", "Account");
+                return View("Registration", model);
+            }
+
+            List<KeyValuePair<string, ProductRoleEnum>> products = null;
+            if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
+            {
+                products = new List<KeyValuePair<string, ProductRoleEnum>>()
+                    { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, 
+                    (ProductRoleEnum)Int32.Parse(model.Role))};
             }
 
             _userManager.AddUser(model.Username, null, null,
-                HashComputer.ComputePasswordHash(model.Password), false);
+                HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             return RedirectToAction("Index", "Home");

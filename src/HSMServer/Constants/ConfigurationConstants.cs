@@ -10,6 +10,12 @@
 
         public const int DefaultMaxPathLength = 10;
 
+        public const string DefaultSMTPServer = "smtp.gmail.com";
+        public const string DefaultSMTPPort = "";
+        public const string DefaultSMTPLogin = "testEmail44543@gmail.com";
+        public const string DefaultSMTPPassword = "TestEmail4";
+        public const string DefaultSMTPFromEmail = "testEmail44543@gmail.com";
+
         #endregion
 
         #region Configuration Names
@@ -17,13 +23,25 @@
         public const string MaxPathLength = nameof(MaxPathLength);
         public const string AesEncryptionKey = nameof(AesEncryptionKey);
 
+        public const string SMTPServer = nameof(SMTPServer);
+        public const string SMTPPort = nameof(SMTPPort);
+        public const string SMTPLogin = nameof(SMTPLogin);
+        public const string SMTPPassword = nameof(SMTPPassword);
+        public const string SMTPFromEmail = nameof(SMTPFromEmail);
+
         #endregion
 
         public static string GetDefault(string name)
         {
             return name switch
             {
-                MaxPathLength => DefaultMaxPathLength.ToString()
+                MaxPathLength => DefaultMaxPathLength.ToString(),
+
+                SMTPServer => DefaultSMTPServer,
+                SMTPPort => DefaultSMTPPort,
+                SMTPLogin => DefaultSMTPLogin,
+                SMTPPassword => DefaultSMTPPassword,
+                SMTPFromEmail => DefaultSMTPFromEmail
             };
         }
     }
