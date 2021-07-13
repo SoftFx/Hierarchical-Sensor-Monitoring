@@ -30,7 +30,7 @@ namespace hsm_wrapper
 
 
 	using BoolSensor = HSMSensor<bool>;
-	using DoubleSensor = HSMSensor<double>;
 	using IntSensor = HSMSensor<int>;
+	using DoubleSensor = HSMSensor<double>;
 	using StringSensor = HSMSensor<const std::string&>;
 }

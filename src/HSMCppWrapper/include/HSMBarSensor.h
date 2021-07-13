@@ -25,6 +25,6 @@ namespace hsm_wrapper
 
 
 
-	using BarDoubleSensor = HSMBarSensor<double>;
-	using BarIntSensor = HSMBarSensor<int>;
+	using IntBarSensor = HSMBarSensor<int>;
+	using DoubleBarSensor = HSMBarSensor<double>;
 }

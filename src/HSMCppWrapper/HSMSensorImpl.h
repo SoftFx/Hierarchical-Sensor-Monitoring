@@ -2,35 +2,22 @@
 
 #include "msclr/auto_gcroot.h"
 
+using System::String;
+
 using namespace HSMDataCollector::PublicInterface;
 
 namespace hsm_wrapper
 {
 	template<class T>
-	struct SensorType;
-
-	template<>
-	struct SensorType<bool>
+	struct SensorType
 	{
-		using type = IBoolSensor^;
-	};
-
-	template<>
-	struct SensorType<int>
-	{
-		using type = IIntSensor^;
-	};
-
-	template<>
-	struct SensorType<double>
-	{
-		using type = IDoubleSensor^;
+		using type = IInstantValueSensor<T>^;
 	};
 
 	template<>
 	struct SensorType<const std::string&>
 	{
-		using type = IStringSensor^;
+		using type = IInstantValueSensor<String^>^;
 	};
 
 	template<class T>

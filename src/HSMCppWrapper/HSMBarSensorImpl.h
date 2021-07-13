@@ -2,23 +2,16 @@
 
 #include "msclr/auto_gcroot.h"
 
+using System::String;
+
 using namespace HSMDataCollector::PublicInterface;
 
 namespace hsm_wrapper
 {
 	template<class T>
-	struct BarSensorType;
-
-	template<>
-	struct BarSensorType<int>
+	struct BarSensorType
 	{
-		using type = IIntBarSensor^;
-	};
-
-	template<>
-	struct BarSensorType<double>
-	{
-		using type = IDoubleBarSensor^;
+		using type = IBarSensor<T>^;
 	};
 
 	template<class T>

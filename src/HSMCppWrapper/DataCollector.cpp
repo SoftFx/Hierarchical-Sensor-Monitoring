@@ -3,7 +3,7 @@
 #include "DataCollector.h"
 #include "HSMSensorImpl.h"
 #include "HSMBarSensorImpl.h"
-#include "HSMDefaultSensorImpl.h"
+#include "HSMLastValueSensorImpl.h"
 
 #include "msclr/auto_gcroot.h"
 #include "msclr/marshal_cppstd.h"
@@ -31,14 +31,18 @@ namespace hsm_wrapper
 		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads);
 		void MonitoringServiceAlive();
 
-		HSMSensor<bool> CreateBoolSensor(const std::string& path);
-		HSMSensor<double> CreateDoubleSensor(const std::string& path);
-		HSMSensor<int> CreateIntSensor(const std::string& path);
-		HSMSensor<const std::string&> CreateStringSensor(const std::string& path);
-		HSMDefaultSensor<double> CreateDefaultValueSensorDouble(const std::string& path, double default_value);
-		HSMDefaultSensor<int> CreateDefaultValueSensorInt(const std::string& path, int default_value);
-		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2);
-		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000);
+		
+		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<double> CreateDoubleSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<const std::string&> CreateStringSensor(const std::string& path, const std::string& description = "");
+		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
+		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
+		HSMLastValueSensor<double> CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
+		HSMLastValueSensor<const std::string&> CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
+		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
+		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
+		
 	private:
 		msclr::auto_gcroot<IDataCollector^> data_collector;
 	};
@@ -79,52 +83,64 @@ void DataCollectorImpl::MonitoringServiceAlive()
 	data_collector->MonitorServiceAlive();
 }
 
-HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path)
+HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
 {
-	IBoolSensor^ bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()));
+	IInstantValueSensor<bool>^ bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
 	return HSMSensor<bool>{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
 }
 
-HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path)
+HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path, const std::string& description)
 {
-	IDoubleSensor^ double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()));
-	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
-}
-
-HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path)
-{
-	IIntSensor^ int_sensor = data_collector->CreateIntSensor(gcnew String(path.c_str()));
+	IInstantValueSensor<int>^ int_sensor = data_collector->CreateIntSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
 	return HSMSensor<int>{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
 }
 
-HSMSensor<const std::string&> DataCollectorImpl::CreateStringSensor(const std::string& path)
+HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
-	IStringSensor^ string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()));
+	IInstantValueSensor<double>^ double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
+	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
+}
+
+HSMSensor<const std::string&> DataCollectorImpl::CreateStringSensor(const std::string& path, const std::string& description)
+{
+	IInstantValueSensor<String^>^ string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
 	return HSMSensor<const std::string&>{std::make_shared<HSMSensorImpl<const std::string&>>(string_sensor)};
 }
 
-HSMDefaultSensor<double> DataCollectorImpl::CreateDefaultValueSensorDouble(const std::string& path, double default_value)
+HSMLastValueSensor<bool> DataCollectorImpl::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
-	IDefaultValueSensorDouble^ double_default_sensor = data_collector->CreateDefaultValueSensorDouble(gcnew String(path.c_str()), default_value);
-	return HSMDefaultSensor<double>{std::make_shared<HSMDefaultSensorImpl<double>>(double_default_sensor)};
+	ILastValueSensor<bool>^ int_default_sensor = data_collector->CreateLastValueBoolSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
+	return HSMLastValueSensor<bool>{std::make_shared<HSMLastValueSensorImpl<bool>>(int_default_sensor)};
 }
 
-HSMDefaultSensor<int> DataCollectorImpl::CreateDefaultValueSensorInt(const std::string& path, int default_value)
+HSMLastValueSensor<int> DataCollectorImpl::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
 {
-	IDefaultValueSensorInt^ int_default_sensor = data_collector->CreateDefaultValueSensorInt(gcnew String(path.c_str()), default_value);
-	return HSMDefaultSensor<int>{std::make_shared<HSMDefaultSensorImpl<int>>(int_default_sensor)};
+	ILastValueSensor<int>^ int_default_sensor = data_collector->CreateLastValueIntSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
+	return HSMLastValueSensor<int>{std::make_shared<HSMLastValueSensorImpl<int>>(int_default_sensor)};
 }
 
-HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision)
+HSMLastValueSensor<double> DataCollectorImpl::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
 {
-	IDoubleBarSensor^ double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), timeout, small_period, precision);
-	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
+	ILastValueSensor<double>^ double_default_sensor = data_collector->CreateLastValueDoubleSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
+	return HSMLastValueSensor<double>{std::make_shared<HSMLastValueSensorImpl<double>>(double_default_sensor)};
 }
 
-HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period)
+HSMLastValueSensor<const std::string&> DataCollectorImpl::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
 {
-	IIntBarSensor^ int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), timeout, small_period);
+	ILastValueSensor<String^>^ int_default_sensor = data_collector->CreateLastValueStringSensor(gcnew String(path.c_str()), gcnew String(default_value.c_str()), gcnew String(description.c_str()));
+	return HSMLastValueSensor<const std::string&>{std::make_shared<HSMLastValueSensorImpl<const std::string&>>(int_default_sensor)};
+}
+
+HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
+{
+	IBarSensor<int>^ int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), timeout, small_period, gcnew String(description.c_str()));
 	return HSMBarSensor<int>{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
+}
+
+HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
+{
+	IBarSensor<double>^ double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), timeout, small_period, precision, gcnew String(description.c_str()));
+	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
 }
 
 
@@ -210,11 +226,11 @@ void DataCollectorProxy::MonitoringServiceAlive()
 	}
 }
 
-HSMSensor<bool> DataCollectorProxy::CreateBoolSensor(const std::string& path)
+HSMSensor<bool> DataCollectorProxy::CreateBoolSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
-		return impl->CreateBoolSensor(path);
+		return impl->CreateBoolSensor(path, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -222,11 +238,11 @@ HSMSensor<bool> DataCollectorProxy::CreateBoolSensor(const std::string& path)
 	}
 }
 
-HSMSensor<double> DataCollectorProxy::CreateDoubleSensor(const std::string& path)
+HSMSensor<double> DataCollectorProxy::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
-		return impl->CreateDoubleSensor(path);
+		return impl->CreateDoubleSensor(path, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -234,11 +250,11 @@ HSMSensor<double> DataCollectorProxy::CreateDoubleSensor(const std::string& path
 	}
 }
 
-HSMSensor<int> DataCollectorProxy::CreateIntSensor(const std::string& path)
+HSMSensor<int> DataCollectorProxy::CreateIntSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
-		return impl->CreateIntSensor(path);
+		return impl->CreateIntSensor(path, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -246,11 +262,11 @@ HSMSensor<int> DataCollectorProxy::CreateIntSensor(const std::string& path)
 	}
 }
 
-HSMSensor<const std::string&> DataCollectorProxy::CreateStringSensor(const std::string& path)
+HSMSensor<const std::string&> DataCollectorProxy::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
-		return impl->CreateStringSensor(path);
+		return impl->CreateStringSensor(path, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -258,11 +274,11 @@ HSMSensor<const std::string&> DataCollectorProxy::CreateStringSensor(const std::
 	}
 }
 
-HSMDefaultSensor<double> DataCollectorProxy::CreateDefaultValueSensorDouble(const std::string& path, double default_value)
+HSMLastValueSensor<bool> DataCollectorProxy::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	try
 	{
-		return impl->CreateDefaultValueSensorDouble(path, default_value);
+		return impl->CreateLastValueBoolSensor(path, default_value, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -270,11 +286,11 @@ HSMDefaultSensor<double> DataCollectorProxy::CreateDefaultValueSensorDouble(cons
 	}
 }
 
-HSMDefaultSensor<int> DataCollectorProxy::CreateDefaultValueSensorInt(const std::string& path, int default_value)
+HSMLastValueSensor<double> DataCollectorProxy::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
 {
 	try
 	{
-		return impl->CreateDefaultValueSensorInt(path, default_value);
+		return impl->CreateLastValueDoubleSensor(path, default_value, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -282,11 +298,11 @@ HSMDefaultSensor<int> DataCollectorProxy::CreateDefaultValueSensorInt(const std:
 	}
 }
 
-HSMBarSensor<double> DataCollectorProxy::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision)
+StringLastValueSensor DataCollectorProxy::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
 {
 	try
 	{
-		return impl->CreateDoubleBarSensor(path, timeout, small_period, precision);
+		return impl->CreateLastValueStringSensor(path, default_value, description);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -294,11 +310,35 @@ HSMBarSensor<double> DataCollectorProxy::CreateDoubleBarSensor(const std::string
 	}
 }
 
-HSMBarSensor<int> DataCollectorProxy::CreateIntBarSensor(const std::string& path, int timeout, int small_period)
+HSMLastValueSensor<int> DataCollectorProxy::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
 {
 	try
 	{
-		return impl->CreateIntBarSensor(path, timeout, small_period);
+		return impl->CreateLastValueIntSensor(path, default_value, description);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+HSMBarSensor<double> DataCollectorProxy::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
+{
+	try
+	{
+		return impl->CreateDoubleBarSensor(path, timeout, small_period, precision, description);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+HSMBarSensor<int> DataCollectorProxy::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
+{
+	try
+	{
+		return impl->CreateIntBarSensor(path, timeout, small_period, description);
 	}
 	catch (System::Exception^ ex)
 	{

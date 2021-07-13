@@ -16,31 +16,31 @@
     <ClInclude Include="pch.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="DataCollector.h">
-      <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="SensorStatus.h">
-      <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="HSMWrapper.h">
-      <Filter>Interface</Filter>
-    </ClInclude>
-    <ClInclude Include="HSMSensor.h">
-      <Filter>Sensors</Filter>
-    </ClInclude>
     <ClInclude Include="HSMSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
     <ClInclude Include="HSMBarSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
-    <ClInclude Include="HSMBarSensor.h">
+    <ClInclude Include="include\HSMCppWrapper.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\SensorStatus.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DataCollector.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMBarSensor.h">
       <Filter>Sensors</Filter>
     </ClInclude>
-    <ClInclude Include="HSMDefaultSensor.h">
+    <ClInclude Include="include\HSMSensor.h">
       <Filter>Sensors</Filter>
     </ClInclude>
-    <ClInclude Include="HSMDefaultSensorImpl.h">
+    <ClInclude Include="include\HSMLastValueSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMLastValueSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
   </ItemGroup>
@@ -57,7 +57,7 @@
     <ClCompile Include="HSMBarSensor.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
-    <ClCompile Include="HSMDefaultSensor.cpp">
+    <ClCompile Include="HSMLastValueSensor.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
   </ItemGroup>

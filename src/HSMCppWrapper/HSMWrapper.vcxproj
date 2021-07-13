@@ -95,6 +95,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>
@@ -111,6 +112,7 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>
@@ -127,6 +129,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>
@@ -142,6 +145,7 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>
@@ -150,21 +154,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="DataCollector.h" />
-    <ClInclude Include="HSMBarSensor.h" />
     <ClInclude Include="HSMBarSensorImpl.h" />
-    <ClInclude Include="HSMDefaultSensor.h" />
-    <ClInclude Include="HSMDefaultSensorImpl.h" />
-    <ClInclude Include="HSMSensor.h" />
+    <ClInclude Include="HSMLastValueSensorImpl.h" />
     <ClInclude Include="HSMSensorImpl.h" />
-    <ClInclude Include="HSMWrapper.h" />
+    <ClInclude Include="include\DataCollector.h" />
+    <ClInclude Include="include\HSMBarSensor.h" />
+    <ClInclude Include="include\HSMCppWrapper.h" />
+    <ClInclude Include="include\HSMLastValueSensor.h" />
+    <ClInclude Include="include\HSMSensor.h" />
+    <ClInclude Include="include\SensorStatus.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="SensorStatus.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DataCollector.cpp" />
     <ClCompile Include="HSMBarSensor.cpp" />
-    <ClCompile Include="HSMDefaultSensor.cpp" />
+    <ClCompile Include="HSMLastValueSensor.cpp" />
     <ClCompile Include="HSMSensor.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
