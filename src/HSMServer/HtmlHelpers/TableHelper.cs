@@ -310,8 +310,9 @@ namespace HSMServer.HtmlHelpers
 
             foreach (var usedUser in usedUsers)
             {
-                var user = users.First(u => u.UserName.Equals(usedUser.Username));
-                users.Remove(user);
+                var user = users.FirstOrDefault(u => u.UserName.Equals(usedUser.Username));
+                if (user != null)
+                    users.Remove(user);
             }
         }
         private static string CreateProductRoleSelect()

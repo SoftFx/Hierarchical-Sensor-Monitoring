@@ -13,6 +13,7 @@ using HSMServer.Keys;
 using System;
 using HSMServer.Configuration;
 using System.Security.Cryptography;
+using HSMServer.Filters;
 
 namespace HSMServer.Controllers
 {
@@ -51,13 +52,14 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
             var product = _monitoringCore.GetProduct(productKey);
             var users = _userManager.GetViewers(productKey);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
-            if (users != null || !users.Any())
+            if (users != null || users.Any())
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
