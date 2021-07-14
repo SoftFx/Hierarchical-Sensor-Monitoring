@@ -174,7 +174,11 @@ namespace HSMServer.Controllers
             var user = _userManager.GetUser(Guid.Parse(model.UserId));
             var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
-            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
+            //Skip empty corresponding pair
+            if (string.IsNullOrEmpty(role.Key) && role.Value == (ProductRoleEnum) 0)
+                return;
+
             user.ProductsRoles.Remove(role);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
