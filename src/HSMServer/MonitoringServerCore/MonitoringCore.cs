@@ -634,6 +634,8 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 productName = _productManager.GetProductNameByKey(productKey);
+                var product = _productManager.GetProductByName(productName);
+                RemoveProductFromUsers(product);
                 _productManager.RemoveProduct(productName);
                 result = true;
             }
@@ -644,6 +646,24 @@ namespace HSMServer.MonitoringServerCore
                 _logger.LogError(ex, $"Failed to remove product name = {productName}");
             }
             return result;
+        }
+
+        private void RemoveProductFromUsers(Product product)
+        {
+            var usersToEdit = new List<User>();
+            foreach (var user in _userManager.Users)
+            {
+                var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
+                if (count == 0)
+                    continue;
+                
+                usersToEdit.Add(user);
+            }
+
+            foreach (var userToEdt in usersToEdit)
+            {
+                _userManager.UpdateUser(userToEdt);
+            }
         }
 
         public void UpdateProduct(User user, Product product)
