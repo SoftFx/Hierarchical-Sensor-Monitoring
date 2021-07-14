@@ -10,7 +10,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Product = HSMServer.DataLayer.Model.Product;
-using HSMServer.Authentication;
 
 namespace HSMServer.Products
 {

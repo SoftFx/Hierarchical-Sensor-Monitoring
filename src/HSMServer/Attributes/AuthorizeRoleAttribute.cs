@@ -10,7 +10,7 @@ namespace HSMServer.Attributes
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
     public class AuthorizeRoleAttribute : AuthorizeAttribute, IAuthorizationFilter
     {
-        private List<bool> _policyRoles;
+        private readonly List<bool> _policyRoles;
 
         public AuthorizeRoleAttribute(params bool[] roles)
         {
