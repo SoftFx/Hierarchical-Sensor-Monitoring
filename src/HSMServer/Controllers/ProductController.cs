@@ -1,19 +1,19 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
+using HSMServer.Filters;
+using HSMServer.Keys;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using HSMServer.Products;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.AspNetCore.Authorization;
-using HSMServer.Products;
-using HSMServer.Keys;
-using System;
-using HSMServer.Configuration;
 using System.Security.Cryptography;
-using HSMServer.Filters;
 
 namespace HSMServer.Controllers
 {
