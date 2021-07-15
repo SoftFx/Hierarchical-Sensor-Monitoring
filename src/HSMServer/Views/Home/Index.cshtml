@@ -87,22 +87,21 @@
     function initializeDataHistoryRequests() {
         $(".accordion-button").on("click", function () {
             id = this.id;
-            console.log(id);
             splitResults = id.split('_');
             product = splitResults[0];
             path = id.substring(product.length + 1);
             totalCount = getCountForId(id);
             type = document.getElementById("sensor_type_" + id).value;
 
-            console.log('in accordion. Product = ', product, ', path = ', path, ', totalCount = ', totalCount, ', type = ', type);
-            initializeGraph(id, product, path, type, totalCount, rawHistoryAction);
+            if (type !== "3" && type !== "6" && type !== "7") {
+                initializeGraph(id, product, path, type, totalCount, rawHistoryAction);    
+            }
             initializeHistory(product, path, totalCount, historyAction);
         });
 
         $('[id^="reload_"]').on("click",
             function () {
                 id = this.id.substring("reload_".length, this.id.length);
-                console.log(id);
                 splitResults = id.split('_');
                 product = splitResults[0];
                 path = id.substring(product.length + 1);
@@ -116,7 +115,9 @@
                 //else {
                 //    initializeHistory(product, path, totalCount, historyAction);
                 //}
-                initializeGraph(id, product, path, type, totalCount, rawHistoryAction);
+                if (type !== "3" && type !== "6" && type !== "7") {
+                    initializeGraph(id, product, path, type, totalCount, rawHistoryAction);    
+                }
                 initializeHistory(product, path, totalCount, historyAction);
             });
 
