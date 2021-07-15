@@ -1,15 +1,13 @@
-﻿using System;
-using System.Text;
-//using System.Text.Json;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
 
 namespace HSMDataCollector.InstantValue
 {
+    [Obsolete("Use InstantValueSensor class")]
     class InstantValueSensorDouble : InstantValueTypedSensorBase<double>, IDoubleSensor
     {
         public InstantValueSensorDouble(string path, string productKey, IValuesQueue queue)
@@ -45,7 +43,12 @@ namespace HSMDataCollector.InstantValue
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.DoubleSensor;
-            SendData(commonValue);
+            EnqueueData(commonValue);
+        }
+
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
         }
 
         protected override string GetStringData(SensorValueBase data)
@@ -61,23 +64,6 @@ namespace HSMDataCollector.InstantValue
                 Console.WriteLine(e);
                 return string.Empty;
             }
-        }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                DoubleSensorValue typedData = (DoubleSensorValue)data;
-                string convertedString = JsonConvert.SerializeObject(typedData);
-                //string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
         }
     }
 }

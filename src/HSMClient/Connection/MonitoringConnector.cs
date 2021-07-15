@@ -13,6 +13,7 @@ using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Objects;
 using HSMClientWPFControls.ViewModel;
 using HSMCommon;
+using HSMSensorDataObjects;
 
 namespace HSMClient.Connection
 {
@@ -217,7 +218,7 @@ namespace HSMClient.Connection
                 connectionStatus = ConnectionStatus.Error;
                 foreach (var node in Nodes)
                 {
-                    node.Status = TextConstants.UpdateError;
+                    node.Status = SensorStatus.Error;
                 }
             }
         }
@@ -237,7 +238,7 @@ namespace HSMClient.Connection
                 connectionStatus = ConnectionStatus.Error;
                 foreach (var node in Nodes)
                 {
-                    node.Status = TextConstants.UpdateError;
+                    node.Status = SensorStatus.Error;
                 }
             }
         }

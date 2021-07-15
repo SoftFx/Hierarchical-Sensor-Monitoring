@@ -1,10 +1,16 @@
 ﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
+using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
+using HSMDataCollector.Logging;
 using HSMDataCollector.PerformanceSensor.Base;
+using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
+using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
+using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,15 +21,13 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
-using HSMDataCollector.DefaultValueSensor;
-using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
-using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
-using HSMDataCollector.PerformanceSensor.SystemMonitoring;
-using Newtonsoft.Json;
-using HSMDataCollector.Logging;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Core
 {
+    /// <summary>
+    /// Main monitoring class which is used to create and control sensors' instances
+    /// </summary>
     public class DataCollector : IDataCollector
     {
         private readonly string _productKey;
@@ -32,21 +36,29 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
         private NLog.Logger _logger;
-        public DataCollector(string productKey, string address, int port)
+        /// <summary>
+        /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
+        /// </summary>
+        /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
+        /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
+        /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
+        public DataCollector(string productKey, string address, int port = 44330)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
-            _listSendingAddress = $"{connectionAddress}/list";
+            //_listSendingAddress = $"{connectionAddress}/list";
+            _listSendingAddress = $"{connectionAddress}/listNew";
             _productKey = productKey;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             _client = new HttpClient();
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
-            _dataQueue.SendData += DataQueue_SendData;
+            //_dataQueue.SendData += DataQueue_SendData;
+            _dataQueue.SendValues += DataQueue_SendValues;
         }
-
+        
         public event EventHandler ValuesQueueOverflow;
-        //Use after constructor!
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
             if (useLogging)
@@ -71,10 +83,11 @@ namespace HSMDataCollector.Core
         {
             _logger?.Info("DataCollector stopping...");
 
-            List<CommonSensorValue> allData = new List<CommonSensorValue>();
+            List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
             if (_dataQueue != null)
             {
-                allData.AddRange(_dataQueue.GetAllCollectedData());
+                //allData.AddRange(_dataQueue.GetAllCollectedData());
+                allData.AddRange(_dataQueue.GetCollectedData());
                 _dataQueue.Stop();
             }
 
@@ -84,7 +97,7 @@ namespace HSMDataCollector.Core
             {
                 if (pair.Value.HasLastValue)
                 {
-                    allData.Add(pair.Value.GetLastValue());
+                    allData.Add(pair.Value.GetLastValueNew());
                 }
             }
             foreach (var pair in _nameToSensor)
@@ -95,7 +108,8 @@ namespace HSMDataCollector.Core
 
             if (allData.Any())
             {
-                SendData(allData);
+                //SendData(allData);
+                SendMonitoringData(allData);
             }
             
             _client.Dispose();
@@ -126,174 +140,333 @@ namespace HSMDataCollector.Core
             AddNewSensor(aliveSensor, path);
         }
 
-        public IBoolSensor CreateBoolSensor(string path)
+        #region Generic sensors functionality
+
+        public IInstantValueSensor<bool> CreateBoolSensor(string path, string description)
+        {
+            return CreateInstantValueSensorInternal<bool>(path, description);
+        }
+
+        public IInstantValueSensor<int> CreateIntSensor(string path, string description)
+        {
+            return CreateInstantValueSensorInternal<int>(path, description);
+        }
+
+        public IInstantValueSensor<double> CreateDoubleSensor(string path, string description)
+        {
+            return CreateInstantValueSensorInternal<double>(path, description);
+        }
+
+        public IInstantValueSensor<string> CreateStringSensor(string path, string description)
+        {
+            return CreateInstantValueSensorInternal<string>(path, description);
+        }
+
+        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description)
         {
             var existingSensor = GetExistingSensor(path);
-            var boolSensor = existingSensor as IBoolSensor;
-            if (boolSensor != null)
+            var instantValueSensor = existingSensor as IInstantValueSensor<T>;
+            if (instantValueSensor != null)
             {
-                return boolSensor;
+                return instantValueSensor;
             }
-            
-            InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _dataQueue as IValuesQueue);
+
+            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.StringSensor, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
+        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
+        {
+            return CreateLastValueSensorInternal(path, defaultValue, description);
+        }
 
-        public IDoubleSensor CreateDoubleSensor(string path)
+        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
+        {
+            return CreateLastValueSensorInternal(path, defaultValue, description);
+        }
+
+        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
+        {
+            return CreateLastValueSensorInternal(path, defaultValue, description);
+        }
+
+        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
+        {
+            return CreateLastValueSensorInternal(path, defaultValue, description);
+        }
+
+        private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
         {
             var existingSensor = GetExistingSensor(path);
-            var doubleSensor = existingSensor as IDoubleSensor;
-            if (doubleSensor != null)
+            var lastValueSensor = existingSensor as ILastValueSensor<T>;
+            if (lastValueSensor != null)
             {
-                return doubleSensor;
+                return lastValueSensor;
             }
 
-            InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IIntSensor CreateIntSensor(string path)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var intSensor = existingSensor as IIntSensor;
-            if (intSensor != null)
-            {
-                return intSensor;
-            }
-
-            InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IStringSensor CreateStringSensor(string path)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var stringSensor = existingSensor as IStringSensor;
-            if (stringSensor != null)
-            {
-                return stringSensor;
-            }
-            
-            InstantValueSensorString sensor = new InstantValueSensorString(path, _productKey, _dataQueue as IValuesQueue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var defaultValueSensorInt = existingSensor as IDefaultValueSensorInt;
-            if (defaultValueSensorInt != null)
-            {
-                return defaultValueSensorInt;
-            }
-
-            DefaultValueSensorInt sensor = new DefaultValueSensorInt(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var defaultValueSensorDouble = existingSensor as IDefaultValueSensorDouble;
-            if (defaultValueSensorDouble != null)
-            {
-                return defaultValueSensorDouble;
-            }
-
-            DefaultValueSensorDouble sensor = new DefaultValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        #region Bar sensors
-
-        public IDoubleBarSensor Create1HrDoubleBarSensor(string path, int precision = 2)
-        {
-            return CreateDoubleBarSensor(path, 3600000, 15000, precision);
-        }
-
-        public IDoubleBarSensor Create30MinDoubleBarSensor(string path, int precision = 2)
-        {
-            return CreateDoubleBarSensor(path, 1800000, 15000, precision);
-        }
-
-        public IDoubleBarSensor Create10MinDoubleBarSensor(string path, int precision = 2)
-        {
-            return CreateDoubleBarSensor(path, 600000, 15000, precision);
-        }
-
-        public IDoubleBarSensor Create5MinDoubleBarSensor(string path, int precision = 2)
-        {
-            return CreateDoubleBarSensor(path, 300000, 15000, precision);
-        }
-
-        public IDoubleBarSensor Create1MinDoubleBarSensor(string path, int precision = 2)
-        {
-            return CreateDoubleBarSensor(path, 60000, 15000, precision);
-        }
-        public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000, int smallPeriod = 15000, int precision = 2)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var doubleBarSensor = existingSensor as IDoubleBarSensor;
-            if (doubleBarSensor != null)
-            {
-                (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
-                return doubleBarSensor;
-            }
-
-            BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod, precision);
-            AddNewSensor(sensor, path);
-            return sensor;
-        }
-
-        public IIntBarSensor Create1HrIntBarSensor(string path)
-        {
-            return CreateIntBarSensor(path, 3600000);
-        }
-
-        public IIntBarSensor Create30MinIntBarSensor(string path)
-        {
-            return CreateIntBarSensor(path, 1800000);
-        }
-
-        public IIntBarSensor Create10MinIntBarSensor(string path)
-        {
-            return CreateIntBarSensor(path, 600000);
-        }
-
-        public IIntBarSensor Create5MinIntBarSensor(string path)
-        {
-            return CreateIntBarSensor(path, 300000);
-        }
-
-        public IIntBarSensor Create1MinIntBarSensor(string path)
-        {
-            return CreateIntBarSensor(path, 60000);
-        }
-
-        public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000, int smallPeriod = 15000)
-        {
-            var existingSensor = GetExistingSensor(path);
-            var intBarSensor = existingSensor as IIntBarSensor;
-            if (intBarSensor != null)
-            {
-                (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
-                return intBarSensor;
-            }
-
-            BarSensorInt sensor = new BarSensorInt(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod);
+            DefaultValueSensor<T> sensor =
+                new DefaultValueSensor<T>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntSensor, defaultValue, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
         #endregion
 
+        #region Old sensor creation
 
+        //public IBoolSensor CreateBoolSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var boolSensor = existingSensor as IBoolSensor;
+        //    if (boolSensor != null)
+        //    {
+        //        return boolSensor;
+        //    }
+
+        //    InstantValueSensorBool sensor = new InstantValueSensorBool(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IDoubleSensor CreateDoubleSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var doubleSensor = existingSensor as IDoubleSensor;
+        //    if (doubleSensor != null)
+        //    {
+        //        return doubleSensor;
+        //    }
+
+        //    InstantValueSensorDouble sensor = new InstantValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IIntSensor CreateIntSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var intSensor = existingSensor as IIntSensor;
+        //    if (intSensor != null)
+        //    {
+        //        return intSensor;
+        //    }
+
+        //    InstantValueSensorInt sensor = new InstantValueSensorInt(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IStringSensor CreateStringSensor(string path)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var stringSensor = existingSensor as IStringSensor;
+        //    if (stringSensor != null)
+        //    {
+        //        return stringSensor;
+        //    }
+
+        //    InstantValueSensorString sensor = new InstantValueSensorString(path, _productKey, _dataQueue as IValuesQueue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IDefaultValueSensorInt CreateDefaultValueSensorInt(string path, int defaultValue)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var defaultValueSensorInt = existingSensor as IDefaultValueSensorInt;
+        //    if (defaultValueSensorInt != null)
+        //    {
+        //        return defaultValueSensorInt;
+        //    }
+
+        //    DefaultValueSensorInt sensor = new DefaultValueSensorInt(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IDefaultValueSensorDouble CreateDefaultValueSensorDouble(string path, double defaultValue)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var defaultValueSensorDouble = existingSensor as IDefaultValueSensorDouble;
+        //    if (defaultValueSensorDouble != null)
+        //    {
+        //        return defaultValueSensorDouble;
+        //    }
+
+        //    DefaultValueSensorDouble sensor = new DefaultValueSensorDouble(path, _productKey, _dataQueue as IValuesQueue, defaultValue);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+        #endregion
+
+        #region Old Bar sensors
+
+        //public IDoubleBarSensor Create1HrDoubleBarSensor(string path, int precision = 2)
+        //{
+        //    return CreateDoubleBarSensor(path, 3600000, 15000, precision);
+        //}
+
+        //public IDoubleBarSensor Create30MinDoubleBarSensor(string path, int precision = 2)
+        //{
+        //    return CreateDoubleBarSensor(path, 1800000, 15000, precision);
+        //}
+
+        //public IDoubleBarSensor Create10MinDoubleBarSensor(string path, int precision = 2)
+        //{
+        //    return CreateDoubleBarSensor(path, 600000, 15000, precision);
+        //}
+
+        //public IDoubleBarSensor Create5MinDoubleBarSensor(string path, int precision = 2)
+        //{
+        //    return CreateDoubleBarSensor(path, 300000, 15000, precision);
+        //}
+
+        //public IDoubleBarSensor Create1MinDoubleBarSensor(string path, int precision = 2)
+        //{
+        //    return CreateDoubleBarSensor(path, 60000, 15000, precision);
+        //}
+        //public IDoubleBarSensor CreateDoubleBarSensor(string path, int timeout = 30000, int smallPeriod = 15000, int precision = 2)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var doubleBarSensor = existingSensor as IDoubleBarSensor;
+        //    if (doubleBarSensor != null)
+        //    {
+        //        (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+        //        return doubleBarSensor;
+        //    }
+
+        //    BarSensorDouble sensor = new BarSensorDouble(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod, precision);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        //public IIntBarSensor Create1HrIntBarSensor(string path)
+        //{
+        //    return CreateIntBarSensor(path, 3600000);
+        //}
+
+        //public IIntBarSensor Create30MinIntBarSensor(string path)
+        //{
+        //    return CreateIntBarSensor(path, 1800000);
+        //}
+
+        //public IIntBarSensor Create10MinIntBarSensor(string path)
+        //{
+        //    return CreateIntBarSensor(path, 600000);
+        //}
+
+        //public IIntBarSensor Create5MinIntBarSensor(string path)
+        //{
+        //    return CreateIntBarSensor(path, 300000);
+        //}
+
+        //public IIntBarSensor Create1MinIntBarSensor(string path)
+        //{
+        //    return CreateIntBarSensor(path, 60000);
+        //}
+
+        //public IIntBarSensor CreateIntBarSensor(string path, int timeout = 30000, int smallPeriod = 15000)
+        //{
+        //    var existingSensor = GetExistingSensor(path);
+        //    var intBarSensor = existingSensor as IIntBarSensor;
+        //    if (intBarSensor != null)
+        //    {
+        //        (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+        //        return intBarSensor;
+        //    }
+
+        //    BarSensorInt sensor = new BarSensorInt(path, _productKey, _dataQueue as IValuesQueue, timeout, smallPeriod);
+        //    AddNewSensor(sensor, path);
+        //    return sensor;
+        //}
+
+        #endregion
+
+        #region Generic bar sensors
+
+        public IBarSensor<int> CreateIntBarSensor(string path, int timeout, int smallPeriod = 15000, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var intBarSensor = existingSensor as IBarSensor<int>;
+            if (intBarSensor != null)
+            {
+                (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+                return intBarSensor;
+            }
+
+            BarSensor<int> sensor = new BarSensor<int>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
+                timeout, smallPeriod,  description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IBarSensor<int> Create1HrIntBarSensor(string path, string description)
+        {
+            return CreateIntBarSensor(path, 3600000, 15000, description);
+        }
+
+        public IBarSensor<int> Create30MinIntBarSensor(string path, string description)
+        {
+            return CreateIntBarSensor(path, 1800000, 15000, description);
+        }
+
+        public IBarSensor<int> Create10MinIntBarSensor(string path, string description)
+        {
+            return CreateIntBarSensor(path, 600000, 15000, description);
+        }
+
+        public IBarSensor<int> Create5MinIntBarSensor(string path, string description)
+        {
+            return CreateIntBarSensor(path, 300000, 15000, description);
+        }
+
+        public IBarSensor<int> Create1MinIntBarSensor(string path, string description)
+        {
+            return CreateIntBarSensor(path, 60000, 15000, description);
+        }
+
+        public IBarSensor<double> CreateDoubleBarSensor(string path, int timeout, int smallPeriod, int precision, string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            var doubleBarSensor = existingSensor as IBarSensor<double>;
+            if (doubleBarSensor != null)
+            {
+                (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+                return doubleBarSensor;
+            }
+
+            BarSensor<double> sensor = new BarSensor<double>(path, _productKey, _dataQueue as IValuesQueue,
+                SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision, string description)
+        {
+            return CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
+        }
+
+        public IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision, string description)
+        {
+            return CreateDoubleBarSensor(path, 1800000, 15000, precision, description);
+        }
+
+        public IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision, string description)
+        {
+            return CreateDoubleBarSensor(path, 600000, 15000, precision, description);
+        }
+
+        public IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision, string description)
+        {
+            return CreateDoubleBarSensor(path, 300000, 15000, precision, description);
+        }
+        public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision, string description)
+        {
+            return CreateDoubleBarSensor(path, 60000, 15000, precision, description);
+        }
+
+        #endregion
         public int GetSensorCount()
         {
             return GetCount();
@@ -303,7 +476,7 @@ namespace HSMDataCollector.Core
         {
             if (isCPU)
             {
-                CPUSensor cpuSensor = new CPUSensor(_productKey, _dataQueue as IValuesQueue);
+                TotalCPUSensor cpuSensor = new TotalCPUSensor(_productKey, _dataQueue as IValuesQueue);
                 AddNewSensor(cpuSensor, cpuSensor.Path);
             }
 
@@ -391,7 +564,7 @@ namespace HSMDataCollector.Core
         private void AddNewSensor(ISensor sensor, string path)
         {
             _nameToSensor[path] = sensor;
-
+            
             _logger?.Info($"Added new sensor {path}");
             //_nameToSensor.AddOrUpdate(path, sensor);
         }
@@ -402,12 +575,44 @@ namespace HSMDataCollector.Core
 
             return count;
         }
-
-        private void DataQueue_SendData(object sender, List<CommonSensorValue> e)
+        private void DataQueue_SendValues(object sender, List<UnitedSensorValue> e)
         {
-            SendData(e);
+            SendMonitoringData(e);
+        }
+        //private void DataQueue_SendData(object sender, List<CommonSensorValue> e)
+        //{
+        //    SendData(e);
+        //}
+
+        private void SendMonitoringData(List<UnitedSensorValue> values)
+        {
+            try
+            {
+                string jsonString = JsonConvert.SerializeObject(values);
+                //_logger?.Info("Try to send data: " + jsonString);
+                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
+                var res = _client.PostAsync(_listSendingAddress, data).Result;
+                if (res.IsSuccessStatusCode)
+                {
+                    //_logger?.Info("Data successfully sent.");
+                }
+                else
+                {
+                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
+                }
+            }
+            catch (Exception e)
+            {
+                if (_dataQueue != null && !_dataQueue.Disposed)
+                {
+                    _dataQueue?.ReturnData(values);
+                }
+
+                _logger?.Error($"Failed to send: {e}");
+            }
         }
 
+        [Obsolete("08.07.2021. Use SendMonitoringData.")]
         private void SendData(List<CommonSensorValue> values)
         {
             try

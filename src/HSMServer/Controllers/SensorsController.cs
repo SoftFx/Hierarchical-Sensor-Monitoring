@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
@@ -263,24 +264,28 @@ namespace HSMServer.Controllers
 
             return BadRequest(values);
         }
-        //[HttpPost("nokey")]
-        //public ActionResult<string> Post([FromBody] NewJobResult newJobResult)
-        //{
-        //    try
-        //    {
-        //        return _monitoringCore.AddSensorInfo(newJobResult);
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        _logger.LogError(e, "Failed to add new sensor!");
-        //        return e.Message.ToString();
-        //    }
-        //}
 
-        //[HttpPost("string")]
-        //public ActionResult<string> Post([FromBody] string serialized)
-        //{
-        //    return Ok(serialized);
-        //}
+
+        [HttpPost("listNew")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
+        {
+            if (values == null || !values.Any())
+                return BadRequest();
+
+
+            try
+            {
+                _monitoringCore.AddSensorsValues(values);
+                return Ok(values);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data");
+                return BadRequest(values);
+            }
+        }
     }
 }

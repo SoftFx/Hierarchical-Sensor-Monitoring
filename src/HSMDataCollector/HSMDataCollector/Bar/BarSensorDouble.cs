@@ -1,29 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-//using System.Text.Json;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMDataCollector.Bar
 {
+    [Obsolete("08.07.2021. Use BarSensor.")]
     public class BarSensorDouble : BarSensorBase, IDoubleBarSensor
     {
-        private readonly List<double> ValuesList;
+        private readonly List<double> _valuesList;
         private readonly int _precision;
 
         public BarSensorDouble(string path, string productKey, IValuesQueue queue,
             int collectPeriod = 300000,
             int smallPeriod = 15000, int precision = 2) : base(path, productKey, queue, collectPeriod,
-            smallPeriod)
+            smallPeriod, "", 2)
         {
-            ValuesList = new List<double>();
+            _valuesList = new List<double>();
             if (precision < 1 || precision > 10)
             {
                 _precision = 2;
@@ -46,7 +44,7 @@ namespace HSMDataCollector.Bar
                 return;
             }
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public override CommonSensorValue GetLastValue()
@@ -63,18 +61,23 @@ namespace HSMDataCollector.Bar
             }
         }
 
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override void SendDataTimer(object state)
         {
             DoubleBarSensorValue dataObject = GetDataObject();
             CommonSensorValue commonValue = ToCommonSensorValue(dataObject);
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
 
         public void AddValue(double value)
         {
             lock (_syncObject)
             {
-                ValuesList.Add(value);
+                _valuesList.Add(value);
             }
         }
 
@@ -92,7 +95,7 @@ namespace HSMDataCollector.Bar
             List<double> currentValues;
             lock (_syncObject)
             {
-                currentValues = new List<double>(ValuesList);
+                currentValues = new List<double>(_valuesList);
 
                 result.StartTime = barStart;
             }
@@ -111,8 +114,8 @@ namespace HSMDataCollector.Bar
             List<double> collected;
             lock (_syncObject)
             {
-                collected = new List<double>(ValuesList);
-                ValuesList.Clear();
+                collected = new List<double>(_valuesList);
+                _valuesList.Clear();
 
                 //New bar starts right after the previous one ends
                 result.StartTime = barStart;
@@ -158,23 +161,6 @@ namespace HSMDataCollector.Bar
                 Console.WriteLine(e);
                 return string.Empty;
             }
-        }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                DoubleBarSensorValue typedData = (DoubleBarSensorValue)data;
-                string convertedString = JsonConvert.SerializeObject(typedData);
-                //string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
         }
 
         private double CountMean(List<double> values)

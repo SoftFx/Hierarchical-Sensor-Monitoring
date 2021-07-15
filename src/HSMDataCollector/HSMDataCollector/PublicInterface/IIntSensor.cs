@@ -1,7 +1,9 @@
-﻿using HSMSensorDataObjects;
+﻿using System;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.PublicInterface
 {
+    [Obsolete("Use IInstantValueSensor<T>")]
     public interface IIntSensor
     {
         void AddValue(int value);

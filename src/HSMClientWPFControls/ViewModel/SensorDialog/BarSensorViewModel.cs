@@ -2,7 +2,7 @@
 using System.Collections.ObjectModel;
 using HSMClientWPFControls.Model;
 using HSMClientWPFControls.Model.SensorDialog;
-using LiveCharts.Defaults;
+//using LiveCharts.Defaults;
 using OxyPlot.Series;
 
 namespace HSMClientWPFControls.ViewModel.SensorDialog
@@ -39,23 +39,23 @@ namespace HSMClientWPFControls.ViewModel.SensorDialog
             }
         }
 
-        public Collection<OhlcPoint> Points
-        {
-            get
-            {
-                var model = Model as IBarSensorModel;
-                return model?.Points;
-            }
-            set
-            {
-                var model = Model as IBarSensorModel;
-                if (model != null)
-                {
-                    model.Points = value;
-                }
-                OnPropertyChanged(nameof(Points));
-            }
-        }
+        //public Collection<OhlcPoint> Points
+        //{
+        //    get
+        //    {
+        //        var model = Model as IBarSensorModel;
+        //        return model?.Points;
+        //    }
+        //    set
+        //    {
+        //        var model = Model as IBarSensorModel;
+        //        if (model != null)
+        //        {
+        //            model.Points = value;
+        //        }
+        //        OnPropertyChanged(nameof(Points));
+        //    }
+        //}
 
         public Collection<string> Labels
         {

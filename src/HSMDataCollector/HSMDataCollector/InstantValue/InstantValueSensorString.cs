@@ -1,16 +1,14 @@
-﻿using System;
-using System.Text;
-//using System.Text.Json;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Serialization;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
 
 namespace HSMDataCollector.InstantValue
 {
-    class InstantValueSensorString : InstantValueSensorBase, IStringSensor
+    [Obsolete("Use InstantValueSensor class")]
+    class InstantValueSensorString : InstantValueTypedSensorBase<string>, IStringSensor
     {
         private string _value;
         public InstantValueSensorString(string path, string productKey, IValuesQueue queue) 
@@ -46,7 +44,7 @@ namespace HSMDataCollector.InstantValue
             CommonSensorValue commonValue = new CommonSensorValue();
             commonValue.TypedValue = serializedValue;
             commonValue.SensorType = SensorType.StringSensor;
-            SendData(commonValue);
+            EnqueueData(commonValue);
         }
         private StringSensorValue GetDataObject()
         {
@@ -62,6 +60,11 @@ namespace HSMDataCollector.InstantValue
             return result;
         }
 
+        public override UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override string GetStringData(SensorValueBase data)
         {
             try
@@ -75,23 +78,6 @@ namespace HSMDataCollector.InstantValue
                 Console.WriteLine(e);
                 return string.Empty;
             }
-        }
-
-        protected override byte[] GetBytesData(SensorValueBase data)
-        {
-            try
-            {
-                StringSensorValue typedData = (StringSensorValue)data;
-                string convertedString = JsonConvert.SerializeObject(typedData);
-                //string convertedString = Serializer.Serialize(typedData);
-                return Encoding.UTF8.GetBytes(convertedString);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                return new byte[1];
-            }
-            
         }
     }
 }

@@ -1,8 +1,8 @@
-﻿using System;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
+using System;
 
 namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
 {
@@ -12,7 +12,7 @@ namespace HSMDataCollector.PerformanceSensor.CustomFuncSensor
         {
         }
 
-        protected override byte[] GetBytesData(SensorValueBase data)
+        public override UnitedSensorValue GetLastValueNew()
         {
             throw new NotImplementedException();
         }

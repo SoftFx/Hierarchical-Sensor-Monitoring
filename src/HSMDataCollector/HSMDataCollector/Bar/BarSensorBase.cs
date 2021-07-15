@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
-using HSMDataCollector.Base;
+﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 namespace HSMDataCollector.Bar
 {
@@ -15,6 +15,7 @@ namespace HSMDataCollector.Bar
         protected DateTime barStart;
         private int _barTimerPeriod;
         private int _smallTimerPeriod;
+        protected int _precision;
         /// <summary>
         /// </summary>
         /// <param name="path"></param>
@@ -22,13 +23,24 @@ namespace HSMDataCollector.Bar
         /// <param name="collectPeriod">One bar contains data for the given period. 5000 is 5 seconds.</param>
         /// <param name="smallPeriod">The sensor sends intermediate bar data every smallPeriod time.</param>
         protected BarSensorBase(string path, string productKey,
-            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod)
-            : base(path, productKey, queue)
+            IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod, string description, int precision)
+            : base(path, productKey, queue, description)
         {
             _syncObject = new object();
             _barTimerPeriod = barTimerPeriod;
             _smallTimerPeriod = smallTimerPeriod;
+            FillPrecision(precision);
             StartTimer(_barTimerPeriod, _smallTimerPeriod);
+        }
+        private void FillPrecision(int precision)
+        {
+            if (precision < 1 || precision > 10)
+            {
+                _precision = 2;
+                return;
+            }
+
+            _precision = precision;
         }
         protected abstract void SendDataTimer(object state);
         protected abstract void SmallTimerTick(object state);
@@ -37,7 +49,7 @@ namespace HSMDataCollector.Bar
         {
             RestartInternal(barPeriod, smallPeriod);
         }
-        public void RestartInternal(int barTimerPeriod, int smallTimerPeriod)
+        private void RestartInternal(int barTimerPeriod, int smallTimerPeriod)
         {
             if (_barTimerPeriod != barTimerPeriod || _smallTimerPeriod != smallTimerPeriod)
             {
@@ -48,8 +60,8 @@ namespace HSMDataCollector.Bar
         }
         private void StartTimer(int barTimePeriod, int smallTimerPeriod)
         {
-            _barTimer?.Dispose();
-            _smallTimer?.Dispose();
+            Stop();
+
             _smallTimer = new Timer(SmallTimerTick, null, TimeSpan.FromMilliseconds(smallTimerPeriod), TimeSpan.FromMilliseconds(smallTimerPeriod));
 
             _barTimer = new Timer(SendDataTimer, null, GetSpanUntilFirstTick(barTimePeriod), TimeSpan.FromMilliseconds(barTimePeriod));
@@ -93,14 +105,17 @@ namespace HSMDataCollector.Bar
         }
         protected void Stop()
         {
-            _barTimer.Dispose();
+            _barTimer?.Dispose();
             _barTimer = null;
-            _smallTimer.Dispose();
+            _smallTimer?.Dispose();
             _smallTimer = null;
         }
 
         protected double GetPercentile(List<double> values, double percent)
         {
+            if (!values.Any())
+                return 0.0;
+
             double position = (values.Count + 1) * percent / 100;
             double leftNumber = 0.0d;
             double rightNumber = 0.0d;
@@ -121,11 +136,14 @@ namespace HSMDataCollector.Bar
                 return leftNumber;
 
             double part = n - Math.Floor(n);
-            return Math.Round(leftNumber + part * (rightNumber - leftNumber));
+            return Math.Round(leftNumber + part * (rightNumber - leftNumber), _precision, MidpointRounding.AwayFromZero);
         }
 
         protected int GetPercentile(List<int> values, double percent)
         {
+            if (!values.Any())
+                return 0;
+
             var count = values.Count;
             int index = (int)Math.Floor(count * percent);
             return values[index];

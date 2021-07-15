@@ -1,9 +1,12 @@
-﻿using HSMDataCollector.Base;
+﻿using System;
+using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.DefaultValueSensor
 {
+    [Obsolete("07.07.2021. Use DefaultValueSensor")]
     internal abstract class DefaultValueSensorBase<T> : ISensor
     {
         protected readonly object _syncRoot;
@@ -25,6 +28,11 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public bool HasLastValue => true;
         public abstract CommonSensorValue GetLastValue();
+        public UnitedSensorValue GetLastValueNew()
+        {
+            throw new NotImplementedException();
+        }
+
         public void Dispose()
         {
             
