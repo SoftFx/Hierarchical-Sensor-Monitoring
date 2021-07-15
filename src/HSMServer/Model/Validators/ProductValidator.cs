@@ -17,8 +17,10 @@ namespace HSMServer.Model.Validators
             RuleFor(x => x.Name)
                 .NotNull()
                 .WithMessage(ErrorConstants.NameNotNull)
-                .Must(name => IsUniqueName(name))
-                .WithMessage(ErrorConstants.NameUnique);
+                .Must(IsUniqueName)
+                .WithMessage(ErrorConstants.NameUnique)
+                .Matches(@"^[0-9a-zA-Z ]+$")
+                .WithMessage(ErrorConstants.ProductNameLatin);
         }
 
         private bool IsUniqueName(string name)

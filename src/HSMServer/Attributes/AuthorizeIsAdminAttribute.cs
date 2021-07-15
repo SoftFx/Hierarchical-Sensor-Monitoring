@@ -8,11 +8,11 @@ using System.Collections.Generic;
 namespace HSMServer.Attributes
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-    public class AuthorizeRoleAttribute : AuthorizeAttribute, IAuthorizationFilter
+    public class AuthorizeIsAdminAttribute : AuthorizeAttribute, IAuthorizationFilter
     {
-        private readonly List<bool> _policyRoles;
+        private List<bool> _policyRoles;
 
-        public AuthorizeRoleAttribute(params bool[] roles)
+        public AuthorizeIsAdminAttribute(params bool[] roles)
         {
             _policyRoles = new List<bool>();
             _policyRoles.AddRange(roles);

@@ -2,6 +2,7 @@
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
 using HSMServer.Extensions;
+using HSMServer.Registration;
 using LevelDB;
 using Microsoft.Extensions.Logging;
 using System;
@@ -13,7 +14,7 @@ using System.Text.Json;
 
 namespace HSMServer.DataLayer
 {
-    public class LevelDBDatabaseClass : IDatabaseClass
+    public class LevelDBDatabaseWorker : IDatabaseWorker
     {
         #region IDisposable implementation
 
@@ -61,7 +62,7 @@ namespace HSMServer.DataLayer
         }
 
         // Use C# destructor syntax for finalization code.
-        ~LevelDBDatabaseClass()
+        ~LevelDBDatabaseWorker()
         {
             // Simply call Dispose(false).
             Dispose(false);
@@ -70,13 +71,13 @@ namespace HSMServer.DataLayer
         #endregion
 
         private readonly object _accessLock;
-        private readonly ILogger<LevelDBDatabaseClass> _logger;
+        private readonly ILogger<LevelDBDatabaseWorker> _logger;
         private readonly char[] _keysSeparator = { '_' };
         private const string DATABASE_NAME = "MonitoringData";
         private readonly Options _dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
         private DB _database;
         private string _currentDatabaseName = DATABASE_NAME;
-        public LevelDBDatabaseClass(ILogger<LevelDBDatabaseClass> logger)
+        public LevelDBDatabaseWorker(ILogger<LevelDBDatabaseWorker> logger)
         {
             _accessLock = new object();
             _logger = logger;
@@ -709,6 +710,62 @@ namespace HSMServer.DataLayer
 
         #endregion
 
+        #region Registration Ticket
+
+        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        {
+            RegistrationTicket result = default(RegistrationTicket);
+            try
+            {
+                lock (_accessLock)
+                {
+                    var value = _database.Get(GetRegistrationTicket(id));
+                    result = JsonSerializer.Deserialize<RegistrationTicket>(value);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to get registration ticket = {id}");
+            }
+
+            return result;
+        }
+
+        public void RemoveRegistrationTicket(Guid id)
+        {
+            try
+            {
+                string key = GetRegistrationTicket(id);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to remove registration ticket = '{id}'");
+            }
+        }
+
+        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        {
+            try
+            {
+                string key = GetRegistrationTicket(ticket.Id);
+                string value = JsonSerializer.Serialize(ticket);
+                lock (_accessLock)
+                {
+                    _database.Put(key, value);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to write registration ticket for ticket = '{ticket.Id}'");
+            }
+        }
+
+        #endregion
+
         #region Private methods
 
         private string GetUniqueConfigurationObjectKey(string name)
@@ -754,6 +811,11 @@ namespace HSMServer.DataLayer
         private string GetProductInfoKey(string name)
         {
             return $"{PrefixConstants.PRODUCT_INFO_PREFIX}_{name}";
+        }
+
+        private string GetRegistrationTicket(Guid id)
+        {
+            return $"{PrefixConstants.REGISTRATION_TICKET_PREFIX}_{id}";
         }
 
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)

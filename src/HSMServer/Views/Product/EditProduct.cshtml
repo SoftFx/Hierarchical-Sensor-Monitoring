@@ -5,7 +5,7 @@
 
 @{ ViewData["Title"] = "Product " + Model.ProductName; }
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
@@ -179,7 +179,7 @@
 
         //modal confirm
         $('#confirmDeleteButton').on('click', function () {
-            modal.hiHtmle();
+            modal.hide();
 
             $.ajax({
                 type: 'POST',

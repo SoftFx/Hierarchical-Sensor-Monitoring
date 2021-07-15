@@ -14,7 +14,9 @@ namespace HSMServer.Model.Validators
 
             RuleFor(x => x.Username)
                 .NotEmpty()
-                .WithMessage(ErrorConstants.UsernameNotNull);
+                .WithMessage(ErrorConstants.UsernameNotNull)
+                .Matches(@"^[0-9a-zA-Z]+$")
+                .WithMessage(ErrorConstants.UsernameLatin);
 
             RuleFor(x => x.Password)
                 .NotEmpty()

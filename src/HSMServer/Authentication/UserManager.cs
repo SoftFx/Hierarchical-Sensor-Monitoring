@@ -24,13 +24,13 @@ namespace HSMServer.Authentication
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly string _usersFileName = "users.xml";
         private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass, ILogger<UserManager> logger)
+        public UserManager(CertificateManager certificateManager, IDatabaseWorker databaseClass, ILogger<UserManager> logger)
         {
             _logger = logger;
             _certificateManager = certificateManager;
