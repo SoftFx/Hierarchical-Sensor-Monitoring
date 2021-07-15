@@ -11,11 +11,12 @@ using HSMServer.DataLayer.Model;
 using HSMServer.Exceptions;
 using HSMServer.Extensions;
 using NLog;
+using HSMServer.Registration;
 
 namespace HSMServer.DataLayer
 {
     [Obsolete("02.04.2021 Use LevelDB database.")]
-    internal class DatabaseClass : IDisposable, IDatabaseClass
+    internal class DatabaseWorker : IDisposable, IDatabaseWorker
     {
         #region IDisposable implementation
 
@@ -63,7 +64,7 @@ namespace HSMServer.DataLayer
         }
 
         // Use C# destructor syntax for finalization code.
-        ~DatabaseClass()
+        ~DatabaseWorker()
         {
             // Simply call Dispose(false).
             Dispose(false);
@@ -78,7 +79,7 @@ namespace HSMServer.DataLayer
         private readonly Logger _logger;
         private readonly char[] _keysSeparator = {'_'};
 
-        public DatabaseClass()
+        public DatabaseWorker()
         {
             _logger = LogManager.GetCurrentClassLogger();
             try
@@ -945,6 +946,26 @@ namespace HSMServer.DataLayer
             {
                 _logger.Error(e, "Failed to clear products list!");
             }
+        }
+
+        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        RegistrationTicket IDatabaseWorker.ReadRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
         }
 
         #endregion

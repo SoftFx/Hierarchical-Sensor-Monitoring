@@ -71,7 +71,7 @@ namespace HSMServer.MonitoringServerCore
 
         //#endregion
 
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
@@ -82,7 +82,7 @@ namespace HSMServer.MonitoringServerCore
         private readonly IValuesCache _valuesCache;
         private readonly IConverter _converter;
 
-        public MonitoringCore(IDatabaseClass database, IUserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseWorker database, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache,
             IConverter converter, ILogger<MonitoringCore> logger)
         {
