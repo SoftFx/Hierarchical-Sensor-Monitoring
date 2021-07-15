@@ -4,6 +4,7 @@
     {
         public const string NameNotNull = "Name must be not null.";
         public const string NameUnique = "Name must be unique.";
+        public const string ProductNameLatin = "Productname must include latin or numeric characters!";
 
         public const string PasswordNotNull = "Password must be not null.";
         public const string SecondPasswordNotNull = "Second password must be not null.";
@@ -11,7 +12,7 @@
 
         public const string UsernameNotNull = "Username must be not null.";
         public const string UsernameUnique = "Username must be unique.";
-        public const string UsernameLatin = "Username must be include latin or numeric characters.";
+        public const string UsernameLatin = "Username must include latin or numeric characters.";
 
         public const string PasswordMinLength = "Password min lenght is 8 characters.";
         public const string PasswordsEquals = "Password and second password must be equals.";
