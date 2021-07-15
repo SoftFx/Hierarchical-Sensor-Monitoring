@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
+using HSMServer.Registration;
 
 namespace HSMServer.DataLayer
 {
-    public interface IDatabaseClass : IDisposable
+    public interface IDatabaseWorker : IDisposable
     {
         #region Management
 
@@ -60,6 +61,14 @@ namespace HSMServer.DataLayer
 
         ConfigurationObject ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationObject obj);
+
+        #endregion
+
+        #region Registration Ticket
+
+        RegistrationTicket ReadRegistrationTicket(Guid id);
+        void RemoveRegistrationTicket(Guid id);
+        void WriteRegistrationTicket(RegistrationTicket ticket);
 
         #endregion
     }

@@ -8,5 +8,6 @@
 
         public string ProductKey { get; set; }
         public string Role { get; set; }
+        public string TicketId { get; set; }
     }
 }

@@ -31,7 +31,6 @@ namespace HSMServer.Controllers
         {
             _logger = logger;
             _monitoringCore = monitoringCore;
-            _logger.LogInformation("Sensors controller started");
         }
 
         /// <summary>
