@@ -21,8 +21,8 @@ namespace HSMServer.Filters
         }
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            var address = context.HttpContext.Request.Path.Value ?? string.Empty;
-            var key = GetProductKey(address);
+            var queryString = context.HttpContext.Request.QueryString.Value ?? string.Empty;
+            var key = GetProductKey(queryString);
             var user = context.HttpContext.User as User;
 
             //Admins have all possible access
