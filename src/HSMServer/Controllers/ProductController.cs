@@ -1,17 +1,18 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
+using HSMServer.Filters;
+using HSMServer.Keys;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using HSMServer.Products;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.AspNetCore.Authorization;
-using HSMServer.Products;
-using HSMServer.Keys;
-using System;
-using HSMServer.Configuration;
 using System.Security.Cryptography;
 
 namespace HSMServer.Controllers
@@ -51,13 +52,14 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
             var product = _monitoringCore.GetProduct(productKey);
             var users = _userManager.GetViewers(productKey);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
-            if (users != null || !users.Any())
+            if (users != null || users.Any())
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
@@ -172,7 +174,11 @@ namespace HSMServer.Controllers
             var user = _userManager.GetUser(Guid.Parse(model.UserId));
             var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
-            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
+            //Skip empty corresponding pair
+            if (string.IsNullOrEmpty(role.Key) && role.Value == (ProductRoleEnum) 0)
+                return;
+
             user.ProductsRoles.Remove(role);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
