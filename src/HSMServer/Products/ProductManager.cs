@@ -15,14 +15,14 @@ namespace HSMServer.Products
 {
     public class ProductManager : IProductManager
     {
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly ILogger<ProductManager> _logger;
         private readonly IConverter _converter;
         private readonly List<Product> _products;
         private readonly Dictionary<string, List<SensorInfo>> _productSensorsDictionary = new Dictionary<string, List<SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager(IDatabaseClass database, IConverter converter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseWorker database, IConverter converter, ILogger<ProductManager> logger)
         {
             _logger = logger;
             _database = database;

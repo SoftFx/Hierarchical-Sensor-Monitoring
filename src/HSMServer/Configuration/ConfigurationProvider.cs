@@ -11,14 +11,14 @@ namespace HSMServer.Configuration
     {
         #region Private fields
 
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
         private ConfigurationObject _currentConfigurationObject;
         #endregion
 
-        public ConfigurationProvider(IDatabaseClass database, ILogger<ConfigurationProvider> logger)
+        public ConfigurationProvider(IDatabaseWorker database, ILogger<ConfigurationProvider> logger)
         {
             _logger = logger;
             _database = database;
