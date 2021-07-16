@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
-using HSMServer.DataLayer.Model;
-using HSMServer.Registration;
+using HSMDatabase.Entity;
 
-namespace HSMServer.DataLayer
+namespace HSMDatabase.DatabaseWorkCore
 {
     public interface IDatabaseWorker : IDisposable
     {
@@ -21,8 +18,8 @@ namespace HSMServer.DataLayer
 
         void AddProductToList(string productName);
         List<string> GetProductsList();
-        Product GetProductInfo(string productName);
-        void PutProductInfo(Product product);
+        ProductEntity GetProductInfo(string productName);
+        void PutProductInfo(ProductEntity product);
         void RemoveProductInfo(string name);
         void RemoveProductFromList(string name);
 
@@ -30,45 +27,45 @@ namespace HSMServer.DataLayer
 
         #region Sensors
 
-        void RemoveSensor(SensorInfo info);
-        void AddSensor(SensorInfo info);
-        void WriteSensorData(SensorDataObject dataObject, string productName);
+        void RemoveSensor(SensorEntity info);
+        void AddSensor(SensorEntity info);
+        void WriteSensorData(SensorDataEntity dataObject, string productName);
         /// <summary>
         /// Use for sensors, for which only last value must be stored
         /// </summary>
         /// <param name="dataObject"></param>
         /// <param name="productName"></param>
-        void WriteOneValueSensorData(SensorDataObject dataObject, string productName);
-        SensorDataObject GetLastSensorValue(string productName, string path);
-        List<SensorDataObject> GetSensorDataHistory(string productName, string path, long n);
+        void WriteOneValueSensorData(SensorDataEntity dataObject, string productName);
+        SensorDataEntity GetLastSensorValue(string productName, string path);
+        List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorFromList(string productName, string sensorName);
-        SensorInfo GetSensorInfo(string productName, string path);
+        SensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
 
         #endregion
 
         #region Users
-        void AddUser(User user);
-        List<User> ReadUsers();
-        void RemoveUser(User user);
-        List<User> ReadUsersPage(int page, int pageSize);
+        void AddUser(UserEntity user);
+        List<UserEntity> ReadUsers();
+        void RemoveUser(UserEntity user);
+        List<UserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
 
         #region Configuration
 
-        ConfigurationObject ReadConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationObject obj);
+        ConfigurationEntity ReadConfigurationObject(string name);
+        void WriteConfigurationObject(ConfigurationEntity obj);
 
         #endregion
 
         #region Registration Ticket
 
-        RegistrationTicket ReadRegistrationTicket(Guid id);
+        RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegistrationTicket ticket);
+        void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
     }

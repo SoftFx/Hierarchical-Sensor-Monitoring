@@ -1,18 +1,16 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Configuration;
-using HSMServer.DataLayer.Model;
-using HSMServer.Extensions;
-using HSMServer.Registration;
-using LevelDB;
-using Microsoft.Extensions.Logging;
+﻿using LevelDB;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using HSMDatabase.Entity;
+using HSMDatabase.Extensions;
+using HSMServer.DataLayer;
+using Microsoft.Extensions.Logging;
 
-namespace HSMServer.DataLayer
+namespace HSMDatabase.DatabaseWorkCore
 {
     public class LevelDBDatabaseWorker : IDatabaseWorker
     {
@@ -86,7 +84,7 @@ namespace HSMServer.DataLayer
                 _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
 
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 _logger.LogError(e, "Failed to create LevelDB database");
                 throw;
@@ -158,7 +156,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Product
+        #region ProductEntity
 
         public void AddProductToList(string productName)
         {
@@ -202,15 +200,15 @@ namespace HSMServer.DataLayer
             return result;
         }
 
-        public Product GetProductInfo(string productName)
+        public ProductEntity GetProductInfo(string productName)
         {
-            Product result = default(Product);
+            ProductEntity result = default(ProductEntity);
             try
             {
                 lock (_accessLock)
                 {
                     var value = _database.Get(GetProductInfoKey(productName));
-                    result = JsonSerializer.Deserialize<Product>(value);
+                    result = JsonSerializer.Deserialize<ProductEntity>(value);
                 }
             }
             catch (Exception e)
@@ -221,7 +219,7 @@ namespace HSMServer.DataLayer
             return result;
         }
 
-        public void PutProductInfo(Product product)
+        public void PutProductInfo(ProductEntity product)
         {
             try
             {
@@ -277,7 +275,7 @@ namespace HSMServer.DataLayer
 
         #region Sensors
 
-        public void RemoveSensor(SensorInfo info)
+        public void RemoveSensor(SensorEntity info)
         {
             try
             {
@@ -293,7 +291,7 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public void AddSensor(SensorInfo info)
+        public void AddSensor(SensorEntity info)
         {
             try
             {
@@ -309,9 +307,9 @@ namespace HSMServer.DataLayer
                 _logger.LogError(e, $"Failed to add sensor info for {info.Path}");
             }
         }
-        public SensorInfo GetSensorInfo(string productName, string path)
+        public SensorEntity GetSensorInfo(string productName, string path)
         {
-            SensorInfo sensorInfo = default(SensorInfo);
+            SensorEntity sensorInfo = default(SensorEntity);
             try
             {
                 string key = GetSensorInfoKey(productName, path);
@@ -321,11 +319,11 @@ namespace HSMServer.DataLayer
                     value = _database.Get(key);
                 }
 
-                sensorInfo = JsonSerializer.Deserialize<SensorInfo>(value);
+                sensorInfo = JsonSerializer.Deserialize<SensorEntity>(value);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to read SensorInfo for {productName}:{path}");
+                _logger.LogError(e, $"Failed to read SensorEntity for {productName}:{path}");
             }
 
             return sensorInfo;
@@ -359,7 +357,7 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public void WriteSensorData(SensorDataObject dataObject, string productName)
+        public void WriteSensorData(SensorDataEntity dataObject, string productName)
         {
             try
             {
@@ -376,7 +374,7 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public void WriteOneValueSensorData(SensorDataObject dataObject, string productName)
+        public void WriteOneValueSensorData(SensorDataEntity dataObject, string productName)
         {
             try
             {
@@ -393,9 +391,9 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public SensorDataObject GetLastSensorValue(string productName, string path)
+        public SensorDataEntity GetLastSensorValue(string productName, string path)
         {
-            SensorDataObject sensorDataObject = default(SensorDataObject);
+            SensorDataEntity sensorDataObject = default(SensorDataEntity);
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
@@ -405,26 +403,6 @@ namespace HSMServer.DataLayer
                 {
                     using (var iterator = _database.CreateIterator())
                     {
-                        //for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
-                        //{
-                        //    if (!iterator.Key().StartsWith(searchKey))
-                        //        continue;
-
-                        //    try
-                        //    {
-                        //        DateTime currentDateTime = GetTimeFromSensorWriteKey(iterator.Key());
-                        //        if (currentDateTime > lastDateTime)
-                        //        {
-                        //            lastDateTime = currentDateTime;
-                        //            bytesValue = iterator.Value();
-                        //        }
-                        //    }
-                        //    catch (Exception e)
-                        //    {
-                        //        _logger.LogError(e, "Failed to read SensorDataObject");
-                        //    }
-
-                        //}
                         for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
                         {
                             try
@@ -438,13 +416,13 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataObject");
+                                _logger.LogError(e, "Failed to read SensorDataEntity");
                             }
                         }
                     }
                 }
                 string stringValue = Encoding.UTF8.GetString(bytesValue);
-                sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
+                sensorDataObject = JsonSerializer.Deserialize<SensorDataEntity>(stringValue);
             }
             catch (Exception e)
             {
@@ -454,9 +432,9 @@ namespace HSMServer.DataLayer
             return sensorDataObject;
         }
 
-        public List<SensorDataObject> GetSensorDataHistory(string productName, string path, long n)
+        public List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n)
         {
-            List<SensorDataObject> result = new List<SensorDataObject>();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
@@ -471,7 +449,7 @@ namespace HSMServer.DataLayer
 
                             try
                             {
-                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.ValueAsString());
+                                var typedValue = JsonSerializer.Deserialize<SensorDataEntity>(iterator.ValueAsString());
                                 if (typedValue.Path == path)
                                 {
                                     result.Add(typedValue);
@@ -479,7 +457,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataObject");
+                                _logger.LogError(e, "Failed to read SensorDataEntity");
                             }
 
                         }
@@ -561,7 +539,7 @@ namespace HSMServer.DataLayer
 
         #region Configuration
 
-        public ConfigurationObject ReadConfigurationObject(string name)
+        public ConfigurationEntity ReadConfigurationObject(string name)
         {
             try
             {
@@ -572,16 +550,16 @@ namespace HSMServer.DataLayer
                     value = _database.Get(key);
                 }
 
-                return JsonSerializer.Deserialize<ConfigurationObject>(value);
+                return JsonSerializer.Deserialize<ConfigurationEntity>(value);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ConfigurationObject!");
+                _logger.LogError(e, "Failed to read ConfigurationEntity!");
                 return null;
             }
         }
 
-        public void WriteConfigurationObject(ConfigurationObject obj)
+        public void WriteConfigurationObject(ConfigurationEntity obj)
         {
             try
             {
@@ -595,7 +573,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to save ConfigurationObject!");
+                _logger.LogError(e, "Failed to save ConfigurationEntity!");
             }
         }
 
@@ -603,7 +581,7 @@ namespace HSMServer.DataLayer
 
         #region Users
 
-        public void AddUser(User user)
+        public void AddUser(UserEntity user)
         {
             try
             {
@@ -620,12 +598,12 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public List<User> ReadUsersPage(int page, int pageSize)
+        public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
             var skip = (page - 1) * pageSize;
-            int index = 1;
+            int index = 1; 
             var lastIndex = page * pageSize;
-            List<User> users = new List<User>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
@@ -641,7 +619,7 @@ namespace HSMServer.DataLayer
 
                             try
                             {
-                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(iterator.ValueAsString());
                                 users.Add(user);
                             }
                             catch (Exception e)
@@ -659,9 +637,9 @@ namespace HSMServer.DataLayer
 
             return users;
         }
-        public List<User> ReadUsers()
+        public List<UserEntity> ReadUsers()
         {
-            List<User> users = new List<User>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
@@ -673,7 +651,7 @@ namespace HSMServer.DataLayer
                         {
                             try
                             {
-                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(iterator.ValueAsString());
                                 users.Add(user);
                             }
                             catch (Exception e)
@@ -692,7 +670,7 @@ namespace HSMServer.DataLayer
             return users;
         }
 
-        public void RemoveUser(User user)
+        public void RemoveUser(UserEntity user)
         {
             try
             {
@@ -712,15 +690,15 @@ namespace HSMServer.DataLayer
 
         #region Registration Ticket
 
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
-            RegistrationTicket result = default(RegistrationTicket);
+            RegisterTicketEntity result = default(RegisterTicketEntity);
             try
             {
                 lock (_accessLock)
                 {
                     var value = _database.Get(GetRegistrationTicket(id));
-                    result = JsonSerializer.Deserialize<RegistrationTicket>(value);
+                    result = JsonSerializer.Deserialize<RegisterTicketEntity>(value);
                 }
             }
             catch (Exception e)
@@ -747,7 +725,7 @@ namespace HSMServer.DataLayer
             }
         }
 
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
             try
             {
@@ -799,7 +777,7 @@ namespace HSMServer.DataLayer
             return
                 $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:G}_{putTime.Ticks}";
         }
-        private string GetSensorInfoKey(SensorInfo info)
+        private string GetSensorInfoKey(SensorEntity info)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ProductName}_{info.Path}";
         }

@@ -13,6 +13,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMServer.Tests", "..\HSMServer.Tests\HSMServer.Tests.csproj", "{4D22F4E7-D3ED-43FA-8BEE-473EEF45DC87}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDatabase", "..\HSMDatabase\HSMDatabase.csproj", "{21BC81CD-1A1E-4E59-BEDB-273194F6248C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,10 @@ Global
 		{4D22F4E7-D3ED-43FA-8BEE-473EEF45DC87}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4D22F4E7-D3ED-43FA-8BEE-473EEF45DC87}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D22F4E7-D3ED-43FA-8BEE-473EEF45DC87}.Release|Any CPU.Build.0 = Release|Any CPU
+		{21BC81CD-1A1E-4E59-BEDB-273194F6248C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{21BC81CD-1A1E-4E59-BEDB-273194F6248C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{21BC81CD-1A1E-4E59-BEDB-273194F6248C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{21BC81CD-1A1E-4E59-BEDB-273194F6248C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
