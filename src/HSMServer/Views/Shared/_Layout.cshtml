@@ -53,9 +53,15 @@
                                 </a>
                             </li>
                         }
+                        
 
+                        <li class="nav-item" style="position: absolute; right: 110px; bottom: 5px">
+                            <a class="nav-link"
+                               href="#">
+                                Hello, @(((User)Context.User).UserName)
+                            </a>
+                        </li>
                         <li class="nav-item" style="position: absolute; right: 10px; bottom: 0px">
-
                             <a class="nav-link"
                                href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
                                 Logout
