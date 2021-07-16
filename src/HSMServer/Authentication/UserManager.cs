@@ -82,7 +82,8 @@ namespace HSMServer.Authentication
         {
             lock (_accessLock)
             {
-                var existingUser = _users.First(x => x.Id.Equals(user.Id));
+                var existingUser = _users.First(x => x.UserName.Equals(user.UserName,
+                    StringComparison.InvariantCultureIgnoreCase));
                 _users.Remove(existingUser);
 
                 _database.RemoveUser(existingUser);
