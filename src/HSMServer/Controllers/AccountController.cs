@@ -173,6 +173,7 @@ namespace HSMServer.Controllers
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
+            user.Id = currentUser.Id;
 
             _userManager.UpdateUser(user);
         }
