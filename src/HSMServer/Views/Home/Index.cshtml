@@ -11,6 +11,7 @@
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
+    var selected = "";
 </script>
 
 
@@ -87,6 +88,7 @@
     function initializeDataHistoryRequests() {
         $(".accordion-button").on("click", function () {
             id = this.id;
+            selected = id;
             splitResults = id.split('_');
             product = splitResults[0];
             path = id.substring(product.length + 1);
@@ -254,8 +256,8 @@
         if (idToOpen === undefined) {
             return;
         }
-
-        //$('[id^=' + idToOpen + ']').click();
+        console.log(selected);
+        $('#' + selected).click();
 
         //let button = document.getElementById(idToOpen);
         //button.click();
