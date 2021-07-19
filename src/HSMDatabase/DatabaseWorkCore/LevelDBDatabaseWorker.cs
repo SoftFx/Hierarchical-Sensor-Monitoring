@@ -267,7 +267,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failer to remove prodcut from list");
+                _logger.LogError(e, "Failed to remove product from list");
             }
         }
 
@@ -275,11 +275,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Sensors
 
-        public void RemoveSensor(SensorEntity info)
+        public void RemoveSensor(string productName, string path)
         {
             try
             {
-                string key = GetSensorInfoKey(info);
+                string key = GetSensorInfoKey(productName, path);
                 lock (_accessLock)
                 {
                     _database.Delete(key);
@@ -287,7 +287,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensor info for {info.Path}");
+                _logger.LogError(e, $"Failed to remove sensor info for {path}");
             }
         }
 
@@ -295,7 +295,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string key = GetSensorInfoKey(info);
+                string key = GetSensorInfoKey(info.ProductName, info.Path);
                 string value = JsonSerializer.Serialize(info);
                 lock (_accessLock)
                 {
@@ -472,6 +472,21 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
+        public void RemoveSensorsList(string productName)
+        {
+            try
+            {
+                var key = GetSensorsListKey(productName);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to remove sensors list for {productName}");
+            }
+        }
         public List<string> GetSensorsList(string productName)
         {
             List<string> result = new List<string>();
@@ -777,10 +792,10 @@ namespace HSMDatabase.DatabaseWorkCore
             return
                 $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:G}_{putTime.Ticks}";
         }
-        private string GetSensorInfoKey(SensorEntity info)
-        {
-            return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ProductName}_{info.Path}";
-        }
+        //private string GetSensorInfoKey(string productName, string path)
+        //{
+        //    return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
+        //}
 
         private string GetSensorInfoKey(string productName, string path)
         {
@@ -817,7 +832,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"LogError parsing datetime from prev version: {str}");
+                _logger.LogError(e, $"Error parsing datetime from prev version: {str}");
                 return DateTime.MinValue;
             }
         }

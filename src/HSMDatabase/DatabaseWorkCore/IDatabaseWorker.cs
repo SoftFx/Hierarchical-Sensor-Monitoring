@@ -27,7 +27,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Sensors
 
-        void RemoveSensor(SensorEntity info);
+        void RemoveSensor(string productName, string path);
         void AddSensor(SensorEntity info);
         void WriteSensorData(SensorDataEntity dataObject, string productName);
         /// <summary>
@@ -40,6 +40,7 @@ namespace HSMDatabase.DatabaseWorkCore
         List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
+        void RemoveSensorsList(string productName);
         void RemoveSensorFromList(string productName, string sensorName);
         SensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
