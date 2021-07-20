@@ -1,19 +1,48 @@
-﻿using LevelDB;
+﻿using HSMDatabase.Entity;
+using HSMDatabase.Extensions;
+using HSMServer.DataLayer;
+using LevelDB;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMDatabase.Entity;
-using HSMDatabase.Extensions;
-using HSMServer.DataLayer;
-using Microsoft.Extensions.Logging;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     internal class LevelDBDatabaseWorker : IDatabaseWorker
     {
+        #region Singleton
+
+        private static volatile LevelDBDatabaseWorker _instance;
+        private static readonly object _singletonLockObj = new object();
+        public IDatabaseWorker GetInstance()
+        {
+            return Instance;
+        }
+
+        private static LevelDBDatabaseWorker Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_singletonLockObj)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new LevelDBDatabaseWorker();
+                        }
+                    }
+                }
+
+                return _instance;
+            }
+        }
+        #endregion
+
         #region IDisposable implementation
 
         private bool _disposed;
@@ -69,16 +98,16 @@ namespace HSMDatabase.DatabaseWorkCore
         #endregion
 
         private readonly object _accessLock;
-        private readonly ILogger<LevelDBDatabaseWorker> _logger;
+        private readonly ILogger _logger;
         private readonly char[] _keysSeparator = { '_' };
         private const string DATABASE_NAME = "MonitoringData";
         private readonly Options _dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
         private DB _database;
         private string _currentDatabaseName = DATABASE_NAME;
-        public LevelDBDatabaseWorker(ILogger<LevelDBDatabaseWorker> logger)
+        private LevelDBDatabaseWorker()
         {
             _accessLock = new object();
-            _logger = logger;
+            _logger = LogManager.GetCurrentClassLogger();
             try
             {
                 _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
@@ -86,7 +115,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (System.Exception e)
             {
-                _logger.LogError(e, "Failed to create LevelDB database");
+                _logger.Error(e, "Failed to create LevelDB database");
                 throw;
             }
             
@@ -108,7 +137,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to close the database", e);
+                _logger.Error("Failed to close the database", e);
             }
             
         }
@@ -136,7 +165,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to open new database", e);
+                _logger.Error("Failed to open new database", e);
             }
             
         }
@@ -150,7 +179,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to delete database directory", e);
+                _logger.Error("Failed to delete database directory", e);
             }
         }
 
@@ -169,14 +198,14 @@ namespace HSMDatabase.DatabaseWorkCore
                     var prodList = string.IsNullOrEmpty(currentValue)
                         ? new List<string>()
                         : JsonSerializer.Deserialize<List<string>>(currentValue);
-                    _logger.LogInformation($"Products list read: {currentValue}");
+                    _logger.Info($"Products list read: {currentValue}");
                     prodList.Add(productName);
                     _database.Put(PrefixConstants.PRODUCTS_LIST_PREFIX, JsonSerializer.Serialize(prodList));
                 }
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to add product to list");
+                _logger.Error(e, "Failed to add product to list");
                 throw;
             }
         }
@@ -194,7 +223,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to get products list");
+                _logger.Error(e, "Failed to get products list");
             }
 
             return result;
@@ -213,7 +242,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get product info for product = {productName}");
+                _logger.Error(e, $"Failed to get product info for product = {productName}");
             }
 
             return result;
@@ -232,7 +261,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to add product info");
+                _logger.Error(e, "Failed to add product info");
             }
         }
 
@@ -248,7 +277,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove product info for product = {name}");
+                _logger.Error(e, $"Failed to remove product info for product = {name}");
             }
         }
 
@@ -267,7 +296,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to remove product from list");
+                _logger.Error(e, "Failed to remove product from list");
             }
         }
 
@@ -287,7 +316,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensor info for {path}");
+                _logger.Error(e, $"Failed to remove sensor info for {path}");
             }
         }
 
@@ -304,7 +333,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add sensor info for {info.Path}");
+                _logger.Error(e, $"Failed to add sensor info for {info.Path}");
             }
         }
         public SensorEntity GetSensorInfo(string productName, string path)
@@ -323,7 +352,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to read SensorEntity for {productName}:{path}");
+                _logger.Error(e, $"Failed to read SensorEntity for {productName}:{path}");
             }
 
             return sensorInfo;
@@ -349,11 +378,11 @@ namespace HSMDatabase.DatabaseWorkCore
                     }
                 
                 }
-                _logger.LogInformation($"Removed {count} values of sensor {path}");
+                _logger.Info($"Removed {count} values of sensor {path}");
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove values of sensors {path}");
+                _logger.Error(e, $"Failed to remove values of sensors {path}");
             }
         }
 
@@ -370,7 +399,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
@@ -387,7 +416,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
@@ -407,7 +436,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get one value sensor value for {productName}/{path}");
+                _logger.Error(e, $"Failed to get one value sensor value for {productName}/{path}");
             }
 
             return null;
@@ -438,7 +467,7 @@ namespace HSMDatabase.DatabaseWorkCore
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataEntity");
+                                _logger.Error(e, "Failed to read SensorDataEntity");
                             }
                         }
                     }
@@ -448,7 +477,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get last value for sensor = {path}, product = {productName}");
+                _logger.Error(e, $"Failed to get last value for sensor = {path}, product = {productName}");
             }
 
             return sensorDataObject;
@@ -479,7 +508,7 @@ namespace HSMDatabase.DatabaseWorkCore
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataEntity");
+                                _logger.Error(e, "Failed to read SensorDataEntity");
                             }
 
                         }
@@ -488,7 +517,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get sensor history {path}");
+                _logger.Error(e, $"Failed to get sensor history {path}");
             }
 
             return result;
@@ -506,7 +535,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensors list for {productName}");
+                _logger.Error(e, $"Failed to remove sensors list for {productName}");
             }
         }
         public List<string> GetSensorsList(string productName)
@@ -524,7 +553,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get sensors list for {productName}");
+                _logger.Error(e, $"Failed to get sensors list for {productName}");
             }
 
             return result;
@@ -548,7 +577,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add new sensor {path} to list for product {productName}");
+                _logger.Error(e, $"Failed to add new sensor {path} to list for product {productName}");
             }
         }
 
@@ -568,7 +597,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensor {sensorName} from list for {productName}");
+                _logger.Error(e, $"Failed to remove sensor {sensorName} from list for {productName}");
             }
         }
 
@@ -591,7 +620,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ConfigurationEntity!");
+                _logger.Error(e, "Failed to read ConfigurationEntity!");
                 return null;
             }
         }
@@ -610,7 +639,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to save ConfigurationEntity!");
+                _logger.Error(e, "Failed to save ConfigurationEntity!");
             }
         }
 
@@ -631,7 +660,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to write user data for user = '{user.UserName}'");
+                _logger.Error(e, $"Failed to write user data for user = '{user.UserName}'");
             }
         }
 
@@ -661,7 +690,7 @@ namespace HSMDatabase.DatabaseWorkCore
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -669,7 +698,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ");
+                _logger.Error(e, "Failed to read ");
             }
 
             return users;
@@ -693,7 +722,7 @@ namespace HSMDatabase.DatabaseWorkCore
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -701,7 +730,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ");
+                _logger.Error(e, "Failed to read ");
             }
 
             return users;
@@ -719,7 +748,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove user = '{user.UserName}'");
+                _logger.Error(e, $"Failed to remove user = '{user.UserName}'");
             }
         }
 
@@ -740,7 +769,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get registration ticket = {id}");
+                _logger.Error(e, $"Failed to get registration ticket = {id}");
             }
 
             return result;
@@ -758,7 +787,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove registration ticket = '{id}'");
+                _logger.Error(e, $"Failed to remove registration ticket = '{id}'");
             }
         }
 
@@ -775,7 +804,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to write registration ticket for ticket = '{ticket.Id}'");
+                _logger.Error(e, $"Failed to write registration ticket for ticket = '{ticket.Id}'");
             }
         }
 
@@ -844,7 +873,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                //_logger.LogError(e, $"LogError parsing datetime: {str}");
+                //_logger.Error(e, $"Error parsing datetime: {str}");
             }
             //Back compatibility
             str = splitRes.Last();
@@ -854,7 +883,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Error parsing datetime from prev version: {str}");
+                _logger.Error(e, $"Error parsing datetime from prev version: {str}");
                 return DateTime.MinValue;
             }
         }
