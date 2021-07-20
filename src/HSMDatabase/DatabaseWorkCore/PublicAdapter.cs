@@ -69,6 +69,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensor(SensorEntity sensorEntity)
         {
+            _databaseWorker.AddNewSensorToList(sensorEntity.ProductName, sensorEntity.Path);
             _databaseWorker.AddSensor(sensorEntity);
         }
 
@@ -90,6 +91,16 @@ namespace HSMDatabase.DatabaseWorkCore
         public SensorEntity GetSensor(string productName, string path)
         {
             return _databaseWorker.GetSensorInfo(productName, path);
+        }
+
+        public List<SensorDataEntity> GetSensorHistory(string productName, string path, long n)
+        {
+            return _databaseWorker.GetSensorDataHistory(productName, path, n);
+        }
+
+        public SensorDataEntity GetOneValueSensorValue(string productName, string path)
+        {
+            return _databaseWorker.GetOneValueSensorValue(productName, path);
         }
 
         #endregion

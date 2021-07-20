@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using HSMDatabase.Entity;
 
 namespace HSMServer.Authentication
 {
     public class User : ClaimsPrincipal
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; }
         public bool IsAdmin { get; set; }
         public string UserName { get; set; }
         public string Password { get; set; }
@@ -17,6 +18,7 @@ namespace HSMServer.Authentication
 
         public User()
         {
+            Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
         }
 
@@ -39,6 +41,24 @@ namespace HSMServer.Authentication
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
                 ProductsRoles.AddRange(user.ProductsRoles);
+        }
+
+        public User(UserEntity entity)
+        {
+            if (entity == null) return;
+
+            Id = entity.Id;
+            UserName = entity.UserName;
+            CertificateFileName = entity.CertificateFileName;
+            CertificateThumbprint = entity.CertificateThumbprint;
+            Password = entity.Password;
+            IsAdmin = entity.IsAdmin;
+            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
+            if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
+            {
+                ProductsRoles.AddRange(entity.ProductsRoles.Select(
+                    r => new KeyValuePair<string, ProductRoleEnum>(r.Key, (ProductRoleEnum)r.Value)));
+            }
         }
         
     }

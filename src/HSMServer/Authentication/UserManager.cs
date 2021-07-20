@@ -130,8 +130,7 @@ namespace HSMServer.Authentication
                 UserName = userName,
                 CertificateFileName = certificateFileName,
                 Password = passwordHash,
-                IsAdmin = isAdmin,
-                Id = Guid.NewGuid()
+                IsAdmin = isAdmin
             };
 
             if (productRoles != null && productRoles.Any())

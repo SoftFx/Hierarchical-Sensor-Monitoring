@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMDatabase.Entity;
 
 namespace HSMServer.DataLayer.Model
 {
@@ -22,6 +23,17 @@ namespace HSMServer.DataLayer.Model
             ExtraKeys = new List<ExtraProductKey>();
             if (product.ExtraKeys != null && product.ExtraKeys.Any())
                 ExtraKeys.AddRange(product.ExtraKeys);
+        }
+
+        public Product(ProductEntity entity)
+        {
+            if (entity == null) return;
+
+            Key = entity.Key;
+            Name = entity.Name;
+            DateAdded = entity.DateAdded;
+            ExtraKeys = new List<ExtraProductKey>();
+            ExtraKeys.AddRange(entity.ExtraKeys.Select(e => new ExtraProductKey(e)));
         }
     }
 }

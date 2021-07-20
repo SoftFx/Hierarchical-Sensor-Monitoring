@@ -4,7 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public interface IDatabaseWorker : IDisposable
+    internal interface IDatabaseWorker : IDisposable
     {
         #region Management
 
@@ -36,6 +36,7 @@ namespace HSMDatabase.DatabaseWorkCore
         /// <param name="dataObject"></param>
         /// <param name="productName"></param>
         void WriteOneValueSensorData(SensorDataEntity dataObject, string productName);
+        SensorDataEntity GetOneValueSensorValue(string productName, string path);
         SensorDataEntity GetLastSensorValue(string productName, string path);
         List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n);
         List<string> GetSensorsList(string productName);

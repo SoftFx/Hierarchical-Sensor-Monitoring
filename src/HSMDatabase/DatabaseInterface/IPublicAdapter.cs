@@ -23,7 +23,8 @@ namespace HSMDatabase.DatabaseInterface
         void PutOneValueSensorData(SensorDataEntity data, string productName);
         SensorDataEntity GetLastSensorValue(string productName, string path);
         SensorEntity GetSensor(string productName, string path);
-
+        List<SensorDataEntity> GetSensorHistory(string productName, string path, long n);
+        SensorDataEntity GetOneValueSensorValue(string productName, string path);
         #endregion
 
         #region User

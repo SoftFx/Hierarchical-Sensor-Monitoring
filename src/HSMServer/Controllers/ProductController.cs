@@ -207,7 +207,6 @@ namespace HSMServer.Controllers
 
             var ticket = new RegistrationTicket()
             {
-                Id = Guid.NewGuid(),
                 ExpirationDate = DateTime.UtcNow + TimeSpan.FromMinutes(30),
                 ProductKey = model.ProductKey,
                 Role = model.Role

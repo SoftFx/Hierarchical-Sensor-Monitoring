@@ -1,4 +1,6 @@
-﻿namespace HSMServer.DataLayer.Model
+﻿using HSMDatabase.Entity;
+
+namespace HSMServer.DataLayer.Model
 {
     public class ExtraProductKey
     {
@@ -9,6 +11,12 @@
         {
             Name = name;
             Key = key;
+        }
+
+        public ExtraProductKey(ExtraKeyEntity entity)
+        {
+            Name = entity.Name;
+            Key = entity.Key;
         }
     }
 }

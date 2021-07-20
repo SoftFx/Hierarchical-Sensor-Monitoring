@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public class LevelDBDatabaseWorker : IDatabaseWorker
+    internal class LevelDBDatabaseWorker : IDatabaseWorker
     {
         #region IDisposable implementation
 
@@ -389,6 +389,28 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
             }
+        }
+
+        public SensorDataEntity GetOneValueSensorValue(string productName, string path)
+        {
+            try
+            {
+                string value;
+                var key = GetOneValueSensorWriteKey(productName, path);
+                lock (_accessLock)
+                {
+                    value = _database.Get(key);
+                }
+
+                SensorDataEntity entity = JsonSerializer.Deserialize<SensorDataEntity>(value);
+                return entity;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to get one value sensor value for {productName}/{path}");
+            }
+
+            return null;
         }
 
         public SensorDataEntity GetLastSensorValue(string productName, string path)
