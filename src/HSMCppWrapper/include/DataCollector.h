@@ -12,6 +12,12 @@ namespace hsm_wrapper
 	{
 	public:
 		DataCollectorProxy(const std::string& product_key, const std::string& address, int port);
+		DataCollectorProxy() = delete;
+		~DataCollectorProxy() = default;
+		DataCollectorProxy(const DataCollectorProxy&) = default;
+		DataCollectorProxy(DataCollectorProxy&&) = default;
+		DataCollectorProxy& operator=(const DataCollectorProxy&) = default;
+		DataCollectorProxy& operator=(DataCollectorProxy&&) = default;
 
 		void Initialize(bool use_logging = true, const std::string& folder_path = "", const std::string& file_name_format = "");
 		void Stop();

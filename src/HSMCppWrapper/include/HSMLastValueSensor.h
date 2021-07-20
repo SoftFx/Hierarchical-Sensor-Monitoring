@@ -11,6 +11,8 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMLastValueSensor
 	{
 	public:
+		using type = T;
+
 		HSMLastValueSensor(std::shared_ptr<HSMLastValueSensorImpl<T>> sensor_impl);
 		HSMLastValueSensor(HSMLastValueSensor&& sensor);
 		~HSMLastValueSensor() = default;

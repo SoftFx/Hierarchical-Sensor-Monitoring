@@ -11,6 +11,8 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMSensor
 	{
 	public:
+		using type = T;
+
 		HSMSensor(std::shared_ptr<HSMSensorImpl<T>> sensor_impl);
 		HSMSensor(HSMSensor&& sensor);
 		~HSMSensor() = default;
