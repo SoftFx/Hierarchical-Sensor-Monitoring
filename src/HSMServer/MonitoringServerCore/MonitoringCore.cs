@@ -569,14 +569,7 @@ namespace HSMServer.MonitoringServerCore
                 historyList.Add(_converter.Convert(lastValue));
             }
 
-            try
-            {
-                historyList.Sort((a, b) => a.Time.CompareTo(b.Time));
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to sort history list");
-            }
+            historyList.Sort((a, b) => a.Time.CompareTo(b.Time));
             
             if (n != -1)
             {
