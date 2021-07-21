@@ -55,11 +55,8 @@ namespace HSMServer.Controllers
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
-            Product product = new Product();
-            product.Name = productName;
-
-            ProductValidator validator = new ProductValidator(_monitoringCore);
-            var results = validator.Validate(product);
+            NewProductNameValidator validator = new NewProductNameValidator(_monitoringCore);
+            var results = validator.Validate(productName);
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
@@ -262,11 +259,8 @@ namespace HSMServer.Controllers
         {
             Product existingProduct = _monitoringCore.GetProduct(productViewModel.Key);
 
-            Product product = new Product()
+            Product product = new Product(productViewModel.Key, productViewModel.Name, productViewModel.CreationDate)
             {
-                DateAdded = productViewModel.CreationDate,
-                Name = productViewModel.Name,
-                Key = productViewModel.Key,
                 ExtraKeys = existingProduct.ExtraKeys
             };
 

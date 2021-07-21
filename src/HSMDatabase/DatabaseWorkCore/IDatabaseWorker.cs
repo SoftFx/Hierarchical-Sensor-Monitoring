@@ -6,7 +6,6 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     internal interface IDatabaseWorker : IDisposable
     {
-        IDatabaseWorker GetInstance();
         #region Management
 
         void CloseDatabase();

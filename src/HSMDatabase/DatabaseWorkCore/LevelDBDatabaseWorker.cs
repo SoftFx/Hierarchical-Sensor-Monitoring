@@ -18,7 +18,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private static volatile LevelDBDatabaseWorker _instance;
         private static readonly object _singletonLockObj = new object();
-        public IDatabaseWorker GetInstance()
+        public static IDatabaseWorker GetInstance()
         {
             return Instance;
         }
@@ -75,8 +75,11 @@ namespace HSMDatabase.DatabaseWorkCore
                     // Dispose managed resources here...
                     //foreach (var counter in Counters)
                     //  counter.Dispose();
-                    _database.Dispose();
-                    _database = null;
+                    lock (_accessLock)
+                    {
+                        _database?.Dispose();
+                        _database = null;
+                    }
                 }
 
                 // Dispose unmanaged resources here...
@@ -357,7 +360,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return sensorInfo;
         }
-
         public void RemoveSensorValues(string productName, string path)
         {
             try
@@ -385,7 +387,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 _logger.Error(e, $"Failed to remove values of sensors {path}");
             }
         }
-
+        
         public void WriteSensorData(SensorDataEntity dataObject, string productName)
         {
             try
@@ -804,7 +806,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write registration ticket for ticket = '{ticket.Id}'");
+                _logger.Error(e, $"Failed to write registration ticket with id = '{ticket.Id}'");
             }
         }
 
@@ -843,11 +845,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return
                 $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:G}_{putTime.Ticks}";
         }
-        //private string GetSensorInfoKey(string productName, string path)
-        //{
-        //    return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
-        //}
-
+        
         private string GetSensorInfoKey(string productName, string path)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
@@ -892,21 +890,6 @@ namespace HSMDatabase.DatabaseWorkCore
             var timeSpan = (dateTime - DateTime.UnixEpoch);
             return (long)timeSpan.TotalSeconds;
         }
-
-        private IEnumerable<string> ParseProducts(string serversListString)
-        {
-            List<string> result = new List<string>();
-            string[] splitRes = serversListString.Split(";".ToCharArray());
-            result.AddRange(splitRes.Select(srv => srv.Trim()));
-            return result;
-        }
-
-        //private T GetTypedValue<T>(MDBValue value)
-        //{
-        //    byte[] bytes = value.CopyToNewArray();
-        //    string stringVal = Encoding.UTF8.GetString(bytes);
-        //    return JsonSerializer.Deserialize<T>(stringVal);
-        //}
 
         #endregion
     }

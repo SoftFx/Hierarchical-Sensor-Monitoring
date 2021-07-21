@@ -7,14 +7,14 @@ using System.Linq;
 
 namespace HSMServer.Model.Validators
 {
-    public class ProductValidator : AbstractValidator<Product>
+    public class NewProductNameValidator : AbstractValidator<string>
     {
         public readonly IMonitoringCore _monitoringCore;
-        public ProductValidator(IMonitoringCore monitoringCore)
+        public NewProductNameValidator(IMonitoringCore monitoringCore)
         {
             _monitoringCore = monitoringCore;
 
-            RuleFor(x => x.Name)
+            RuleFor(x => x)
                 .NotNull()
                 .WithMessage(ErrorConstants.NameNotNull)
                 .Must(IsUniqueName)

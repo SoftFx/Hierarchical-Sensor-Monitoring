@@ -5,12 +5,12 @@ using HSMDatabase.DatabaseInterface;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal class PublicAdapter : IPublicAdapter
+    public class PublicAdapter : IPublicAdapter
     {
         private readonly IDatabaseWorker _databaseWorker;
-        public PublicAdapter(IDatabaseWorker databaseWorker)
+        public PublicAdapter()
         {
-            _databaseWorker = databaseWorker;
+            _databaseWorker = LevelDBDatabaseWorker.GetInstance();
         }
 
         #region Product
@@ -25,6 +25,12 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 _databaseWorker.RemoveSensor(productName, sensor);
             }
+        }
+
+        //Simply add and rewrite object to update
+        public void UpdateProduct(ProductEntity productEntity)
+        {
+            _databaseWorker.PutProductInfo(productEntity);            
         }
 
         public void AddProduct(ProductEntity productEntity)
@@ -73,6 +79,12 @@ namespace HSMDatabase.DatabaseWorkCore
             _databaseWorker.AddSensor(sensorEntity);
         }
 
+        //To update object simply rewrite it
+        public void UpdateSensor(SensorEntity sensorEntity)
+        {
+            _databaseWorker.AddSensor(sensorEntity);            
+        }
+
         public void PutSensorData(SensorDataEntity data, string productName)
         {
             _databaseWorker.WriteSensorData(data, productName);
@@ -103,6 +115,18 @@ namespace HSMDatabase.DatabaseWorkCore
             return _databaseWorker.GetOneValueSensorValue(productName, path);
         }
 
+        public List<SensorEntity> GetProductSensors(string productName)
+        {
+            List<SensorEntity> result = new List<SensorEntity>();
+            var sensorsList = _databaseWorker.GetSensorsList(productName);
+            foreach (var sensorPath in sensorsList)
+            {
+                result.Add(_databaseWorker.GetSensorInfo(productName, sensorPath));
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Users
@@ -110,6 +134,12 @@ namespace HSMDatabase.DatabaseWorkCore
         public void AddUser(UserEntity user)
         {
             _databaseWorker.AddUser(user);
+        }
+        
+        //To update User, simply rewrite the object
+        public void UpdateUser(UserEntity user)
+        {
+            _databaseWorker.AddUser(user);            
         }
 
         public void RemoveUser(UserEntity user)
@@ -129,7 +159,6 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         #endregion
-
 
         public ConfigurationEntity ReadConfigurationObject(string name)
         {

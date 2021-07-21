@@ -15,6 +15,7 @@ namespace HSMServer.DataLayer
 
         void RemoveProduct(string productName);
         void AddProduct(Product product);
+        void UpdateProduct(Product product);
         Product GetProduct(string productName);
         List<Product> GetProducts();
 
@@ -24,17 +25,20 @@ namespace HSMServer.DataLayer
 
         void RemoveSensor(string productName, string sensorName);
         void AddSensor(SensorInfo info);
+        void UpdateSensor(SensorInfo info);
         void PutSensorData(SensorDataEntity data, string productName);
         void PutOneValueSensorData(SensorDataEntity data, string productName);
         SensorDataEntity GetLastSensorValue(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, long n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
+        List<SensorInfo> GetProductSensors(Product product);
         #endregion
 
         #region User
 
         void AddUser(User user);
+        void UpdateUser(User user);
         void RemoveUser(User user);
         List<User> GetUsers();
         List<User> GetUsersPage(int page, int pageSize);

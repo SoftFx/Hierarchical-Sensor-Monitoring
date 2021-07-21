@@ -33,6 +33,12 @@ namespace HSMServer.DataLayer
             _adapter.AddProduct(entity);
         }
 
+        public void UpdateProduct(Product product)
+        {
+            var entity = Convert(product);
+            _adapter.UpdateProduct(entity);
+        }
+
         public Product GetProduct(string productName)
         {
             return new Product(_adapter.GetProduct(productName));
@@ -56,6 +62,12 @@ namespace HSMServer.DataLayer
         {
             var entity = Convert(info);
             _adapter.AddSensor(entity);
+        }
+
+        public void UpdateSensor(SensorInfo info)
+        {
+            var entity = Convert(info);
+            _adapter.UpdateSensor(entity);
         }
 
         public void PutSensorData(SensorDataEntity data, string productName)
@@ -88,6 +100,11 @@ namespace HSMServer.DataLayer
             return Convert(_adapter.GetOneValueSensorValue(productName, path));
         }
 
+        public List<SensorInfo> GetProductSensors(Product product)
+        {
+            return _adapter.GetProductSensors(product.Name).Select(e => new SensorInfo(e)).ToList();
+        }
+
         #endregion
 
         #region Users
@@ -96,6 +113,12 @@ namespace HSMServer.DataLayer
         {
             var entity = Convert(user);
             _adapter.AddUser(entity);
+        }
+
+        public void UpdateUser(User user)
+        {
+            var entity = Convert(user);
+            _adapter.UpdateUser(entity);
         }
 
         public void RemoveUser(User user)

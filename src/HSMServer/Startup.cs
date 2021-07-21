@@ -1,13 +1,21 @@
-﻿using HSMServer.Authentication;
+﻿using FluentValidation.AspNetCore;
+using HSMDatabase.DatabaseInterface;
+using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Authentication;
+using HSMServer.Cache;
 using HSMServer.ClientUpdateService;
 using HSMServer.Configuration;
-using HSMServer.DataLayer;
 using HSMServer.Middleware;
+using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
 using HSMServer.Products;
+using HSMServer.Registration;
+using HSMServer.Services;
 using HSMServer.SignalR;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,13 +23,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
-using HSMServer.Services;
-using HSMServer.Model.ViewModel;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Http;
-using FluentValidation.AspNetCore;
-using HSMServer.Cache;
-using HSMServer.Registration;
+using HSMServer.DataLayer;
 
 namespace HSMServer
 {
@@ -59,7 +61,9 @@ namespace HSMServer
                 hubOptions.EnableDetailedErrors = true;
             });
 
-            services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
+            //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
+            services.AddScoped<IPublicAdapter, PublicAdapter>();
+            services.AddScoped<IDatabaseAdapter, DatabaseAdapter>();
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
