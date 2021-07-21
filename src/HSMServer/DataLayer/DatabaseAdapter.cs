@@ -204,8 +204,10 @@ namespace HSMServer.DataLayer
             result.Name = product.Name;
             result.Key = product.Key;
             result.DateAdded = product.DateAdded;
-            result.ExtraKeys = new List<ExtraKeyEntity>();
-            result.ExtraKeys.AddRange(product.ExtraKeys.Select(Convert));
+            if (product.ExtraKeys != null && product.ExtraKeys.Any())
+            {
+                result.ExtraKeys = product.ExtraKeys.Select(Convert).ToList();
+            }
             return result;
         }
 
@@ -236,7 +238,10 @@ namespace HSMServer.DataLayer
             result.CertificateFileName = user.CertificateFileName;
             result.Id = user.Id;
             result.IsAdmin = user.IsAdmin;
-            result.ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value)).ToList();
+            if (user.ProductsRoles != null && user.ProductsRoles.Any())
+            {
+                result.ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value)).ToList();
+            }
             return result;
         }
 
