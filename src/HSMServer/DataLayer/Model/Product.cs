@@ -1,15 +1,15 @@
-﻿using System;
+﻿using HSMDatabase.Entity;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMDatabase.Entity;
 
 namespace HSMServer.DataLayer.Model
 {
     public class Product
     {
-        public string Key { get; set; }
-        public string Name { get; set; }
-        public DateTime DateAdded { get; set; }
+        public string Key { get; }
+        public string Name { get; }
+        public DateTime DateAdded { get; }
         public List<ExtraProductKey> ExtraKeys { get; set; }
         public Product() { }
         public Product(string key, string name, DateTime dateAdded)
@@ -52,5 +52,6 @@ namespace HSMServer.DataLayer.Model
                 ExtraKeys.AddRange(product.ExtraKeys);
             }
         }
+
     }
 }
