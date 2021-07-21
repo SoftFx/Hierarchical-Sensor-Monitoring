@@ -62,8 +62,8 @@ namespace HSMServer
             });
 
             //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
-            services.AddScoped<IPublicAdapter, PublicAdapter>();
-            services.AddScoped<IDatabaseAdapter, DatabaseAdapter>();
+            services.AddTransient<IPublicAdapter, PublicAdapter>();
+            services.AddTransient<IDatabaseAdapter, DatabaseAdapter>();
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();

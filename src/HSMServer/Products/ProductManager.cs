@@ -49,6 +49,10 @@ namespace HSMServer.Products
             var existingProducts = _databaseAdapter.GetProducts();
             foreach (var product in existingProducts)
             {
+                lock (_productsLock)
+                {
+                    _products.Add(product);
+                }
                 var sensors = _databaseAdapter.GetProductSensors(product);
                 lock (_dictionaryLock)
                 {

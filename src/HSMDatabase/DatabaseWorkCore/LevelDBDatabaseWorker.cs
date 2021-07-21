@@ -719,7 +719,8 @@ namespace HSMDatabase.DatabaseWorkCore
                         {
                             try
                             {
-                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(iterator.ValueAsString());
+                                string stringValue = iterator.ValueAsString();
+                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(stringValue);
                                 users.Add(user);
                             }
                             catch (Exception e)

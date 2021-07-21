@@ -41,12 +41,17 @@ namespace HSMServer.DataLayer
 
         public Product GetProduct(string productName)
         {
-            return new Product(_adapter.GetProduct(productName));
+            var productEntity = _adapter.GetProduct(productName);
+            return productEntity == null ? null : new Product(productEntity);
         }
 
         public List<Product> GetProducts()
         {
-            return _adapter.GetAllProducts().Select(e => new Product(e)).ToList();
+            var productEntities = _adapter.GetAllProducts();
+            if (productEntities == null || !productEntities.Any())
+                return new List<Product>();
+
+            return productEntities.Select(e => new Product(e)).ToList();
         }
 
         #endregion
@@ -87,22 +92,31 @@ namespace HSMServer.DataLayer
 
         public SensorInfo GetSensorInfo(string productName, string path)
         {
-            return new SensorInfo(_adapter.GetSensor(productName, path));
+            var sensorEntity = _adapter.GetSensor(productName, path);
+            return sensorEntity == null ? null : new SensorInfo(sensorEntity);
         }
 
         public List<SensorHistoryData> GetSensorHistory(string productName, string path, long n)
         {
-            return _adapter.GetSensorHistory(productName, path, n).Select(Convert).ToList();
+            var dataEntities = _adapter.GetSensorHistory(productName, path, n);
+            if (dataEntities == null || !dataEntities.Any())
+                return new List<SensorHistoryData>();
+
+            return dataEntities.Select(Convert).ToList();
         }
 
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
-            return Convert(_adapter.GetOneValueSensorValue(productName, path));
+            var dataEntity = _adapter.GetOneValueSensorValue(productName, path);
+            return dataEntity == null ? null : Convert(dataEntity);
         }
 
         public List<SensorInfo> GetProductSensors(Product product)
         {
-            return _adapter.GetProductSensors(product.Name).Select(e => new SensorInfo(e)).ToList();
+            var sensorEntities = _adapter.GetProductSensors(product.Name);
+            if(sensorEntities == null || !sensorEntities.Any())
+                return new List<SensorInfo>();
+            return sensorEntities.Select(e => new SensorInfo(e)).ToList();
         }
 
         #endregion
@@ -129,12 +143,18 @@ namespace HSMServer.DataLayer
 
         public List<User> GetUsers()
         {
-            return _adapter.GetUsers().Select(u => new User(u)).ToList();
+            var userEntities = _adapter.GetUsers();
+            if(userEntities == null || !userEntities.Any())
+                return new List<User>();
+            return userEntities.Select(u => new User(u)).ToList();
         }
 
         public List<User> GetUsersPage(int page, int pageSize)
         {
-            return _adapter.GetUsersPage(page, pageSize).Select(u => new User(u)).ToList();
+            var userEntities = _adapter.GetUsersPage(page, pageSize);
+            if (userEntities == null || !userEntities.Any())
+                return new List<User>();
+            return userEntities.Select(u => new User(u)).ToList();
         }
 
         #endregion
@@ -143,7 +163,8 @@ namespace HSMServer.DataLayer
 
         public ConfigurationObject GetConfigurationObject(string name)
         {
-            return new ConfigurationObject(_adapter.ReadConfigurationObject(name));
+            var configurationEntity = _adapter.ReadConfigurationObject(name);
+            return configurationEntity == null ? null : new ConfigurationObject(configurationEntity);
         }
 
         public void WriteConfigurationObject(ConfigurationObject obj)
@@ -158,7 +179,8 @@ namespace HSMServer.DataLayer
 
         public RegistrationTicket ReadRegistrationTicket(Guid id)
         {
-            return new RegistrationTicket(_adapter.ReadRegistrationTicket(id));
+            var ticketEntity = _adapter.ReadRegistrationTicket(id);
+            return ticketEntity == null ? null : new RegistrationTicket(ticketEntity);
         }
 
         public void RemoveRegistrationTicket(Guid id)
