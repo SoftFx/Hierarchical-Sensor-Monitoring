@@ -426,11 +426,22 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string value;
-                var key = GetOneValueSensorWriteKey(productName, path);
+                string value = string.Empty;
+                var key = GetSensorReadValueKey(productName, path);
                 lock (_accessLock)
                 {
-                    value = _database.Get(key);
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        iterator.Seek(key);
+                        if (iterator.IsValid())
+                        {
+                            var currentKey = iterator.Key();
+                            if (currentKey.StartsWith(Encoding.UTF8.GetBytes(key)))
+                            {
+                                value = iterator.ValueAsString();
+                            }
+                        }
+                    }
                 }
 
                 SensorDataEntity entity = JsonSerializer.Deserialize<SensorDataEntity>(value);

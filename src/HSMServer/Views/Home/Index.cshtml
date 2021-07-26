@@ -140,7 +140,7 @@
             function () {
                 id = this.id.substring("button_view".length, this.id.length);
 
-                //console.log(id);
+                console.log(id);
                 let splitRes = id.split('_');
                 let product = splitRes[1];
                 let fileName = splitRes[splitRes.length - 1];
@@ -154,6 +154,7 @@
         $('[id^="button_download"]').on("click",
             function () {
                 id = this.id.substring("button_download".length, this.id.length);
+                console.log(id);
 
                 let splitRes = id.split('_');
                 let product = splitRes[1];

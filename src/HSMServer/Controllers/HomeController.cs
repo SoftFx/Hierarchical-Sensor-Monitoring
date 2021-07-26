@@ -78,20 +78,20 @@ namespace HSMServer.Controllers
         public FileResult GetFile([FromQuery] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/');
+            string path = model.Path.Replace('_', '/').Replace('-', ' ');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
-
+            var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";
 
-            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
+            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
         public IActionResult GetFileStream([FromBody] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/');
+            string path = model.Path.Replace('_', '/').Replace('-', ' ');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
