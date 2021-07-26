@@ -480,6 +480,12 @@ namespace HSMServer.Authentication
             if (existingUser != null)
             {
                 existingUser.Update(user);
+                lock (_accessLock)
+                {
+                    var correspondingUser = _users.First(u => u.Id == existingUser.Id);
+                    _users.Remove(correspondingUser);
+                    _users.Add(existingUser);
+                }
                 Task.Run(() =>
                 {
                     _databaseAdapter.UpdateUser(existingUser);

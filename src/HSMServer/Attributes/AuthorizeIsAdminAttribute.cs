@@ -25,9 +25,8 @@ namespace HSMServer.Attributes
             }
 
             var user = context.HttpContext.User;
-            var convertedUser = user as User;
 
-            if (_policyRoles.Contains(convertedUser.IsAdmin))
+            if (user is User convertedUser && _policyRoles.Contains(convertedUser.IsAdmin))
             {
                 return;
             }
