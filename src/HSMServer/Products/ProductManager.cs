@@ -134,6 +134,7 @@ namespace HSMServer.Products
                 _logger.LogError(e, $"Failed to add new product, name = {product.Name}");
             }
         }
+
         public void UpdateProduct(Product product)
         {
             Product currentProduct;
@@ -225,6 +226,27 @@ namespace HSMServer.Products
             //ThreadPool.QueueUserWorkItem(_ =>
             //    _databaseAdapter.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
             Task.Run(() => _databaseAdapter.AddSensor(sensorInfo));
+        }
+        public void RemoveSensor(string productName, string path)
+        {
+            try
+            {
+                lock (_dictionaryLock)
+                {
+                    var existingInfo = _productSensorsDictionary[productName].FirstOrDefault(s => s.Path == path);
+                    if (existingInfo != null)
+                    {
+                        _productSensorsDictionary[productName].Remove(existingInfo);
+                    }
+                }
+
+                Task.Run(() => _databaseAdapter.RemoveSensor(productName, path));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
+            }
+            
         }
         public string GetProductKeyByName(string name)
         {

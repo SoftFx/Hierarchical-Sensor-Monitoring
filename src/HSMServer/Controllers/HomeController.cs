@@ -4,13 +4,12 @@ using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.StaticFiles;
 
 namespace HSMServer.Controllers
 {

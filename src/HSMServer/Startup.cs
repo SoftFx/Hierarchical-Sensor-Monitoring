@@ -23,6 +23,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
+using HSMServer.BackgroundTask;
 using HSMServer.DataLayer;
 
 namespace HSMServer
@@ -80,6 +81,9 @@ namespace HSMServer
             services.AddSingleton<Services.HSMService>();
             services.AddSingleton<AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
+
+
+            services.AddHostedService<OutdatedSensorService>();
 
             services.AddHttpsRedirection(configureOptions =>
             {

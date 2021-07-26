@@ -850,7 +850,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string GetOneValueSensorWriteKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{DateTime.MaxValue:G}_{DateTime.MaxValue.Ticks}";
+            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{DateTime.Now:G}_{DateTime.Now.Ticks}";
         }
         private string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
