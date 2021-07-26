@@ -13,9 +13,9 @@ namespace HSMServer.MonitoringServerCore
         private readonly Queue<SensorData> _monitoringQueue;
         private readonly List<SensorData> _emptyQueue = new List<SensorData>();
         private int _elementsCount;
-        private const int ErrorCapacity = 10000;
-        private const int WarningCapacity = 5000;
-        private const int UpdateListCapacity = 1000;
+        private const int ErrorCapacity = 30000;
+        private const int WarningCapacity = 15000;
+        private const int UpdateListCapacity = 5000;
         public event EventHandler<ClientMonitoringQueue> QueueOverflow;
         public event EventHandler QueueOverflowWarning;
         public event EventHandler<string> UserDisconnected;
