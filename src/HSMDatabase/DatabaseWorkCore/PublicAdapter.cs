@@ -184,5 +184,10 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _databaseWorker.WriteRegistrationTicket(ticket);
         }
+
+        public void Dispose()
+        {
+            _databaseWorker.Dispose();
+        }
     }
 }

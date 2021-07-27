@@ -14,7 +14,7 @@ namespace HSMServer.DataLayer
 {
     public class DatabaseAdapter : IDatabaseAdapter
     {
-        private readonly IPublicAdapter _adapter;
+        private IPublicAdapter _adapter;
         public DatabaseAdapter(IPublicAdapter adapter)
         {
             _adapter = adapter;
@@ -272,5 +272,11 @@ namespace HSMServer.DataLayer
             return result;
         }
         #endregion
+
+        public void Dispose()
+        {
+            _adapter?.Dispose();
+            _adapter = null;
+        }
     }
 }

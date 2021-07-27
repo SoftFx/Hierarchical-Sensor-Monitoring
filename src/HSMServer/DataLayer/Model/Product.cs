@@ -11,8 +11,12 @@ namespace HSMServer.DataLayer.Model
         public string Name { get; set; }
         public DateTime DateAdded { get; set; }
         public List<ExtraProductKey> ExtraKeys { get; set; }
-        public Product() { }
-        public Product(string key, string name, DateTime dateAdded)
+
+        public Product()
+        {
+            ExtraKeys = new List<ExtraProductKey>();
+        }
+        public Product(string key, string name, DateTime dateAdded) : this()
         {
             Key = key;
             Name = name;

@@ -4,7 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseInterface
 {
-    public interface IPublicAdapter
+    public interface IPublicAdapter : IDisposable
     {
         #region Products
         void RemoveProduct(string productName);
