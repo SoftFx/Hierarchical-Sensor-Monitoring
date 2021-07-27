@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
 using HSMServer.Tests.Fixture;
@@ -92,7 +93,57 @@ namespace HSMServer.Tests.DatabaseTests
 
         #endregion
 
+        #region Users
 
+        [Fact]
+        public void UserMustBeAdded()
+        {
+            //Arrange
+            var user = _databaseFixture.CreateFirstUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user);
+            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsers();
+
+            //Assert
+            Assert.Contains(usersFromDB, u => u.UserName == user.UserName && u.Id == user.Id);
+        }
+
+        [Fact]
+        public void UserMustBeRemoved()
+        {
+            //Arrange
+            var user = _databaseFixture.CreateSecondUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user);
+            _databaseFixture.DatabaseAdapter.RemoveUser(user);
+            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsers();
+
+            //Assert
+            Assert.DoesNotContain(usersFromDB, u => u.UserName == user.UserName && u.Id == user.Id);
+        }
+
+        [Fact]
+        public void ProductRoleMustBeAdded()
+        {
+            //Arrange
+            var user = _databaseFixture.CreateThirdUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user);
+            var existingUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
+            var key = _databaseFixture.GetFirstTestProduct().Key;
+            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(key, ProductRoleEnum.ProductManager));
+            existingUser.Update(user);
+            _databaseFixture.DatabaseAdapter.UpdateUser(existingUser);
+            var newUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
+
+            //Assert
+            Assert.NotEmpty(newUser.ProductsRoles);
+            Assert.Equal(key, newUser.ProductsRoles.First().Key);
+        }
+        #endregion
         public void Dispose()
         {
             _databaseFixture?.Dispose();

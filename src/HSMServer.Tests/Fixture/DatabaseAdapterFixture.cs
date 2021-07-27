@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Authentication;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
@@ -11,6 +12,9 @@ namespace HSMServer.Tests.Fixture
     public class DatabaseAdapterFixture : IDisposable
     {
         public IDatabaseAdapter DatabaseAdapter { get; }
+        /// <summary>
+        /// Use as Set Up method for all Database tests
+        /// </summary>
         public DatabaseAdapterFixture()
         {
             IPublicAdapter publicAdapter = new PublicAdapter();
@@ -60,15 +64,47 @@ namespace HSMServer.Tests.Fixture
 
         #endregion
 
-        public readonly string FirstUserName = $"First_user_name_{DateTime.Now.Ticks}";
-        public readonly string SecondUserName = $"Second_user_name_{DateTime.Now.Ticks}";
-        public readonly string ThirdUserName = $"Third_user_name_{DateTime.Now.Ticks}";
+        #region Users
 
+        public readonly string FirstUserName = "First_user_name";
+        public readonly string SecondUserName = "Second_user_name";
+        public readonly string ThirdUserName = "Third_user_name";
+
+        public User CreateFirstUser()
+        {
+            return CreateUser(FirstUserName, HashComputer.ComputePasswordHash(FirstUserName));
+        }
+
+        public User CreateSecondUser()
+        {
+            return CreateUser(SecondUserName, HashComputer.ComputePasswordHash(SecondUserName));
+        }
+
+        public User CreateThirdUser()
+        {
+            return CreateUser(ThirdUserName, HashComputer.ComputePasswordHash(ThirdUserName));
+        }
+        private User CreateUser(string userName, string password)
+        {
+            User user = new User();
+            user.UserName = userName;
+            user.Password = password;
+            user.IsAdmin = false;
+            return user;
+        }
+        #endregion
+
+        /// <summary>
+        /// Use as Tear Down method for Database tests
+        /// </summary>
         public void Dispose()
         {
             DatabaseAdapter?.RemoveProduct(FirstProductName);
             DatabaseAdapter?.RemoveProduct(SecondProductName);
             DatabaseAdapter?.RemoveProduct(ThirdProductName);
+            DatabaseAdapter?.RemoveUser(CreateFirstUser());
+            DatabaseAdapter?.RemoveUser(CreateSecondUser());
+            DatabaseAdapter?.RemoveUser(CreateThirdUser());
         }
     }
 }
