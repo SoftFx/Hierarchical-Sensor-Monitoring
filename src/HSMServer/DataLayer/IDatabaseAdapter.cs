@@ -9,7 +9,7 @@ using HSMServer.Registration;
 
 namespace HSMServer.DataLayer
 {
-    public interface IDatabaseAdapter : IDisposable
+    public interface IDatabaseAdapter
     {
         #region Product
 

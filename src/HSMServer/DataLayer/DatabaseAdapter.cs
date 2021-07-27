@@ -273,10 +273,10 @@ namespace HSMServer.DataLayer
         }
         #endregion
 
-        public void Dispose()
-        {
-            _adapter?.Dispose();
-            _adapter = null;
-        }
+        //public void Dispose()
+        //{
+        //    _adapter?.Dispose();
+        //    _adapter = null;
+        //}
     }
 }

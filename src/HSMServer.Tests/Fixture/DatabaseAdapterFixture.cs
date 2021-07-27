@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using HSMDatabase.DatabaseInterface;
+﻿using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.DataLayer;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Tests.Fixture
 {
@@ -25,10 +24,10 @@ namespace HSMServer.Tests.Fixture
 
         #region Product
 
-        public readonly string FirstProductName = $"First_product_name_{DateTime.Now.Ticks}";
-        public readonly string SecondProductName = $"Second_product_name_{DateTime.Now.Ticks}";
-        public readonly string ThirdProductName = $"Third_product_name_{DateTime.Now.Ticks}";
-        public readonly string ExtraKeyName = "Key2";
+        public readonly string FirstProductName = "First_product_name";
+        public readonly string SecondProductName = "Second_product_name";
+        public readonly string ThirdProductName = "Third_product_name";
+        public readonly string ExtraKeyName = "Extra_key";
         
         public Product GetFirstTestProduct()
         {
@@ -67,7 +66,9 @@ namespace HSMServer.Tests.Fixture
 
         public void Dispose()
         {
-            DatabaseAdapter?.Dispose();
+            DatabaseAdapter?.RemoveProduct(FirstProductName);
+            DatabaseAdapter?.RemoveProduct(SecondProductName);
+            DatabaseAdapter?.RemoveProduct(ThirdProductName);
         }
     }
 }

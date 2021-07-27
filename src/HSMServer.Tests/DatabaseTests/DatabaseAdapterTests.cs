@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
@@ -55,7 +56,7 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         [Fact]
-        public void ListMustReturnAllAddedProducts()
+        public void ListMustReturnAddedProduct()
         {
             //Arrange
             var product = _databaseFixture.GetThirdTestProduct();
@@ -63,6 +64,7 @@ namespace HSMServer.Tests.DatabaseTests
             //Act
             _databaseFixture.DatabaseAdapter.AddProduct(product);
             var list = _databaseFixture.GetProductsList();
+            Debug.Print($"List of {list.Count} products received");
 
             //Assert
             Assert.Contains(list, p => p.Name == product.Name && p.Key == product.Key);
@@ -83,8 +85,9 @@ namespace HSMServer.Tests.DatabaseTests
             //Assert
             var gotProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.Name);
             Assert.NotEmpty(gotProduct.ExtraKeys);
-            Assert.Equal(extraKey.Name, gotProduct.ExtraKeys.First().Name);
-            Assert.Equal(extraKey.Key, gotProduct.ExtraKeys.First().Key);
+            var keyFromDB = gotProduct.ExtraKeys.First();
+            Assert.Equal(extraKey.Name, keyFromDB.Name);
+            Assert.Equal(extraKey.Key, keyFromDB.Key);
         }
 
         #endregion
@@ -92,9 +95,6 @@ namespace HSMServer.Tests.DatabaseTests
 
         public void Dispose()
         {
-            _databaseFixture.DatabaseAdapter.RemoveProduct(_databaseFixture.FirstProductName);
-            _databaseFixture.DatabaseAdapter.RemoveProduct(_databaseFixture.SecondProductName);
-            _databaseFixture.DatabaseAdapter.RemoveProduct(_databaseFixture.ThirdProductName);
             _databaseFixture?.Dispose();
         }
     }
