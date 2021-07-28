@@ -36,6 +36,7 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
         private NLog.Logger _logger;
+        private bool _isStopped;
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
@@ -56,6 +57,7 @@ namespace HSMDataCollector.Core
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
             //_dataQueue.SendData += DataQueue_SendData;
             _dataQueue.SendValues += DataQueue_SendValues;
+            _isStopped = false;
         }
         
         public event EventHandler ValuesQueueOverflow;
@@ -81,6 +83,9 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
+            if (_isStopped)
+                return;
+
             _logger?.Info("DataCollector stopping...");
 
             List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
@@ -112,7 +117,8 @@ namespace HSMDataCollector.Core
                 SendMonitoringData(allData);
             }
             
-            _client.Dispose();
+            _client?.Dispose();
+            _isStopped = true;
             _logger?.Info("DataCollector successfully stopped.");
         }
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
