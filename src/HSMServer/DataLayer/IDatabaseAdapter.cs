@@ -23,7 +23,7 @@ namespace HSMServer.DataLayer
 
         #region Sensors
 
-        void RemoveSensor(string productName, string sensorName);
+        void RemoveSensor(string productName, string path);
         void AddSensor(SensorInfo info);
         void UpdateSensor(SensorInfo info);
         void PutSensorData(SensorDataEntity data, string productName);

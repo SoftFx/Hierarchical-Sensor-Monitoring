@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.Entity;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HSMDatabase.DatabaseInterface;
 
 namespace HSMDatabase.DatabaseWorkCore
@@ -24,6 +25,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var sensor in sensorsList)
             {
                 _databaseWorker.RemoveSensor(productName, sensor);
+                _databaseWorker.RemoveSensorValues(productName, sensor);
             }
         }
 
@@ -107,7 +109,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorDataEntity> GetSensorHistory(string productName, string path, long n)
         {
-            return _databaseWorker.GetSensorDataHistory(productName, path, n);
+            var history = _databaseWorker.GetSensorDataHistory(productName, path, n);
+            history.Sort((a, b) => a.Time.CompareTo(b.Time));
+            if (n != -1 && n > 0)
+            {
+                history = history.TakeLast((int) n).ToList();
+            }
+
+            return history;
         }
 
         public SensorDataEntity GetOneValueSensorValue(string productName, string path)

@@ -427,7 +427,7 @@ namespace HSMDatabase.DatabaseWorkCore
             try
             {
                 string value = string.Empty;
-                var key = GetSensorReadValueKey(productName, path);
+                var key = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
                 lock (_accessLock)
                 {
                     using (var iterator = _database.CreateIterator())
@@ -435,8 +435,7 @@ namespace HSMDatabase.DatabaseWorkCore
                         iterator.Seek(key);
                         if (iterator.IsValid())
                         {
-                            var currentKey = iterator.Key();
-                            if (currentKey.StartsWith(Encoding.UTF8.GetBytes(key)))
+                            if (iterator.Key().StartsWith(key))
                             {
                                 value = iterator.ValueAsString();
                             }

@@ -58,9 +58,9 @@ namespace HSMServer.DataLayer
 
         #region Sensor
 
-        public void RemoveSensor(string productName, string sensorName)
+        public void RemoveSensor(string productName, string path)
         {
-            _adapter.RemoveSensor(productName, sensorName);
+            _adapter.RemoveSensor(productName, path);
         }
 
         public void AddSensor(SensorInfo info)

@@ -144,6 +144,146 @@ namespace HSMServer.Tests.DatabaseTests
             Assert.Equal(key, newUser.ProductsRoles.First().Key);
         }
         #endregion
+
+        #region Sensors
+
+        [Fact]
+        public void SensorMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+
+            //Assert
+            Assert.NotNull(infoFromDB);
+            Assert.Equal(info.SensorName, infoFromDB.SensorName);
+            Assert.Equal(info.Description, infoFromDB.Description);
+            Assert.Equal(info.Path, infoFromDB.Path);
+            Assert.Equal(info.ProductName, infoFromDB.ProductName);
+        }
+
+        [Fact]
+        public void SensorMustBeRemoved()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            _databaseFixture.DatabaseAdapter.RemoveSensor(product.Name, info.Path);
+            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+
+            //Assert
+            Assert.Null(infoFromDB);
+        }
+
+        [Fact]
+        public void SensorValueMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateOneDataEntity();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(data.DataType, (byte)dataFromDB[0].SensorType);
+            Assert.Equal(data.TypedData, dataFromDB[0].TypedData);
+        }
+
+        [Fact]
+        public void OneValueSensorValueMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateOneValueSensorInfo();
+            var data = _databaseFixture.CreateOneValueSensorDataEntity();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            _databaseFixture.DatabaseAdapter.PutOneValueSensorData(data, product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+
+            //Assert
+            Assert.NotNull(dataFromDB);
+            Assert.Equal(data.DataType, (byte)dataFromDB.SensorType);
+            Assert.Equal(data.TypedData, dataFromDB.TypedData);
+        }
+
+        [Fact]
+        public void AllSensorValuesMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(data.Count, dataFromDB.Count);
+        }
+
+        [Fact]
+        public void RequestedSensorValuesMustBeReturned()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, 10);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(10, dataFromDB.Count);
+        }
+
+        [Fact]
+        public void SensorValuesMustBeRemovedWithProduct()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+
+            //Assert
+            Assert.NotNull(dataFromDB);
+            Assert.Empty(dataFromDB);
+        }
+
+        #endregion
         public void Dispose()
         {
             _databaseFixture?.Dispose();
