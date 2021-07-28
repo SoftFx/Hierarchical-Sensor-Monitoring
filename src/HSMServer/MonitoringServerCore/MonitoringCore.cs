@@ -568,8 +568,6 @@ namespace HSMServer.MonitoringServerCore
             {
                 historyList.Add(_converter.Convert(lastValue));
             }
-
-            historyList.Sort((a, b) => a.Time.CompareTo(b.Time));
             
             if (n != -1)
             {
