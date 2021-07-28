@@ -173,6 +173,11 @@ namespace HSMServer.DataLayer
             _adapter.WriteConfigurationObject(entity);
         }
 
+        public void RemoveConfigurationObject(string name)
+        {
+            _adapter.RemoveConfigurationObject(name);
+        }
+
         #endregion
 
         #region Register tickets

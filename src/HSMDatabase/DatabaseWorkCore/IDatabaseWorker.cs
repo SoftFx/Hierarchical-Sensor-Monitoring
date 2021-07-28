@@ -60,6 +60,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
+        void RemoveConfigurationObject(string name);
 
         #endregion
 

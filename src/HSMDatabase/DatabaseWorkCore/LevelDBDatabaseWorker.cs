@@ -655,6 +655,21 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        public void RemoveConfigurationObject(string name)
+        {
+            try
+            {
+                string key = GetUniqueConfigurationObjectKey(name);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove configuration entity named {name}");
+            }
+        }
         #endregion
 
         #region Users

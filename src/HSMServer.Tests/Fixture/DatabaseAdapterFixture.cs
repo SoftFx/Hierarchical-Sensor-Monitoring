@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using HSMDatabase.Entity;
 using HSMSensorDataObjects;
+using HSMServer.Configuration;
+using HSMServer.Registration;
 
 namespace HSMServer.Tests.Fixture
 {
@@ -149,6 +151,34 @@ namespace HSMServer.Tests.Fixture
         }
         #endregion
 
+        #region Tickets
+
+        private RegistrationTicket _ticket = new RegistrationTicket()
+        {
+            Role = ProductRoleEnum.ProductManager.ToString(),
+            ExpirationDate = DateTime.Now.AddMinutes(30),
+            ProductKey = KeyGenerator.GenerateProductKey("Name for testing"),
+        };
+        public RegistrationTicket CreateRegistrationTicket()
+        {
+            return _ticket;
+        }
+        
+        #endregion
+
+        #region ConfigurationObject
+
+        public const string ConfigurationObjectName = "Config";
+        public const string ConfigurationObjectValue = "123";
+        public ConfigurationObject CreateConfigurationObject()
+        {
+            ConfigurationObject result = new ConfigurationObject();
+            result.Name = ConfigurationObjectName;
+            result.Value = ConfigurationObjectValue;
+            return result;
+        }
+
+        #endregion
         /// <summary>
         /// Use as Tear Down method for Database tests
         /// </summary>
@@ -160,6 +190,8 @@ namespace HSMServer.Tests.Fixture
             DatabaseAdapter?.RemoveUser(CreateFirstUser());
             DatabaseAdapter?.RemoveUser(CreateSecondUser());
             DatabaseAdapter?.RemoveUser(CreateThirdUser());
+            DatabaseAdapter?.RemoveRegistrationTicket(_ticket.Id);
+            DatabaseAdapter?.RemoveConfigurationObject(ConfigurationObjectName);
         }
     }
 }

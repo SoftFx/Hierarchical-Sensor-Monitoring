@@ -49,6 +49,7 @@ namespace HSMServer.DataLayer
 
         ConfigurationObject GetConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationObject obj);
+        void RemoveConfigurationObject(string name);
 
         #endregion
 

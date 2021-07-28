@@ -179,6 +179,11 @@ namespace HSMDatabase.DatabaseWorkCore
             _databaseWorker.WriteConfigurationObject(obj);
         }
 
+        public void RemoveConfigurationObject(string name)
+        {
+            _databaseWorker.RemoveConfigurationObject(name);
+        }
+
         public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
             return _databaseWorker.ReadRegistrationTicket(id);

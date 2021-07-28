@@ -284,6 +284,89 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         #endregion
+
+        [Fact]
+        public void RegisterTickerMustBeAdded()
+        {
+            //Arrange
+            var ticket = _databaseFixture.CreateRegistrationTicket();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
+            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
+
+            //Assert
+            Assert.NotNull(ticketFromDB);
+            Assert.Equal(ticket.Id, ticketFromDB.Id);
+            Assert.Equal(ticket.Role, ticketFromDB.Role);
+            Assert.Equal(ticket.ProductKey, ticketFromDB.ProductKey);
+            Assert.Equal(ticket.ExpirationDate, ticketFromDB.ExpirationDate);
+        }
+
+        [Fact]
+        public void RegisterTicketMustBeRemoved()
+        {
+            //Arrange
+            var ticket = _databaseFixture.CreateRegistrationTicket();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
+            _databaseFixture.DatabaseAdapter.RemoveRegistrationTicket(ticket.Id);
+            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
+
+            //Assert
+            Assert.Null(ticketFromDB);
+        }
+
+        [Fact]
+        public void ConfigurationObjectMustBeAdded()
+        {
+            //Arrange
+            var configObj = _databaseFixture.CreateConfigurationObject();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+
+            //Assert
+            Assert.NotNull(objectFromDB);
+            Assert.Equal(configObj.Name, objectFromDB.Name);
+            Assert.Equal(configObj.Value, objectFromDB.Value);
+        }
+
+        [Fact]
+        public void ConfigurationObjectMustBeUpdated()
+        {
+            //Arrange
+            var configObj = _databaseFixture.CreateConfigurationObject();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
+            string newValue = "New value";
+            configObj.Value = newValue;
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+
+            //Assert
+            Assert.NotNull(objectFromDB);
+            Assert.Equal(newValue, objectFromDB.Value);
+        }
+
+        [Fact]
+        public void ConfigurationObjectMustBeRemoved()
+        {
+            //Arrange
+            var configObj = _databaseFixture.CreateConfigurationObject();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
+            _databaseFixture.DatabaseAdapter.RemoveConfigurationObject(configObj.Name);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+
+            //Assert
+            Assert.Null(objectFromDB);
+        }
+
         public void Dispose()
         {
             _databaseFixture?.Dispose();
