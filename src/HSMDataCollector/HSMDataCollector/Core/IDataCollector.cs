@@ -4,7 +4,7 @@ using HSMDataCollector.PublicInterface;
 
 namespace HSMDataCollector.Core
 {
-    public interface IDataCollector<T, U> : IDisposable
+    public interface IDataCollector : IDisposable
     {
         #region Common methods
 
@@ -105,16 +105,16 @@ namespace HSMDataCollector.Core
 
         #region Custom func sensors
 
-        INoParamsFuncSensor<T> CreateNoParamsFuncSensor(string path, string description, Func<T> function, TimeSpan interval);
-        INoParamsFuncSensor<T> CreateNoParamsFuncSensor(string path, string description, Func<T> function, int millisecondsInterval = 15000);
-        INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor(string path, string description, Func<T> function);
-        INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor(string path, string description, Func<T> function);
+        INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval);
+        INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval = 15000);
+        INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
+        INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        IParamsFuncSensor<T, U> CreateParamsFuncSensor(string path, string description, Func<List<U>,T> function, TimeSpan interval);
-        IParamsFuncSensor<T, U> CreateParamsFuncSensor(string path, string description, Func<List<U>, T> function, int millisecondsInterval = 15000);
+        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>,T> function, TimeSpan interval);
+        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval = 15000);
 
-        IParamsFuncSensor<T, U> Create1MinParamsFuncSensor(string path, string description, Func<List<U>, T> function);
-        IParamsFuncSensor<T, U> Create5MinParamsFuncSensor(string path, string description, Func<List<U>, T> function);
+        IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
+        IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
         #endregion
         //int GetSensorCount();
 

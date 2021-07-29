@@ -29,7 +29,7 @@ namespace HSMDataCollector.Core
     /// <summary>
     /// Main monitoring class which is used to create and control sensors' instances
     /// </summary>
-    public class DataCollector<T, U> : IDataCollector<T, U>
+    public class DataCollector : IDataCollector
     {
         private readonly string _productKey;
         private readonly string _listSendingAddress;
@@ -67,7 +67,7 @@ namespace HSMDataCollector.Core
         {
             if (useLogging)
             {
-                _logger = Logger.Create(nameof(DataCollector<T, U>));
+                _logger = Logger.Create(nameof(DataCollector));
 
                 Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{TextConstants.LogDefaultFolder}",
                     fileNameFormat ?? TextConstants.LogFormatFileName);
@@ -480,46 +480,46 @@ namespace HSMDataCollector.Core
         #endregion
 
         #region Generic func sensors
-        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor(string path, string description, Func<T> function, TimeSpan interval)
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval)
         {
             return CreateNoParamsFuncSensorInternal(path, description, function, interval);
         }
 
-        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor(string path, string description, Func<T> function, int millisecondsInterval)
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval)
         {
             return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
         }
 
-        public INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor(string path, string description, Func<T> function)
+        public INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
         {
             return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
         }
 
-        public INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor(string path, string description, Func<T> function)
+        public INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
         {
             return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
         }
 
-        public IParamsFuncSensor<T, U> CreateParamsFuncSensor(string path, string description, Func<List<U>, T> function, TimeSpan interval)
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval)
         {
             return CreateParamsFuncSensorInternal(path, description, function, interval);
         }
 
-        public IParamsFuncSensor<T, U> CreateParamsFuncSensor(string path, string description, Func<List<U>, T> function, int millisecondsInterval)
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval)
         {
             return CreateParamsFuncSensorInternal(path, description, function,
                 TimeSpan.FromMilliseconds(millisecondsInterval));
         }
 
-        public IParamsFuncSensor<T, U> Create1MinParamsFuncSensor(string path, string description, Func<List<U>, T> function)
+        public IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
         {
             return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
         }
-        public IParamsFuncSensor<T, U> Create5MinParamsFuncSensor(string path, string description, Func<List<U>, T> function)
+        public IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
         {
             return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
         }
-        private IParamsFuncSensor<T, U> CreateParamsFuncSensorInternal(string path, string description,
+        private IParamsFuncSensor<T, U> CreateParamsFuncSensorInternal<T, U>(string path, string description,
             Func<List<U>, T> function, TimeSpan interval)
         {
             var existingSensor = GetExistingSensor(path);
@@ -534,7 +534,7 @@ namespace HSMDataCollector.Core
             AddNewSensor(sensor, path);
             return sensor;
         }
-        private INoParamsFuncSensor<T> CreateNoParamsFuncSensorInternal(string path, string description, Func<T> function,
+        private INoParamsFuncSensor<T> CreateNoParamsFuncSensorInternal<T>(string path, string description, Func<T> function,
             TimeSpan interval)
         {
             var existingSensor = GetExistingSensor(path);
