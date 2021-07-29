@@ -173,7 +173,6 @@ namespace HSMServer.Controllers
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
-            user.Id = currentUser.Id;
 
             _userManager.UpdateUser(user);
         }
@@ -213,9 +212,8 @@ namespace HSMServer.Controllers
 
         private User GetModelFromViewModel(UserViewModel userViewModel)
         {
-            User user = new User()
+            User user = new User(userViewModel.Username)
             {
-                UserName = userViewModel.Username,
                 Password = userViewModel.Password,
                 IsAdmin = userViewModel.IsAdmin
             };

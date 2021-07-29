@@ -15,6 +15,7 @@ namespace HSMServer.Products
         bool IsSensorRegistered(string productName, string path);
         void AddSensor(string productName, SensorValueBase sensorValue);
         void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue);
+        void RemoveSensor(string productName, string path);
         void UpdateProduct(Product product);
     }
 }

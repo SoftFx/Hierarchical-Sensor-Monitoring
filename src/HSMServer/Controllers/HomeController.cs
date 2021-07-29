@@ -4,13 +4,12 @@ using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.StaticFiles;
 
 namespace HSMServer.Controllers
 {
@@ -78,20 +77,20 @@ namespace HSMServer.Controllers
         public FileResult GetFile([FromQuery] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/');
+            string path = model.Path.Replace('_', '/').Replace('-', ' ');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
-
+            var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";
 
-            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
+            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
         public IActionResult GetFileStream([FromBody] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/');
+            string path = model.Path.Replace('_', '/').Replace('-', ' ');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);

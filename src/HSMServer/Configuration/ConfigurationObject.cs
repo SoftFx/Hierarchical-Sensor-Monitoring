@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Configuration
+﻿using HSMDatabase.Entity;
+
+namespace HSMServer.Configuration
 {
     public class ConfigurationObject
     {
@@ -12,6 +14,15 @@
                 Name = name,
                 Value = value
             };
+        }
+
+        public ConfigurationObject(){}
+        public ConfigurationObject(ConfigurationEntity entity)
+        {
+            if (entity == null) return;
+
+            Name = entity.Name;
+            Value = entity.Value;
         }
     }
 }

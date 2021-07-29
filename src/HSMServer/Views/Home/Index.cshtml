@@ -140,7 +140,6 @@
             function () {
                 id = this.id.substring("button_view".length, this.id.length);
 
-                //console.log(id);
                 let splitRes = id.split('_');
                 let product = splitRes[1];
                 let fileName = splitRes[splitRes.length - 1];
@@ -256,7 +255,7 @@
         if (idToOpen === undefined) {
             return;
         }
-        console.log(selected);
+        //console.log(selected);
         $('#' + selected).click();
 
         //let button = document.getElementById(idToOpen);

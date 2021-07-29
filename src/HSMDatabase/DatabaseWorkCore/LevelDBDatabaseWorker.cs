@@ -1,10 +1,8 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Configuration;
-using HSMServer.DataLayer.Model;
-using HSMServer.Extensions;
-using HSMServer.Registration;
+﻿using HSMDatabase.Entity;
+using HSMDatabase.Extensions;
+using HSMServer.DataLayer;
 using LevelDB;
-using Microsoft.Extensions.Logging;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,10 +10,39 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 
-namespace HSMServer.DataLayer
+namespace HSMDatabase.DatabaseWorkCore
 {
-    public class LevelDBDatabaseWorker : IDatabaseWorker
+    internal class LevelDBDatabaseWorker : IDatabaseWorker
     {
+        #region Singleton
+
+        private static volatile LevelDBDatabaseWorker _instance;
+        private static readonly object _singletonLockObj = new object();
+        public static IDatabaseWorker GetInstance()
+        {
+            return Instance;
+        }
+
+        private static LevelDBDatabaseWorker Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_singletonLockObj)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new LevelDBDatabaseWorker();
+                        }
+                    }
+                }
+
+                return _instance;
+            }
+        }
+        #endregion
+
         #region IDisposable implementation
 
         private bool _disposed;
@@ -48,8 +75,11 @@ namespace HSMServer.DataLayer
                     // Dispose managed resources here...
                     //foreach (var counter in Counters)
                     //  counter.Dispose();
-                    _database.Dispose();
-                    _database = null;
+                    lock (_accessLock)
+                    {
+                        _database?.Dispose();
+                        _database = null;
+                    }
                 }
 
                 // Dispose unmanaged resources here...
@@ -71,24 +101,24 @@ namespace HSMServer.DataLayer
         #endregion
 
         private readonly object _accessLock;
-        private readonly ILogger<LevelDBDatabaseWorker> _logger;
+        private readonly ILogger _logger;
         private readonly char[] _keysSeparator = { '_' };
         private const string DATABASE_NAME = "MonitoringData";
         private readonly Options _dbOptions = new Options() { CreateIfMissing = true, MaxOpenFiles = 100000 };
         private DB _database;
         private string _currentDatabaseName = DATABASE_NAME;
-        public LevelDBDatabaseWorker(ILogger<LevelDBDatabaseWorker> logger)
+        private LevelDBDatabaseWorker()
         {
             _accessLock = new object();
-            _logger = logger;
+            _logger = LogManager.GetCurrentClassLogger();
             try
             {
                 _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
 
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
-                _logger.LogError(e, "Failed to create LevelDB database");
+                _logger.Error(e, "Failed to create LevelDB database");
                 throw;
             }
             
@@ -110,7 +140,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to close the database", e);
+                _logger.Error("Failed to close the database", e);
             }
             
         }
@@ -138,7 +168,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to open new database", e);
+                _logger.Error("Failed to open new database", e);
             }
             
         }
@@ -152,13 +182,13 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to delete database directory", e);
+                _logger.Error("Failed to delete database directory", e);
             }
         }
 
         #endregion
 
-        #region Product
+        #region ProductEntity
 
         public void AddProductToList(string productName)
         {
@@ -171,14 +201,14 @@ namespace HSMServer.DataLayer
                     var prodList = string.IsNullOrEmpty(currentValue)
                         ? new List<string>()
                         : JsonSerializer.Deserialize<List<string>>(currentValue);
-                    _logger.LogInformation($"Products list read: {currentValue}");
+                    _logger.Info($"Products list read: {currentValue}");
                     prodList.Add(productName);
                     _database.Put(PrefixConstants.PRODUCTS_LIST_PREFIX, JsonSerializer.Serialize(prodList));
                 }
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to add product to list");
+                _logger.Error(e, "Failed to add product to list");
                 throw;
             }
         }
@@ -196,32 +226,32 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to get products list");
+                _logger.Error(e, "Failed to get products list");
             }
 
             return result;
         }
 
-        public Product GetProductInfo(string productName)
+        public ProductEntity GetProductInfo(string productName)
         {
-            Product result = default(Product);
+            ProductEntity result = default(ProductEntity);
             try
             {
                 lock (_accessLock)
                 {
                     var value = _database.Get(GetProductInfoKey(productName));
-                    result = JsonSerializer.Deserialize<Product>(value);
+                    result = JsonSerializer.Deserialize<ProductEntity>(value);
                 }
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get product info for product = {productName}");
+                _logger.Error(e, $"Failed to get product info for product = {productName}");
             }
 
             return result;
         }
 
-        public void PutProductInfo(Product product)
+        public void PutProductInfo(ProductEntity product)
         {
             try
             {
@@ -234,7 +264,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to add product info");
+                _logger.Error(e, "Failed to add product info");
             }
         }
 
@@ -250,7 +280,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove product info for product = {name}");
+                _logger.Error(e, $"Failed to remove product info for product = {name}");
             }
         }
 
@@ -269,7 +299,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failer to remove prodcut from list");
+                _logger.Error(e, "Failed to remove product from list");
             }
         }
 
@@ -277,11 +307,11 @@ namespace HSMServer.DataLayer
 
         #region Sensors
 
-        public void RemoveSensor(SensorInfo info)
+        public void RemoveSensor(string productName, string path)
         {
             try
             {
-                string key = GetSensorInfoKey(info);
+                string key = GetSensorInfoKey(productName, path);
                 lock (_accessLock)
                 {
                     _database.Delete(key);
@@ -289,15 +319,15 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensor info for {info.Path}");
+                _logger.Error(e, $"Failed to remove sensor info for {path}");
             }
         }
 
-        public void AddSensor(SensorInfo info)
+        public void AddSensor(SensorEntity info)
         {
             try
             {
-                string key = GetSensorInfoKey(info);
+                string key = GetSensorInfoKey(info.ProductName, info.Path);
                 string value = JsonSerializer.Serialize(info);
                 lock (_accessLock)
                 {
@@ -306,12 +336,12 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add sensor info for {info.Path}");
+                _logger.Error(e, $"Failed to add sensor info for {info.Path}");
             }
         }
-        public SensorInfo GetSensorInfo(string productName, string path)
+        public SensorEntity GetSensorInfo(string productName, string path)
         {
-            SensorInfo sensorInfo = default(SensorInfo);
+            SensorEntity sensorInfo = default(SensorEntity);
             try
             {
                 string key = GetSensorInfoKey(productName, path);
@@ -321,16 +351,15 @@ namespace HSMServer.DataLayer
                     value = _database.Get(key);
                 }
 
-                sensorInfo = JsonSerializer.Deserialize<SensorInfo>(value);
+                sensorInfo = JsonSerializer.Deserialize<SensorEntity>(value);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to read SensorInfo for {productName}:{path}");
+                _logger.Error(e, $"Failed to read SensorEntity for {productName}:{path}");
             }
 
             return sensorInfo;
         }
-
         public void RemoveSensorValues(string productName, string path)
         {
             try
@@ -351,15 +380,15 @@ namespace HSMServer.DataLayer
                     }
                 
                 }
-                _logger.LogInformation($"Removed {count} values of sensor {path}");
+                _logger.Info($"Removed {count} values of sensor {path}");
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove values of sensors {path}");
+                _logger.Error(e, $"Failed to remove values of sensors {path}");
             }
         }
-
-        public void WriteSensorData(SensorDataObject dataObject, string productName)
+        
+        public void WriteSensorData(SensorDataEntity dataObject, string productName)
         {
             try
             {
@@ -372,11 +401,11 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
-        public void WriteOneValueSensorData(SensorDataObject dataObject, string productName)
+        public void WriteOneValueSensorData(SensorDataEntity dataObject, string productName)
         {
             try
             {
@@ -389,13 +418,45 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add data for sensor {dataObject.Path}");
+                _logger.Error(e, $"Failed to add data for sensor {dataObject.Path}");
             }
         }
 
-        public SensorDataObject GetLastSensorValue(string productName, string path)
+        public SensorDataEntity GetOneValueSensorValue(string productName, string path)
         {
-            SensorDataObject sensorDataObject = default(SensorDataObject);
+            try
+            {
+                string value = string.Empty;
+                var key = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        iterator.Seek(key);
+                        if (iterator.IsValid())
+                        {
+                            if (iterator.Key().StartsWith(key))
+                            {
+                                value = iterator.ValueAsString();
+                            }
+                        }
+                    }
+                }
+
+                SensorDataEntity entity = JsonSerializer.Deserialize<SensorDataEntity>(value);
+                return entity;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get one value sensor value for {productName}/{path}");
+            }
+
+            return null;
+        }
+
+        public SensorDataEntity GetLastSensorValue(string productName, string path)
+        {
+            SensorDataEntity sensorDataObject = default(SensorDataEntity);
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
@@ -405,26 +466,6 @@ namespace HSMServer.DataLayer
                 {
                     using (var iterator = _database.CreateIterator())
                     {
-                        //for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
-                        //{
-                        //    if (!iterator.Key().StartsWith(searchKey))
-                        //        continue;
-
-                        //    try
-                        //    {
-                        //        DateTime currentDateTime = GetTimeFromSensorWriteKey(iterator.Key());
-                        //        if (currentDateTime > lastDateTime)
-                        //        {
-                        //            lastDateTime = currentDateTime;
-                        //            bytesValue = iterator.Value();
-                        //        }
-                        //    }
-                        //    catch (Exception e)
-                        //    {
-                        //        _logger.LogError(e, "Failed to read SensorDataObject");
-                        //    }
-
-                        //}
                         for (iterator.Seek(searchKey); iterator.IsValid() && iterator.Key().StartsWith(searchKey); iterator.Next())
                         {
                             try
@@ -438,25 +479,25 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataObject");
+                                _logger.Error(e, "Failed to read SensorDataEntity");
                             }
                         }
                     }
                 }
                 string stringValue = Encoding.UTF8.GetString(bytesValue);
-                sensorDataObject = JsonSerializer.Deserialize<SensorDataObject>(stringValue);
+                sensorDataObject = JsonSerializer.Deserialize<SensorDataEntity>(stringValue);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get last value for sensor = {path}, product = {productName}");
+                _logger.Error(e, $"Failed to get last value for sensor = {path}, product = {productName}");
             }
 
             return sensorDataObject;
         }
 
-        public List<SensorDataObject> GetSensorDataHistory(string productName, string path, long n)
+        public List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n)
         {
-            List<SensorDataObject> result = new List<SensorDataObject>();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetSensorReadValueKey(productName, path));
@@ -471,7 +512,7 @@ namespace HSMServer.DataLayer
 
                             try
                             {
-                                var typedValue = JsonSerializer.Deserialize<SensorDataObject>(iterator.ValueAsString());
+                                var typedValue = JsonSerializer.Deserialize<SensorDataEntity>(iterator.ValueAsString());
                                 if (typedValue.Path == path)
                                 {
                                     result.Add(typedValue);
@@ -479,7 +520,7 @@ namespace HSMServer.DataLayer
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, "Failed to read SensorDataObject");
+                                _logger.Error(e, "Failed to read SensorDataEntity");
                             }
 
                         }
@@ -488,12 +529,27 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get sensor history {path}");
+                _logger.Error(e, $"Failed to get sensor history {path}");
             }
 
             return result;
         }
 
+        public void RemoveSensorsList(string productName)
+        {
+            try
+            {
+                var key = GetSensorsListKey(productName);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove sensors list for {productName}");
+            }
+        }
         public List<string> GetSensorsList(string productName)
         {
             List<string> result = new List<string>();
@@ -509,7 +565,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get sensors list for {productName}");
+                _logger.Error(e, $"Failed to get sensors list for {productName}");
             }
 
             return result;
@@ -533,7 +589,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add new sensor {path} to list for product {productName}");
+                _logger.Error(e, $"Failed to add new sensor {path} to list for product {productName}");
             }
         }
 
@@ -553,7 +609,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove sensor {sensorName} from list for {productName}");
+                _logger.Error(e, $"Failed to remove sensor {sensorName} from list for {productName}");
             }
         }
 
@@ -561,7 +617,7 @@ namespace HSMServer.DataLayer
 
         #region Configuration
 
-        public ConfigurationObject ReadConfigurationObject(string name)
+        public ConfigurationEntity ReadConfigurationObject(string name)
         {
             try
             {
@@ -572,16 +628,16 @@ namespace HSMServer.DataLayer
                     value = _database.Get(key);
                 }
 
-                return JsonSerializer.Deserialize<ConfigurationObject>(value);
+                return JsonSerializer.Deserialize<ConfigurationEntity>(value);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ConfigurationObject!");
+                _logger.Error(e, "Failed to read ConfigurationEntity!");
                 return null;
             }
         }
 
-        public void WriteConfigurationObject(ConfigurationObject obj)
+        public void WriteConfigurationObject(ConfigurationEntity obj)
         {
             try
             {
@@ -595,15 +651,30 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to save ConfigurationObject!");
+                _logger.Error(e, "Failed to save ConfigurationEntity!");
             }
         }
 
+        public void RemoveConfigurationObject(string name)
+        {
+            try
+            {
+                string key = GetUniqueConfigurationObjectKey(name);
+                lock (_accessLock)
+                {
+                    _database.Delete(key);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove configuration entity named {name}");
+            }
+        }
         #endregion
 
         #region Users
 
-        public void AddUser(User user)
+        public void AddUser(UserEntity user)
         {
             try
             {
@@ -616,16 +687,16 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to write user data for user = '{user.UserName}'");
+                _logger.Error(e, $"Failed to write user data for user = '{user.UserName}'");
             }
         }
 
-        public List<User> ReadUsersPage(int page, int pageSize)
+        public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
             var skip = (page - 1) * pageSize;
-            int index = 1;
+            int index = 1; 
             var lastIndex = page * pageSize;
-            List<User> users = new List<User>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
@@ -641,12 +712,12 @@ namespace HSMServer.DataLayer
 
                             try
                             {
-                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(iterator.ValueAsString());
                                 users.Add(user);
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -654,14 +725,14 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ");
+                _logger.Error(e, "Failed to read ");
             }
 
             return users;
         }
-        public List<User> ReadUsers()
+        public List<UserEntity> ReadUsers()
         {
-            List<User> users = new List<User>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 byte[] searchKey = Encoding.UTF8.GetBytes(GetUserReadKey());
@@ -673,12 +744,13 @@ namespace HSMServer.DataLayer
                         {
                             try
                             {
-                                User user = JsonSerializer.Deserialize<User>(iterator.ValueAsString());
+                                string stringValue = iterator.ValueAsString();
+                                UserEntity user = JsonSerializer.Deserialize<UserEntity>(stringValue);
                                 users.Add(user);
                             }
                             catch (Exception e)
                             {
-                                _logger.LogError(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
+                                _logger.Error(e, $"Failed to deserialize user from {iterator.ValueAsString()}");
                             }
                         }
                     }
@@ -686,13 +758,13 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to read ");
+                _logger.Error(e, "Failed to read ");
             }
 
             return users;
         }
 
-        public void RemoveUser(User user)
+        public void RemoveUser(UserEntity user)
         {
             try
             {
@@ -704,7 +776,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove user = '{user.UserName}'");
+                _logger.Error(e, $"Failed to remove user = '{user.UserName}'");
             }
         }
 
@@ -712,20 +784,20 @@ namespace HSMServer.DataLayer
 
         #region Registration Ticket
 
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
-            RegistrationTicket result = default(RegistrationTicket);
+            RegisterTicketEntity result = default(RegisterTicketEntity);
             try
             {
                 lock (_accessLock)
                 {
                     var value = _database.Get(GetRegistrationTicket(id));
-                    result = JsonSerializer.Deserialize<RegistrationTicket>(value);
+                    result = JsonSerializer.Deserialize<RegisterTicketEntity>(value);
                 }
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to get registration ticket = {id}");
+                _logger.Error(e, $"Failed to get registration ticket = {id}");
             }
 
             return result;
@@ -743,11 +815,11 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to remove registration ticket = '{id}'");
+                _logger.Error(e, $"Failed to remove registration ticket = '{id}'");
             }
         }
 
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
             try
             {
@@ -760,7 +832,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to write registration ticket for ticket = '{ticket.Id}'");
+                _logger.Error(e, $"Failed to write registration ticket with id = '{ticket.Id}'");
             }
         }
 
@@ -792,18 +864,14 @@ namespace HSMServer.DataLayer
 
         private string GetOneValueSensorWriteKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{DateTime.MaxValue:G}_{DateTime.MaxValue.Ticks}";
+            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{DateTime.Now:G}_{DateTime.Now.Ticks}";
         }
         private string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
             return
                 $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime:G}_{putTime.Ticks}";
         }
-        private string GetSensorInfoKey(SensorInfo info)
-        {
-            return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{info.ProductName}_{info.Path}";
-        }
-
+        
         private string GetSensorInfoKey(string productName, string path)
         {
             return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
@@ -829,7 +897,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                //_logger.LogError(e, $"LogError parsing datetime: {str}");
+                //_logger.Error(e, $"Error parsing datetime: {str}");
             }
             //Back compatibility
             str = splitRes.Last();
@@ -839,7 +907,7 @@ namespace HSMServer.DataLayer
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"LogError parsing datetime from prev version: {str}");
+                _logger.Error(e, $"Error parsing datetime from prev version: {str}");
                 return DateTime.MinValue;
             }
         }
@@ -848,21 +916,6 @@ namespace HSMServer.DataLayer
             var timeSpan = (dateTime - DateTime.UnixEpoch);
             return (long)timeSpan.TotalSeconds;
         }
-
-        private IEnumerable<string> ParseProducts(string serversListString)
-        {
-            List<string> result = new List<string>();
-            string[] splitRes = serversListString.Split(";".ToCharArray());
-            result.AddRange(splitRes.Select(srv => srv.Trim()));
-            return result;
-        }
-
-        //private T GetTypedValue<T>(MDBValue value)
-        //{
-        //    byte[] bytes = value.CopyToNewArray();
-        //    string stringVal = Encoding.UTF8.GetString(bytes);
-        //    return JsonSerializer.Deserialize<T>(stringVal);
-        //}
 
         #endregion
     }

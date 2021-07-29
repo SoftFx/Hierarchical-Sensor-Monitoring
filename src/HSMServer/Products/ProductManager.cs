@@ -15,17 +15,17 @@ namespace HSMServer.Products
 {
     public class ProductManager : IProductManager
     {
-        private readonly IDatabaseWorker _database;
+        private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<ProductManager> _logger;
         private readonly IConverter _converter;
         private readonly List<Product> _products;
         private readonly Dictionary<string, List<SensorInfo>> _productSensorsDictionary = new Dictionary<string, List<SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager(IDatabaseWorker database, IConverter converter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseAdapter databaseAdapter, IConverter converter, ILogger<ProductManager> logger)
         {
             _logger = logger;
-            _database = database;
+            _databaseAdapter = databaseAdapter;
             _converter = converter;
             _products = new List<Product>();
             InitializeProducts();
@@ -45,43 +45,25 @@ namespace HSMServer.Products
         //TODO: read products via product info, like users are read now
         private void InitializeProducts()
         {
-            List<string> productNames = _database.GetProductsList();
-            foreach (var productName in productNames)
+            int count = 0;
+            var existingProducts = _databaseAdapter.GetProducts();
+            foreach (var product in existingProducts)
             {
-                var info = _database.GetProductInfo(productName);
-                var sensorPaths = _database.GetSensorsList(productName);
-                List<SensorInfo> sensorInfos = new List<SensorInfo>();
-                foreach (var sensorPath in sensorPaths)
+                lock (_productsLock)
                 {
-                    var existingInfo = _database.GetSensorInfo(productName, sensorPath);
-                    if (existingInfo == null)
-                    {
-                        SensorInfo defaultInfo = _converter.Convert(productName, sensorPath);
-                        sensorInfos.Add(defaultInfo);
-                        Task.Run(() => _database.AddSensor(defaultInfo));
-                        sensorInfos.Add(defaultInfo);
-                    }
-                    else
-                    {
-                        sensorInfos.Add(existingInfo);
-                    }
+                    _products.Add(product);
                 }
-                if (info != null)
+                var sensors = _databaseAdapter.GetProductSensors(product);
+                lock (_dictionaryLock)
                 {
-                    lock (_productsLock)
-                    {
-                        _products.Add(info);
-                    }
+                    _productSensorsDictionary[product.Name] = new List<SensorInfo>();
+                    _productSensorsDictionary[product.Name].AddRange(sensors);
+                }
 
-                    lock (_dictionaryLock)
-                    {
-                        _productSensorsDictionary[productName] = new List<SensorInfo>();
-                        _productSensorsDictionary[productName].AddRange(sensorInfos);
-                    }
-                }
+                ++count;
             }
 
-            if (productNames.Count < 1)
+            if (count < 1)
             {
                 AddDefaultProduct();
             }
@@ -95,10 +77,7 @@ namespace HSMServer.Products
 
         private void AddDefaultProduct()
         {
-            Product product = new Product();
-            product.Name = TextConstants.DefaultProductName;
-            product.Key = TextConstants.DefaultProductKey;
-            product.DateAdded = DateTime.Now;
+            Product product = new Product(TextConstants.DefaultProductName, TextConstants.DefaultProductName, DateTime.Now);
             AddProduct(product);
         }
 
@@ -106,8 +85,7 @@ namespace HSMServer.Products
         {
             try
             {
-                _database.RemoveProductFromList(name);
-                _database.RemoveProductInfo(name);
+                _databaseAdapter.RemoveProduct(name);
                 var product = GetProductByName(name);
                 if (product != null)
                 {
@@ -132,7 +110,7 @@ namespace HSMServer.Products
         {
             string key = KeyGenerator.GenerateProductKey(name);
             _logger.LogInformation($"Created product key = '{key}' for product = '{name}'");
-            Product product = new Product {Key = key, Name = name, DateAdded = DateTime.Now};
+            Product product = new Product(key, name, DateTime.Now);
             AddProduct(product);
         }
 
@@ -140,8 +118,7 @@ namespace HSMServer.Products
         {
             try
             {
-                _database.AddProductToList(product.Name);
-                _database.PutProductInfo(product);
+                _databaseAdapter.AddProduct(product);
                 lock (_productsLock)
                 {
                     _products.Add(product);
@@ -157,6 +134,7 @@ namespace HSMServer.Products
                 _logger.LogError(e, $"Failed to add new product, name = {product.Name}");
             }
         }
+
         public void UpdateProduct(Product product)
         {
             Product currentProduct;
@@ -172,16 +150,11 @@ namespace HSMServer.Products
                 return;
             }
 
-            currentProduct.ExtraKeys = new List<ExtraProductKey>();
-            if (product.ExtraKeys != null && product.ExtraKeys.Any())
-            {
-                currentProduct.ExtraKeys.AddRange(product.ExtraKeys);
-            }
+            currentProduct.Update(product);
 
             Task.Run(() =>
             {
-                _database.RemoveProductInfo(currentProduct.Name);
-                _database.PutProductInfo(currentProduct);
+                _databaseAdapter.UpdateProduct(currentProduct);
             });
         }
         public bool IsSensorRegistered(string productName, string path)
@@ -207,8 +180,7 @@ namespace HSMServer.Products
                 _productSensorsDictionary[productName].Add(newObject);
             }
 
-            Task.Run(() => _database.AddNewSensorToList(productName, newObject.Path));
-            Task.Run(() => _database.AddSensor(newObject));
+            Task.Run(() => _databaseAdapter.AddSensor(newObject));
         }
 
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
@@ -235,8 +207,7 @@ namespace HSMServer.Products
 
             if (needToAdd)
             {
-                Task.Run(() => _database.AddNewSensorToList(productName, newObject.Path));
-                Task.Run(() => _database.AddSensor(newObject));
+                Task.Run(() => _databaseAdapter.AddSensor(newObject));
             }
         }
 
@@ -251,11 +222,31 @@ namespace HSMServer.Products
                 _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo);
             }
 
-            //ThreadPool.QueueUserWorkItem(_ => _database.AddSensor(sensorInfo));
+            //ThreadPool.QueueUserWorkItem(_ => _databaseAdapter.AddSensor(sensorInfo));
             //ThreadPool.QueueUserWorkItem(_ =>
-            //    _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
-            Task.Run(() => _database.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
-            Task.Run(() => _database.AddSensor(sensorInfo));
+            //    _databaseAdapter.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            Task.Run(() => _databaseAdapter.AddSensor(sensorInfo));
+        }
+        public void RemoveSensor(string productName, string path)
+        {
+            try
+            {
+                lock (_dictionaryLock)
+                {
+                    var existingInfo = _productSensorsDictionary[productName].FirstOrDefault(s => s.Path == path);
+                    if (existingInfo != null)
+                    {
+                        _productSensorsDictionary[productName].Remove(existingInfo);
+                    }
+                }
+
+                Task.Run(() => _databaseAdapter.RemoveSensor(productName, path));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
+            }
+            
         }
         public string GetProductKeyByName(string name)
         {

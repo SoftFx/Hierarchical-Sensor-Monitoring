@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Extensions
+﻿namespace HSMDatabase.Extensions
 {
     public static class ByteArrayExtensions
     {
