@@ -21,9 +21,9 @@ namespace HSMServer
         }
 
         public static bool IsViewer(string productKey,
-            List<KeyValuePair<string, ProductRoleEnum>> productsRigths)
+            List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
-            var pair = productsRigths?.FirstOrDefault(x => x.Key.Equals(productKey));
+            var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
             if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductViewer)
                 return true;
 

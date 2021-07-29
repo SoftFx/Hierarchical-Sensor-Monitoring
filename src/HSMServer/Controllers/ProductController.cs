@@ -1,16 +1,19 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.DataLayer.Model;
+using HSMServer.Filters;
+using HSMServer.Keys;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
+using HSMServer.Registration;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.AspNetCore.Authorization;
-using HSMServer.Products;
-using HSMServer.Keys;
-using System;
+using System.Security.Cryptography;
 
 namespace HSMServer.Controllers
 {
@@ -19,22 +22,25 @@ namespace HSMServer.Controllers
     {
         private readonly IMonitoringCore _monitoringCore;
         private readonly IUserManager _userManager;
-        private readonly IProductManager _productManager;
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly IRegistrationTicketManager _ticketManager;
 
         public ProductController(IMonitoringCore monitoringCore, IUserManager userManager,
-            IProductManager productManager)
+            IConfigurationProvider configurationProvider, IRegistrationTicketManager ticketManager)
         {
             _monitoringCore = monitoringCore;
             _userManager = userManager;
-            _productManager = productManager;
+            _ticketManager = ticketManager;
+            _configurationProvider = configurationProvider;
         }
 
+        #region Products
         public IActionResult Index()
         {
             var user = HttpContext.User as User;
 
             List<Product> products = null;
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
                 products = _monitoringCore.GetAllProducts();
             else
                 products = _monitoringCore.GetProducts(user);
@@ -45,22 +51,6 @@ namespace HSMServer.Controllers
                 _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
-        }
-
-        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
-        {
-            var product = _monitoringCore.GetProduct(productKey);
-            var users = _userManager.GetViewers(productKey);
-
-            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
-            if (users != null || !users.Any())
-                foreach (var user in users.OrderBy(x => x.UserName))
-                {
-                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
-                }
-
-            return View(new EditProductViewModel(product, pairs));
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
@@ -86,7 +76,6 @@ namespace HSMServer.Controllers
             _monitoringCore.RemoveProduct(productKey, out string error);
         }
 
-
         [HttpPost]
         public void UpdateProduct([FromBody] ProductViewModel model)
         {
@@ -94,6 +83,27 @@ namespace HSMServer.Controllers
 
             Product product = GetModelFromViewModel(model);
             _monitoringCore.UpdateProduct(HttpContext.User as User, product);
+        }
+
+        #endregion
+
+        #region Edit Product
+
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
+        {
+            var product = _monitoringCore.GetProduct(productKey);
+            var users = _userManager.GetViewers(productKey);
+
+            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
+            if (users != null || users.Any())
+                foreach (var user in users.OrderBy(x => x.UserName))
+                {
+                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
+                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
+                }
+
+            return View(new EditProductViewModel(product, pairs));
         }
 
         [HttpPost]
@@ -155,7 +165,7 @@ namespace HSMServer.Controllers
         public void RemoveUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager.GetUser(Guid.Parse(model.UserId));
-  
+
             var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
@@ -168,7 +178,11 @@ namespace HSMServer.Controllers
             var user = _userManager.GetUser(Guid.Parse(model.UserId));
             var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
-            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
+            //Skip empty corresponding pair
+            if (string.IsNullOrEmpty(role.Key) && role.Value == (ProductRoleEnum)0)
+                return;
+
             user.ProductsRoles.Remove(role);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
@@ -178,6 +192,71 @@ namespace HSMServer.Controllers
 
             _userManager.UpdateUser(user);
 
+        }
+
+        [HttpPost]
+        public void Invite([FromBody] InviteViewModel model)
+        {
+            InviteValidator validator = new InviteValidator();
+            var results = validator.Validate(model);
+            if (!results.IsValid)
+            {
+                TempData[TextConstants.TempDataInviteErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+                return;
+            }
+
+            var ticket = new RegistrationTicket()
+            {
+                Id = Guid.NewGuid(),
+                ExpirationDate = DateTime.UtcNow + TimeSpan.FromMinutes(30),
+                ProductKey = model.ProductKey,
+                Role = model.Role
+            };
+            _ticketManager.AddTicket(ticket);
+
+            var (server, port, login, password, fromEmail) = GetMailConfiguration();
+
+            EmailSender sender = new EmailSender(server,
+                string.IsNullOrEmpty(port) ? null : Int32.Parse(port),
+                login, password, fromEmail, model.Email);
+
+            sender.Send("Invitation link HSM", GetLink(ticket.Id.ToString()));
+        }
+
+        #endregion
+
+        private (string, string, string, string, string) GetMailConfiguration()
+        {
+            var server = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPServer).Value;
+            var port = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPort).Value;
+            var login = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPLogin).Value;
+            var password = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPassword).Value;
+            var fromEmail = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPFromEmail).Value;
+
+            return (server, port, login, password, fromEmail);
+        }
+
+        private string GetLink(string id)
+        {
+            var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+            byte[] keyBytes;
+            if (key == null)
+            {
+                var bytes = new byte[32];
+                RandomNumberGenerator.Fill(bytes);
+
+                _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
+                    AESCypher.ToString(bytes));
+                keyBytes = bytes;
+            }
+            else
+                keyBytes = AESCypher.ToBytes(key.Value);
+
+            var (cipher, nonce, tag) = AESCypher.Encrypt(id, keyBytes);
+
+            return $"{Request.Scheme}://{Request.Host}/" +
+                $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
+                $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
         }
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)

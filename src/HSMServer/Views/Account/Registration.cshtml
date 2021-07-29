@@ -19,16 +19,23 @@
 
         <div class="mb-3">
             <label for="secondPassword" class="form-label">Repeat Password</label>
-            <input type="password" class="form-control" id="secondPassword" name="secondPassword" value="@Model.SecondPassword" style="width: 200px"/>
+            <input type="password" class="form-control" id="secondPassword" name="secondPassword" value="@Model.SecondPassword" style="width: 200px" />
         </div>
+
+        <input id="productKey" name="ProductKey" value="@Model.ProductKey" style="display: none" />
+        <input id="role" name="Role" value="@Model.Role" style="display: none" />
+        <input id="ticketId" name="TicketId" value="@Model.TicketId" style="display: none"/>
 
         <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-user-plus"></i></button>
     </form>
     @if (TempData["ErrorMessage"] != null)
     {
-    <p style="color: red;font-size: large;font-weight:normal">
-        @TempData["ErrorMessage"].ToString()
-    </p>
-        
+        <p style="color: red;font-size: large;font-weight:normal">
+            @TempData["ErrorMessage"].ToString()
+        </p>
+
     }
+
+
 </div>
+

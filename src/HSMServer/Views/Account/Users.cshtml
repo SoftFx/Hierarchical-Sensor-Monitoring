@@ -41,12 +41,24 @@
 </div>
 
 <script>
-    function createData(userName, password, role, products) {
-        return { "Username": userName, "Password": password, "Role": Number(role), "ProductKeys": products }
+    function createData(userName, password, role, isAdmin, products) {
+        return {
+            "Username": userName,
+            "Password": password,
+            "Role": Number(role),
+            "IsAdmin": isAdmin,
+            "ProductKeys": products
+        }
     }
 
     //fix checked attribut
-    $('[id^=createCheck_]').on('click', function () {
+    $('#createIsAdmin').on('click', function () {
+        if (this.checked)
+            this.setAttribute("checked", "checked");
+        else this.removeAttribute("checked");
+    });
+
+    $('[id^=isAdmin_]').on('click', function () {
         if (this.checked)
             this.setAttribute("checked", "checked");
         else this.removeAttribute("checked");
@@ -57,14 +69,9 @@
         username = $('#createName').val();
         password = $('#createPassword').val();
         role = $('#createRole').val();
+        isAdmin = $('#createIsAdmin').is(":checked");
 
-        products = []
-        $('[id^=createCheck_]').each(function () {
-            if ($(this).is(":checked"))
-                products.push(`${$(this).val()}`);
-        });
-
-        var data = createData(username, password, role, products);
+        var data = createData(username, password, role, isAdmin, null);
         console.log(data);
         $.ajax({
             type: 'POST',
@@ -117,14 +124,12 @@
         $('[id^=role_]').attr('disabled', true);
         $('[id^=ok_]').attr('disabled', true);
         $('[id^=cancel_]').attr('disabled', true);
-        $('[id^=check' + username + '_]').attr('disabled', true);
+        $('[id^=isAdmin_]').attr('disabled', true);
 
         $('#role_' + username).removeAttr("disabled");
         $('#ok_' + username).removeAttr("disabled");
         $('#cancel_' + username).removeAttr("disabled");
-        $('[id^=check' + username + '_]').removeAttr("disabled");
-        //$('#accordionButton_' + username).click();
-
+        $('#isAdmin_' + username).removeAttr("disabled");
     });
 
     $('[id^=cancel_]').on('click', function() {
@@ -134,14 +139,9 @@
     $('[id^=ok_]').on('click', function () {
         username = this.id.substring('ok_'.length, this.id.length);
         role = $('#role_' + username).val();
+        isAdmin = $('#isAdmin_' + username).is(":checked");
 
-        products = []
-        $('[id^=check' + username + '_]').each(function () {
-            if ($(this).is(":checked"))
-                products.push(`${$(this).val()}`);
-        });
-
-        var data = createData(username, null, role, products);
+        var data = createData(username, null, role, isAdmin, null);
         $.ajax({
             type: 'POST',
             url: updateAction,

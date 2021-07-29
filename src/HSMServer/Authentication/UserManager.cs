@@ -24,13 +24,13 @@ namespace HSMServer.Authentication
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly string _usersFileName = "users.xml";
         private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager, IDatabaseClass databaseClass, ILogger<UserManager> logger)
+        public UserManager(CertificateManager certificateManager, IDatabaseWorker databaseClass, ILogger<UserManager> logger)
         {
             _logger = logger;
             _certificateManager = certificateManager;
@@ -82,7 +82,8 @@ namespace HSMServer.Authentication
         {
             lock (_accessLock)
             {
-                var existingUser = _users.First(x => x.Id.Equals(user.Id));
+                var existingUser = _users.First(x => x.UserName.Equals(user.UserName,
+                    StringComparison.InvariantCultureIgnoreCase));
                 _users.Remove(existingUser);
 
                 _database.RemoveUser(existingUser);
@@ -120,8 +121,8 @@ namespace HSMServer.Authentication
 
             Task.Run(() => _database.AddUser(user));
         }
-        public void AddUser(string userName, string certificateThumbprint, string certificateFileName, string passwordHash, UserRoleEnum role,
-            List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
+        public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
+            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
         {
             User user = new User
             {
@@ -129,7 +130,7 @@ namespace HSMServer.Authentication
                 UserName = userName,
                 CertificateFileName = certificateFileName,
                 Password = passwordHash,
-                Role = role,
+                IsAdmin = isAdmin,
                 Id = Guid.NewGuid()
             };
 
@@ -212,7 +213,7 @@ namespace HSMServer.Authentication
             List<User> result = new List<User>();
             foreach(var user in _users)
             {
-                if (user.Role == UserRoleEnum.SystemAdmin) continue;
+                if (user.IsAdmin) continue;
                 result.Add(user);
             }
 
@@ -240,7 +241,7 @@ namespace HSMServer.Authentication
             List<User> result = new List<User>();
             foreach(var user in _users)
             {
-                if (user.Role == UserRoleEnum.SystemAdmin) continue;
+                if (user.IsAdmin) continue;
                 result.Add(user);
             }
 
@@ -271,7 +272,7 @@ namespace HSMServer.Authentication
             AddUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
                 CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), UserRoleEnum.SystemAdmin);
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), false);
         }
 
         private List<User> ReadUserFromDatabase()
@@ -284,10 +285,13 @@ namespace HSMServer.Authentication
             List<User> usersFromFile = ParseUsersFile();
             foreach (var user in usersFromFile)
             {
+                if (user.UserName.Equals("default"))
+                    user.IsAdmin = true;
+
                 if (string.IsNullOrEmpty(user.Password))
                 {
-                    AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, HashComputer.ComputePasswordHash(user.UserName),
-                        user.Role);
+                    AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, 
+                        HashComputer.ComputePasswordHash(user.UserName), user.IsAdmin);
                 }
             }
 

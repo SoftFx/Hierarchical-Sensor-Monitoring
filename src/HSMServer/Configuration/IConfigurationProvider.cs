@@ -7,8 +7,12 @@ namespace HSMServer.Configuration
     {
         string ClientAppFolderPath { get; }
         ClientVersionModel ClientVersion { get; }
-        ConfigurationObject CurrentConfigurationObject { get; }
+
+        event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
+
+        void AddConfigurationObject(string name, string value);
         void UpdateConfigurationObject(ConfigurationObject newObject);
-        event EventHandler<ConfigurationObject> ConfigurationObjectUpdated; 
+        ConfigurationObject ReadConfigurationObject(string name);
+        ConfigurationObject ReadOrDefaultConfigurationObject(string name);
     }
 }

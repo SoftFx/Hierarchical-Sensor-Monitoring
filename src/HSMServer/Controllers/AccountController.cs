@@ -10,7 +10,11 @@ using HSMServer.Constants;
 using HSMServer.Model.Validators;
 using System.Linq;
 using HSMServer.Attributes;
+using HSMServer.Filters;
 using HSMServer.Model.ViewModel;
+using HSMServer.Configuration;
+using System;
+using HSMServer.Registration;
 
 namespace HSMServer.Controllers
 {
@@ -18,13 +22,21 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly IRegistrationTicketManager _ticketManager;
 
-        public AccountController(IUserManager userManager)
+        public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
+            IRegistrationTicketManager ticketManager)
         {
             _userManager = userManager;
+            _configurationProvider = configurationProvider;
+            _ticketManager = ticketManager;
         }
 
+        #region Login
+
         [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
         [ActionName(nameof(Index))]
         public IActionResult Index()
         {
@@ -32,19 +44,13 @@ namespace HSMServer.Controllers
         }
 
         [AllowAnonymous]
-        public IActionResult Registration()
-        {
-            return View(new RegistrationViewModel());
-        }
-
-        [AllowAnonymous]
         [Consumes("application/x-www-form-urlencoded")]
         //[ValidateAntiForgeryToken]
-        public async Task<IActionResult> Authenticate([FromForm]LoginViewModel model)
+        public async Task<IActionResult> Authenticate([FromForm] LoginViewModel model)
         {
             LoginValidator validator = new LoginValidator(_userManager);
             var results = validator.Validate(model);
-            if (!results.IsValid) 
+            if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
                 return RedirectToAction("Index", "Home");
@@ -56,42 +62,84 @@ namespace HSMServer.Controllers
             return RedirectToAction("Index", "Home");
         }
 
+        #endregion
+
+        #region Registration
+
+        [AllowAnonymous]
+        [UnauthorizedAccessOnlyFilter]
+        public IActionResult Registration([FromQuery(Name = "Cipher")] string cipher,
+            [FromQuery(Name = "Tag")] string tag, [FromQuery(Name = "Nonce")] string nonce)
+        {
+            var model = new RegistrationViewModel();
+
+            if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
+            {
+                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+                byte[] keyBytes = AESCypher.ToBytes(key.Value);
+
+                var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
+                var ticketId = Guid.Parse(result);
+                var ticket = _ticketManager.GetTicket(ticketId);
+                if (ticket == null)
+                {
+                    return RedirectToAction("Index", "Error", new ErrorViewModel()
+                    {
+                        ErrorText = "Link already used.",
+                        StatusCode = "500"
+                    });
+                }
+
+                if (ticket.ExpirationDate < DateTime.UtcNow)
+                    return RedirectToAction("Index", "Error", new ErrorViewModel()
+                    {
+                        ErrorText = "Link expired.",
+                        StatusCode = "500"
+                    });
+
+                model.ProductKey = ticket.ProductKey;
+                model.Role = ticket.Role;
+                model.TicketId = ticket.Id.ToString();
+            }
+
+            return View(model);
+        }
+
         [AllowAnonymous]
         [Consumes("application/x-www-form-urlencoded")]
-        public async Task<IActionResult> Registrate([FromForm]RegistrationViewModel model)
+        public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
             RegistrationValidator validator = new RegistrationValidator(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return RedirectToAction("Registration", "Account");
+                return View("Registration", model);
+            }
+
+            List<KeyValuePair<string, ProductRoleEnum>> products = null;
+            if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
+            {
+                products = new List<KeyValuePair<string, ProductRoleEnum>>()
+                    { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey,
+                    (ProductRoleEnum)Int32.Parse(model.Role))};
             }
 
             _userManager.AddUser(model.Username, null, null,
-                HashComputer.ComputePasswordHash(model.Password), UserRoleEnum.Guest);
+                HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
+            if (!string.IsNullOrEmpty(model.TicketId))
+                _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
+
             return RedirectToAction("Index", "Home");
         }
 
-        public async Task<IActionResult> Logout()
-        {
-            TempData.Remove(TextConstants.TempDataErrorText);
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Index", "Home");
-        }
+        #endregion
 
-        //public IActionResult GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        //{
-        //    var pagedUsers = _userManager.GetUsersPage(page, pageSize);
+        #region Users
 
-        //    ViewData[TextConstants.ViewDataPageNumber] = page;
-        //    ViewData[TextConstants.ViewDataPageSize] = pageSize;
-
-        //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
-        //}
-        [AuthorizeRole(UserRoleEnum.SystemAdmin)]
+        [AuthorizeIsAdmin(true)]
         public IActionResult Users()
         {
             var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
@@ -110,11 +158,11 @@ namespace HSMServer.Controllers
             UserValidator validator = new UserValidator(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);              
-            
-            else 
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+
+            else
                 _userManager.AddUser(model.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(model.Password), model.Role.Value);
+                HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
         [HttpPost]
@@ -122,14 +170,33 @@ namespace HSMServer.Controllers
         {
             var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
             userViewModel.Password = currentUser.Password;
-            if (userViewModel.Role == null) 
-                userViewModel.Role = currentUser.Role;
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
+            user.Id = currentUser.Id;
 
             _userManager.UpdateUser(user);
         }
+
+        #endregion
+
+        public async Task<IActionResult> Logout()
+        {
+            TempData.Remove(TextConstants.TempDataErrorText);
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Index", "Home");
+        }
+
+        //public IActionResult GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        //{
+        //    var pagedUsers = _userManager.GetUsersPage(page, pageSize);
+
+        //    ViewData[TextConstants.ViewDataPageNumber] = page;
+        //    ViewData[TextConstants.ViewDataPageSize] = pageSize;
+
+        //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
+        //}
+
 
         private async Task Authenticate(string login, bool keepLoggedIn)
         {
@@ -141,7 +208,7 @@ namespace HSMServer.Controllers
             properties.IsPersistent = keepLoggedIn;
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
                 properties);
-  
+
         }
 
         private User GetModelFromViewModel(UserViewModel userViewModel)
@@ -149,8 +216,8 @@ namespace HSMServer.Controllers
             User user = new User()
             {
                 UserName = userViewModel.Username,
-                Password = userViewModel.Password,//HashComputer.ComputePasswordHash(userViewModel.Password),
-                Role = userViewModel.Role.Value
+                Password = userViewModel.Password,
+                IsAdmin = userViewModel.IsAdmin
             };
             return user;
         }

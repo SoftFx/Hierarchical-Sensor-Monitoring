@@ -27,6 +27,16 @@
       "provider": "cdnjs",
       "library": "plotly.js@2.1.0",
       "destination": "wwwroot/js/plotly.js/"
+    },
+    {
+      "provider": "cdnjs",
+      "library": "jstree@3.3.11",
+      "destination": "wwwroot/js/jstree/"
+    },
+    {
+      "provider": "cdnjs",
+      "library": "clipboard.js@2.0.8",
+      "destination": "wwwroot/js/clipboard.js/"
     }
   ]
 }

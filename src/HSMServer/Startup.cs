@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using FluentValidation.AspNetCore;
 using HSMServer.Cache;
+using HSMServer.Registration;
 
 namespace HSMServer
 {
@@ -58,11 +59,12 @@ namespace HSMServer
                 hubOptions.EnableDetailedErrors = true;
             });
 
-            services.AddSingleton<IDatabaseClass, LevelDBDatabaseClass>();
+            services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
+            services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();

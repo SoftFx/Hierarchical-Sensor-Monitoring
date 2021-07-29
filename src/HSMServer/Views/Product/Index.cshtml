@@ -5,7 +5,7 @@
 
 @{ ViewData["Title"] = "Products"; }
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
@@ -20,8 +20,11 @@
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
         if (errorText !== undefined) {
             let errorSpan = document.getElementById('new_product_name_span');
-            errorSpan.textContent = errorText;//.slice(0, errorText.length - 5);
-            errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+            if (errorSpan != undefined) {
+                errorSpan.textContent = errorText;//.slice(0, errorText.length - 5);
+                errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+
+            }
         }
     </script>
 </div>

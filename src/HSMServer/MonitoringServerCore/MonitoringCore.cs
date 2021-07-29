@@ -71,7 +71,7 @@ namespace HSMServer.MonitoringServerCore
 
         //#endregion
 
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseWorker _database;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
@@ -82,7 +82,7 @@ namespace HSMServer.MonitoringServerCore
         private readonly IValuesCache _valuesCache;
         private readonly IConverter _converter;
 
-        public MonitoringCore(IDatabaseClass database, IUserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseWorker database, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache,
             IConverter converter, ILogger<MonitoringCore> logger)
         {
@@ -526,7 +526,7 @@ namespace HSMServer.MonitoringServerCore
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
             //Show available products only
-            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.Role))
+            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.IsAdmin))
                 productsList = productsList.Where(p => 
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
@@ -714,6 +714,8 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 productName = _productManager.GetProductNameByKey(productKey);
+                var product = _productManager.GetProductByName(productName);
+                RemoveProductFromUsers(product);
                 _productManager.RemoveProduct(productName);
                 result = true;
             }
@@ -724,6 +726,24 @@ namespace HSMServer.MonitoringServerCore
                 _logger.LogError(ex, $"Failed to remove product name = {productName}");
             }
             return result;
+        }
+
+        private void RemoveProductFromUsers(Product product)
+        {
+            var usersToEdit = new List<User>();
+            foreach (var user in _userManager.Users)
+            {
+                var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
+                if (count == 0)
+                    continue;
+                
+                usersToEdit.Add(user);
+            }
+
+            foreach (var userToEdt in usersToEdit)
+            {
+                _userManager.UpdateUser(userToEdt);
+            }
         }
 
         public void UpdateProduct(User user, Product product)
@@ -744,7 +764,7 @@ namespace HSMServer.MonitoringServerCore
             _certificateManager.InstallClientCertificate(clientCert);
             _certificateManager.SaveClientCertificate(clientCert, fileName);
             _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), UserRoleEnum.SystemAdmin);
+                HashComputer.ComputePasswordHash(commonName), true);
             result.Item1 = clientCert;
             result.Item2 = CertificatesConfig.CACertificate;
             return result;

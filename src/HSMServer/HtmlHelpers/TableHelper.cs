@@ -11,6 +11,7 @@ using System.Text.Json;
 using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.DataLayer.Model;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -38,7 +39,8 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>#</th>" +
                 "<th scope='col'>Username</th>" +
                 "<th scope='col'>Password</th>" +
-                "<th scope='col'>Role</th>" + 
+                "<th dcope='col'>IsAdmin</th>" +
+                "<th scope='col'>Products</th>" +
                 "<th scope='col'>Action</th>");
 
             result.Append("<tbody>");
@@ -46,12 +48,13 @@ namespace HSMServer.HtmlHelpers
             if (users == null || users.Count == 0) return result.ToString();
 
             //create 
-            if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
+            if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
             {
                 result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
                 "<th><input id='createPassword' type='password' class='form-control'/></th>" +
-                $"<th>{CreateRoleSelect()}</th>" +
+                "<th><input id='createIsAdmin' type='checkbox' class='form-check-input' style='margin-left: 0px'/></th>" +
+                "<th>---</th>" +
                 "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                 $"<i class='fas fa-plus'></i></button></th></tr>");
             }
@@ -63,13 +66,18 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{userItem.Username}</td>" +
                     $"<td>**************</td>");
 
-                if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
-                    result.Append($"<td>{CreateUserRoleSelect(userItem.Username, userItem.Role.Value)}</td>");
-                else
-                    result.Append($"<td>{userItem.Role}</td>");
+                result.Append($"<td><input id='isAdmin_{userItem.Username}' type='checkbox' class='form-check-input' " +
+                    $"disabled value='{userItem.IsAdmin}' style='margin-left: 0px' ");
+
+                if (userItem.IsAdmin)
+                    result.Append($"checked");
+
+                result.Append("/></td>");    
+
+                result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles)}</td>");
 
                 result.Append("<td style='width: 25%'>");
-                if (UserRoleHelper.IsUserCRUDAllowed(user.Role))
+                if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
                     result.Append($"<button style='margin-left: 5px' id='delete_{userItem.Username}' " +
                         $"type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button>");
@@ -94,31 +102,26 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateRoleSelect()
+        private static string CreateUserProductsList(List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
             StringBuilder result = new StringBuilder();
 
-            result.Append("<select class='form-select' id='createRole'>");
+            if (productsRights == null || !productsRights.Any())
+                return "---";
 
-            foreach (UserRoleEnum role in Enum.GetValues(typeof(UserRoleEnum)))
-                result.Append($"<option value='{(int)role}'>{role}</option>");
+            var response = _client.GetAsync(
+                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetAllProducts)}").Result;
 
-            result.Append("</select>");
-
-            return result.ToString();
-        }
-
-        private static string CreateUserRoleSelect(string username, UserRoleEnum userRole)
-        {
-            StringBuilder result = new StringBuilder();
-            result.Append($"<select class='form-select' disabled id='role_{username}'>");
-
-            foreach (UserRoleEnum role in Enum.GetValues(typeof(UserRoleEnum)))
+            List<Product> products = null;
+            if (response.IsSuccessStatusCode)
             {
-                if (role == userRole)
-                    result.Append($"<option selected value='{(int)role}'>{role}</option>");
-                else
-                    result.Append($"<option value='{(int)role}'>{role}</option>");
+                products = response.Content.ReadAsAsync<List<Product>>().Result;
+            }
+
+            foreach (var right in productsRights)
+            {
+                var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key))?.Name;
+                result.AppendLine($"{name ?? right.Key} ({right.Value})<br>");
             }
 
             return result.ToString();
@@ -145,14 +148,14 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role) 
+            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) 
                 || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
                 result.Append("<th scope='col'>Action</th></tr>");
 
             result.Append("</thead><tbody>");
            
             //create 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
                 result.Append("<tr><th>0</th>" +
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
@@ -177,13 +180,13 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.ManagerName}</td>");
 
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.Role) || 
+                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.Role))
+                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
                     result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
                         $"type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button>");
@@ -307,8 +310,9 @@ namespace HSMServer.HtmlHelpers
 
             foreach (var usedUser in usedUsers)
             {
-                var user = users.First(u => u.UserName.Equals(usedUser.Username));
-                users.Remove(user);
+                var user = users.FirstOrDefault(u => u.UserName.Equals(usedUser.Username));
+                if (user != null)
+                    users.Remove(user);
             }
         }
         private static string CreateProductRoleSelect()
