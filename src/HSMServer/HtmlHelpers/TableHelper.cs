@@ -48,7 +48,7 @@ namespace HSMServer.HtmlHelpers
             if (users == null || users.Count == 0) return result.ToString();
 
             //create 
-            if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
+            if (UserRoleHelper.IsUserCRUDAllowed(user))
             {
                 result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
@@ -77,7 +77,7 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles)}</td>");
 
                 result.Append("<td style='width: 25%'>");
-                if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
+                if (UserRoleHelper.IsUserCRUDAllowed(user))
                     result.Append($"<button style='margin-left: 5px' id='delete_{userItem.Username}' " +
                         $"type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button>");
@@ -148,14 +148,14 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) 
+            if (UserRoleHelper.IsProductCRUDAllowed(user) 
                 || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
                 result.Append("<th scope='col'>Action</th></tr>");
 
             result.Append("</thead><tbody>");
            
             //create 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
+            if (UserRoleHelper.IsProductCRUDAllowed(user))
                 result.Append("<tr><th>0</th>" +
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
@@ -180,13 +180,13 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.ManagerName}</td>");
 
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) || 
+                if (UserRoleHelper.IsProductCRUDAllowed(user) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
+                if (UserRoleHelper.IsProductCRUDAllowed(user))
                     result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
                         $"type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button>");

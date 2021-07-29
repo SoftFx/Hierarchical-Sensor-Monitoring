@@ -527,7 +527,7 @@ namespace HSMServer.MonitoringServerCore
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
             //Show available products only
-            if (!UserRoleHelper.IsAllProductsTreeAllowed(user.IsAdmin))
+            if (!UserRoleHelper.IsAllProductsTreeAllowed(user))
                 productsList = productsList.Where(p => 
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
