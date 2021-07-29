@@ -8,7 +8,7 @@ namespace HSMDataCollector.PublicInterface
     /// </summary>
     /// <typeparam name="U">Func parameter type</typeparam>
     /// <typeparam name="T">Result value type</typeparam>
-    public interface IParamsFuncSensor<U, out T>
+    public interface IParamsFuncSensor<T, U>
     {
         /// <summary>
         /// Gets the function, that is invoked within the specified interval

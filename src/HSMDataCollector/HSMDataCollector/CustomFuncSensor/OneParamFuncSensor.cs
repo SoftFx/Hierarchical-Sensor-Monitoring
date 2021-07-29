@@ -8,7 +8,7 @@ using Logger = HSMDataCollector.Logging.Logger;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal class OneParamFuncSensor<T, U> : CustomFuncSensorBase, IParamsFuncSensor<U, T>
+    internal class OneParamFuncSensor<T, U> : CustomFuncSensorBase, IParamsFuncSensor<T, U>
     {
         private readonly Func<List<U>, T> _funcToInvoke;
         private readonly List<U> _paramsList;
