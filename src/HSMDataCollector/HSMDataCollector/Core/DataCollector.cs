@@ -144,8 +144,8 @@ namespace HSMDataCollector.Core
             string path = $"{TextConstants.PerformanceNodeName}/Service alive";
             _logger?.Info($"Initialize {path} sensor...");
 
-            BoolFuncSensor aliveSensor = new BoolFuncSensor(() => true, path, _productKey,
-                _dataQueue as IValuesQueue);
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, "",
+                TimeSpan.FromSeconds(15), SensorType.BooleanSensor, () => true,_isLogging);
             AddNewSensor(aliveSensor, path);
         }
 
