@@ -530,7 +530,7 @@ namespace HSMDataCollector.Core
             }
 
             OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _productKey, _dataQueue as IValuesQueue, description,
-                interval, SensorType.StringSensor, function, _isLogging);
+                interval, GetSensorType(typeof(T)), function, _isLogging);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -545,12 +545,24 @@ namespace HSMDataCollector.Core
             }
 
             NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _productKey, _dataQueue as IValuesQueue, description,
-                interval, SensorType.StringSensor, function, _isLogging);
+                interval, GetSensorType(typeof(T)), function, _isLogging);
             AddNewSensor(sensor, path);
             return sensor;
         }
 
-        
+        private SensorType GetSensorType(Type type)
+        {
+            if (type == typeof(int))
+                return SensorType.IntSensor;
+
+            if (type == typeof(double))
+                return SensorType.DoubleSensor;
+
+            if (type == typeof(bool))
+                return SensorType.BooleanSensor;
+
+            return SensorType.StringSensor;
+        }
 
         #endregion
         public int GetSensorCount()
