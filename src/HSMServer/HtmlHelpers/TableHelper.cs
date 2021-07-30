@@ -413,6 +413,8 @@ namespace HSMServer.HtmlHelpers
             if (sensorHistory.Count == 0)
                 return string.Empty;
 
+            sensorHistory.Reverse();
+
             var type = sensorHistory[0].SensorType;
             switch (type)
             {

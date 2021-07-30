@@ -1,4 +1,4 @@
-@using HSMServer.Constants
+﻿@using HSMServer.Constants
 @using HSMServer.HtmlHelpers
 @model HSMServer.Model.ViewModel.TreeViewModel
 
@@ -7,6 +7,10 @@
 }
 <script>
     var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
+    var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
+    var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
+    var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
+    var updateTree = "@Html.Raw(Url.Action(ViewConstants.UpdateTreeAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
@@ -61,6 +65,9 @@
 
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
 <script src="/js/plotting.js"></script>
+<script src="~/js/file.js"></script>
+<script src="~/js/tree.js"></script>
+<script src="~/js/history.js"></script>
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
 
@@ -78,117 +85,15 @@
 
 <div class="container">
     <div id="mainContainer" class="row">
-        @ViewHelper.CreateTreeWithLists(Model)
+        <div id="treeContainer">@ViewHelper.CreateTree(Model)</div>
+
+        <div id="listContainer">@ViewHelper.CreateFullLists(Model)</div>
     </div>
     <hr />
 </div>
 
 <script>
-    //Add event listeners to buttons
-    function initializeDataHistoryRequests() {
-        $(".accordion-button").on("click", function () {
-            id = this.id;
-            selected = id;
-            splitResults = id.split('_');
-            product = splitResults[0];
-            path = id.substring(product.length + 1);
-            totalCount = getCountForId(id);
-            type = document.getElementById("sensor_type_" + id).value;
-
-            if (type !== "3" && type !== "6" && type !== "7") {
-                initializeGraph(id, product, path, type, totalCount, rawHistoryAction);    
-            }
-            initializeHistory(product, path, totalCount, historyAction);
-        });
-
-        $('[id^="reload_"]').on("click",
-            function () {
-                id = this.id.substring("reload_".length, this.id.length);
-                splitResults = id.split('_');
-                product = splitResults[0];
-                path = id.substring(product.length + 1);
-                totalCount = getCountForId(id);
-
-                type = document.getElementById("sensor_type_" + id).value;
-                //var graphVisible = $('#graph_' + product + "_" + path).css("display") !== "none";
-                //if (graphVisible) {
-                //    initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
-                //}
-                //else {
-                //    initializeHistory(product, path, totalCount, historyAction);
-                //}
-                if (type !== "3" && type !== "6" && type !== "7") {
-                    initializeGraph(id, product, path, type, totalCount, rawHistoryAction);    
-                }
-                initializeHistory(product, path, totalCount, historyAction);
-            });
-
-        //$('[id^="button_graph_"]').on("click",
-        //    function () {
-        //        id = this.id.substring("button_graph_".length, this.id.length);
-        //        splitResults = id.split('_');
-        //        product = splitResults[0];
-        //        path = id.substring(product.length + 1, id.length - 2);
-        //        totalCount = $('#inputCount_' + id).val();
-        //        type = splitResults[splitResults.length - 1];
-        //        noNumberId = id.substring(0, id.length - 2);
-
-        //        initializeGraph(noNumberId, product, path, type, totalCount, rawHistoryAction);
-        //    });
-
-        $('[id^="button_view"]').on("click",
-            function () {
-                id = this.id.substring("button_view".length, this.id.length);
-
-                //console.log(id);
-                let splitRes = id.split('_');
-                let product = splitRes[1];
-                let fileName = splitRes[splitRes.length - 1];
-                let path = id.substring(product.length + 2, id.length - fileName.length - 1);
-
-                //window.open(getFileAction + "?Product=" + product + "&Path=" + path, '_blank');
-                viewFile(product, path, fileName, viewFileAction);
-            }
-        );
-
-        $('[id^="button_download"]').on("click",
-            function () {
-                id = this.id.substring("button_download".length, this.id.length);
-
-                let splitRes = id.split('_');
-                let product = splitRes[1];
-                let fileName = splitRes[splitRes.length - 1];
-                let path = id.substring(product.length + 2, id.length - fileName.length - 1);
-
-                window.location.href = getFileAction + "?Product=" + product + "&Path=" + path;
-            }
-        );
-    }
-</script>
-
-<script>
-    //Mime types map
-    const mimeTypesMap = new Map();
-    mimeTypesMap.set('html', 'text/html');
-    mimeTypesMap.set('pdf', 'application/pdf');
-</script>
-<script>
-    //Sub-methods
-
-    function getCountForId(id) {
-        let inputCount = $('#inputCount_' + id).val();
-        if (inputCount === undefined) {
-
-            inputCount = 10;
-        }
-
-        return inputCount;
-    }
-</script>
-<script>
-    //Tree functionality
     initializeTree();
-
     initializeDataHistoryRequests();
 
     const hubConnection = new signalR.HubConnectionBuilder()
@@ -199,69 +104,110 @@
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
 
-    hubConnection.on('SendSensorUpdates', function (newModel) {
-        if (newModel == undefined) return;
+    hubConnection.on('SendSensorUpdates', function (sensors) {
+        if (sensors == undefined) return;
 
+        //update tree
         $.ajax({
             type: 'POST',
-            data: JSON.stringify(newModel),
-            url: urlAction,
+            data: JSON.stringify(sensors),
+            url: updateTree,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (data) {
+        }).done(function (treeData) {
             var node = $('#jstree').jstree().get_selected(true)[0];
-            var selectedHistory = $('[class*=accordion-collapse][class*=show]')[0];
-            if (selectedHistory !== undefined && selectedHistory != undefined) {
-                let selectedId = selectedHistory.id;
-                var newStr = selectedId.slice("collapse_".length, selectedId.length);
-                selectedHistory = newStr;
+
+            treeData = treeData.replace('{"value":"', '');
+            treeData = treeData.slice(0, treeData.length - 2);
+            treeData = treeData.replaceAll("\\", "");
+
+            $('#treeContainer').empty();
+            $('#treeContainer').append(treeData);
+
+            $('#jstree').jstree();
+            if (node !== undefined && node != undefined) {
+                $('#jstree').jstree('select_node', node.id);
             }
-            //console.log('selected history item id: ', selectedHistory);
+            initializeClickTree();
+        });
 
-            data = data.replace('{"value":"', '');//fix sometime
-            data = data.slice(0, data.length - 2);
-            data = data.replaceAll("\\", "");
+        var selectedHistory = $('[class*=accordion][style*="display: block;"]')[0];
+        var listId = selectedHistory.id;
 
-            $("#mainContainer").empty();
-            $("#mainContainer").append(data);
+        //removing invisible lists
+        $('[id^="list_"][style*="display: none;"]').each(function (index) {
+            this.remove();
+        });
 
-            initializeTree();
+        //update invisible lists
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(sensors),
+            url: updateLists + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (listsData) {
+            listsData = listsData.replace('{"value":"', '');
+            listsData = listsData.slice(0, listsData.length - 2);
+            listsData = listsData.replaceAll("\\", "");
+
+            $('#listContainer').append(listsData);
 
             initializeDataHistoryRequests();
-
-            openSensorHistory(selectedHistory);
-
-            if (node !== undefined && node != undefined) {
-                $('#list_' + node.id).css('display', 'block');
-                $('#jstree').jstree('select_node', node.id);
-                $('#noData').css('display', 'none');
-                $('#list_sensors_header').css('display', 'block');
-            }
-            //console.log(selectedHistory);
-
-
-            $('#updateTime').empty();
-            $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-
-            $("#state").empty();
-            $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-
-
         });
+
+        //update selected list
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(sensors),
+            url: updateSelectedList + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (listsData) {
+            var array = JSON.parse(listsData);
+            for (let i = 0; i < array.length; i++) {
+                var id = array[i].id.substring('list_'.length, array[i].id.length);
+
+                $('#value_' + id).empty().append(array[i].value);
+                $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                $('#status_' + id).removeClass('tree-icon-unknown ' +
+                    'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                $('#status_' + id).addClass(array[i].status);
+
+                var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                $('#reload_' + selectedAccordion.attr('id')).click();
+            }
+        });
+
+        //add new sensors
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(sensors),
+            url: addNewSensors + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (sensorsData) {
+            sensorsData = sensorsData.replace('{"value":"', '');
+            sensorsData = sensorsData.slice(0, sensorsData.length - 2);
+            sensorsData = sensorsData.replaceAll("\\", "");
+
+            $('#' + listId).append(sensorsData); 
+        });
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+        $("#state").empty();
+        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+        
     });
-
-    function openSensorHistory(idToOpen) {
-        if (idToOpen === undefined) {
-            return;
-        }
-        console.log(selected);
-        $('#' + selected).click();
-
-        //let button = document.getElementById(idToOpen);
-        //button.click();
-    }
 
     hubConnection.onclose(error => {
         $("#state").empty();
@@ -271,159 +217,4 @@
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
     });
-
-    function initializeTree() {
-        $('#jstree').jstree();
-
-        $('#updateTime').empty();
-        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-
-        $('#jstree').on('activate_node.jstree', function (e, data) {
-            if (data == undefined || data.node == undefined || data.node.id == undefined)
-                return;
-            //alert('clicked node: ' + data.node.id);
-
-            $('[id^="list_"]').css("display", "none"); //start with
-
-            if (document.getElementById('list_' + data.node.id) == null) {
-                $('#list_sensors_header').css('display', 'none');
-                $('#noData').css('display', 'block');
-            }
-            else {
-                $('#list_sensors_header').css('display', 'block');
-                $('#noData').css('display', 'none');
-            }
-
-            $('#list_' + data.node.id).css('display', 'block');
-        });
-    }
-</script>
-<script>
-    //graphs functionality
-
-    function initializeGraph(id, product, path, type, totalCount, rawHistoryAction) {
-        if (totalCount == undefined)
-            totalCount = 10;
-
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(data(product, path, totalCount)),
-            url: rawHistoryAction,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (data) {
-
-            //$('#values_'+id).css('display', 'none');
-
-            let graphDivId = "graph_" + id;
-            //$('#' + graphDivId).css('display', 'block');
-
-            displayGraph(data, type, graphDivId, path);
-        });
-    }
-</script>
-<script>
-    //request history functionality
-    function data(product, path, totalCount) {
-        return { "Path": path, "Product": product, "TotalCount": totalCount };
-    }
-
-    function initializeHistory(product, path, totalCount, historyAction) {
-        if (totalCount == undefined)
-            totalCount = 10;
-
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(data(product, path, totalCount)),
-            url: historyAction,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (data) {
-            //console.log(data);
-
-            data = data.replace('{"value":"', ''); //fix sometime
-            data = data.replace('"}', '');
-
-            //console.log(`#values_${product}_${path}`);
-
-            $(`#values_${product}_${path}`).empty();
-            //console.log(`#values_${product}_${path}`);
-            $(`#values_${product}_${path}`).append(data);
-        });
-    }
-</script>
-<script>
-    //files functionality
-    function getMimeType(fileName) {
-        let extension = getExtensionFromName(fileName);
-        let fileType = mimeTypesMap.get(extension);
-        if (fileType === undefined) {
-            fileType = "text/html";
-        }
-        return fileType;
-    }
-
-    function getExtensionFromName(fileName) {
-        let dotIndex = fileName.indexOf('.');
-        if (dotIndex === -1) {
-            return fileName;
-        }
-        return fileName.substring(dotIndex + 1, fileName.length);
-    }
-
-
-    //function getFileName(product, path, fileName) {
-    //    let newDate = new Date();
-    //    let date = newDate.toLocaleDateString("ru-RU");
-    //    let time = newDate.toLocaleTimeString("ru-Ru").replace(':', '.');
-    //    let dotIndex = fileName.indexOf('.');
-    //    //has dot and does not start from dot
-    //    if (dotIndex > 0) {
-    //       return fileName;
-
-    //    }
-
-    //    if (dotIndex === 0) {
-    //        return product + "_" + path + "_" + date + "_" + time + fileName;
-    //    }
-    //    return product + "_" + path + "_" + date + "_" + time + "." + fileName;
-    //}
-
-    function viewFile(product, path, fileName, viewFileAction) {
-        let fileType = getMimeType(fileName);
-        //console.log(fileType);
-        //var xhr = new XMLHttpRequest();
-        //xhr.open('POST', viewFileAction, true);
-        //xhr.responseType = 'blob';
-        //xhr.onload = function () {
-        //    let blob = new Blob([this.response], { type: fileType });
-        //    console.log(blob);
-        //    let url = window.URL.createObjectURL(blob);
-        //    window.open(url);
-        //}
-        //xhr.send(JSON.stringify(fileData(product, path)));
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(fileData(product, path)),
-            url: viewFileAction,
-            cache: false,
-            contentType: "application/json",
-            success: function (response) {
-                if (fileType === undefined) {
-                    fileType = "text/html";
-                }
-                let blob = new Blob([response], { type: fileType });
-                let url = window.URL.createObjectURL(blob);
-                window.open(url);
-            }
-        });
-    }
-
-    function fileData(product, path) {
-        return { "Product": product, "Path": path };
-    }
 </script>

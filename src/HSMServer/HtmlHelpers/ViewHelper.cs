@@ -11,14 +11,29 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ViewHelper
     {
-        public static HtmlString CreateTreeWithLists(TreeViewModel model)
+        //public static HtmlString CreateTreeWithLists(TreeViewModel model)
+        //{
+        //    StringBuilder result = new StringBuilder();
+
+        //    result.Append(TreeHelper.CreateTree(model));
+        //    result.Append(ListHelper.CreateFullLists(model));
+
+        //    return new HtmlString(result.ToString());
+        //}
+
+        public static HtmlString CreateTree(TreeViewModel model)
         {
-            StringBuilder result = new StringBuilder();
+            return new HtmlString(TreeHelper.CreateTree(model).ToString());
+        }
 
-            result.Append(TreeHelper.CreateTree(model));
-            result.Append(ListHelper.CreateFullLists(model));
+        public static HtmlString CreateFullLists(TreeViewModel model)
+        {
+            return new HtmlString(ListHelper.CreateFullLists(model));
+        }
 
-            return new HtmlString(result.ToString());
+        public static HtmlString CreateNotSelectedLists(string selectedPath, TreeViewModel model)
+        {
+            return new HtmlString(ListHelper.CreateNotSelectedLists(selectedPath, model));
         }
 
         public static HtmlString CreateProductList(ClaimsPrincipal claims, List<ProductViewModel> products)
