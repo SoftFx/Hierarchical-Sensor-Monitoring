@@ -11,7 +11,6 @@ namespace HSMDataCollector.Base
         protected readonly string ProductKey;
         protected readonly string Description;
         private readonly IValuesQueue _queue;
-
         protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
         {
             _queue = queue;

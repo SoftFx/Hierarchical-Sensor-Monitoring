@@ -1,6 +1,10 @@
-﻿using HSMServer.ApiControllers;
+﻿using HSMCommon.Model.SensorsData;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.ApiControllers;
 using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.DataLayer.Model;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -8,10 +12,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.DataLayer.Model;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -48,7 +48,7 @@ namespace HSMServer.HtmlHelpers
             if (users == null || users.Count == 0) return result.ToString();
 
             //create 
-            if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
+            if (UserRoleHelper.IsUserCRUDAllowed(user))
             {
                 result.Append("<tr><th>0</th>" +
                 "<th><input id='createName' type='text' class='form-control'/></th>" +
@@ -77,13 +77,13 @@ namespace HSMServer.HtmlHelpers
                 result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles)}</td>");
 
                 result.Append("<td style='width: 25%'>");
-                if (UserRoleHelper.IsUserCRUDAllowed(user.IsAdmin))
+                if (UserRoleHelper.IsUserCRUDAllowed(user))
                     result.Append($"<button style='margin-left: 5px' id='delete_{userItem.Username}' " +
-                        $"type='button' class='btn btn-secondary' title='delete'>" +
-                        $"<i class='fas fa-trash-alt'></i></button>");
+                        "type='button' class='btn btn-secondary' title='delete'>" +
+                        "<i class='fas fa-trash-alt'></i></button>");
 
                 result.Append($"<button style='margin-left: 5px' id='change_{userItem.Username}' " +
-                    $"type='button' class='btn btn-secondary' title='change'>" +
+                    "type='button' class='btn btn-secondary' title='change'>" +
                     "<i class='fas fa-user-edit'></i></button>" +
 
                     $"<button disabled style='margin-left: 5px' id='ok_{userItem.Username}' " +
@@ -148,14 +148,14 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) 
+            if (UserRoleHelper.IsProductCRUDAllowed(user) 
                 || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
                 result.Append("<th scope='col'>Action</th></tr>");
 
             result.Append("</thead><tbody>");
            
             //create 
-            if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
+            if (UserRoleHelper.IsProductCRUDAllowed(user))
                 result.Append("<tr><th>0</th>" +
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
@@ -180,13 +180,13 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.ManagerName}</td>");
 
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin) || 
+                if (UserRoleHelper.IsProductCRUDAllowed(user) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
                     $"type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user.IsAdmin))
+                if (UserRoleHelper.IsProductCRUDAllowed(user))
                     result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
                         $"type='button' class='btn btn-secondary' title='delete'>" +
                         $"<i class='fas fa-trash-alt'></i></button>");
@@ -413,6 +413,8 @@ namespace HSMServer.HtmlHelpers
             if (sensorHistory.Count == 0)
                 return string.Empty;
 
+            sensorHistory.Reverse();
+
             var type = sensorHistory[0].SensorType;
             switch (type)
             {
@@ -570,6 +572,61 @@ namespace HSMServer.HtmlHelpers
             }
 
             sb.Append("</tbody>");
+            return sb.ToString();
+        }
+
+        #endregion
+
+        #region Configuration object
+
+        public static string CreateConfigurationObjectsTable(List<ConfigurationObjectViewModel> configurationObjects)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.Append("<div style='margin: 10px'>" +
+                          "<div class='row justify-content-start'><div class='col-auto'>" +
+                          "<h5 style='margin: 10px 20px 10px;'>Configuration parameters</h5></div></div></div>");
+
+            sb.Append("<div class='col-xxl'>");
+            //table template
+            sb.Append("<table class='table table-striped'><thead><tr>" +
+                          "<th scope='col'>#</th>" +
+                          "<th scope='col'>Parameter name</th>" +
+                          "<th scope='col'>Parameter value</th>" +
+                          "<th scope='col'>Action</th>");
+
+            sb.Append("<tbody>");
+
+            for (int i = 0; i < configurationObjects.Count; ++i)
+            {
+                sb.Append($"<tr><th scope='row'>{i}</th><td>{configurationObjects[i].Name}</td>" +
+                          $"<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
+                          $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
+
+                if (configurationObjects[i].IsDefault)
+                {
+                    sb.Append("<label class='default-text-field'>default</label>");
+                }
+
+                sb.Append("</div></td><td>");
+
+                if (!configurationObjects[i].IsDefault)
+                {
+                    sb.Append($"<button id='reset_{configurationObjects[i].Name}' style='margin-left: 5px' " +
+                              "type='button' class='btn btn-secondary' title='reset value to default'>" +
+                              "<i class='fas fa-undo-alt'></i></button>");
+                }
+
+                sb.Append($"<button disabled style='margin-left: 5px' id='ok_{configurationObjects[i].Name}' " +
+                          "type='button' class='btn btn-secondary' title='ok'>" +
+                          "<i class='fas fa-check'></i></button>" +
+
+                          $"<button disabled style='margin-left: 5px' id='cancel_{configurationObjects[i].Name}' " +
+                          "type='button' class='btn btn-secondary' title='revert changes'>" +
+                          "<i class='fas fa-times'></i></button></td></tr>");
+            }
+
+            sb.Append("</tbody");
             return sb.ToString();
         }
 

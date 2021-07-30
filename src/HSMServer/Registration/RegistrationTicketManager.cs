@@ -6,28 +6,28 @@ namespace HSMServer.Registration
 {
     public class RegistrationTicketManager : IRegistrationTicketManager
     {
-        private readonly IDatabaseWorker _databaseWorker;
+        private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<RegistrationTicketManager> _logger;
-        public RegistrationTicketManager(IDatabaseWorker databaseWorker, 
+        public RegistrationTicketManager(IDatabaseAdapter databaseAdapter, 
             ILogger<RegistrationTicketManager> logger)
         {
-            _databaseWorker = databaseWorker;
+            _databaseAdapter = databaseAdapter;
             _logger = logger;
         }
 
         public RegistrationTicket GetTicket(Guid id)
         {
-            return _databaseWorker.ReadRegistrationTicket(id);
+            return _databaseAdapter.ReadRegistrationTicket(id);
         }
 
         public void AddTicket(RegistrationTicket ticket)
         {
-            _databaseWorker.WriteRegistrationTicket(ticket);
+            _databaseAdapter.WriteRegistrationTicket(ticket);
         }
 
         public void RemoveTicket(Guid id)
         {
-            _databaseWorker.RemoveRegistrationTicket(id);
+            _databaseAdapter.RemoveRegistrationTicket(id);
         }
     }
 }
