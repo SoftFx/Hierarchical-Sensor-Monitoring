@@ -43,6 +43,7 @@ namespace HSMServer.Constants
                 MaxPathLength => DefaultMaxPathLength.ToString(),
                 SensorExpirationTime => DefaultExpirationTime.ToString(),
                 ServerCertificatePassword => string.Empty,
+                AesEncryptionKey => string.Empty,
 
                 SMTPServer => DefaultSMTPServer,
                 SMTPPort => DefaultSMTPPort,
