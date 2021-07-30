@@ -5,7 +5,6 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.PerformanceSensor.Base;
-using HSMDataCollector.PerformanceSensor.CustomFuncSensor;
 using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
@@ -21,6 +20,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
+using HSMDataCollector.CustomFuncSensor;
 using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Core
@@ -36,6 +36,8 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
         private NLog.Logger _logger;
+        private bool _isStopped;
+        private bool _isLogging;
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
@@ -56,8 +58,9 @@ namespace HSMDataCollector.Core
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
             //_dataQueue.SendData += DataQueue_SendData;
             _dataQueue.SendValues += DataQueue_SendValues;
+            _isStopped = false;
         }
-        
+
         public event EventHandler ValuesQueueOverflow;
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
@@ -67,6 +70,7 @@ namespace HSMDataCollector.Core
 
                 Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{TextConstants.LogDefaultFolder}",
                     fileNameFormat ?? TextConstants.LogFormatFileName);
+                _isLogging = true;
             }
 
             _logger?.Info("Initialize timer...");
@@ -81,6 +85,9 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
+            if (_isStopped)
+                return;
+
             _logger?.Info("DataCollector stopping...");
 
             List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
@@ -112,7 +119,8 @@ namespace HSMDataCollector.Core
                 SendMonitoringData(allData);
             }
             
-            _client.Dispose();
+            _client?.Dispose();
+            _isStopped = true;
             _logger?.Info("DataCollector successfully stopped.");
         }
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
@@ -135,8 +143,8 @@ namespace HSMDataCollector.Core
             string path = $"{TextConstants.PerformanceNodeName}/Service alive";
             _logger?.Info($"Initialize {path} sensor...");
 
-            BoolFuncSensor aliveSensor = new BoolFuncSensor(() => true, path, _productKey,
-                _dataQueue as IValuesQueue);
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, "",
+                TimeSpan.FromSeconds(15), SensorType.BooleanSensor, () => true,_isLogging);
             AddNewSensor(aliveSensor, path);
         }
 
@@ -464,6 +472,95 @@ namespace HSMDataCollector.Core
         public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision, string description)
         {
             return CreateDoubleBarSensor(path, 60000, 15000, precision, description);
+        }
+
+
+
+        #endregion
+
+        #region Generic func sensors
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval)
+        {
+            return CreateNoParamsFuncSensorInternal(path, description, function, interval);
+        }
+
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval)
+        {
+            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
+        }
+
+        public INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
+        {
+            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
+        }
+
+        public INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
+        {
+            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
+        }
+
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval)
+        {
+            return CreateParamsFuncSensorInternal(path, description, function, interval);
+        }
+
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval)
+        {
+            return CreateParamsFuncSensorInternal(path, description, function,
+                TimeSpan.FromMilliseconds(millisecondsInterval));
+        }
+
+        public IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
+        {
+            return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
+        }
+        public IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
+        {
+            return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
+        }
+        private IParamsFuncSensor<T, U> CreateParamsFuncSensorInternal<T, U>(string path, string description,
+            Func<List<U>, T> function, TimeSpan interval)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var typedSensor = existingSensor as IParamsFuncSensor<T, U>;
+            if (typedSensor != null)
+            {
+                return typedSensor;
+            }
+
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _productKey, _dataQueue as IValuesQueue, description,
+                interval, GetSensorType(typeof(T)), function, _isLogging);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+        private INoParamsFuncSensor<T> CreateNoParamsFuncSensorInternal<T>(string path, string description, Func<T> function,
+            TimeSpan interval)
+        {
+            var existingSensor = GetExistingSensor(path);
+            var typedSensor = existingSensor as INoParamsFuncSensor<T>;
+            if (typedSensor != null)
+            {
+                return typedSensor;
+            }
+
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _productKey, _dataQueue as IValuesQueue, description,
+                interval, GetSensorType(typeof(T)), function, _isLogging);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
+
+        private SensorType GetSensorType(Type type)
+        {
+            if (type == typeof(int))
+                return SensorType.IntSensor;
+
+            if (type == typeof(double))
+                return SensorType.DoubleSensor;
+
+            if (type == typeof(bool))
+                return SensorType.BooleanSensor;
+
+            return SensorType.StringSensor;
         }
 
         #endregion

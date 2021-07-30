@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using HSMDataCollector.PublicInterface;
 
 namespace HSMDataCollector.Core
@@ -102,6 +103,19 @@ namespace HSMDataCollector.Core
         IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision = 2, string description = "");
         #endregion
 
+        #region Custom func sensors
+
+        INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval);
+        INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval = 15000);
+        INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
+        INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
+
+        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>,T> function, TimeSpan interval);
+        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval = 15000);
+
+        IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
+        IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
+        #endregion
         //int GetSensorCount();
 
         event EventHandler ValuesQueueOverflow;

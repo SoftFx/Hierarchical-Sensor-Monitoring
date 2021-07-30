@@ -1,4 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
+﻿using HSMCommon.Model;
+using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using System;
 
@@ -14,6 +15,7 @@ namespace HSMServer.Model.ViewModel
         public string Description { get; set; }
         public DateTime Time { get; set; }
         public string ShortStringValue { get; set; }
+        public TransactionType TransactionType { get; set; }
         public SensorViewModel(string name, SensorData sensor)
         {
             Name = name;
@@ -23,6 +25,7 @@ namespace HSMServer.Model.ViewModel
             ShortStringValue = sensor.ShortStringValue;
             Description = sensor.Description;
             Time = sensor.Time;
+            TransactionType = sensor.TransactionType;
         }
 
         public void Update(SensorData sensorData)
@@ -32,6 +35,7 @@ namespace HSMServer.Model.ViewModel
             ShortStringValue = sensorData.ShortStringValue;
             Description = sensorData.Description;
             Time = sensorData.Time;
+            TransactionType = sensorData.TransactionType;
         }
 
         public void Update(SensorViewModel viewModel)
@@ -41,6 +45,7 @@ namespace HSMServer.Model.ViewModel
             ShortStringValue = viewModel.ShortStringValue;
             Description = viewModel.Description;
             Time = viewModel.Time;
+            TransactionType = viewModel.TransactionType;
         }
     }
 }

@@ -1,4 +1,9 @@
-﻿using System;
+﻿using HSMCommon;
+using HSMServer.Configuration;
+using HSMServer.DataLayer;
+using HSMServer.Extensions;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,11 +11,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using HSMCommon;
-using HSMServer.Configuration;
-using HSMServer.DataLayer;
-using HSMServer.Extensions;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Authentication
 {
@@ -24,18 +24,18 @@ namespace HSMServer.Authentication
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
         private readonly CertificateManager _certificateManager;
-        private readonly IDatabaseWorker _database;
+        private readonly IDatabaseAdapter _databaseAdapter;
         private readonly string _usersFileName = "users.xml";
         private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager, IDatabaseWorker databaseClass, ILogger<UserManager> logger)
+        public UserManager(CertificateManager certificateManager, IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
         {
             _logger = logger;
             _certificateManager = certificateManager;
             _users = new List<User>();
-            _database = databaseClass;
+            _databaseAdapter = databaseAdapter;
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
             if (File.Exists(_usersFilePath))
@@ -82,10 +82,11 @@ namespace HSMServer.Authentication
         {
             lock (_accessLock)
             {
-                var existingUser = _users.First(x => x.Id.Equals(user.Id));
+                var existingUser = _users.First(x => x.UserName.Equals(user.UserName,
+                    StringComparison.InvariantCultureIgnoreCase));
                 _users.Remove(existingUser);
 
-                _database.RemoveUser(existingUser);
+                _databaseAdapter.RemoveUser(existingUser);
             }
         }
 
@@ -108,7 +109,7 @@ namespace HSMServer.Authentication
             if (page < 1 || pageSize < 1)
                 return new List<User>();
             
-            return _database.ReadUsersPage(page, pageSize);
+            return _databaseAdapter.GetUsersPage(page, pageSize);
         }
 
         public void AddUser(User user)
@@ -118,19 +119,17 @@ namespace HSMServer.Authentication
                 _users.Add(user);
             }
 
-            Task.Run(() => _database.AddUser(user));
+            Task.Run(() => _databaseAdapter.AddUser(user));
         }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
         {
-            User user = new User
+            User user = new User (userName)
             {
                 CertificateThumbprint = certificateThumbprint,
-                UserName = userName,
                 CertificateFileName = certificateFileName,
                 Password = passwordHash,
-                IsAdmin = isAdmin,
-                Id = Guid.NewGuid()
+                IsAdmin = isAdmin
             };
 
             if (productRoles != null && productRoles.Any())
@@ -276,7 +275,7 @@ namespace HSMServer.Authentication
 
         private List<User> ReadUserFromDatabase()
         {
-            return _database.ReadUsers();
+            return _databaseAdapter.GetUsers();
         }
 
         private void MigrateUsersToDatabase()
@@ -332,11 +331,10 @@ namespace HSMServer.Authentication
         [Obsolete]
         private void CreateDefaultUsersFile()
         {
-            User defaultUser = new User()
+            User defaultUser = new User("default.client")
             {
                 CertificateFileName = "default.client.crt",
                 CertificateThumbprint = CommonConstants.DefaultClientCertificateThumbprint,
-                UserName = "default.client"
             };
             string content = GetUsersXml(new List<User>() { defaultUser });
             FileManager.SafeCreateFile(_usersFilePath);
@@ -345,13 +343,12 @@ namespace HSMServer.Authentication
         [Obsolete]
         private User ParseUserNode(XmlNode node)
         {
-            User user = new User();
+            User user;
             var nameAttr = node.Attributes?["Name"];
-            if (nameAttr != null)
-            {
-                user.UserName = nameAttr.Value;
-            }
+            if (nameAttr == null)
+                return null;
 
+            user = new User(nameAttr.Value);
             var certAttr = node.Attributes?["Certificate"];
             if (certAttr != null)
             {
@@ -482,10 +479,18 @@ namespace HSMServer.Authentication
 
             if (existingUser != null)
             {
-                RemoveUser(existingUser);
+                existingUser.Update(user);
+                lock (_accessLock)
+                {
+                    var correspondingUser = _users.First(u => u.Id == existingUser.Id);
+                    _users.Remove(correspondingUser);
+                    _users.Add(existingUser);
+                }
+                Task.Run(() =>
+                {
+                    _databaseAdapter.UpdateUser(existingUser);
+                });
             }
-
-            AddUser(user);
         }
     }
 }

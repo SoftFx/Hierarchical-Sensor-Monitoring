@@ -3,7 +3,7 @@ using System.Text;
 
 namespace HSMServer
 {
-    internal static class HashComputer
+    public static class HashComputer
     {
         public static string ComputeSha256Hash(string data)
         {

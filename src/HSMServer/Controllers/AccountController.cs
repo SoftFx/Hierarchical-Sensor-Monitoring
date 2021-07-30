@@ -128,7 +128,9 @@ namespace HSMServer.Controllers
             _userManager.AddUser(model.Username, null, null,
                 HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
-            _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
+
+            if (!string.IsNullOrEmpty(model.TicketId))
+                _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
 
             return RedirectToAction("Index", "Home");
         }
@@ -210,9 +212,8 @@ namespace HSMServer.Controllers
 
         private User GetModelFromViewModel(UserViewModel userViewModel)
         {
-            User user = new User()
+            User user = new User(userViewModel.Username)
             {
-                UserName = userViewModel.Username,
                 Password = userViewModel.Password,
                 IsAdmin = userViewModel.IsAdmin
             };

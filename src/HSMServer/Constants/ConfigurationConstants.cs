@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Constants
+﻿using System;
+
+namespace HSMServer.Constants
 {
     internal class ConfigurationConstants
     {
@@ -9,6 +11,7 @@
         #region Default config
 
         public const int DefaultMaxPathLength = 10;
+        public static readonly TimeSpan DefaultExpirationTime = new TimeSpan(30,0,0,0);
 
         public const string DefaultSMTPServer = "smtp.gmail.com";
         public const string DefaultSMTPPort = "";
@@ -22,6 +25,8 @@
 
         public const string MaxPathLength = nameof(MaxPathLength);
         public const string AesEncryptionKey = nameof(AesEncryptionKey);
+        public const string SensorExpirationTime = nameof(SensorExpirationTime);
+        public const string ServerCertificatePassword = nameof(ServerCertificatePassword);
 
         public const string SMTPServer = nameof(SMTPServer);
         public const string SMTPPort = nameof(SMTPPort);
@@ -36,6 +41,8 @@
             return name switch
             {
                 MaxPathLength => DefaultMaxPathLength.ToString(),
+                SensorExpirationTime => DefaultExpirationTime.ToString(),
+                ServerCertificatePassword => string.Empty,
 
                 SMTPServer => DefaultSMTPServer,
                 SMTPPort => DefaultSMTPPort,

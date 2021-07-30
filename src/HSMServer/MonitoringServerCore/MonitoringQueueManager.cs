@@ -177,7 +177,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 foreach (var pair in _currentSessions)
                 {
-                    if (UserRoleHelper.IsAllSensorsAllowed(pair.Key.IsAdmin))
+                    if (UserRoleHelper.IsAllSensorsAllowed(pair.Key))
                         pair.Value.AddUpdate(message);
 
                     else if (pair.Key.IsSensorAvailable(message.Key))

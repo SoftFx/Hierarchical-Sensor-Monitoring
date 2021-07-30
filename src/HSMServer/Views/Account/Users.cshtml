@@ -51,7 +51,7 @@
         }
     }
 
-    //fix checked attribut
+    //fix checked attribute
     $('#createIsAdmin').on('click', function () {
         if (this.checked)
             this.setAttribute("checked", "checked");
@@ -72,7 +72,7 @@
         isAdmin = $('#createIsAdmin').is(":checked");
 
         var data = createData(username, password, role, isAdmin, null);
-        console.log(data);
+        //console.log(data);
         $.ajax({
             type: 'POST',
             url: createAction,
@@ -80,9 +80,9 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (result) {
+        }).done(function(result) {
             document.location.reload();
-        })
+        });
     });
 
     //delete action

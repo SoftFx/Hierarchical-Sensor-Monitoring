@@ -65,6 +65,20 @@ namespace HSMServer.Model.ViewModel
             }
         }
 
+        public NodeViewModel GetNode(string path)
+        {
+            if (Nodes != null)
+                foreach (var node in Nodes)
+                {
+                    if (node.Path.Equals(path)) return node;
+
+                    var existingNode = node.GetNode(path);
+                    if (existingNode != null) return existingNode;
+                }
+
+            return null;
+        }
+
         public NodeViewModel Update(NodeViewModel newModel)
         {
             Status = newModel.Status;

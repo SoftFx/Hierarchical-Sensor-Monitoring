@@ -53,21 +53,5 @@ namespace HSMServer.Model.ViewModel
             else
                 _treeModels.Add(user.UserName, model);
         }
-
-        //class UserComparer : IEqualityComparer<User>
-        //{
-        //    public bool Equals(User x, User y)
-        //    {
-        //        if (/*x.CertificateThumbprint == y.CertificateThumbprint  && */(x.UserName == y.UserName))
-        //            return true;
-
-        //        return false;
-        //    }
-
-        //    public int GetHashCode(User obj)
-        //    {
-        //        return obj.GetHashCode();
-        //    }
-        //}
     }
 }
