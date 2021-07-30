@@ -26,6 +26,7 @@ namespace HSMServer.Constants
         public const string MaxPathLength = nameof(MaxPathLength);
         public const string AesEncryptionKey = nameof(AesEncryptionKey);
         public const string SensorExpirationTime = nameof(SensorExpirationTime);
+        public const string ServerCertificatePassword = nameof(ServerCertificatePassword);
 
         public const string SMTPServer = nameof(SMTPServer);
         public const string SMTPPort = nameof(SMTPPort);
@@ -41,6 +42,7 @@ namespace HSMServer.Constants
             {
                 MaxPathLength => DefaultMaxPathLength.ToString(),
                 SensorExpirationTime => DefaultExpirationTime.ToString(),
+                ServerCertificatePassword => string.Empty,
 
                 SMTPServer => DefaultSMTPServer,
                 SMTPPort => DefaultSMTPPort,

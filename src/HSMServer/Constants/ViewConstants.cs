@@ -8,6 +8,7 @@
         public const string HomeController = "Home";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
+        public const string AdminController = "Admin";
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";
@@ -34,5 +35,8 @@
         public const string RemoveUserRoleAction = "RemoveUserRole";
         public const string RemoveExtraKeyAction = "RemoveExtraKey";
         public const string InviteAction = "Invite";
+
+        public const string SaveConfigObjectAction = "SaveConfigObject";
+        public const string SetConfigObjectToDefaultAction = "SetToDefault";
     }
 }

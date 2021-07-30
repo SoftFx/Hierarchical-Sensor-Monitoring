@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using HSMSensorDataObjects;
 using System;
+using HSMServer.Configuration;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -51,6 +52,14 @@ namespace HSMServer.HtmlHelpers
 
             StringBuilder result = new StringBuilder();
             result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
+
+            return new HtmlString(result.ToString());
+        }
+
+        public static HtmlString CreateConfigurationObjectsTable(List<ConfigurationObjectViewModel> configurationObjects)
+        {
+            StringBuilder result = new StringBuilder();
+            result.Append(TableHelper.CreateConfigurationObjectsTable(configurationObjects));
 
             return new HtmlString(result.ToString());
         }

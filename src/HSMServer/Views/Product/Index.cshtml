@@ -94,14 +94,14 @@
             url: createAction + "?Product=" + name,
             cache: false,
             async: true,
-            success: function () {
+            success: function() {
                 document.location.reload();
             }
-        })
+        });
     });
 
     $('[id^=change_]').on('click', function () {
         key = this.id.substring("change_".length, this.id.length);
-        window.location.href = editAction + "?Product=" + key
+        window.location.href = editAction + "?Product=" + key;
     }); 
 </script>

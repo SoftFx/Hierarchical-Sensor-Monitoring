@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using HSMCommon.Model;
 using HSMServer.Constants;
@@ -15,7 +16,13 @@ namespace HSMServer.Configuration
         private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
-        private ConfigurationObject _currentConfigurationObject;
+        private readonly List<string> _configurationObjectNamesList = new List<string>
+        {
+            ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey, 
+            ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, ConfigurationConstants.SMTPPort,
+            ConfigurationConstants.SMTPLogin, ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
+            ConfigurationConstants.ServerCertificatePassword
+        };
         #endregion
 
         public ConfigurationProvider(IDatabaseAdapter databaseAdapter, ILogger<ConfigurationProvider> logger)
@@ -30,11 +37,9 @@ namespace HSMServer.Configuration
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.ClientAppFolderName);
         public ClientVersionModel ClientVersion => _clientVersion ??= ReadClientVersion();
 
-        public void UpdateConfigurationObject(ConfigurationObject newObject)
+        public List<string> GetAllParameterNames()
         {
-            _currentConfigurationObject = newObject;
-            SaveConfigurationObject(newObject);
-            OnConfigurationObjectUpdated(newObject);
+            return _configurationObjectNamesList;
         }
 
         public void AddConfigurationObject(string name, string value)
@@ -43,12 +48,28 @@ namespace HSMServer.Configuration
             _databaseAdapter.WriteConfigurationObject(config);
         }
 
+        public void SetConfigurationObjectToDefault(string name)
+        {
+            _databaseAdapter.RemoveConfigurationObject(name);
+        }
+
         ///Use 'name' from ConfigurationConstants! 
         public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
             var currentObject = _databaseAdapter.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
                 ConfigurationConstants.GetDefault(name));
+        }
+
+        public List<ConfigurationObject> GetAllConfigurationObjects()
+        {
+            List<ConfigurationObject> result = new List<ConfigurationObject>();
+            foreach (var name in _configurationObjectNamesList)
+            {
+                result.Add(ReadOrDefaultConfigurationObject(name));
+            }
+
+            return result;
         }
 
         public ConfigurationObject ReadConfigurationObject(string name)
