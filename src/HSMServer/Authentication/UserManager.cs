@@ -270,7 +270,7 @@ namespace HSMServer.Authentication
             AddUser(CommonConstants.DefaultUserUsername,
                 CommonConstants.DefaultClientCertificateThumbprint,
                 CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), false);
+                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), true);
         }
 
         private List<User> ReadUserFromDatabase()
