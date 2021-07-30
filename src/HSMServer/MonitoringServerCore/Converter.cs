@@ -481,7 +481,7 @@ namespace HSMServer.MonitoringServerCore
             data.Path = value.Path;
             data.Product = productName;
             data.Time = timeCollected;
-            //data.TransactionType = type;
+            data.TransactionType = type;
             data.Description = value.Description;
             data.Status = value.Status;
             data.Key = value.Key;

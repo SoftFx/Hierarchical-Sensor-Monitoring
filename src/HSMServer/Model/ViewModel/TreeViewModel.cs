@@ -29,8 +29,6 @@ namespace HSMServer.Model.ViewModel
             if (Paths.FirstOrDefault(x => x.Equals(path)) == null)
                 Paths.Add(path);
 
-
-
             var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(sensor.Product));
             if (existingNode == null)
             {
@@ -42,36 +40,26 @@ namespace HSMServer.Model.ViewModel
             }
         }
 
+        public NodeViewModel GetNode(string path)
+        {
+            if (Nodes != null)
+                foreach (var node in Nodes)
+                {
+                    if (node.Path.Equals(path)) return node;
+
+                    var existingNode = node.GetNode(path);
+                    if (existingNode != null) return existingNode;
+                }
+
+            return null;
+        }
+
         public TreeViewModel Update(List<SensorData> sensors)
         {
             foreach (var sensor in sensors)
             {
                 AddSensor(sensor);   
             }
-            UpdateNodeCharacteristics();
-            return this;
-        }
-        public TreeViewModel Update(TreeViewModel newModel)
-        {
-            foreach (var path in newModel.Paths)
-            {
-                if (!Paths.Contains(path))
-                    Paths.Add(path);
-            }
-
-            foreach(var node in newModel.Nodes)
-            {
-                var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(node.Name));
-
-                if (Nodes == null)
-                    Nodes = new List<NodeViewModel> { node };
-
-                else if (existingNode == null)
-                    Nodes.Add(node);
-
-                else existingNode = existingNode.Update(node); 
-            }
-
             UpdateNodeCharacteristics();
             return this;
         }

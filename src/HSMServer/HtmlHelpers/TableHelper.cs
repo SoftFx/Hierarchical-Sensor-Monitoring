@@ -413,6 +413,8 @@ namespace HSMServer.HtmlHelpers
             if (sensorHistory.Count == 0)
                 return string.Empty;
 
+            sensorHistory.Reverse();
+
             var type = sensorHistory[0].SensorType;
             switch (type)
             {
@@ -582,7 +584,7 @@ namespace HSMServer.HtmlHelpers
             StringBuilder sb = new StringBuilder();
 
             sb.Append("<div style='margin: 10px'>" +
-                          "<div class='row justify-content-start'><div class='col-3'>" +
+                          "<div class='row justify-content-start'><div class='col-auto'>" +
                           "<h5 style='margin: 10px 20px 10px;'>Configuration parameters</h5></div></div></div>");
 
             sb.Append("<div class='col-xxl'>");

@@ -4,12 +4,14 @@ using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model.ViewModel;
 using HSMServer.MonitoringServerCore;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.StaticFiles;
+using System.Text;
 
 namespace HSMServer.Controllers
 {
@@ -40,16 +42,73 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public HtmlString Update([FromBody]List<SensorData> sensors)
+        public HtmlString UpdateTree([FromBody]List<SensorData> sensors)
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            //var newModel = new TreeViewModel(sensors);
             var model = oldModel.Update(sensors);
 
-            return ViewHelper.CreateTreeWithLists(model);
+            return ViewHelper.CreateTree(model);
         }
 
+        [HttpPost]
+        public HtmlString UpdateInvisibleLists([FromQuery(Name = "Selected")] string selectedList,
+            [FromBody] List<SensorData> sensors)
+        {
+            var user = HttpContext.User as User;
+            var oldModel = _treeManager.GetTreeViewModel(user);
+            var model = oldModel.Update(sensors);
+
+            return ViewHelper.CreateNotSelectedLists(selectedList, model);
+        }
+
+        [HttpPost]
+        public ActionResult UpdateSelectedList([FromQuery(Name = "Selected")] string selectedList,
+            [FromBody] List<SensorData> sensors)
+        {
+            var user = HttpContext.User as User;
+            var oldModel = _treeManager.GetTreeViewModel(user);
+            var model = oldModel.Update(sensors);
+
+            var path = selectedList.Replace('-', ' ');
+            int index = path.IndexOf('_');
+            path = path.Substring(index + 1, selectedList.Length - index - 1);
+
+            var node = model.GetNode(path);
+            List<SensorDataViewModel> result = new List<SensorDataViewModel>();
+            if (node?.Sensors != null)
+                foreach(var sensor in node.Sensors)
+                {
+                    if (sensor.TransactionType != TransactionType.Add)
+                        result.Add(new SensorDataViewModel(selectedList, sensor));
+                }
+
+            return Json(result);
+        }
+
+        [HttpPost]
+        public HtmlString AddNewSensors([FromQuery(Name = "Selected")] string selectedList, 
+            [FromBody] List<SensorData> sensors)
+        {
+            var user = HttpContext.User as User;
+            var oldModel = _treeManager.GetTreeViewModel(user);
+            var model = oldModel.Update(sensors);
+
+            int index = selectedList.IndexOf('_');
+            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
+            var path = formattedPath.Replace('-', ' ');
+
+            var node = model.GetNode(path);
+            StringBuilder result = new StringBuilder();
+            if (node.Sensors != null)
+                foreach(var sensor in node.Sensors)
+                {
+                    if (sensor.TransactionType == TransactionType.Add)
+                        result.Append(ListHelper.CreateSensor(formattedPath, sensor));
+                }
+
+            return new HtmlString(result.ToString());
+        }
 
         [HttpPost]
         public HtmlString History([FromBody]GetSensorHistoryModel model)
@@ -77,20 +136,20 @@ namespace HSMServer.Controllers
         public FileResult GetFile([FromQuery] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/').Replace('-', ' ');
+            string path = model.Path.Replace('_', '/');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
-            var fileContentsStream = new MemoryStream(fileContents);
+
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{model.Path}.{extension}";
 
-            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
+            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
         public IActionResult GetFileStream([FromBody] GetFileSensorModel model)
         {
             string product = model.Product.Replace('-', ' ');
-            string path = model.Path.Replace('_', '/').Replace('-', ' ');
+            string path = model.Path.Replace('_', '/');
             var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
             var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
