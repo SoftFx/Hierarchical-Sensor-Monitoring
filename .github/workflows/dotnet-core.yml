@@ -23,7 +23,7 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0
+        dotnet-version: 5.0.x
     
     - name: Install dependencies
       run: dotnet restore src/HSMServer/HSMServer.sln
@@ -153,4 +153,4 @@ jobs:
           name: hsmonitoring/hierarchical_sensor_monitoring
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}      
-          tags: "latest"
+          tags: "${{ env.RELEASE_VERSION }}"
