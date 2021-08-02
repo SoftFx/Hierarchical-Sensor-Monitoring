@@ -8,6 +8,7 @@
         public const string HomeController = "Home";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
+        public const string AdminController = "Admin";
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";
@@ -15,6 +16,10 @@
 
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
+        public const string UpdateTreeAction = "UpdateTree";
+        public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
+        public const string UpdateSelectedListAction = "UpdateSelectedList";
+        public const string AddNewSensorsAction = "AddNewSensors";
         public const string HistoryAction = "History";
         public const string RawHistoryAction = "RawHistory";
         public const string RemoveProductAction = "RemoveProduct";
@@ -34,5 +39,8 @@
         public const string RemoveUserRoleAction = "RemoveUserRole";
         public const string RemoveExtraKeyAction = "RemoveExtraKey";
         public const string InviteAction = "Invite";
+
+        public const string SaveConfigObjectAction = "SaveConfigObject";
+        public const string SetConfigObjectToDefaultAction = "SetToDefault";
     }
 }

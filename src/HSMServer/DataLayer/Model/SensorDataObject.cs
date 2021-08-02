@@ -3,6 +3,7 @@ using HSMSensorDataObjects;
 
 namespace HSMServer.DataLayer.Model
 {
+    [Obsolete("19.07.2021. Use SensorDataEntity and convert it to SensorData")]
     public class SensorDataObject
     {
         public DateTime Time { get; set; }

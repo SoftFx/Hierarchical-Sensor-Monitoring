@@ -9,6 +9,7 @@ using HSMServer.Model;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Text.Json;
+using HSMDatabase.Entity;
 
 namespace HSMServer.MonitoringServerCore
 {
@@ -113,14 +114,14 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
        
-        public SensorHistoryData Convert(SensorDataObject dataObject)
+        public SensorHistoryData Convert(SensorDataEntity dataObject)
         {
             SensorHistoryData historyData = new SensorHistoryData();
             try
             {
                 historyData.TypedData = dataObject.TypedData;
                 historyData.Time = dataObject.Time;
-                historyData.SensorType = dataObject.DataType;
+                historyData.SensorType = (SensorType)dataObject.DataType;
             }
             catch (Exception e)
             { }
@@ -131,114 +132,81 @@ namespace HSMServer.MonitoringServerCore
         #endregion
         #region Convert to database objects
 
-        private void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataObject dataObject)
+        private void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataEntity dataObject)
         {
-            dataObject = new SensorDataObject();
+            dataObject = new SensorDataEntity();
             dataObject.Path = value.Path;
             dataObject.Time = value.Time.ToUniversalTime();
             dataObject.TimeCollected = timeCollected.ToUniversalTime();
             dataObject.Timestamp = GetTimestamp(value.Time);
         }
-
-        //private SensorType Convert(SensorObjectType type)
-        //{
-        //    switch (type)
-        //    {
-        //        case SensorObjectType.ObjectTypeBoolSensor:
-        //            return SensorType.BooleanSensor;
-        //        case SensorObjectType.ObjectTypeDoubleSensor:
-        //            return SensorType.DoubleSensor;
-        //        case SensorObjectType.ObjectTypeIntSensor:
-        //            return SensorType.IntSensor;
-        //        case SensorObjectType.ObjectTypeStringSensor:
-        //            return SensorType.StringSensor;
-        //        case SensorObjectType.ObjectTypeBarDoubleSensor:
-        //            return SensorType.DoubleBarSensor;
-        //        case SensorObjectType.ObjectTypeBarIntSensor:
-        //            return SensorType.IntegerBarSensor;
-        //        case SensorObjectType.ObjectTypeFileSensor:
-        //            return SensorType.FileSensor;
-        //        default:
-        //            throw new InvalidEnumArgumentException($"Invalid SensorDataType: {type}");
-        //    }
-        //}
-        //public SensorDataObject ConvertToDatabase(SensorUpdateMessage update, DateTime originalTime)
-        //{
-        //    SensorDataObject result = new SensorDataObject();
-        //    result.Path = update.Path;
-        //    result.Time = originalTime;
-        //    result.TypedData = update.DataObject.ToString(Encoding.UTF8);
-        //    result.TimeCollected = update.Time.ToDateTime();
-        //    result.Timestamp = GetTimestamp(result.TimeCollected);
-        //    result.DataType = Convert(update.ObjectType);
-        //    return result;
-        //}
-
-        public SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
         {
-            SensorDataObject result;
-            FillCommonFields(sensorValue, timeCollected, out result);
-            result.DataType = SensorType.BooleanSensor;
-            result.Status = sensorValue.Status;
+            FillCommonFields(sensorValue, timeCollected, out var result);
+            result.DataType = (byte)SensorType.BooleanSensor;
+            result.Status = (byte)sensorValue.Status;
 
             BoolSensorData typedData = new BoolSensorData() { BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.IntSensor;
-            result.Status = sensorValue.Status;
+            result.DataType = (byte)SensorType.IntSensor;
+            result.Status = (byte)sensorValue.Status;
 
             IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.DoubleSensor;
-            result.Status = sensorValue.Status;
+            result.DataType = (byte)SensorType.DoubleSensor;
+            result.Status = (byte)sensorValue.Status;
 
             DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.StringSensor;
-            result.Status = sensorValue.Status;
+            result.DataType = (byte)SensorType.StringSensor;
+            result.Status = (byte)sensorValue.Status;
 
             StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.FileSensor;
-            result.Status = sensorValue.Status;
+            result.DataType = (byte)SensorType.FileSensor;
+            result.Status = (byte)sensorValue.Status;
 
             FileSensorData typedData = new FileSensorData()
             {
-                Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent, FileName = sensorValue.FileName
+                Comment = sensorValue.Comment,
+                Extension = sensorValue.Extension,
+                FileContent = sensorValue.FileContent,
+                FileName = sensorValue.FileName
             };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
 
         }
 
-        public SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.FileSensor;
-            result.Status = sensorValue.Status;
+            result.DataType = (byte)SensorType.FileSensor;
+            result.Status = (byte)sensorValue.Status;
 
             FileSensorBytesData typedData = new FileSensorBytesData()
             {
@@ -250,27 +218,134 @@ namespace HSMServer.MonitoringServerCore
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
-        public SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.IntegerBarSensor;
+            result.DataType = (byte)SensorType.IntegerBarSensor;
 
             IntBarSensorData typedData = ToTypedData(sensorValue);
             result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = sensorValue.Status;
+            result.Status = (byte)sensorValue.Status;
             return result;
         }
 
-        public SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = SensorType.DoubleBarSensor;
+            result.DataType = (byte)SensorType.DoubleBarSensor;
 
             DoubleBarSensorData typedData = ToTypedData(sensorValue);
             result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = sensorValue.Status;
+            result.Status = (byte)sensorValue.Status;
             return result;
         }
+
+        //private void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataObject dataObject)
+        //{
+        //    dataObject = new SensorDataObject();
+        //    dataObject.Path = value.Path;
+        //    dataObject.Time = value.Time.ToUniversalTime();
+        //    dataObject.TimeCollected = timeCollected.ToUniversalTime();
+        //    dataObject.Timestamp = GetTimestamp(value.Time);
+        //}
+
+        //public SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    SensorDataObject result;
+        //    FillCommonFields(sensorValue, timeCollected, out result);
+        //    result.DataType = SensorType.BooleanSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    BoolSensorData typedData = new BoolSensorData() { BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
+
+        //public SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.IntSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
+
+        //public SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.DoubleSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
+
+        //public SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.StringSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
+
+        //public SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.FileSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    FileSensorData typedData = new FileSensorData()
+        //    {
+        //        Comment = sensorValue.Comment, Extension = sensorValue.Extension, FileContent = sensorValue.FileContent, FileName = sensorValue.FileName
+        //    };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+
+        //}
+
+        //public SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.FileSensor;
+        //    result.Status = sensorValue.Status;
+
+        //    FileSensorBytesData typedData = new FileSensorBytesData()
+        //    {
+        //        Comment = sensorValue.Comment,
+        //        Extension = sensorValue.Extension,
+        //        FileContent = sensorValue.FileContent,
+        //        FileName = sensorValue.FileName
+        //    };
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    return result;
+        //}
+        //public SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.IntegerBarSensor;
+
+        //    IntBarSensorData typedData = ToTypedData(sensorValue);
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    result.Status = sensorValue.Status;
+        //    return result;
+        //}
+
+        //public SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        //{
+        //    FillCommonFields(sensorValue, timeCollected, out var result);
+        //    result.DataType = SensorType.DoubleBarSensor;
+
+        //    DoubleBarSensorData typedData = ToTypedData(sensorValue);
+        //    result.TypedData = JsonSerializer.Serialize(typedData);
+        //    result.Status = sensorValue.Status;
+        //    return result;
+        //}
 
 
         private IntBarSensorData ToTypedData(IntBarSensorValue sensorValue)
@@ -310,22 +385,22 @@ namespace HSMServer.MonitoringServerCore
         
         #region Independent update messages
 
-        public SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName)
+        public SensorData Convert(SensorDataEntity dataObject, SensorInfo sensorInfo, string productName)
         {
             var converted = Convert(dataObject, productName);
             converted.Description = sensorInfo.Description;
             return converted;
         }
-        public SensorData Convert(SensorDataObject dataObject, string productName)
+        public SensorData Convert(SensorDataEntity dataObject, string productName)
         {
             SensorData result = new SensorData();
             result.Path = dataObject.Path;
-            result.SensorType = dataObject.DataType;
+            result.SensorType = (SensorType)dataObject.DataType;
             result.Product = productName;
             result.Time = dataObject.TimeCollected;
-            result.StringValue = GetStringValue(dataObject.TypedData, dataObject.DataType, dataObject.TimeCollected);
-            result.ShortStringValue = GetShortStringValue(dataObject.TypedData, dataObject.DataType);
-            result.Status = dataObject.Status;
+            result.StringValue = GetStringValue(dataObject.TypedData, (SensorType)dataObject.DataType, dataObject.TimeCollected);
+            result.ShortStringValue = GetShortStringValue(dataObject.TypedData, (SensorType)dataObject.DataType);
+            result.Status = (SensorStatus)dataObject.Status;
             return result;
         }
 
@@ -406,7 +481,7 @@ namespace HSMServer.MonitoringServerCore
             data.Path = value.Path;
             data.Product = productName;
             data.Time = timeCollected;
-            //data.TransactionType = type;
+            data.TransactionType = type;
             data.Description = value.Description;
             data.Status = value.Status;
             data.Key = value.Key;
@@ -977,11 +1052,11 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         #region UnitedSensorValue to database objects
-        public SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected)
+        public SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected)
         {
             FillCommonFields(value, timeCollected, out var result);
-            result.DataType = value.Type;
-            result.Status = value.Status;
+            result.DataType = (byte)value.Type;
+            result.Status = (byte)value.Status;
             result.TypedData = GetTypedData(value);
             return result;
         }

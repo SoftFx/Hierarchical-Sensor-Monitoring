@@ -2,7 +2,7 @@
 
 namespace HSMServer.Keys
 {
-    internal static class KeyGenerator
+    public static class KeyGenerator
     {
         public static string GenerateProductKey(string productName)
         {

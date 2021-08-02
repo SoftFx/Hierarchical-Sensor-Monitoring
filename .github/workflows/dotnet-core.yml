@@ -153,4 +153,4 @@ jobs:
           name: hsmonitoring/hierarchical_sensor_monitoring
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}      
-          tags: "latest"
+          tags: "${{ env.RELEASE_VERSION }}"

@@ -5,7 +5,7 @@
 
 @{ ViewData["Title"] = "Product " + Model.ProductName; }
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
@@ -43,22 +43,28 @@
     <div style="margin: 10px">
         <div class="row justify-content-start">
             <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'.</div>
+            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
 
 
             <div class="mb-3">
                 <label for="email" class="form-label">Email address</label>
                 <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
             </div>
-            <div class="mb-3">
+            <!--<div class="mb-3">
                 <label for="dateTime" class="form-label">Access expiration date</label>
-                <input style="width: 300px" type="datetime-local" class="form-control" id="dateTime"/>
-            </div>
+                <input style="width: 300px" type="time" class="form-control" id="dateTime"
+                       min="@DateTime.UtcNow.ToString("")"/>-->
+                @*<input style="width: 300px" type="datetime-local" class="form-control" id="dateTime"
+                       min="@DateTime.UtcNow.ToString("yyyy-MM-ddThh:mm:ss")"
+                       max="@((DateTime.UtcNow + TimeSpan.FromMinutes(30)).ToString("yyyy-MM-ddThh:mm:ss"))"/>*@
+            <!--</div>-->
 
             <div class="mb-3">
                 <label for="productRole" class="form-label">Choose a role permission</label>
                 @ViewHelper.CreateProductRoleSelect()
             </div>
+
+            <span id="new_invite_span" style="display: none"></span>
 
             <div class="mb-3">
                 <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
@@ -85,6 +91,13 @@
         keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
+    let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
+    if (inviteErrorText !== undefined) {
+        let inviteErrorSpan = document.getElementById('new_invite_span');
+        inviteErrorSpan.textContent = inviteErrorText;
+        inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    }
+
     //copy buttons
     var clipboard = new ClipboardJS('[id^="copy_"]');
 </script>
@@ -102,7 +115,7 @@
     $('#inviteButton').on('click', function () {
         productKey = $('#productKey').val();
         email = $('#email').val();
-        dateTime = $('#dateTime').val();
+        dateTime = null;//$('#dateTime').val();
         productRole = $('#productRole').val();
 
         data = createInviteData(productKey, email, dateTime, productRole);
@@ -166,7 +179,7 @@
 
         //modal confirm
         $('#confirmDeleteButton').on('click', function () {
-            modal.hiHtmle();
+            modal.hide();
 
             $.ajax({
                 type: 'POST',

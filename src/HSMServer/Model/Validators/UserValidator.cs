@@ -14,13 +14,22 @@ namespace HSMServer.Model.Validators
 
             RuleFor(x => x.Username)
                 .NotEmpty()
-                .WithMessage(ErrorConstants.UsernameNotNull);
+                .WithMessage(ErrorConstants.UsernameNotNull)
+                .Must(IsUniqueUsername)
+                .WithMessage(ErrorConstants.UsernameUnique)
+                .Matches(@"^[0-9a-zA-Z]+$")
+                .WithMessage(ErrorConstants.UsernameLatin);
 
             RuleFor(x => x.Password)
                 .NotEmpty()
                 .WithMessage(ErrorConstants.PasswordNotNull)
                 .MinimumLength(8)
                 .WithMessage(ErrorConstants.PasswordMinLength);
+        }
+
+        private bool IsUniqueUsername(string username)
+        {
+            return _userManager.GetUserByUserName(username) == null;
         }
     }
 }

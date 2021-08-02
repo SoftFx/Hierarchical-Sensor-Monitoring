@@ -36,6 +36,24 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        public static string CreateNotSelectedLists(string selectedPath, TreeViewModel model)
+        {
+            if (model == null) return string.Empty;
+
+            StringBuilder result = new StringBuilder();
+
+            foreach(var path in model.Paths)
+            {
+                string formattedPath = path.Replace(' ', '-');
+                if (!string.IsNullOrEmpty(selectedPath) 
+                    && selectedPath.Equals(formattedPath)) continue;
+
+                result.Append(CreateList(path, path, model));
+            }
+
+            return result.ToString();
+        }
+
         public static string CreateList(string path, string fullPath, TreeViewModel model)
         {
             if (path == null) return string.Empty;
@@ -56,87 +74,93 @@ namespace HSMServer.HtmlHelpers
             if (node.Sensors != null)
                 foreach (var sensor in node.Sensors)
                 {
-                    string name = sensor.Name.Replace(' ', '-');
-                    result.Append("<div class='accordion-item'>" +
-                                  $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
-
-                    var time = (DateTime.UtcNow - sensor.Time);
-
-                    if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
-                    {
-                        //header
-                        string fileName = GetFileNameString(sensor.StringValue);
-
-                        //button
-                        result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
-                                  $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  "<div>" +
-                                  $"<div class='row'><div class='col-md-auto'>{sensor.Name}</div>" +
-                                  $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
-                        //body
-                        result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
-                                  $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
-                                  "<div class='accordion-body'>");
-
-                        result.Append("<div style='width: 100%'>" +
-                                  $"<div class='row justify-content-between'><div class='col-md-auto'>" +
-                                  $"<li class='fas fa-circle sensor-icon-with-margin " +
-                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
-                                  $"<div class='col-md-auto time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
-                                  $"{sensor.ShortStringValue}</div>" +
-                                      "<div class='row'><div class='col-md-auto'>" +
-                                      $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
-                                      "class='button-view-file-sensor btn btn-secondary' title='View'>" +
-                                      "<i class='fas fa-eye'></i></button></div>" +
-                                      "<div class='col'>" +
-                                      $"<button id='button_download_{formattedPath}_{name}_{fileName}'" +
-                                      " class='button-download-file-sensor-value btn btn-secondary'" +
-                                      " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
-
-
-                        result.Append("</div></div></div>");
-
-                        continue;
-                    }
-
-                    result.Append($"<button id='{formattedPath}_{name}_{(int)sensor.SensorType}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
-                                  $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
-                                  "<div style='width: 100%'>" +
-                                  "<div class='row justify-content-between'>" +
-                                  "<div class='col-md-auto'><li class='fas fa-circle sensor-icon-with-margin " +
-                                  $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
-                                  $"{sensor.Name}</div>" +
-                                  $"<div class='col-md-auto'><div class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
-                                  $"{sensor.ShortStringValue}</div></button></h2>");
-
-                    result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
-                                  $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
-                                  "<div class='accordion-body'>" +
-                                  "<div class='mb-3 row'>" +
-                                  $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
-                                  "<div class='col-sm-3'>" +
-                                  $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
-                                  "<div class='col-sm-1'>" +
-                                  $"<button id='reload_{formattedPath}_{name}_{(int) sensor.SensorType}' type='button' class='btn btn-secondary'>" +
-                                  "<i class='fas fa-redo-alt'></i></button></div>");
-                                //$"<div class='col-sm-1'><button title='Plot' id='button_graph_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                //"type='button' class='btn btn-secondary' style='display: none'><i class='fas fa-chart-bar'></i><button></div>" +
-                                //$"<div class='col-sm-1'><button title='Table' id='button_table_{formattedPath}_{name}_{(int)sensor.SensorType}'" +
-                                //"type='button' class='btn btn-secondary'><i class='fas fa-table'></i><button></div>" +
-
-                                result.Append("<div style='margin-top: 15px'>");
-                    result.Append(isPlottingSupported(sensor.SensorType)
-                                    ? GetNavTabsForHistory(formattedPath, name)
-                                    : GetValuesDivForHistory(formattedPath, name));
-
-                    result.Append("</div></div></div></div></div>");
+                    result.Append(CreateSensor(formattedPath, sensor));
                 }
             result.Append("</div>");
 
             return result.ToString();
         }
 
-        private static string GetTimeAgo(TimeSpan time)
+        public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
+        {
+            StringBuilder result = new StringBuilder();
+            string name = sensor.Name.Replace(' ', '-');
+            result.Append("<div class='accordion-item'>" +
+                          $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
+
+            var time = (DateTime.UtcNow - sensor.Time);
+
+            if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
+            {
+                //header
+                string fileName = GetFileNameString(sensor.StringValue);
+
+                //button
+                result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
+                          $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
+                          "<div>" +
+                          $"<div class='row'><div class='col-md-auto'>{sensor.Name}</div>" +
+                          $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
+                //body
+                result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
+                          $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          "<div class='accordion-body'>");
+
+                result.Append("<div style='width: 100%'>" +
+                          "<div class='row justify-content-between'><div class='col-md-auto'>" +
+                          $"<li id='status_{formattedPath}_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                          $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
+                          $"<div class='col-md-auto time-ago-div' id='update_{formattedPath}_{name}' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
+                          $"{sensor.ShortStringValue}</div>" +
+                              "<div class='row'><div class='col-md-auto'>" +
+                              $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
+                              "class='button-view-file-sensor btn btn-secondary' title='View'>" +
+                              "<i class='fas fa-eye'></i></button></div>" +
+                              "<div class='col'>" +
+                              $"<button id='button_download_{formattedPath}_{name}_{fileName}'" +
+                              " class='button-download-file-sensor-value btn btn-secondary'" +
+                              " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
+
+
+                result.Append("</div></div></div>");
+
+                return result;
+            }
+
+            result.Append($"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
+                          $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
+                          "<div style='width: 100%'>" +
+                          "<div class='row justify-content-between'>" +
+                          $"<div class='col-md-auto'><li id='status_{formattedPath}_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                          $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
+                          $"{sensor.Name}</div><div class='col-md-auto'>" +
+                          $"<input id='sensor_type_{formattedPath}_{name}' value='{(int)sensor.SensorType}' style='display: none' />" +
+                          $"<div id='update_{formattedPath}_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
+                          $"<div id='value_{formattedPath}_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
+
+            result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
+                          $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          "<div class='accordion-body'>" +
+                          "<div class='mb-3 row'>" +
+                          $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
+                          "<div class='col-sm-3'>" +
+                          $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
+                          "<div class='col-sm-1'>" +
+                          $"<button id='reload_{formattedPath}_{name}' type='button' class='btn btn-secondary'>" +
+                          "<i class='fas fa-redo-alt'></i></button>" +
+                          $"<input style='display: none' id='listId_{formattedPath}_{name}' value='{formattedPath}'/></div>");
+
+            result.Append("<div style='margin-top: 15px'>");
+            result.Append(isPlottingSupported(sensor.SensorType)
+                            ? GetNavTabsForHistory(formattedPath, name)
+                            : GetValuesDivForHistory(formattedPath, name));
+
+            result.Append("</div></div></div></div></div>");
+
+            return result;
+        }
+
+        public static string GetTimeAgo(TimeSpan time)
         {
             if (time.TotalDays > 30)
                 return "> a month ago";

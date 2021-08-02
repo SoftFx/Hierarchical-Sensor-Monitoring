@@ -1,14 +1,18 @@
-﻿using System;
+﻿using HSMCommon;
+using HSMCommon.Certificates;
+using HSMCommon.Model;
+using HSMDatabase.DatabaseInterface;
+using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Constants;
+using HSMServer.DataLayer;
+using NLog;
+using System;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
-using HSMCommon;
-using HSMCommon.Certificates;
-using HSMCommon.Model;
-using NLog;
 
 namespace HSMServer.Configuration
 {
@@ -60,6 +64,7 @@ namespace HSMServer.Configuration
         private static X509Certificate2 _serverCertificate;
         private static X509Certificate2 _caCertificate;
         private static X509Certificate2 _caCertificateWithKey;
+        private static IDatabaseAdapter _databaseAdapter;
         #endregion
 
         #region Public fields
@@ -76,6 +81,8 @@ namespace HSMServer.Configuration
         public static void InitializeConfig()
         {
             _logger = LogManager.GetCurrentClassLogger();
+            IPublicAdapter publicAdapter = new PublicAdapter();
+            _databaseAdapter = new DatabaseAdapter(publicAdapter);
 
             InitializeIndependentConstants();
 
@@ -166,9 +173,12 @@ namespace HSMServer.Configuration
             //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
             if (!_isFirstLaunch)
             {
-                X509Certificate2 certificate = new X509Certificate2(_serverCertificatePath);
-
-                return certificate;
+                var pwdParam = _databaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
+                if (pwdParam != null)
+                {
+                    return new X509Certificate2(_serverCertificatePath,pwdParam.Value);
+                }
+                return new X509Certificate2(_serverCertificatePath);
             }
 
             string certOriginalPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,

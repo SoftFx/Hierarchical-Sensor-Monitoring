@@ -71,6 +71,9 @@
     <Compile Include="Core\IDataCollector.cs" />
     <Compile Include="Core\IDataQueue.cs" />
     <Compile Include="Core\IValuesQueue.cs" />
+    <Compile Include="CustomFuncSensor\CustomFuncSensorBase.cs" />
+    <Compile Include="CustomFuncSensor\NoParamsFuncSensor.cs" />
+    <Compile Include="CustomFuncSensor\OneParamFuncSensor.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensor.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorBase.cs" />
     <Compile Include="DefaultValueSensor\DefaultValueSensorDouble.cs" />
@@ -84,8 +87,6 @@
     <Compile Include="InstantValue\InstantValueSensorString.cs" />
     <Compile Include="InstantValue\InstantValueTypedSensorBase.cs" />
     <Compile Include="Logging\Logger.cs" />
-    <Compile Include="PerformanceSensor\CustomFuncSensor\BoolFuncSensor.cs" />
-    <Compile Include="PerformanceSensor\CustomFuncSensor\FuncSensorBase.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\TotalCPUSensor.cs" />
@@ -106,6 +107,8 @@
     <Compile Include="PublicInterface\IIntBarSensor.cs" />
     <Compile Include="PublicInterface\IIntSensor.cs" />
     <Compile Include="PublicInterface\ILastValueSensor.cs" />
+    <Compile Include="PublicInterface\INoParamsFuncSensor.cs" />
+    <Compile Include="PublicInterface\IParamsFuncSensor.cs" />
     <Compile Include="PublicInterface\IStringSensor.cs" />
     <Compile Include="Serialization\Serializer.cs" />
     <Compile Include="TextConstants.cs" />

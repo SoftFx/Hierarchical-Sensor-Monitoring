@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using HSMCommon.Model;
 using HSMServer.Constants;
@@ -11,17 +12,23 @@ namespace HSMServer.Configuration
     {
         #region Private fields
 
-        private readonly IDatabaseClass _database;
+        private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
-        private ConfigurationObject _currentConfigurationObject;
+        private readonly List<string> _configurationObjectNamesList = new List<string>
+        {
+            ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey, 
+            ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, ConfigurationConstants.SMTPPort,
+            ConfigurationConstants.SMTPLogin, ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
+            ConfigurationConstants.ServerCertificatePassword
+        };
         #endregion
 
-        public ConfigurationProvider(IDatabaseClass database, ILogger<ConfigurationProvider> logger)
+        public ConfigurationProvider(IDatabaseAdapter databaseAdapter, ILogger<ConfigurationProvider> logger)
         {
             _logger = logger;
-            _database = database;
+            _databaseAdapter = databaseAdapter;
             _logger.LogInformation("ConfigurationProvider initialized.");
         }
 
@@ -30,30 +37,44 @@ namespace HSMServer.Configuration
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.ClientAppFolderName);
         public ClientVersionModel ClientVersion => _clientVersion ??= ReadClientVersion();
 
-        public void UpdateConfigurationObject(ConfigurationObject newObject)
+        public List<string> GetAllParameterNames()
         {
-            _currentConfigurationObject = newObject;
-            SaveConfigurationObject(newObject);
-            OnConfigurationObjectUpdated(newObject);
+            return _configurationObjectNamesList;
         }
 
         public void AddConfigurationObject(string name, string value)
         {
             var config = new ConfigurationObject() { Name = name, Value = value };
-            _database.WriteConfigurationObject(config);
+            _databaseAdapter.WriteConfigurationObject(config);
+        }
+
+        public void SetConfigurationObjectToDefault(string name)
+        {
+            _databaseAdapter.RemoveConfigurationObject(name);
         }
 
         ///Use 'name' from ConfigurationConstants! 
         public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
-            var currentObject = _database.ReadConfigurationObject(name);
+            var currentObject = _databaseAdapter.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
                 ConfigurationConstants.GetDefault(name));
         }
 
+        public List<ConfigurationObject> GetAllConfigurationObjects()
+        {
+            List<ConfigurationObject> result = new List<ConfigurationObject>();
+            foreach (var name in _configurationObjectNamesList)
+            {
+                result.Add(ReadOrDefaultConfigurationObject(name));
+            }
+
+            return result;
+        }
+
         public ConfigurationObject ReadConfigurationObject(string name)
         {
-            return _database.ReadConfigurationObject(name);
+            return _databaseAdapter.GetConfigurationObject(name);
         }
 
         public event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
@@ -66,7 +87,7 @@ namespace HSMServer.Configuration
         }
         private void SaveConfigurationObject(ConfigurationObject configurationObject)
         {
-            _database.WriteConfigurationObject(configurationObject);
+            _databaseAdapter.WriteConfigurationObject(configurationObject);
         }
 
         private ClientVersionModel ReadClientVersion()
