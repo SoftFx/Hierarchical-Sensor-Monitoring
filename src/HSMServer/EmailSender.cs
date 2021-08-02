@@ -48,6 +48,8 @@ namespace HSMServer
 
             SmtpClient client = _port.HasValue ? new SmtpClient(_server, _port.Value)
                 : new SmtpClient(_server);
+            client.Host = _server;
+            client.UseDefaultCredentials = false;
             client.Credentials = new NetworkCredential(_login, _password);
             client.EnableSsl = true;
 
