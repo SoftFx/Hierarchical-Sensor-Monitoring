@@ -14,6 +14,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -24,14 +26,16 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly ILogger<ProductController> _logger;
 
         public ProductController(IMonitoringCore monitoringCore, IUserManager userManager,
-            IConfigurationProvider configurationProvider, IRegistrationTicketManager ticketManager)
+            IConfigurationProvider configurationProvider, IRegistrationTicketManager ticketManager, ILogger<ProductController> logger)
         {
             _monitoringCore = monitoringCore;
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
+            _logger = logger;
         }
 
         #region Products
@@ -216,7 +220,9 @@ namespace HSMServer.Controllers
                 string.IsNullOrEmpty(port) ? null : Int32.Parse(port),
                 login, password, fromEmail, model.Email);
 
-            sender.Send("Invitation link HSM", GetLink(ticket.Id.ToString()));
+            var link = GetLink(ticket.Id.ToString());
+
+            Task.Run(() => sender.Send("Invitation link HSM", link));
         }
 
         #endregion
@@ -234,25 +240,34 @@ namespace HSMServer.Controllers
 
         private string GetLink(string id)
         {
-            var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-            byte[] keyBytes;
-            if (key == null)
+            try
             {
-                var bytes = new byte[32];
-                RandomNumberGenerator.Fill(bytes);
+                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+                byte[] keyBytes;
+                if (key == null)
+                {
+                    var bytes = new byte[32];
+                    RandomNumberGenerator.Fill(bytes);
 
-                _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
-                    AESCypher.ToString(bytes));
-                keyBytes = bytes;
+                    _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
+                        AESCypher.ToString(bytes));
+                    keyBytes = bytes;
+                }
+                else
+                    keyBytes = AESCypher.ToBytes(key.Value);
+
+                var (cipher, nonce, tag) = AESCypher.Encrypt(id, keyBytes);
+
+                return $"{Request.Scheme}://{Request.Host}/" +
+                       $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
+                       $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
             }
-            else
-                keyBytes = AESCypher.ToBytes(key.Value);
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to create invitation link.");
+            }
 
-            var (cipher, nonce, tag) = AESCypher.Encrypt(id, keyBytes);
-
-            return $"{Request.Scheme}://{Request.Host}/" +
-                $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
-                $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
+            return string.Empty;
         }
 
         private Product GetModelFromViewModel(ProductViewModel productViewModel)
