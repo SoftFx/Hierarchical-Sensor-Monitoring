@@ -192,10 +192,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void Invite([FromBody] InviteViewModel model)
+        public async void Invite([FromBody] InviteViewModel model)
         {
             InviteValidator validator = new InviteValidator();
-            var results = validator.Validate(model);
+            var results = await validator.ValidateAsync(model);
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataInviteErrorText] = ValidatorHelper.GetErrorString(results.Errors);
