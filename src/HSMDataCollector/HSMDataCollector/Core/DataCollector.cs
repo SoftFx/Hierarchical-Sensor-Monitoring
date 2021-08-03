@@ -152,25 +152,26 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<bool> CreateBoolSensor(string path, string description)
         {
-            return CreateInstantValueSensorInternal<bool>(path, description);
+            return CreateInstantValueSensorInternal<bool>(path, description, SensorType.BooleanSensor);
         }
 
         public IInstantValueSensor<int> CreateIntSensor(string path, string description)
         {
-            return CreateInstantValueSensorInternal<int>(path, description);
+            return CreateInstantValueSensorInternal<int>(path, description, SensorType.IntSensor);
         }
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description)
         {
-            return CreateInstantValueSensorInternal<double>(path, description);
+            return CreateInstantValueSensorInternal<double>(path, description, SensorType.DoubleSensor);
         }
 
         public IInstantValueSensor<string> CreateStringSensor(string path, string description)
         {
-            return CreateInstantValueSensorInternal<string>(path, description);
+            return CreateInstantValueSensorInternal<string>(path, description, SensorType.StringSensor);
         }
 
-        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description)
+        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description, 
+            SensorType sensorType)
         {
             var existingSensor = GetExistingSensor(path);
             var instantValueSensor = existingSensor as IInstantValueSensor<T>;
@@ -180,31 +181,32 @@ namespace HSMDataCollector.Core
             }
 
             InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _productKey, _dataQueue as IValuesQueue,
-                SensorType.StringSensor, description);
+                sensorType, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
         {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
+            return CreateLastValueSensorInternal(path, defaultValue, SensorType.BooleanSensor, description);
         }
 
         public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
         {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
+            return CreateLastValueSensorInternal(path, defaultValue, SensorType.IntSensor, description);
         }
 
         public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
         {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
+            return CreateLastValueSensorInternal(path, defaultValue, SensorType.DoubleSensor, description);
         }
 
         public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
         {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
+            return CreateLastValueSensorInternal(path, defaultValue, SensorType.StringSensor, description);
         }
 
-        private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
+        private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, SensorType type,
+            string description = "")
         {
             var existingSensor = GetExistingSensor(path);
             var lastValueSensor = existingSensor as ILastValueSensor<T>;
@@ -214,7 +216,7 @@ namespace HSMDataCollector.Core
             }
 
             DefaultValueSensor<T> sensor =
-                new DefaultValueSensor<T>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntSensor, defaultValue, description);
+                new DefaultValueSensor<T>(path, _productKey, _dataQueue as IValuesQueue, type, defaultValue, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
