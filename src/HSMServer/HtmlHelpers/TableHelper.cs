@@ -599,8 +599,11 @@ namespace HSMServer.HtmlHelpers
 
             for (int i = 0; i < configurationObjects.Count; ++i)
             {
-                sb.Append($"<tr><th scope='row'>{i}</th><td>{configurationObjects[i].Name}</td>" +
-                          $"<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
+                sb.Append($"<tr><th scope='row'>{i}</th><td><label>{configurationObjects[i].Name}</label>" +
+                          "<span class='tooltip-button' data-trigger='focus' data-toggle='popover' title='Description' " +
+                          $"data-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'" +
+                          $"title='{configurationObjects[i].Description}'></i></span></td>" +
+                          "<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
                           $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
 
                 if (configurationObjects[i].IsDefault)

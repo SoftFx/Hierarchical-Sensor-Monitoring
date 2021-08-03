@@ -17,6 +17,10 @@
         font-size: inherit;
         margin-left: 5px;
     }
+
+    .tooltip-button {
+        margin-left: 10px;
+    }
 </style>
 
 <div class="container row justify-content-center">
@@ -24,6 +28,13 @@
 </div>
 
 <script>
+    //Description popovers
+    $('[data-toggle="popover"]').popover();
+
+    $('.popover-dismiss').popover({
+        trigger: 'focus'
+    });
+
     function createData(name, value, isDefault) {
         return {
             "Name": name,

@@ -7,6 +7,7 @@ namespace HSMServer.Model.ViewModel
         public string Name { get; set; }
         public string Value { get; set; }
         public bool IsDefault { get; set; }
+        public string Description { get; set; }
 
         public ConfigurationObjectViewModel() {}
         public ConfigurationObjectViewModel(ConfigurationObject obj, bool isDefault)
@@ -14,6 +15,7 @@ namespace HSMServer.Model.ViewModel
             IsDefault = isDefault;
             Name = obj.Name;
             Value = obj.Value;
+            Description = obj.Description;
         }
     }
 }

@@ -58,7 +58,7 @@ namespace HSMServer.Configuration
         {
             var currentObject = _databaseAdapter.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
-                ConfigurationConstants.GetDefault(name));
+                ConfigurationConstants.GetDefault(name), ConfigurationConstants.GetDescription(name));
         }
 
         public List<ConfigurationObject> GetAllConfigurationObjects()
@@ -74,7 +74,12 @@ namespace HSMServer.Configuration
 
         public ConfigurationObject ReadConfigurationObject(string name)
         {
-            return _databaseAdapter.GetConfigurationObject(name);
+            var objectFromDB = _databaseAdapter.GetConfigurationObject(name);
+            if (objectFromDB != null)
+            {
+                objectFromDB.Description = ConfigurationConstants.GetDescription(name);
+            }
+            return objectFromDB;
         }
 
         public event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
