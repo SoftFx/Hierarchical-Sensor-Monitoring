@@ -279,6 +279,17 @@ namespace HSMServer.Products
             return product;
         }
 
+        public Product GetProductByKey(string key)
+        {
+            Product product = default(Product);
+            lock (_productsLock)
+            {
+                product = _products.FirstOrDefault(p => p.Key.Equals(key));
+            }
+
+            return product;
+        }
+
         public List<SensorInfo> GetProductSensors(string productName)
         {
             List<SensorInfo> result = new List<SensorInfo>();

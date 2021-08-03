@@ -710,8 +710,8 @@ namespace HSMServer.MonitoringServerCore
             string productName = string.Empty;
             try
             {
-                productName = _productManager.GetProductNameByKey(productKey);
-                var product = _productManager.GetProductByName(productName);
+                var product = _productManager.GetProductByName(productKey);
+                productName = product?.Name;
                 RemoveProductFromUsers(product);
                 _productManager.RemoveProduct(productName);
                 _valuesCache.RemoveProduct(productName);
@@ -721,7 +721,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 result = false;
                 error = ex.Message;
-                _logger.LogError(ex, $"Failed to remove product name = {productName}");
+                _logger.LogError(ex, $"Failed to remove product, name = {productName}");
             }
             return result;
         }
