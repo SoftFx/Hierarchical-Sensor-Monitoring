@@ -714,6 +714,7 @@ namespace HSMServer.MonitoringServerCore
                 var product = _productManager.GetProductByName(productName);
                 RemoveProductFromUsers(product);
                 _productManager.RemoveProduct(productName);
+                _valuesCache.RemoveProduct(productName);
                 result = true;
             }
             catch(Exception ex)
