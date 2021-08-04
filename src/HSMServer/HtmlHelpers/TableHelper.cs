@@ -600,10 +600,8 @@ namespace HSMServer.HtmlHelpers
             for (int i = 0; i < configurationObjects.Count; ++i)
             {
                 sb.Append($"<tr><th scope='row'>{i}</th><td><label class='config-name'>{configurationObjects[i].Name}</label>" +
-                          //"<a data-toggle='popover' data-trigger='focus' title='Description' " +
-                          //$" data-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'></i></a></td>" +
-                          "<a tabindex='0' title='Dismissible popover' data-bs-toggle='popover' data-bs-trigger='focus' " +
-                          "data-bs-content='Click anywhere in the document to close this popover'><i class='fas fa-question-circle'></i></a>" +
+                          "<a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' " +
+                          $" data-bs-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'></i></a></td>" +
                           "<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
                           $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
 
