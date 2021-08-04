@@ -593,16 +593,17 @@ namespace HSMServer.HtmlHelpers
                           "<th scope='col'>#</th>" +
                           "<th scope='col'>Parameter name</th>" +
                           "<th scope='col'>Parameter value</th>" +
-                          "<th scope='col'>Action</th>");
+                          "<th scope='col'>Action</th></tr></thead>");
 
             sb.Append("<tbody>");
 
             for (int i = 0; i < configurationObjects.Count; ++i)
             {
-                sb.Append($"<tr><th scope='row'>{i}</th><td><label>{configurationObjects[i].Name}</label>" +
-                          "<span class='tooltip-button' data-trigger='focus' data-toggle='popover' title='Description' " +
-                          $"data-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'" +
-                          $"title='{configurationObjects[i].Description}'></i></span></td>" +
+                sb.Append($"<tr><th scope='row'>{i}</th><td><label class='config-name'>{configurationObjects[i].Name}</label>" +
+                          //"<a data-toggle='popover' data-trigger='focus' title='Description' " +
+                          //$" data-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'></i></a></td>" +
+                          "<a tabindex='0' title='Dismissible popover' data-bs-toggle='popover' data-bs-trigger='focus' " +
+                          "data-bs-content='Click anywhere in the document to close this popover'><i class='fas fa-question-circle'></i></a>" +
                           "<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
                           $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
 

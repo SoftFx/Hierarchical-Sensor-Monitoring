@@ -39,7 +39,7 @@ namespace HSMServer.Constants
         #region Configuration descriptions
 
         public const string MaxPathLengthDescription =
-            "Maximum nodes amount in the sensor path (maximum '/' symbols amount).";
+            "Maximum nodes amount in the sensor path (maximum slash symbols amount).";
 
         public const string AesEncryptionKeyDescription =
             "Encryption key for invitation links, generated automatically.";
