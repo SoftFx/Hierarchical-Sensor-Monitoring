@@ -11,8 +11,9 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     {
         private const int _mbDivisor = 1048576;
         private const string _sensorName = "Process memory MB";
-        public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName)
-            : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Process", "Working set", processName)
+        public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName,
+            string nodeName = TextConstants.CurrentProcessNodeName)
+            : base($"{nodeName}/{_sensorName}", "Process", "Working set", processName)
         {
             InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }

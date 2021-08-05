@@ -10,8 +10,9 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     internal class ProcessThreadCountSensor : StandardPerformanceSensorBase<int>
     {
         private const string _sensorName = "Process thread count";
-        public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName)
-            : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Process", "Thread Count", processName)
+        public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName,
+            string nodeName = TextConstants.CurrentProcessNodeName)
+            : base($"{nodeName}/{_sensorName}", "Process", "Thread Count", processName)
         {
             InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
