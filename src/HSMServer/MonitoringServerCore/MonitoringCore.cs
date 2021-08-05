@@ -705,12 +705,12 @@ namespace HSMServer.MonitoringServerCore
 
         public bool RemoveProduct(string productKey, out string error)
         {           
-            bool result;
+            bool result = false;
             error = string.Empty;
             string productName = string.Empty;
             try
             {
-                var product = _productManager.GetProductByName(productKey);
+                var product = _productManager.GetProductByKey(productKey);
                 productName = product?.Name;
                 RemoveProductFromUsers(product);
                 _productManager.RemoveProduct(productName);
