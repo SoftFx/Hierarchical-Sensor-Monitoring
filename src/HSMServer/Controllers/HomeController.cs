@@ -104,7 +104,10 @@ namespace HSMServer.Controllers
                 foreach(var sensor in node.Sensors)
                 {
                     if (sensor.TransactionType == TransactionType.Add)
+                    {
                         result.Append(ListHelper.CreateSensor(formattedPath, sensor));
+                        sensor.TransactionType = TransactionType.Update;
+                    }
                 }
 
             return new HtmlString(result.ToString());

@@ -238,12 +238,14 @@ namespace HSMServer.MonitoringServerCore
             try
             {
                 string productName = _productManager.GetProductNameByKey(value.Key);
+                TransactionType type = TransactionType.Unknown;
                 if (!_productManager.IsSensorRegistered(productName, value.Path))
                 {
                     _productManager.AddSensor(productName, value);
+                    type = TransactionType.Add;
                 }
                 DateTime timeCollected = DateTime.Now;
-                SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected);
+                SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected, type);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
                 bool isToDB = true;
