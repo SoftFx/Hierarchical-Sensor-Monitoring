@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.Entity;
 using HSMDatabase.Extensions;
-using HSMServer.DataLayer;
 using LevelDB;
 using NLog;
 using System;
