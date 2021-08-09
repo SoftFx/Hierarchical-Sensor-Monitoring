@@ -3,12 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using HSMDatabase.LevelDB.Extensions;
+using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
 {
-    internal class Database : IDatabase
+    public class Database : IDatabase
     {
-        private DB _database;
+        private readonly DB _database;
+        private readonly string _name;
         public Database(string name)
         {
             Options databaseOptions = new Options();
@@ -17,6 +19,7 @@ namespace HSMDatabase.LevelDB
             databaseOptions.CompressionLevel = CompressionLevel.SnappyCompression;
             databaseOptions.BlockSize = 204800;
             databaseOptions.WriteBufferSize = 8388608;
+            _name = name;
             try
             {
                 _database = new DB(databaseOptions, name, Encoding.UTF8);
@@ -27,12 +30,30 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public string Name => _name;
 
         public void Delete(byte[] key)
         {
             try
             {
                 _database.Delete(key);
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public void RemoveStartingWith(byte[] startWithKey)
+        {
+            try
+            {
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.Seek(startWithKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey);
+                    iterator.Next())
+                {
+                    _database.Delete(iterator.Key());
+                }
             }
             catch (Exception e)
             {
@@ -75,7 +96,7 @@ namespace HSMDatabase.LevelDB
                     iterator.Next())
                 {
                     size += iterator.Value().LongLength;
-                    //TODO: possibly add key size
+                    //TODO: possibly add startwithKey size
                 }
 
                 return size;
@@ -86,9 +107,49 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetRange(byte[] @from, byte[] to)
+        public List<byte[]> GetRange(byte[] from, byte[] to)
         {
-            
+            try
+            {
+                List<byte[]> values = new List<byte[]>();
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.Seek(from); iterator.IsValid() && !iterator.Key().StartsWith(to);
+                    iterator.Next())
+                {
+                    values.Add(iterator.Value());                    
+                }
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public List<byte[]> GetAllStartingWith(byte[] startWithKey)
+        {
+            try
+            {
+                List<byte[]> values = new List<byte[]>();
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.Seek(startWithKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey);
+                    iterator.Next())
+                {
+                    values.Add(iterator.Value());
+                }
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public void Dispose()
+        {
+            _database?.Dispose();
         }
     }
 }

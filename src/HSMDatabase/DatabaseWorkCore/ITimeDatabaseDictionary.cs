@@ -1,5 +1,6 @@
-﻿using System;
-using HSMDatabase.SensorsDatabase;
+﻿using HSMDatabase.SensorsDatabase;
+using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -7,5 +8,6 @@ namespace HSMDatabase.DatabaseWorkCore
     {
         bool TryGetDatabase(DateTime time, out ISensorsDatabase database);
         void AddDatabase(ISensorsDatabase database);
+        List<ISensorsDatabase> GetAllDatabases();
     }
 }

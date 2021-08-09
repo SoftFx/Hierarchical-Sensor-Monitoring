@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.Entity;
-using HSMDatabase.Extensions;
 using LevelDB;
 using NLog;
 using System;
@@ -8,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using HSMDatabase.LevelDB.Extensions;
 
 namespace HSMDatabase.DatabaseWorkCore
 {

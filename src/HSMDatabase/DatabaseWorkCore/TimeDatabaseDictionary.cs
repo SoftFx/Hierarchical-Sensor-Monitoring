@@ -42,5 +42,13 @@ namespace HSMDatabase.DatabaseWorkCore
                 _sensorsDatabases.Add(database);
             }
         }
+
+        public List<ISensorsDatabase> GetAllDatabases()
+        {
+            lock (_accessLock)
+            {
+                return _sensorsDatabases;
+            }
+        }
     }
 }

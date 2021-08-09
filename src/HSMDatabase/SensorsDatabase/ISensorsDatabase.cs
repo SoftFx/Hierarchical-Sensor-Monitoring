@@ -8,9 +8,12 @@ namespace HSMDatabase.SensorsDatabase
     {
         long DatabaseMinTicks { get; }
         long DatabaseMaxTicks { get; }
-        List<SensorDataEntity> GetAllSensorValues();
-        List<SensorDataEntity> GetSensorValues(int count);
-        List<SensorDataEntity> GetSensorValuesFrom(DateTime from);
-        List<SensorDataEntity> GetSensorValuesBetween(DateTime from, DateTime to);
+        long GetSensorSize(string productName, string path);
+        void PutSensorData(SensorDataEntity sensorData, string productName);
+        SensorDataEntity GetLatestSensorValue(string productName, string path);
+        List<SensorDataEntity> GetAllSensorValues(string productName, string path);
+        //List<SensorDataEntity> GetSensorValues(string productName, string path, int count);
+        List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
+        List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
     }
 }
