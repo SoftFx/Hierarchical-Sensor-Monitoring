@@ -12,6 +12,7 @@ namespace HSMDatabase.SensorsDatabase
         DateTime DatabaseMinDateTime { get; }
         long GetSensorSize(string productName, string path);
         void PutSensorData(SensorDataEntity sensorData, string productName);
+        void DeleteAllSensorValues(string productName, string path);
         SensorDataEntity GetLatestSensorValue(string productName, string path);
         List<SensorDataEntity> GetAllSensorValues(string productName, string path);
         //List<SensorDataEntity> GetSensorValues(string productName, string path, int count);

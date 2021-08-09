@@ -62,6 +62,20 @@ namespace HSMDatabase.SensorsDatabase
             }
         }
 
+        public void DeleteAllSensorValues(string productName, string path)
+        {
+            var stringKey = CreateKey(productName, path);
+            var bytesKey = Encoding.UTF8.GetBytes(stringKey);
+            try
+            {
+                _database.RemoveStartingWith(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove values for sensor {productName}/{path}");
+            }
+        }
+
         public SensorDataEntity GetLatestSensorValue(string productName, string path)
         {
             var readKey = CreateKey(productName, path);

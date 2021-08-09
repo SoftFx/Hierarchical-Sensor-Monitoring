@@ -141,11 +141,20 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
+        public void RemoveSensor(string productName, string path)
+        {
+            //TODO: write this method
+            //_environmentDatabase.RemoveSensor
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+            {
+                database.   
+            }
+        }
+
         #endregion
 
-        #region Environment database methods
-
-        #region Products
+        #region Environment database : products
 
         public void RemoveProduct(string productName)
         {
@@ -171,8 +180,6 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             throw new NotImplementedException();
         }
-
-        #endregion
 
 
         #endregion
