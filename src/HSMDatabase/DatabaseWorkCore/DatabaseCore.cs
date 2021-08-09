@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using HSMDatabase.DatabaseInterface;
+﻿using HSMDatabase.DatabaseInterface;
 using HSMDatabase.Entity;
 using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
+using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -16,23 +16,84 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase = new EnvironmentDatabaseWorker("");
             _sensorsDatabases = new TimeDatabaseDictionary();
+            
         }
 
+        private void OpenAllExistingSensorDatabases()
+        {
+
+        }
         #region Sensors methods
 
         public List<SensorDataEntity> GetAllSensorData(string productName, string path)
         {
-            throw new NotImplementedException();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+            {
+                result.AddRange(database.GetAllSensorValues(productName, path));
+            }
+
+            return result;
         }
 
-        public List<SensorDataEntity> GetSensorData(string productName, string path, DateTime @from)
+        public List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from)
         {
-            throw new NotImplementedException();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+            {
+                //Skip too old data
+                if (database.DatabaseMaxTicks < from.Ticks)
+                    continue;
+
+                //If from is in the middle of database, add just values starting from 'from' DateTime
+                if (database.DatabaseMinTicks < from.Ticks)
+                    result.AddRange(database.GetSensorValuesFrom(productName, path, from));
+
+                //Add all values from databases that begin after the 'from' time
+                result.AddRange(database.GetAllSensorValues(productName, path));
+            }
+
+            return result;
         }
 
-        public List<SensorDataEntity> GetSensorData(string productName, string path, DateTime @from, DateTime to)
+        public List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from, DateTime to)
         {
-            throw new NotImplementedException();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+            {
+                //Skip too old data
+                if (database.DatabaseMaxTicks < from.Ticks)
+                    continue;
+
+                //Read data if all the period is from one database
+                if (database.DatabaseMinTicks < from.Ticks && database.DatabaseMaxTicks > to.Ticks)
+                {
+                    result.AddRange(database.GetSensorValuesBetween(productName, path, from, to));
+                    break;
+                }
+
+                //Period starts inside the database
+                if (database.DatabaseMinTicks < from.Ticks)
+                {
+                    result.AddRange(database.GetSensorValuesFrom(productName, path, from));
+                    continue;
+                }
+
+                //Period ends inside the database
+                if (database.DatabaseMaxTicks > to.Ticks)
+                {
+                    result.AddRange(database.GetSensorValuesBetween(productName, path, database.DatabaseMinDateTime, to));
+                    break;
+                }
+
+                //Database period is fully inside the 'from'-'to' period
+                result.AddRange(database.GetAllSensorValues(productName, path));
+            }
+
+            return result;
         }
 
         public long GetSensorSize(string productName, string path)
@@ -62,6 +123,22 @@ namespace HSMDatabase.DatabaseWorkCore
             ISensorsDatabase newDatabase = new SensorsDatabaseWorker(newDatabaseName, minDateTime, maxDateTime);
             _sensorsDatabases.AddDatabase(newDatabase);
             newDatabase.PutSensorData(entity, productName);
+        }
+
+        public SensorDataEntity GetLatestSensorValue(string productName, string path)
+        {
+            List<ISensorsDatabase> databases = _sensorsDatabases.GetAllDatabases();
+            databases.Reverse();
+            foreach (var database in databases)
+            {
+                var currentLatestValue = database.GetLatestSensorValue(productName, path);
+                if (currentLatestValue != null)
+                {
+                    return currentLatestValue;
+                }
+            }
+
+            return null;
         }
 
         #endregion

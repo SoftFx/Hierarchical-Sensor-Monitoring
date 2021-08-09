@@ -13,6 +13,7 @@ namespace HSMDatabase.DatabaseInterface
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from, DateTime to);
         long GetSensorSize(string productName, string path);
         void AddSensorValue(SensorDataEntity entity, string productName);
+        SensorDataEntity GetLatestSensorValue(string productName, string path);
 
         #endregion
 

@@ -8,6 +8,8 @@ namespace HSMDatabase.SensorsDatabase
     {
         long DatabaseMinTicks { get; }
         long DatabaseMaxTicks { get; }
+        DateTime DatabaseMaxDateTime { get; }
+        DateTime DatabaseMinDateTime { get; }
         long GetSensorSize(string productName, string path);
         void PutSensorData(SensorDataEntity sensorData, string productName);
         SensorDataEntity GetLatestSensorValue(string productName, string path);

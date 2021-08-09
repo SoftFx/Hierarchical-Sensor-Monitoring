@@ -18,6 +18,9 @@ namespace HSMDatabase.SensorsDatabase
         private readonly Logger _logger;
         public long DatabaseMinTicks => _databaseMinTime.Ticks;
         public long DatabaseMaxTicks => _databaseMaxTime.Ticks;
+        public DateTime DatabaseMaxDateTime => _databaseMaxTime;
+        public DateTime DatabaseMinDateTime => _databaseMinTime;
+
         public SensorsDatabaseWorker(string name, DateTime minTime, DateTime maxTime)
         {
             _databaseMinTime = minTime;
