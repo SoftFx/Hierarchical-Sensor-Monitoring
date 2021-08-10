@@ -144,11 +144,11 @@ namespace HSMDatabase.DatabaseWorkCore
         public void RemoveSensor(string productName, string path)
         {
             //TODO: write this method
-            //_environmentDatabase.RemoveSensor
+            _environmentDatabase.RemoveSensor(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
-                database.   
+                database.DeleteAllSensorValues(productName, path);  
             }
         }
 

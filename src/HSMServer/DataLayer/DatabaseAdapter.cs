@@ -20,7 +20,7 @@ namespace HSMServer.DataLayer
             _adapter = adapter;
         }
 
-        #region Product
+        #region Product Old
 
         public void RemoveProductOld(string productName)
         {
@@ -56,7 +56,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Sensor
+        #region Sensor Old
 
         public void RemoveSensorOld(string productName, string path)
         {
@@ -121,7 +121,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Users
+        #region Users Old
 
         public void AddUserOld(User user)
         {
@@ -159,7 +159,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Configuration
+        #region Configuration Old
 
         public ConfigurationObject GetConfigurationObjectOld(string name)
         {
@@ -180,7 +180,7 @@ namespace HSMServer.DataLayer
 
         #endregion
 
-        #region Register tickets
+        #region Register tickets Old
 
         public RegistrationTicket ReadRegistrationTicketOld(Guid id)
         {
@@ -200,7 +200,156 @@ namespace HSMServer.DataLayer
 
         #endregion
 
+        #region Product
 
+        public void RemoveProduct(string productName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddProduct(Product product)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void UpdateProduct(Product product)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Product GetProduct(string productName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<Product> GetProducts()
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region Sensors
+
+        public void RemoveSensor(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void AddSensor(SensorInfo info)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void UpdateSensor(SensorInfo info)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void PutSensorData(SensorDataEntity data, string productName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public SensorDataEntity GetLastSensorValue(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public SensorInfo GetSensorInfo(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime @from)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime @from, DateTime to)
+        {
+            throw new NotImplementedException();
+        }
+
+        public SensorHistoryData GetOneValueSensorValue(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<SensorInfo> GetProductSensors(Product product)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region User
+
+        public void AddUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void UpdateUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveUser(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<User> GetUsers()
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<User> GetUsersPage(int page, int pageSize)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region Configuration object
+
+        public ConfigurationObject GetConfigurationObject(string name)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteConfigurationObject(ConfigurationObject obj)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveConfigurationObject(string name)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region Registration ticket
+
+        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+        
         #region Convert objects
 
         private ProductEntity Convert(Product product)
