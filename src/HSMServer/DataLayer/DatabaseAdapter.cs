@@ -15,9 +15,11 @@ namespace HSMServer.DataLayer
     public class DatabaseAdapter : IDatabaseAdapter
     {
         private IPublicAdapter _adapter;
-        public DatabaseAdapter(IPublicAdapter adapter)
+        private IDatabaseCore _database;
+        public DatabaseAdapter(IPublicAdapter adapter, IDatabaseCore database)
         {
             _adapter = adapter;
+            _database = database;
         }
 
         #region Product Old
@@ -257,6 +259,11 @@ namespace HSMServer.DataLayer
         }
 
         public SensorInfo GetSensorInfo(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<SensorHistoryData> GetAllSensorHistory(string productName, string path)
         {
             throw new NotImplementedException();
         }

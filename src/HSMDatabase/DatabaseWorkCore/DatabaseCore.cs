@@ -7,22 +7,52 @@ using System.Collections.Generic;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal class DatabaseCore : IDatabaseCore
+    public class DatabaseCore : IDatabaseCore
     {
+        #region Singleton
+
+        private static volatile DatabaseCore _instance;
+        private static readonly object _singletonLockObj = new object();
+        public static IDatabaseCore GetInstance()
+        {
+            return Instance;
+        }
+
+        private static DatabaseCore Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_singletonLockObj)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new DatabaseCore();
+                        }
+                    }
+                }
+
+                return _instance;
+            }
+        }
+        #endregion
+
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private const string DatabaseFolderName = "MonitoringData";
-        public DatabaseCore()
+        private DatabaseCore()
         {
             _environmentDatabase = new EnvironmentDatabaseWorker("");
             _sensorsDatabases = new TimeDatabaseDictionary();
-            
+
         }
 
         private void OpenAllExistingSensorDatabases()
         {
 
         }
+
         #region Sensors methods
 
         public List<SensorDataEntity> GetAllSensorData(string productName, string path)
@@ -154,7 +184,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
-        #region Environment database : products
+        #region Environment database : Product
 
         public void RemoveProduct(string productName)
         {
@@ -180,7 +210,68 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             throw new NotImplementedException();
         }
+        
+        #endregion
 
+        #region Environment database : User
+
+        public void AddUser(UserEntity user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<UserEntity> ReadUsers()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveUser(UserEntity user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<UserEntity> ReadUsersPage(int page, int pageSize)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region Environment database : Configuration
+
+        public ConfigurationEntity ReadConfigurationObject(string name)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteConfigurationObject(ConfigurationEntity obj)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveConfigurationObject(string name)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region Environment database : Ticket
+
+        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveRegistrationTicket(Guid id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
+        {
+            throw new NotImplementedException();
+        }
 
         #endregion
 

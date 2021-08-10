@@ -82,7 +82,7 @@ namespace HSMServer.Configuration
         {
             _logger = LogManager.GetCurrentClassLogger();
             IPublicAdapter publicAdapter = new PublicAdapter();
-            _databaseAdapter = new DatabaseAdapter(publicAdapter);
+            _databaseAdapter = new DatabaseAdapter(publicAdapter, DatabaseCore.GetInstance());
 
             InitializeIndependentConstants();
 

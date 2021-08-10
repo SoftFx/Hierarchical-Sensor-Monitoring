@@ -1,19 +1,19 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
 using HSMServer.Tests.Fixture;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using Xunit;
 
 namespace HSMServer.Tests.DatabaseTests
 {
-    public class DatabaseAdapterTests : IClassFixture<DatabaseAdapterFixture>, IDisposable
+    public class DatabaseAdapterOldTests : IClassFixture<DatabaseAdapterFixture>, IDisposable
     {
         private readonly DatabaseAdapterFixture _databaseFixture;
-        public DatabaseAdapterTests(DatabaseAdapterFixture databaseFixture)
+        public DatabaseAdapterOldTests(DatabaseAdapterFixture databaseFixture)
         {
             _databaseFixture = databaseFixture;
         }
@@ -27,8 +27,8 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            var existingProduct = _databaseFixture.DatabaseAdapter.GetProduct(_databaseFixture.FirstProductName);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            var existingProduct = _databaseFixture.DatabaseAdapter.GetProductOld(_databaseFixture.FirstProductName);
 
             //Assert
             Assert.Equal(product.Name, existingProduct.Name);
@@ -43,14 +43,14 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetSecondTestProduct();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
 
             //Assert
-            Assert.NotNull(_databaseFixture.DatabaseAdapter.GetProduct(_databaseFixture.SecondProductName));
+            Assert.NotNull(_databaseFixture.DatabaseAdapter.GetProductOld(_databaseFixture.SecondProductName));
 
             //Act
-            _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
-            var correspondingProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.Name);
+            _databaseFixture.DatabaseAdapter.RemoveProductOld(product.Name);
+            var correspondingProduct = _databaseFixture.DatabaseAdapter.GetProductOld(product.Name);
 
             //Assert
             Assert.Null(correspondingProduct);
@@ -63,7 +63,7 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetThirdTestProduct();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
             var list = _databaseFixture.GetProductsList();
             Debug.Print($"List of {list.Count} products received");
 
@@ -77,14 +77,14 @@ namespace HSMServer.Tests.DatabaseTests
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
             var key = KeyGenerator.GenerateExtraProductKey(product.Name, _databaseFixture.ExtraKeyName);
-            var extraKey = new ExtraProductKey { Key = key, Name = _databaseFixture.ExtraKeyName };
+            var extraKey = new ExtraProductKey {Key = key, Name = _databaseFixture.ExtraKeyName};
             product.ExtraKeys = new List<ExtraProductKey> { extraKey };
 
             //Act
-            _databaseFixture.DatabaseAdapter.UpdateProduct(product);
+            _databaseFixture.DatabaseAdapter.UpdateProductOld(product);
 
             //Assert
-            var gotProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.Name);
+            var gotProduct = _databaseFixture.DatabaseAdapter.GetProductOld(product.Name);
             Assert.NotEmpty(gotProduct.ExtraKeys);
             var keyFromDB = gotProduct.ExtraKeys.First();
             Assert.Equal(extraKey.Name, keyFromDB.Name);
@@ -102,8 +102,8 @@ namespace HSMServer.Tests.DatabaseTests
             var user = _databaseFixture.CreateFirstUser();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddUser(user);
-            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsers();
+            _databaseFixture.DatabaseAdapter.AddUserOld(user);
+            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsersOld();
 
             //Assert
             Assert.Contains(usersFromDB, u => u.UserName == user.UserName && u.Id == user.Id);
@@ -116,9 +116,9 @@ namespace HSMServer.Tests.DatabaseTests
             var user = _databaseFixture.CreateSecondUser();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddUser(user);
-            _databaseFixture.DatabaseAdapter.RemoveUser(user);
-            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsers();
+            _databaseFixture.DatabaseAdapter.AddUserOld(user);
+            _databaseFixture.DatabaseAdapter.RemoveUserOld(user);
+            var usersFromDB = _databaseFixture.DatabaseAdapter.GetUsersOld();
 
             //Assert
             Assert.DoesNotContain(usersFromDB, u => u.UserName == user.UserName && u.Id == user.Id);
@@ -131,13 +131,13 @@ namespace HSMServer.Tests.DatabaseTests
             var user = _databaseFixture.CreateThirdUser();
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddUser(user);
-            var existingUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
+            _databaseFixture.DatabaseAdapter.AddUserOld(user);
+            var existingUser = _databaseFixture.DatabaseAdapter.GetUsersOld().First(u => u.Id == user.Id);
             var key = _databaseFixture.GetFirstTestProduct().Key;
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(key, ProductRoleEnum.ProductManager));
             existingUser.Update(user);
-            _databaseFixture.DatabaseAdapter.UpdateUser(existingUser);
-            var newUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
+            _databaseFixture.DatabaseAdapter.UpdateUserOld(existingUser);
+            var newUser = _databaseFixture.DatabaseAdapter.GetUsersOld().First(u => u.Id == user.Id);
 
             //Assert
             Assert.NotEmpty(newUser.ProductsRoles);
@@ -153,12 +153,12 @@ namespace HSMServer.Tests.DatabaseTests
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
 
 
             //Act
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
-            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
+            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfoOld(product.Name, info.Path);
 
             //Assert
             Assert.NotNull(infoFromDB);
@@ -174,12 +174,12 @@ namespace HSMServer.Tests.DatabaseTests
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.RemoveSensor(product.Name, info.Path);
-            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.RemoveSensorOld(product.Name, info.Path);
+            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfoOld(product.Name, info.Path);
 
             //Assert
             Assert.Null(infoFromDB);
@@ -192,17 +192,17 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
             var data = _databaseFixture.CreateOneDataEntity();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.PutSensorDataOld(data, product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistoryOld(product.Name, info.Path, -1);
 
             //Assert
-            Assert.NotNull(dataFromDB);
-            Assert.Equal(data.DataType, (byte)dataFromDB.SensorType);
-            Assert.Equal(data.TypedData, dataFromDB.TypedData);
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(data.DataType, (byte)dataFromDB[0].SensorType);
+            Assert.Equal(data.TypedData, dataFromDB[0].TypedData);
         }
 
         [Fact]
@@ -212,12 +212,12 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateOneValueSensorInfo();
             var data = _databaseFixture.CreateOneValueSensorDataEntity();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.PutOneValueSensorDataOld(data, product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValueOld(product.Name, info.Path);
 
             //Assert
             Assert.NotNull(dataFromDB);
@@ -232,12 +232,12 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
             var data = _databaseFixture.CreateSensorValues();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorDataOld(d, product.Name));
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistoryOld(product.Name, info.Path, -1);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -251,12 +251,12 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
             var data = _databaseFixture.CreateSensorValues();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorDataOld(d, product.Name));
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistoryOld(product.Name, info.Path, 10);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -270,13 +270,13 @@ namespace HSMServer.Tests.DatabaseTests
             var product = _databaseFixture.GetFirstTestProduct();
             var info = _databaseFixture.CreateSensorInfo();
             var data = _databaseFixture.CreateSensorValues();
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            _databaseFixture.DatabaseAdapter.AddSensor(info);
+            _databaseFixture.DatabaseAdapter.AddProductOld(product);
+            _databaseFixture.DatabaseAdapter.AddSensorOld(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorDataOld(d, product.Name));
+            _databaseFixture.DatabaseAdapter.RemoveProductOld(product.Name);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistoryOld(product.Name, info.Path, -1);
 
             //Assert
             Assert.NotNull(dataFromDB);
@@ -292,8 +292,8 @@ namespace HSMServer.Tests.DatabaseTests
             var ticket = _databaseFixture.CreateRegistrationTicket();
 
             //Act
-            _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
-            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
+            _databaseFixture.DatabaseAdapter.WriteRegistrationTicketOld(ticket);
+            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicketOld(ticket.Id);
 
             //Assert
             Assert.NotNull(ticketFromDB);
@@ -310,9 +310,9 @@ namespace HSMServer.Tests.DatabaseTests
             var ticket = _databaseFixture.CreateRegistrationTicket();
 
             //Act
-            _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
-            _databaseFixture.DatabaseAdapter.RemoveRegistrationTicket(ticket.Id);
-            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
+            _databaseFixture.DatabaseAdapter.WriteRegistrationTicketOld(ticket);
+            _databaseFixture.DatabaseAdapter.RemoveRegistrationTicketOld(ticket.Id);
+            var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicketOld(ticket.Id);
 
             //Assert
             Assert.Null(ticketFromDB);
@@ -325,8 +325,8 @@ namespace HSMServer.Tests.DatabaseTests
             var configObj = _databaseFixture.CreateConfigurationObject();
 
             //Act
-            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
-            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObjectOld(configObj);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObjectOld(configObj.Name);
 
             //Assert
             Assert.NotNull(objectFromDB);
@@ -341,11 +341,11 @@ namespace HSMServer.Tests.DatabaseTests
             var configObj = _databaseFixture.CreateConfigurationObject();
 
             //Act
-            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObjectOld(configObj);
             string newValue = "New value";
             configObj.Value = newValue;
-            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
-            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObjectOld(configObj);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObjectOld(configObj.Name);
 
             //Assert
             Assert.NotNull(objectFromDB);
@@ -359,9 +359,9 @@ namespace HSMServer.Tests.DatabaseTests
             var configObj = _databaseFixture.CreateConfigurationObject();
 
             //Act
-            _databaseFixture.DatabaseAdapter.WriteConfigurationObject(configObj);
-            _databaseFixture.DatabaseAdapter.RemoveConfigurationObject(configObj.Name);
-            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObject(configObj.Name);
+            _databaseFixture.DatabaseAdapter.WriteConfigurationObjectOld(configObj);
+            _databaseFixture.DatabaseAdapter.RemoveConfigurationObjectOld(configObj.Name);
+            var objectFromDB = _databaseFixture.DatabaseAdapter.GetConfigurationObjectOld(configObj.Name);
 
             //Assert
             Assert.Null(objectFromDB);

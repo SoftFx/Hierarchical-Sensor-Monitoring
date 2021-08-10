@@ -103,6 +103,7 @@ namespace HSMServer.DataLayer
         void PutSensorData(SensorDataEntity data, string productName);
         SensorDataEntity GetLastSensorValue(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
+        List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
