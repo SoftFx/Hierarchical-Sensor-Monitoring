@@ -10,10 +10,13 @@ namespace HSMDatabase.DatabaseInterface
         List<SensorDataEntity> GetAllSensorData(string productName, string path);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from, DateTime to);
-        long GetSensorSize(string productName, string path);
         void AddSensorValue(SensorDataEntity entity, string productName);
         SensorDataEntity GetLatestSensorValue(string productName, string path);
         void RemoveSensor(string productName, string path);
+        void AddSensor(SensorEntity entity);
+        SensorEntity GetSensorInfo(string productName, string path);
+        List<SensorEntity> GetProductSensors(string productName);
+        long GetSensorSize(string productName, string path);
         #endregion
 
         #region Products

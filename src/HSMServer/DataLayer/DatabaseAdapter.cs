@@ -206,27 +206,33 @@ namespace HSMServer.DataLayer
 
         public void RemoveProduct(string productName)
         {
-            throw new NotImplementedException();
+            _database.RemoveProduct(productName);
         }
 
         public void AddProduct(Product product)
         {
-            throw new NotImplementedException();
+            var entity = Convert(product);
+            _database.AddProduct(entity);
         }
 
         public void UpdateProduct(Product product)
         {
-            throw new NotImplementedException();
+            AddProduct(product);
         }
 
         public Product GetProduct(string productName)
         {
-            throw new NotImplementedException();
+            var entity = _database.GetProduct(productName);
+            return entity != null ? new Product(entity) : null;
         }
 
         public List<Product> GetProducts()
         {
-            throw new NotImplementedException();
+            var productEntities = _adapter.GetAllProducts();
+            if (productEntities == null || !productEntities.Any())
+                return new List<Product>();
+
+            return productEntities.Select(e => new Product(e)).ToList();
         }
 
         #endregion
@@ -235,57 +241,86 @@ namespace HSMServer.DataLayer
 
         public void RemoveSensor(string productName, string path)
         {
-            throw new NotImplementedException();
+            _database.RemoveSensor(productName, path);
         }
 
         public void AddSensor(SensorInfo info)
         {
-            throw new NotImplementedException();
+            SensorEntity entity = Convert(info);
+            _database.AddSensor(entity);
         }
 
         public void UpdateSensor(SensorInfo info)
         {
-            throw new NotImplementedException();
+            SensorEntity entity = Convert(info);
+            _database.AddSensor(entity);
         }
 
         public void PutSensorData(SensorDataEntity data, string productName)
         {
-            throw new NotImplementedException();
+            _database.AddSensorValue(data, productName);
         }
 
         public SensorDataEntity GetLastSensorValue(string productName, string path)
         {
-            throw new NotImplementedException();
+            var value = _database.GetLatestSensorValue(productName, path);
+            return value;
         }
 
         public SensorInfo GetSensorInfo(string productName, string path)
         {
-            throw new NotImplementedException();
+            var sensorEntity = _database.GetSensorInfo(productName, path);
+            return sensorEntity != null ? new SensorInfo(sensorEntity) : null;
         }
 
         public List<SensorHistoryData> GetAllSensorHistory(string productName, string path)
         {
-            throw new NotImplementedException();
+            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>();
+            var history = _database.GetAllSensorData(productName, path);
+            if (history != null && history.Any())
+            {
+                historyDatas.AddRange(history.Select(Convert));
+            }
+
+            return historyDatas;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime @from)
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from)
         {
-            throw new NotImplementedException();
+            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>();
+            var history = _database.GetSensorData(productName, path, from);
+            if (history != null && history.Any())
+            {
+                historyDatas.AddRange(history.Select(Convert));
+            }
+
+            return historyDatas;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime @from, DateTime to)
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to)
         {
-            throw new NotImplementedException();
+            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>();
+            var history = _database.GetSensorData(productName, path, from, to);
+            if (history != null && history.Any())
+            {
+                historyDatas.AddRange(history.Select(Convert));
+            }
+
+            return historyDatas;
         }
 
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
-            throw new NotImplementedException();
+            SensorDataEntity entity = _database.GetLatestSensorValue(productName, path);
+            return entity != null ? Convert(entity) : null;
         }
 
         public List<SensorInfo> GetProductSensors(Product product)
         {
-            throw new NotImplementedException();
+            var sensorEntities = _adapter.GetProductSensors(product.Name);
+            if (sensorEntities == null || !sensorEntities.Any())
+                return new List<SensorInfo>();
+            return sensorEntities.Select(e => new SensorInfo(e)).ToList();
         }
 
         #endregion
@@ -294,27 +329,44 @@ namespace HSMServer.DataLayer
 
         public void AddUser(User user)
         {
-            throw new NotImplementedException();
+            UserEntity entity = Convert(user);
+            _database.AddUser(entity);
         }
 
         public void UpdateUser(User user)
         {
-            throw new NotImplementedException();
+            UserEntity entity = Convert(user);
+            _database.AddUser(entity);
         }
 
         public void RemoveUser(User user)
         {
-            throw new NotImplementedException();
+            UserEntity entity = Convert(user);
+            _database.RemoveUser(entity);
         }
 
         public List<User> GetUsers()
         {
-            throw new NotImplementedException();
+            List<User> users = new List<User>();
+            var userEntities = _database.ReadUsers();
+            if (userEntities != null && userEntities.Any())
+            {
+                users.AddRange(userEntities.Select(e => new User(e)));
+            }
+
+            return users;
         }
 
         public List<User> GetUsersPage(int page, int pageSize)
         {
-            throw new NotImplementedException();
+            List<User> users = new List<User>();
+            var userEntities = _database.ReadUsersPage(page, pageSize);
+            if (userEntities != null && userEntities.Any())
+            {
+                users.AddRange(userEntities.Select(e => new User(e)));
+            }
+
+            return users;
         }
 
         #endregion
@@ -323,17 +375,19 @@ namespace HSMServer.DataLayer
 
         public ConfigurationObject GetConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            var entity = _database.ReadConfigurationObject(name);
+            return entity != null ? new ConfigurationObject(entity) : null;
         }
 
         public void WriteConfigurationObject(ConfigurationObject obj)
         {
-            throw new NotImplementedException();
+            var entity = Convert(obj);
+            _database.WriteConfigurationObject(entity);
         }
 
         public void RemoveConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            _database.RemoveConfigurationObject(name);
         }
 
         #endregion
@@ -342,17 +396,19 @@ namespace HSMServer.DataLayer
 
         public RegistrationTicket ReadRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            var entity = _database.ReadRegistrationTicket(id);
+            return entity != null ? new RegistrationTicket(entity) : null;
         }
 
         public void RemoveRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            _database.ReadRegistrationTicket(id);
         }
 
         public void WriteRegistrationTicket(RegistrationTicket ticket)
         {
-            throw new NotImplementedException();
+            var entity = Convert(ticket);
+            _database.WriteRegistrationTicket(entity);
         }
 
         #endregion

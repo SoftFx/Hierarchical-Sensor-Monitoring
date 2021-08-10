@@ -126,6 +126,16 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
+        public SensorEntity GetSensorInfo(string productName, string path)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<SensorEntity> GetProductSensors(string productName)
+        {
+            throw new NotImplementedException();
+        }
+
         public long GetSensorSize(string productName, string path)
         {
             long size = 0L;
@@ -180,6 +190,11 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 database.DeleteAllSensorValues(productName, path);  
             }
+        }
+
+        public void AddSensor(SensorEntity entity)
+        {
+            throw new NotImplementedException();
         }
 
         #endregion
