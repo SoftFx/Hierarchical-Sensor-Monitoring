@@ -46,14 +46,14 @@ namespace HSMServer.Products
         private void InitializeProducts()
         {
             int count = 0;
-            var existingProducts = _databaseAdapter.GetProducts();
+            var existingProducts = _databaseAdapter.GetProductsOld();
             foreach (var product in existingProducts)
             {
                 lock (_productsLock)
                 {
                     _products.Add(product);
                 }
-                var sensors = _databaseAdapter.GetProductSensors(product);
+                var sensors = _databaseAdapter.GetProductSensorsOld(product);
                 lock (_dictionaryLock)
                 {
                     _productSensorsDictionary[product.Name] = new List<SensorInfo>();
@@ -85,7 +85,7 @@ namespace HSMServer.Products
         {
             try
             {
-                _databaseAdapter.RemoveProduct(name);
+                _databaseAdapter.RemoveProductOld(name);
                 var product = GetProductByName(name);
                 if (product != null)
                 {
@@ -118,7 +118,7 @@ namespace HSMServer.Products
         {
             try
             {
-                _databaseAdapter.AddProduct(product);
+                _databaseAdapter.AddProductOld(product);
                 lock (_productsLock)
                 {
                     _products.Add(product);
@@ -154,7 +154,7 @@ namespace HSMServer.Products
 
             Task.Run(() =>
             {
-                _databaseAdapter.UpdateProduct(currentProduct);
+                _databaseAdapter.UpdateProductOld(currentProduct);
             });
         }
         public bool IsSensorRegistered(string productName, string path)
@@ -180,7 +180,7 @@ namespace HSMServer.Products
                 _productSensorsDictionary[productName].Add(newObject);
             }
 
-            Task.Run(() => _databaseAdapter.AddSensor(newObject));
+            Task.Run(() => _databaseAdapter.AddSensorOld(newObject));
         }
 
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
@@ -207,7 +207,7 @@ namespace HSMServer.Products
 
             if (needToAdd)
             {
-                Task.Run(() => _databaseAdapter.AddSensor(newObject));
+                Task.Run(() => _databaseAdapter.AddSensorOld(newObject));
             }
         }
 
@@ -225,7 +225,7 @@ namespace HSMServer.Products
             //ThreadPool.QueueUserWorkItem(_ => _databaseAdapter.AddSensor(sensorInfo));
             //ThreadPool.QueueUserWorkItem(_ =>
             //    _databaseAdapter.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
-            Task.Run(() => _databaseAdapter.AddSensor(sensorInfo));
+            Task.Run(() => _databaseAdapter.AddSensorOld(sensorInfo));
         }
         public void RemoveSensor(string productName, string path)
         {
@@ -240,7 +240,7 @@ namespace HSMServer.Products
                     }
                 }
 
-                Task.Run(() => _databaseAdapter.RemoveSensor(productName, path));
+                Task.Run(() => _databaseAdapter.RemoveSensorOld(productName, path));
             }
             catch (Exception e)
             {

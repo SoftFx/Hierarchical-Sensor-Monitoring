@@ -110,7 +110,7 @@ namespace HSMServer.MonitoringServerCore
                 var sensors = _productManager.GetProductSensors(product.Name);
                 foreach (var sensor in sensors)
                 {
-                    var lastVal = _databaseAdapter.GetLastSensorValue(product.Name, sensor.Path);
+                    var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
                     if (lastVal != null)
                     {
                         _valuesCache.AddValue(product.Name, _converter.Convert(lastVal, sensor, product.Name));
@@ -150,7 +150,7 @@ namespace HSMServer.MonitoringServerCore
         private void SaveSensorValue(SensorDataEntity dataObject, string productName)
         {
             //_productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
-            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutSensorDataOld(dataObject, productName));
         }
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace HSMServer.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveOneValueSensorValue(SensorDataEntity dataObject, string productName)
         {
-            Task.Run(() => _databaseAdapter.PutOneValueSensorData(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
         }
 
         public void AddSensorsValues(IEnumerable<CommonSensorValue> values)
@@ -561,7 +561,7 @@ namespace HSMServer.MonitoringServerCore
         }
         public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
         {
-            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistory(product, path, n);
+            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
             //_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null)
@@ -579,7 +579,7 @@ namespace HSMServer.MonitoringServerCore
 
         public string GetFileSensorValue(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistory(product, path, 1);
+            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
             if (historyList.Count < 1)
             {
                 return string.Empty;
@@ -597,7 +597,7 @@ namespace HSMServer.MonitoringServerCore
 
         public byte[] GetFileSensorValueBytes(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistory(product, path, 1);
+            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
             if (historyList.Count < 1)
             {
                 return new byte[1];
@@ -621,7 +621,7 @@ namespace HSMServer.MonitoringServerCore
         }
         public string GetFileSensorValueExtension(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistory(product, path, 1);
+            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
             if (historyList.Count < 1)
             {
                 return string.Empty;

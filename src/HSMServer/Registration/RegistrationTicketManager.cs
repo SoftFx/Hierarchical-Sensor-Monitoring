@@ -17,17 +17,17 @@ namespace HSMServer.Registration
 
         public RegistrationTicket GetTicket(Guid id)
         {
-            return _databaseAdapter.ReadRegistrationTicket(id);
+            return _databaseAdapter.ReadRegistrationTicketOld(id);
         }
 
         public void AddTicket(RegistrationTicket ticket)
         {
-            _databaseAdapter.WriteRegistrationTicket(ticket);
+            _databaseAdapter.WriteRegistrationTicketOld(ticket);
         }
 
         public void RemoveTicket(Guid id)
         {
-            _databaseAdapter.RemoveRegistrationTicket(id);
+            _databaseAdapter.RemoveRegistrationTicketOld(id);
         }
     }
 }

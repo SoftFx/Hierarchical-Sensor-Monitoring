@@ -184,14 +184,14 @@ namespace HSMServer.Tests.Fixture
         /// </summary>
         public void Dispose()
         {
-            DatabaseAdapter?.RemoveProduct(FirstProductName);
-            DatabaseAdapter?.RemoveProduct(SecondProductName);
-            DatabaseAdapter?.RemoveProduct(ThirdProductName);
-            DatabaseAdapter?.RemoveUser(CreateFirstUser());
-            DatabaseAdapter?.RemoveUser(CreateSecondUser());
-            DatabaseAdapter?.RemoveUser(CreateThirdUser());
-            DatabaseAdapter?.RemoveRegistrationTicket(_ticket.Id);
-            DatabaseAdapter?.RemoveConfigurationObject(ConfigurationObjectName);
+            DatabaseAdapter?.RemoveProductOld(FirstProductName);
+            DatabaseAdapter?.RemoveProductOld(SecondProductName);
+            DatabaseAdapter?.RemoveProductOld(ThirdProductName);
+            DatabaseAdapter?.RemoveUserOld(CreateFirstUser());
+            DatabaseAdapter?.RemoveUserOld(CreateSecondUser());
+            DatabaseAdapter?.RemoveUserOld(CreateThirdUser());
+            DatabaseAdapter?.RemoveRegistrationTicketOld(_ticket.Id);
+            DatabaseAdapter?.RemoveConfigurationObjectOld(ConfigurationObjectName);
         }
     }
 }

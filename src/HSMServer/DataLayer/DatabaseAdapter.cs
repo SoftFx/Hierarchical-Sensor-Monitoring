@@ -22,30 +22,30 @@ namespace HSMServer.DataLayer
 
         #region Product
 
-        public void RemoveProduct(string productName)
+        public void RemoveProductOld(string productName)
         {
             _adapter.RemoveProduct(productName);
         }
 
-        public void AddProduct(Product product)
+        public void AddProductOld(Product product)
         {
             var entity = Convert(product);
             _adapter.AddProduct(entity);
         }
 
-        public void UpdateProduct(Product product)
+        public void UpdateProductOld(Product product)
         {
             var entity = Convert(product);
             _adapter.UpdateProduct(entity);
         }
 
-        public Product GetProduct(string productName)
+        public Product GetProductOld(string productName)
         {
             var productEntity = _adapter.GetProduct(productName);
             return productEntity == null ? null : new Product(productEntity);
         }
 
-        public List<Product> GetProducts()
+        public List<Product> GetProductsOld()
         {
             var productEntities = _adapter.GetAllProducts();
             if (productEntities == null || !productEntities.Any())
@@ -58,45 +58,45 @@ namespace HSMServer.DataLayer
 
         #region Sensor
 
-        public void RemoveSensor(string productName, string path)
+        public void RemoveSensorOld(string productName, string path)
         {
             _adapter.RemoveSensor(productName, path);
         }
 
-        public void AddSensor(SensorInfo info)
+        public void AddSensorOld(SensorInfo info)
         {
             var entity = Convert(info);
             _adapter.AddSensor(entity);
         }
 
-        public void UpdateSensor(SensorInfo info)
+        public void UpdateSensorOld(SensorInfo info)
         {
             var entity = Convert(info);
             _adapter.UpdateSensor(entity);
         }
 
-        public void PutSensorData(SensorDataEntity data, string productName)
+        public void PutSensorDataOld(SensorDataEntity data, string productName)
         {
             _adapter.PutSensorData(data, productName);
         }
 
-        public void PutOneValueSensorData(SensorDataEntity data, string productName)
+        public void PutOneValueSensorDataOld(SensorDataEntity data, string productName)
         {
             _adapter.PutOneValueSensorData(data, productName);
         }
 
-        public SensorDataEntity GetLastSensorValue(string productName, string path)
+        public SensorDataEntity GetLastSensorValueOld(string productName, string path)
         {
             return _adapter.GetLastSensorValue(productName, path);
         }
 
-        public SensorInfo GetSensorInfo(string productName, string path)
+        public SensorInfo GetSensorInfoOld(string productName, string path)
         {
             var sensorEntity = _adapter.GetSensor(productName, path);
             return sensorEntity == null ? null : new SensorInfo(sensorEntity);
         }
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, long n)
+        public List<SensorHistoryData> GetSensorHistoryOld(string productName, string path, long n)
         {
             var dataEntities = _adapter.GetSensorHistory(productName, path, n);
             if (dataEntities == null || !dataEntities.Any())
@@ -105,13 +105,13 @@ namespace HSMServer.DataLayer
             return dataEntities.Select(Convert).ToList();
         }
 
-        public SensorHistoryData GetOneValueSensorValue(string productName, string path)
+        public SensorHistoryData GetOneValueSensorValueOld(string productName, string path)
         {
             var dataEntity = _adapter.GetOneValueSensorValue(productName, path);
             return dataEntity == null ? null : Convert(dataEntity);
         }
 
-        public List<SensorInfo> GetProductSensors(Product product)
+        public List<SensorInfo> GetProductSensorsOld(Product product)
         {
             var sensorEntities = _adapter.GetProductSensors(product.Name);
             if(sensorEntities == null || !sensorEntities.Any())
@@ -123,25 +123,25 @@ namespace HSMServer.DataLayer
 
         #region Users
 
-        public void AddUser(User user)
+        public void AddUserOld(User user)
         {
             var entity = Convert(user);
             _adapter.AddUser(entity);
         }
 
-        public void UpdateUser(User user)
+        public void UpdateUserOld(User user)
         {
             var entity = Convert(user);
             _adapter.UpdateUser(entity);
         }
 
-        public void RemoveUser(User user)
+        public void RemoveUserOld(User user)
         {
             var entity = Convert(user);
             _adapter.RemoveUser(entity);
         }
 
-        public List<User> GetUsers()
+        public List<User> GetUsersOld()
         {
             var userEntities = _adapter.GetUsers();
             if(userEntities == null || !userEntities.Any())
@@ -149,7 +149,7 @@ namespace HSMServer.DataLayer
             return userEntities.Select(u => new User(u)).ToList();
         }
 
-        public List<User> GetUsersPage(int page, int pageSize)
+        public List<User> GetUsersPageOld(int page, int pageSize)
         {
             var userEntities = _adapter.GetUsersPage(page, pageSize);
             if (userEntities == null || !userEntities.Any())
@@ -161,19 +161,19 @@ namespace HSMServer.DataLayer
 
         #region Configuration
 
-        public ConfigurationObject GetConfigurationObject(string name)
+        public ConfigurationObject GetConfigurationObjectOld(string name)
         {
             var configurationEntity = _adapter.ReadConfigurationObject(name);
             return configurationEntity == null ? null : new ConfigurationObject(configurationEntity);
         }
 
-        public void WriteConfigurationObject(ConfigurationObject obj)
+        public void WriteConfigurationObjectOld(ConfigurationObject obj)
         {
             var entity = Convert(obj);
             _adapter.WriteConfigurationObject(entity);
         }
 
-        public void RemoveConfigurationObject(string name)
+        public void RemoveConfigurationObjectOld(string name)
         {
             _adapter.RemoveConfigurationObject(name);
         }
@@ -182,18 +182,18 @@ namespace HSMServer.DataLayer
 
         #region Register tickets
 
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
+        public RegistrationTicket ReadRegistrationTicketOld(Guid id)
         {
             var ticketEntity = _adapter.ReadRegistrationTicket(id);
             return ticketEntity == null ? null : new RegistrationTicket(ticketEntity);
         }
 
-        public void RemoveRegistrationTicket(Guid id)
+        public void RemoveRegistrationTicketOld(Guid id)
         {
             _adapter.RemoveRegistrationTicket(id);
         }
 
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
+        public void WriteRegistrationTicketOld(RegistrationTicket ticket)
         {
             _adapter.WriteRegistrationTicket(Convert(ticket));
         }

@@ -173,7 +173,7 @@ namespace HSMServer.Configuration
             //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
             if (!_isFirstLaunch)
             {
-                var pwdParam = _databaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
+                var pwdParam = _databaseAdapter.GetConfigurationObjectOld(ConfigurationConstants.ServerCertificatePassword);
                 if (pwdParam != null)
                 {
                     return new X509Certificate2(_serverCertificatePath,pwdParam.Value);

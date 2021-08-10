@@ -45,18 +45,18 @@ namespace HSMServer.Configuration
         public void AddConfigurationObject(string name, string value)
         {
             var config = new ConfigurationObject() { Name = name, Value = value };
-            _databaseAdapter.WriteConfigurationObject(config);
+            _databaseAdapter.WriteConfigurationObjectOld(config);
         }
 
         public void SetConfigurationObjectToDefault(string name)
         {
-            _databaseAdapter.RemoveConfigurationObject(name);
+            _databaseAdapter.RemoveConfigurationObjectOld(name);
         }
 
         ///Use 'name' from ConfigurationConstants! 
         public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
-            var currentObject = _databaseAdapter.GetConfigurationObject(name);
+            var currentObject = _databaseAdapter.GetConfigurationObjectOld(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
                 ConfigurationConstants.GetDefault(name), ConfigurationConstants.GetDescription(name));
         }
@@ -74,7 +74,7 @@ namespace HSMServer.Configuration
 
         public ConfigurationObject ReadConfigurationObject(string name)
         {
-            var objectFromDB = _databaseAdapter.GetConfigurationObject(name);
+            var objectFromDB = _databaseAdapter.GetConfigurationObjectOld(name);
             if (objectFromDB != null)
             {
                 objectFromDB.Description = ConfigurationConstants.GetDescription(name);
@@ -92,7 +92,7 @@ namespace HSMServer.Configuration
         }
         private void SaveConfigurationObject(ConfigurationObject configurationObject)
         {
-            _databaseAdapter.WriteConfigurationObject(configurationObject);
+            _databaseAdapter.WriteConfigurationObjectOld(configurationObject);
         }
 
         private ClientVersionModel ReadClientVersion()

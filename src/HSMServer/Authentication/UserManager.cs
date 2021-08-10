@@ -86,7 +86,7 @@ namespace HSMServer.Authentication
                     StringComparison.InvariantCultureIgnoreCase));
                 _users.Remove(existingUser);
 
-                _databaseAdapter.RemoveUser(existingUser);
+                _databaseAdapter.RemoveUserOld(existingUser);
             }
         }
 
@@ -109,7 +109,7 @@ namespace HSMServer.Authentication
             if (page < 1 || pageSize < 1)
                 return new List<User>();
             
-            return _databaseAdapter.GetUsersPage(page, pageSize);
+            return _databaseAdapter.GetUsersPageOld(page, pageSize);
         }
 
         public void AddUser(User user)
@@ -119,7 +119,7 @@ namespace HSMServer.Authentication
                 _users.Add(user);
             }
 
-            Task.Run(() => _databaseAdapter.AddUser(user));
+            Task.Run(() => _databaseAdapter.AddUserOld(user));
         }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
@@ -275,7 +275,7 @@ namespace HSMServer.Authentication
 
         private List<User> ReadUserFromDatabase()
         {
-            return _databaseAdapter.GetUsers();
+            return _databaseAdapter.GetUsersOld();
         }
 
         private void MigrateUsersToDatabase()
@@ -488,7 +488,7 @@ namespace HSMServer.Authentication
                 }
                 Task.Run(() =>
                 {
-                    _databaseAdapter.UpdateUser(existingUser);
+                    _databaseAdapter.UpdateUserOld(existingUser);
                 });
             }
         }

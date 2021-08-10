@@ -11,53 +11,76 @@ namespace HSMServer.DataLayer
 {
     public interface IDatabaseAdapter
     {
-        #region Product
-
-        void RemoveProduct(string productName);
-        void AddProduct(Product product);
-        void UpdateProduct(Product product);
-        Product GetProduct(string productName);
-        List<Product> GetProducts();
-
-        #endregion
-
-        #region Sensors
-
-        void RemoveSensor(string productName, string path);
-        void AddSensor(SensorInfo info);
-        void UpdateSensor(SensorInfo info);
-        void PutSensorData(SensorDataEntity data, string productName);
-        void PutOneValueSensorData(SensorDataEntity data, string productName);
-        SensorDataEntity GetLastSensorValue(string productName, string path);
-        SensorInfo GetSensorInfo(string productName, string path);
-        List<SensorHistoryData> GetSensorHistory(string productName, string path, long n);
-        SensorHistoryData GetOneValueSensorValue(string productName, string path);
-        List<SensorInfo> GetProductSensors(Product product);
-        #endregion
-
-        #region User
-
-        void AddUser(User user);
-        void UpdateUser(User user);
-        void RemoveUser(User user);
-        List<User> GetUsers();
-        List<User> GetUsersPage(int page, int pageSize);
+        #region Product Old
+        [Obsolete]
+        void RemoveProductOld(string productName);
+        [Obsolete]
+        void AddProductOld(Product product);
+        [Obsolete]
+        void UpdateProductOld(Product product);
+        [Obsolete]
+        Product GetProductOld(string productName);
+        [Obsolete]
+        List<Product> GetProductsOld();
 
         #endregion
 
-        #region Configuration
+        #region Sensors Old
 
-        ConfigurationObject GetConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationObject obj);
-        void RemoveConfigurationObject(string name);
+        [Obsolete]
+        void RemoveSensorOld(string productName, string path);
+        [Obsolete]
+        void AddSensorOld(SensorInfo info);
+        [Obsolete]
+        void UpdateSensorOld(SensorInfo info);
+        [Obsolete]
+        void PutSensorDataOld(SensorDataEntity data, string productName);
+        [Obsolete]
+        void PutOneValueSensorDataOld(SensorDataEntity data, string productName);
+        [Obsolete]
+        SensorDataEntity GetLastSensorValueOld(string productName, string path);
+        [Obsolete]
+        SensorInfo GetSensorInfoOld(string productName, string path);
+        [Obsolete]
+        List<SensorHistoryData> GetSensorHistoryOld(string productName, string path, long n);
+        [Obsolete]
+        SensorHistoryData GetOneValueSensorValueOld(string productName, string path);
+        [Obsolete]
+        List<SensorInfo> GetProductSensorsOld(Product product);
+        #endregion
+
+        #region User Old
+
+        [Obsolete]
+        void AddUserOld(User user);
+        [Obsolete]
+        void UpdateUserOld(User user);
+        [Obsolete]
+        void RemoveUserOld(User user);
+        [Obsolete]
+        List<User> GetUsersOld();
+        [Obsolete]
+        List<User> GetUsersPageOld(int page, int pageSize);
 
         #endregion
 
-        #region Registration Ticket
+        #region Configuration Old
+        [Obsolete]
+        ConfigurationObject GetConfigurationObjectOld(string name);
+        [Obsolete]
+        void WriteConfigurationObjectOld(ConfigurationObject obj);
+        [Obsolete]
+        void RemoveConfigurationObjectOld(string name);
 
-        RegistrationTicket ReadRegistrationTicket(Guid id);
-        void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegistrationTicket ticket);
+        #endregion
+
+        #region Registration Ticket Old
+        [Obsolete]
+        RegistrationTicket ReadRegistrationTicketOld(Guid id);
+        [Obsolete]
+        void RemoveRegistrationTicketOld(Guid id);
+        [Obsolete]
+        void WriteRegistrationTicketOld(RegistrationTicket ticket);
 
         #endregion
     }
