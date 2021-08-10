@@ -204,12 +204,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemoveProduct(string productName)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.RemoveProductInfo(productName);
+            _environmentDatabase.RemoveProductFromList(productName);
         }
 
         public void UpdateProduct(ProductEntity productEntity)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.AddSensor()
         }
 
         public void AddProduct(ProductEntity productEntity)

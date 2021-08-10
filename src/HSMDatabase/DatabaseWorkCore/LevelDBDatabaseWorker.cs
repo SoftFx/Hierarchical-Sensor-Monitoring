@@ -854,7 +854,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
         private string GetSensorsListKey(string productName)
         {
-            return $"{PrefixConstants.SENSORS_LIST_PREFIX}_{productName}";
+            return PrefixConstants.GetSensorsListKey(productName);
         }
         private string GetSensorReadValueKey(string productName, string path)
         {
@@ -877,7 +877,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
         private string GetProductInfoKey(string name)
         {
-            return $"{PrefixConstants.PRODUCT_INFO_PREFIX}_{name}";
+            return PrefixConstants.GetProductInfoKey(name);
         }
 
         private string GetRegistrationTicket(Guid id)

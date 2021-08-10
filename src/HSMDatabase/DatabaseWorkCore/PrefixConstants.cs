@@ -1,6 +1,4 @@
-﻿using System.Runtime.InteropServices.ComTypes;
-
-namespace HSMDatabase.DatabaseWorkCore
+﻿namespace HSMDatabase.DatabaseWorkCore
 {
     public class PrefixConstants
     {
@@ -23,6 +21,21 @@ namespace HSMDatabase.DatabaseWorkCore
         public static string GetUsersReadKey()
         {
             return USER_INFO_PREFIX;
+        }
+
+        public static string GetSensorsListKey(string productName)
+        {
+            return $"{SENSORS_LIST_PREFIX}_{productName}";
+        }
+
+        public static string GetProductsListKey()
+        {
+            return PRODUCTS_LIST_PREFIX;
+        }
+
+        public static string GetProductInfoKey(string productName)
+        {
+            return $"{PRODUCT_INFO_PREFIX}_{productName}";
         }
     }
 }

@@ -61,7 +61,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public bool Read(byte[] key, out byte[] value)
+        public bool TryRead(byte[] key, out byte[] value)
         {
             try
             {

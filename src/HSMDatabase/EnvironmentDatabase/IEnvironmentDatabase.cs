@@ -12,8 +12,8 @@ namespace HSMDatabase.EnvironmentDatabase
         List<string> GetProductsList();
         ProductEntity GetProductInfo(string productName);
         void PutProductInfo(ProductEntity product);
-        void RemoveProductInfo(string name);
-        void RemoveProductFromList(string name);
+        void RemoveProductInfo(string productName);
+        void RemoveProductFromList(string productName);
 
         #endregion
 

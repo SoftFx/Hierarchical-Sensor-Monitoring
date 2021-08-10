@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
-using HSMDatabase.DatabaseWorkCore;
+﻿using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Entity;
 using HSMDatabase.LevelDB;
 using NLog;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
 
 namespace HSMDatabase.EnvironmentDatabase
 {
@@ -19,35 +19,136 @@ namespace HSMDatabase.EnvironmentDatabase
             _logger = LogManager.GetCurrentClassLogger(typeof(EnvironmentDatabaseWorker));
         }
 
+        #region Products
+
         public void AddProductToList(string productName)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetProductsListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool result = _database.TryRead(bytesKey, out byte[] value);
+                if (!result)
+                {
+                    throw new ServerDatabaseException("Failed to read products list!");
+                }
+
+                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(bytesKey));
+                if (!currentList.Contains(productName))
+                    currentList.Add(productName);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add prodct to list");
+            }
         }
 
         public List<string> GetProductsList()
         {
-            throw new NotImplementedException();
+            string listKey = PrefixConstants.GetProductsListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
+            List<string> result = new List<string>();
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read products list!");
+                }
+
+                List<string> products = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                result.AddRange(products);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get products list");
+            }
+
+            return result;
         }
 
         public ProductEntity GetProductInfo(string productName)
         {
-            throw new NotImplementedException();
+            string key = PrefixConstants.GetProductInfoKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read product info");
+                }
+
+                return JsonSerializer.Deserialize<ProductEntity>(Encoding.UTF8.GetString(value));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for product {productName}");
+            }
+
+            return null;
         }
 
         public void PutProductInfo(ProductEntity product)
         {
-            throw new NotImplementedException();
+            string key = PrefixConstants.GetProductInfoKey(product.Name);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            string stringData = JsonSerializer.Serialize(product);
+            byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put product info for {product.Name}");
+            }
         }
 
-        public void RemoveProductInfo(string name)
+        public void RemoveProductInfo(string productName)
         {
-            throw new NotImplementedException();
+            string key = PrefixConstants.GetProductInfoKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for product {productName}");
+            }
         }
 
-        public void RemoveProductFromList(string name)
+        public void RemoveProductFromList(string productName)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetProductsListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool result = _database.TryRead(bytesKey, out byte[] value);
+                if (!result)
+                {
+                    throw new ServerDatabaseException("Failed to read products list!");
+                }
+
+                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(bytesKey));
+                currentList.Remove(productName);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add prodct to list");
+            }
         }
+
+        #endregion
 
         public void RemoveSensor(string productName, string path)
         {
