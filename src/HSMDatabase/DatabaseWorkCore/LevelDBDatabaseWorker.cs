@@ -845,12 +845,12 @@ namespace HSMDatabase.DatabaseWorkCore
         }
         private string GetUniqueUserKey(string userName)
         {
-            return $"{PrefixConstants.USER_INFO_PREFIX}_{userName}";
+            return PrefixConstants.GetUniqueUserKey(userName);
         }
 
         private string GetUserReadKey()
         {
-            return PrefixConstants.USER_INFO_PREFIX;
+            return PrefixConstants.GetUsersReadKey();
         }
         private string GetSensorsListKey(string productName)
         {

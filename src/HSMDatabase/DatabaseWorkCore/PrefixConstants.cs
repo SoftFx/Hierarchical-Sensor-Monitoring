@@ -1,4 +1,6 @@
-﻿namespace HSMDatabase.DatabaseWorkCore
+﻿using System.Runtime.InteropServices.ComTypes;
+
+namespace HSMDatabase.DatabaseWorkCore
 {
     public class PrefixConstants
     {
@@ -12,5 +14,15 @@
         public const string USER_INFO_PREFIX = "UserInfo";
         public const string CONFIGURATION_OBJECT_PREFIX = "ConfigurationObject";
         public const string REGISTRATION_TICKET_PREFIX = "RegistrationTicket";
+
+        public static string GetUniqueUserKey(string userName)
+        {
+            return $"{USER_INFO_PREFIX}_{userName}";
+        }
+
+        public static string GetUsersReadKey()
+        {
+            return USER_INFO_PREFIX;
+        }
     }
 }

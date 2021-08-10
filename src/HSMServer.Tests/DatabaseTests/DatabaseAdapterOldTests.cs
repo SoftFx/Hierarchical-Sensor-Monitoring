@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
@@ -276,6 +277,7 @@ namespace HSMServer.Tests.DatabaseTests
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorDataOld(d, product.Name));
             _databaseFixture.DatabaseAdapter.RemoveProductOld(product.Name);
+            Thread.Sleep(1000);
             var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistoryOld(product.Name, info.Path, -1);
 
             //Assert

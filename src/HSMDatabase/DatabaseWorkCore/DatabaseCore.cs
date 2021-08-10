@@ -41,9 +41,10 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private const string DatabaseFolderName = "MonitoringData";
+        private const string EnvironmentDatabaseName = "EnvironmentData";
         private DatabaseCore()
         {
-            _environmentDatabase = new EnvironmentDatabaseWorker("");
+            _environmentDatabase = new EnvironmentDatabaseWorker(EnvironmentDatabaseName);
             _sensorsDatabases = new TimeDatabaseDictionary();
 
         }
@@ -232,22 +233,22 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddUser(UserEntity user)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.AddUser(user);
         }
 
         public List<UserEntity> ReadUsers()
         {
-            throw new NotImplementedException();
+            return _environmentDatabase.ReadUsers();
         }
 
         public void RemoveUser(UserEntity user)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.RemoveUser(user);
         }
 
         public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
-            throw new NotImplementedException();
+            return _environmentDatabase.ReadUsersPage(page, pageSize);
         }
 
         #endregion

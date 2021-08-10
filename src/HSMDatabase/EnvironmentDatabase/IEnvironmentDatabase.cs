@@ -21,10 +21,6 @@ namespace HSMDatabase.EnvironmentDatabase
 
         void RemoveSensor(string productName, string path);
         void AddSensor(SensorEntity info);
-        void WriteSensorData(SensorDataEntity dataObject, string productName);
-        SensorDataEntity GetOneValueSensorValue(string productName, string path);
-        SensorDataEntity GetLatestSensorValue(string productName, string path);
-        List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorsList(string productName);

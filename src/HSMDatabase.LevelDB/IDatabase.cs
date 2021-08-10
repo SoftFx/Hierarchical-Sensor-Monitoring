@@ -13,5 +13,6 @@ namespace HSMDatabase.LevelDB
         long GetSize(byte[] startWithKey);
         List<byte[]> GetRange(byte[] from, byte[] to);
         List<byte[]> GetAllStartingWith(byte[] startWithKey);
+        public List<byte[]> GetPageStartingWith(byte[] startWithKey, int page, int pageSize);
     }
 }

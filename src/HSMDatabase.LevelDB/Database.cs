@@ -1,8 +1,8 @@
-﻿using LevelDB;
+﻿using HSMDatabase.LevelDB.Extensions;
+using LevelDB;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using HSMDatabase.LevelDB.Extensions;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -146,6 +146,33 @@ namespace HSMDatabase.LevelDB
                 throw new ServerDatabaseException(e.Message, e);
             }
         }
+
+        public List<byte[]> GetPageStartingWith(byte[] startWithKey, int page, int pageSize)
+        {
+            int skip = (page - 1) * pageSize;
+            int index = 1;
+            int lastIndex = page * pageSize;
+            try
+            {
+                List<byte[]> values = new List<byte[]>();
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.Seek(startWithKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey) &&
+                    index <= lastIndex; iterator.Next(), ++index)
+                {
+                    if(index <= skip)
+                        continue;
+                    
+                    values.Add(iterator.Value());
+                }
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
 
         public void Dispose()
         {

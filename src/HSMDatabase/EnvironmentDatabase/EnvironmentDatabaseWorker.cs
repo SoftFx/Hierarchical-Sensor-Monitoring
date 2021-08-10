@@ -1,14 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
+using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Entity;
+using HSMDatabase.LevelDB;
+using NLog;
 
 namespace HSMDatabase.EnvironmentDatabase
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
+        private readonly IDatabase _database;
+        private readonly Logger _logger;
         public EnvironmentDatabaseWorker(string name)
         {
-
+            _database = new Database(name);
+            _logger = LogManager.GetCurrentClassLogger(typeof(EnvironmentDatabaseWorker));
         }
 
         public void AddProductToList(string productName)
@@ -51,26 +59,6 @@ namespace HSMDatabase.EnvironmentDatabase
             throw new NotImplementedException();
         }
 
-        public void WriteSensorData(SensorDataEntity dataObject, string productName)
-        {
-            throw new NotImplementedException();
-        }
-
-        public SensorDataEntity GetOneValueSensorValue(string productName, string path)
-        {
-            throw new NotImplementedException();
-        }
-
-        public SensorDataEntity GetLatestSensorValue(string productName, string path)
-        {
-            throw new NotImplementedException();
-        }
-
-        public List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n)
-        {
-            throw new NotImplementedException();
-        }
-
         public List<string> GetSensorsList(string productName)
         {
             throw new NotImplementedException();
@@ -101,25 +89,96 @@ namespace HSMDatabase.EnvironmentDatabase
             throw new NotImplementedException();
         }
 
+        #region User
+
         public void AddUser(UserEntity user)
         {
-            throw new NotImplementedException();
+            var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
+            var keyBytes = Encoding.UTF8.GetBytes(userKey);
+            var stringValue = JsonSerializer.Serialize(user);
+            var valueBytes = Encoding.UTF8.GetBytes(stringValue);
+            try
+            {
+                _database.Put(keyBytes, valueBytes);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to save user {user.UserName}");
+            }
         }
 
         public List<UserEntity> ReadUsers()
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetUsersReadKey();
+            var keyBytes = Encoding.UTF8.GetBytes(key);
+            List<UserEntity> users = new List<UserEntity>();
+            try
+            {
+                List<byte[]> values = _database.GetAllStartingWith(keyBytes);
+                foreach (var value in values)
+                {
+                    try
+                    {
+                        users.Add(JsonSerializer.Deserialize<UserEntity>(Encoding.UTF8.GetString(value)));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to UserEntity");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read users!");
+            }
+
+            return users;
         }
 
         public void RemoveUser(UserEntity user)
         {
-            throw new NotImplementedException();
+            var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
+            var keyBytes = Encoding.UTF8.GetBytes(userKey);
+            try
+            {
+                _database.Delete(keyBytes);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to delete user '{user.UserName}'");
+            }
         }
 
         public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetUsersReadKey();
+            var keyBytes = Encoding.UTF8.GetBytes(key);
+            List<UserEntity> users = new List<UserEntity>();
+            try
+            {
+                List<byte[]> values = _database.GetPageStartingWith(keyBytes, page, pageSize);
+                foreach (var value in values)
+                {
+                    try
+                    {
+                        users.Add(JsonSerializer.Deserialize<UserEntity>(Encoding.UTF8.GetString(value)));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to UserEntity");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read users!");
+            }
+
+            return users;
         }
+
+        #endregion
+
 
         public ConfigurationEntity ReadConfigurationObject(string name)
         {

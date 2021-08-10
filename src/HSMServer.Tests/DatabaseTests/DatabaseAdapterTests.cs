@@ -1,8 +1,8 @@
-﻿using System;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
 using HSMServer.Tests.Fixture;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -109,6 +109,43 @@ namespace HSMServer.Tests.DatabaseTests
             Assert.Contains(usersFromDB, u => u.UserName == user.UserName && u.Id == user.Id);
         }
 
+        [Fact]
+        public void UsersPageMustBeRead()
+        {
+            //Arrange
+            var user1 = _databaseFixture.CreateFirstUser();
+            var user2 = _databaseFixture.CreateSecondUser();
+            var user3 = _databaseFixture.CreateThirdUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user1);
+            _databaseFixture.DatabaseAdapter.AddUser(user2);
+            _databaseFixture.DatabaseAdapter.AddUser(user3);
+            var page = _databaseFixture.DatabaseAdapter.GetUsersPage(2, 1);
+
+            //Assert
+            Assert.NotNull(page);
+            Assert.Equal(1, page.Count);
+        }
+
+        [Fact]
+        public void UsersEmptyPageMustBeReturned()
+        {
+            //Arrange
+            var user1 = _databaseFixture.CreateFirstUser();
+            var user2 = _databaseFixture.CreateSecondUser();
+            var user3 = _databaseFixture.CreateThirdUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user1);
+            _databaseFixture.DatabaseAdapter.AddUser(user2);
+            _databaseFixture.DatabaseAdapter.AddUser(user3);
+            var page = _databaseFixture.DatabaseAdapter.GetUsersPage(3, 5);
+
+            //Assert
+            Assert.NotNull(page);
+            Assert.Empty(page);
+        }
         [Fact]
         public void UserMustBeRemoved()
         {
