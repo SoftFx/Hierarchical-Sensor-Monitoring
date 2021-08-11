@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.Entity;
+using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 using NLog;
 using System;
@@ -7,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMDatabase.LevelDB.Extensions;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -858,7 +858,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
         private string GetSensorReadValueKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}";
+            return PrefixConstants.GetSensorReadValueKey(productName, path);
         }
 
         private string GetOneValueSensorWriteKey(string productName, string path)
@@ -873,7 +873,7 @@ namespace HSMDatabase.DatabaseWorkCore
         
         private string GetSensorInfoKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
+            return PrefixConstants.GetSensorInfoKey(productName, path);
         }
         private string GetProductInfoKey(string name)
         {

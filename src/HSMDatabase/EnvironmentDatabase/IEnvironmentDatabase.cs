@@ -24,7 +24,7 @@ namespace HSMDatabase.EnvironmentDatabase
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorsList(string productName);
-        void RemoveSensorFromList(string productName, string sensorName);
+        void RemoveSensorFromList(string productName, string path);
         SensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
 

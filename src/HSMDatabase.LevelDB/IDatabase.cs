@@ -7,7 +7,7 @@ namespace HSMDatabase.LevelDB
     {
         string Name { get; }
         void Delete(byte[] key);
-        void RemoveStartingWith(byte[] startWithKey);
+        void DeleteAllStartingWith(byte[] startWithKey);
         bool TryRead(byte[] key, out byte[] value);
         void Put(byte[] key, byte[] value);
         long GetSize(byte[] startWithKey);

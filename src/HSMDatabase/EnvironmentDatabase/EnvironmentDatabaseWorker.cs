@@ -33,7 +33,7 @@ namespace HSMDatabase.EnvironmentDatabase
                     throw new ServerDatabaseException("Failed to read products list!");
                 }
 
-                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(bytesKey));
+                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
                 if (!currentList.Contains(productName))
                     currentList.Add(productName);
 
@@ -150,45 +150,164 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #endregion
 
+        #region Sensors
+
         public void RemoveSensor(string productName, string path)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorInfoKey(productName, path);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove sensor info for {productName}/{path}");
+            }
         }
 
         public void AddSensor(SensorEntity info)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorInfoKey(info.ProductName, info.Path);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            string stringValue = JsonSerializer.Serialize(info);
+            byte[] bytesValue = Encoding.UTF8.GetBytes(stringValue);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put sensor info for {info.ProductName}/{info.Path}");
+            }
         }
 
         public List<string> GetSensorsList(string productName)
         {
-            throw new NotImplementedException();
+            string listKey = PrefixConstants.GetSensorsListKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
+            List<string> result = new List<string>();
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException($"Failed to read sensors list for {productName}!");
+                }
+
+                List<string> products = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                result.AddRange(products);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get products list for {productName}");
+            }
+
+            return result;
         }
 
         public void AddNewSensorToList(string productName, string path)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorsListKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool result = _database.TryRead(bytesKey, out byte[] value);
+                if (!result)
+                {
+                    throw new ServerDatabaseException("Failed to read products list!");
+                }
+
+                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                if (!currentList.Contains(path))
+                    currentList.Add(path);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add prodct to list");
+            }
         }
 
         public void RemoveSensorsList(string productName)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorsListKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove sensors list for {productName}");
+            }
         }
 
-        public void RemoveSensorFromList(string productName, string sensorName)
+        public void RemoveSensorFromList(string productName, string path)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorsListKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool result = _database.TryRead(bytesKey, out byte[] value);
+                if (!result)
+                {
+                    throw new ServerDatabaseException("Failed to read products list!");
+                }
+
+                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                currentList.Remove(path);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add prodct to list");
+            }
         }
 
         public SensorEntity GetSensorInfo(string productName, string path)
         {
-            throw new NotImplementedException();
+            string key = PrefixConstants.GetSensorInfoKey(productName, path);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read sensor info");
+                }
+
+                return JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for sensor {productName}/{path}");
+            }
+
+            return null;
         }
 
         public void RemoveSensorValues(string productName, string path)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetSensorInfoKey(productName, path);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.DeleteAllStartingWith(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove sensor values for {productName}/{path}");
+            }
         }
+
+        #endregion
 
         #region User
 
@@ -391,7 +510,5 @@ namespace HSMDatabase.EnvironmentDatabase
         }
 
         #endregion
-
-
     }
 }

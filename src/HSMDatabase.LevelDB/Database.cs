@@ -44,7 +44,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void RemoveStartingWith(byte[] startWithKey)
+        public void DeleteAllStartingWith(byte[] startWithKey)
         {
             try
             {

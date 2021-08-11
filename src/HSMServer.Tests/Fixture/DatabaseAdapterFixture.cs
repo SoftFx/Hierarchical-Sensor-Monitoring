@@ -120,12 +120,12 @@ namespace HSMServer.Tests.Fixture
 
         public SensorDataEntity CreateOneDataEntity()
         {
-            return CreateDataEntity(SensorPath, "Test");
+            return CreateDataEntity(SensorPath, "Test", 0);
         }
 
         public SensorDataEntity CreateOneValueSensorDataEntity()
         {
-            return CreateDataEntity(OneValueSensorPath, "File bytes");
+            return CreateDataEntity(OneValueSensorPath, "File bytes", 0);
         }
 
         public List<SensorDataEntity> CreateSensorValues()
@@ -133,17 +133,17 @@ namespace HSMServer.Tests.Fixture
             List<SensorDataEntity> result = new List<SensorDataEntity>();
             for (int i = 0; i < 20; i++)
             {
-                result.Add(CreateDataEntity(SensorPath, i.ToString()));
+                result.Add(CreateDataEntity(SensorPath, i.ToString(), i));
             }
 
             return result;
         }
-        private SensorDataEntity CreateDataEntity(string path, string value)
+        private SensorDataEntity CreateDataEntity(string path, string value, int days)
         {
             SensorDataEntity entity = new SensorDataEntity();
             entity.Path = path;
             entity.Time = DateTime.Now;
-            entity.TimeCollected = DateTime.Now;
+            entity.TimeCollected = DateTime.Now.AddDays(-1 * days);
             entity.Status = (byte) SensorStatus.Ok;
             entity.DataType = (byte) SensorType.IntSensor;
             entity.TypedData = value;

@@ -127,16 +127,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public SensorEntity GetSensorInfo(string productName, string path)
-        {
-            throw new NotImplementedException();
-        }
-
-        public List<SensorEntity> GetProductSensors(string productName)
-        {
-            throw new NotImplementedException();
-        }
-
         public long GetSensorSize(string productName, string path)
         {
             long size = 0L;
@@ -181,6 +171,29 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return null;
         }
+        
+        #endregion
+
+        #region Environment database : Sensor
+
+        public SensorEntity GetSensorInfo(string productName, string path)
+        {
+            return _environmentDatabase.GetSensorInfo(productName, path);
+        }
+
+        public List<SensorEntity> GetProductSensors(string productName)
+        {
+            List<SensorEntity> sensors = new List<SensorEntity>();
+            List<string> sensorPaths = _environmentDatabase.GetSensorsList(productName);
+            foreach (var path in sensorPaths)
+            {
+                SensorEntity sensorEntity = _environmentDatabase.GetSensorInfo(productName, path);
+                if(sensorEntity != null)
+                    sensors.Add(sensorEntity);
+            }
+
+            return sensors;
+        }
 
         public void RemoveSensor(string productName, string path)
         {
@@ -189,15 +202,14 @@ namespace HSMDatabase.DatabaseWorkCore
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
-                database.DeleteAllSensorValues(productName, path);  
+                database.DeleteAllSensorValues(productName, path);
             }
         }
 
         public void AddSensor(SensorEntity entity)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.AddSensor(entity);
         }
-
         #endregion
 
         #region Environment database : Product

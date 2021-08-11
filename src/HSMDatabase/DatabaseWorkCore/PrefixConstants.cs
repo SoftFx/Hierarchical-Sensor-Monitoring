@@ -49,5 +49,21 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             return $"{REGISTRATION_TICKET_PREFIX}_{id}";
         }
+
+        public static string GetSensorReadValueKey(string productName, string path)
+        {
+            return $"{SENSOR_VALUE_PREFIX}_{productName}_{path}";
+        }
+
+        public static string GetSensorInfoKey(string productName, string path)
+        {
+            return $"{SENSOR_KEY_PREFIX}_{productName}_{path}";
+        }
+
+        public static string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
+        {
+            return
+                $"{SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime.Ticks}";
+        }
     }
 }
