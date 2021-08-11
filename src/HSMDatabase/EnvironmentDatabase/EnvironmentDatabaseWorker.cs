@@ -27,13 +27,11 @@ namespace HSMDatabase.EnvironmentDatabase
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                bool result = _database.TryRead(bytesKey, out byte[] value);
-                if (!result)
-                {
-                    throw new ServerDatabaseException("Failed to read products list!");
-                }
+                byte[] value = _database.Read(bytesKey);
 
-                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                List<string> currentList = value == null
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
                 if (!currentList.Contains(productName))
                     currentList.Add(productName);
 
@@ -135,7 +133,11 @@ namespace HSMDatabase.EnvironmentDatabase
                     throw new ServerDatabaseException("Failed to read products list!");
                 }
 
-                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(bytesKey));
+                string stringValue = Encoding.UTF8.GetString(value);
+                List<string> currentList = string.IsNullOrEmpty(stringValue)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(stringValue);
+
                 currentList.Remove(productName);
 
                 string stringData = JsonSerializer.Serialize(currentList);
@@ -195,7 +197,10 @@ namespace HSMDatabase.EnvironmentDatabase
                     throw new ServerDatabaseException($"Failed to read sensors list for {productName}!");
                 }
 
-                List<string> products = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                string stringValue = Encoding.UTF8.GetString(value);
+                List<string> products = string.IsNullOrEmpty(stringValue)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(stringValue);
                 result.AddRange(products);
             }
             catch (Exception e)
@@ -212,13 +217,11 @@ namespace HSMDatabase.EnvironmentDatabase
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                bool result = _database.TryRead(bytesKey, out byte[] value);
-                if (!result)
-                {
-                    throw new ServerDatabaseException("Failed to read products list!");
-                }
+                byte[] value = _database.Read(bytesKey);
 
-                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                List<string> currentList = value == null
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
                 if (!currentList.Contains(path))
                     currentList.Add(path);
 
@@ -258,7 +261,11 @@ namespace HSMDatabase.EnvironmentDatabase
                     throw new ServerDatabaseException("Failed to read products list!");
                 }
 
-                List<string> currentList = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                string stringValue = Encoding.UTF8.GetString(value);
+                List<string> currentList = string.IsNullOrEmpty(stringValue)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(stringValue);
+
                 currentList.Remove(path);
 
                 string stringData = JsonSerializer.Serialize(currentList);

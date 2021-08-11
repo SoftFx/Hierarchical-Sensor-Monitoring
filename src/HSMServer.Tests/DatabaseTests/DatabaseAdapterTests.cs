@@ -313,7 +313,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            Thread.Sleep(1000);
+            Thread.Sleep(5000);
             _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
             var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
 

@@ -15,13 +15,12 @@ namespace HSMDatabase.DatabaseWorkCore
         }
         public bool TryGetDatabase(DateTime time, out ISensorsDatabase database)
         {
-            long minTicks = DateTimeMethods.GetMinDateTimeTicks(time);
-            long maxTicks = DateTimeMethods.GetMaxDateTimeTicks(time);
+            long ticks = time.Ticks;
             ISensorsDatabase correspondingItem;
             lock (_accessLock)
             {
                 correspondingItem = _sensorsDatabases.FirstOrDefault(i => 
-                    i.DatabaseMinTicks == minTicks && i.DatabaseMaxTicks == maxTicks);
+                    i.DatabaseMinTicks <= ticks && i.DatabaseMaxTicks >= ticks);
 
             }
 

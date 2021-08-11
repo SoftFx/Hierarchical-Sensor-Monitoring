@@ -49,7 +49,7 @@ namespace HSMDatabase.SensorsDatabase
 
         public void PutSensorData(SensorDataEntity sensorData, string productName)
         {
-            var writeKey = PrefixConstants.GetSensorReadValueKey(productName, sensorData.Path);
+            var writeKey = PrefixConstants.GetSensorWriteValueKey(productName, sensorData.Path, sensorData.TimeCollected);
             var bytesKey = Encoding.UTF8.GetBytes(writeKey);
             try
             {

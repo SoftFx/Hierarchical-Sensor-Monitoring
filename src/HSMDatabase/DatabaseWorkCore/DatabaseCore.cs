@@ -4,6 +4,8 @@ using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -141,6 +143,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensorValue(SensorDataEntity entity, string productName)
         {
+            Debug.Print("PutSensorData call");
             bool isExists = _sensorsDatabases.TryGetDatabase(entity.TimeCollected, out var database);
             if (isExists)
             {
@@ -159,8 +162,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public SensorDataEntity GetLatestSensorValue(string productName, string path)
         {
             List<ISensorsDatabase> databases = _sensorsDatabases.GetAllDatabases();
-            databases.Reverse();
-            foreach (var database in databases)
+            foreach (var database in databases.AsEnumerable().Reverse())
             {
                 var currentLatestValue = database.GetLatestSensorValue(productName, path);
                 if (currentLatestValue != null)
@@ -199,6 +201,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             //TODO: write this method
             _environmentDatabase.RemoveSensor(productName, path);
+            _environmentDatabase.RemoveSensorFromList(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
@@ -208,6 +211,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensor(SensorEntity entity)
         {
+            _environmentDatabase.AddNewSensorToList(entity.ProductName, entity.Path);
             _environmentDatabase.AddSensor(entity);
         }
         #endregion
@@ -218,6 +222,12 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.RemoveProductInfo(productName);
             _environmentDatabase.RemoveProductFromList(productName);
+            var sensorsList = _environmentDatabase.GetSensorsList(productName);
+            _environmentDatabase.RemoveSensorsList(productName);
+            foreach (var sensor in sensorsList)
+            {
+                RemoveSensor(productName, sensor);
+            }
         }
 
         public void UpdateProduct(ProductEntity productEntity)
