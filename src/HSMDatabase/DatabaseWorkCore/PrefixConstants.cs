@@ -1,4 +1,6 @@
-﻿namespace HSMDatabase.DatabaseWorkCore
+﻿using System;
+
+namespace HSMDatabase.DatabaseWorkCore
 {
     public class PrefixConstants
     {
@@ -36,6 +38,16 @@
         public static string GetProductInfoKey(string productName)
         {
             return $"{PRODUCT_INFO_PREFIX}_{productName}";
+        }
+
+        public static string GetUniqueConfigurationObjectKey(string objectName)
+        {
+            return $"{CONFIGURATION_OBJECT_PREFIX}_{objectName}";
+        }
+
+        public static string GetRegistrationTicketKey(Guid id)
+        {
+            return $"{REGISTRATION_TICKET_PREFIX}_{id}";
         }
     }
 }

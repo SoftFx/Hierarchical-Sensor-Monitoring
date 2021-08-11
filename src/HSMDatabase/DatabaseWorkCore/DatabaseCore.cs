@@ -210,22 +210,32 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateProduct(ProductEntity productEntity)
         {
-            _environmentDatabase.AddSensor()
+            AddProduct(productEntity);
         }
 
         public void AddProduct(ProductEntity productEntity)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.AddProductToList(productEntity.Name);
+            _environmentDatabase.PutProductInfo(productEntity);
         }
 
         public ProductEntity GetProduct(string productName)
         {
-            throw new NotImplementedException();
+            return _environmentDatabase.GetProductInfo(productName);
         }
 
         public List<ProductEntity> GetAllProducts()
         {
-            throw new NotImplementedException();
+            List<ProductEntity> products = new List<ProductEntity>();
+            var productNames = _environmentDatabase.GetProductsList();
+            foreach (var productName in productNames)
+            {
+                var product = _environmentDatabase.GetProductInfo(productName);
+                if (product != null)
+                    products.Add(product);
+            }
+
+            return products;
         }
         
         #endregion
@@ -258,17 +268,17 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public ConfigurationEntity ReadConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            return _environmentDatabase.ReadConfigurationObject(name);
         }
 
         public void WriteConfigurationObject(ConfigurationEntity obj)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.WriteConfigurationObject(obj);
         }
 
         public void RemoveConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.RemoveConfigurationObject(name);
         }
 
         #endregion
@@ -277,17 +287,17 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            return _environmentDatabase.ReadRegistrationTicket(id);
         }
 
         public void RemoveRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.RemoveRegistrationTicket(id);
         }
 
         public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
-            throw new NotImplementedException();
+            _environmentDatabase.WriteRegistrationTicket(ticket);
         }
 
         #endregion

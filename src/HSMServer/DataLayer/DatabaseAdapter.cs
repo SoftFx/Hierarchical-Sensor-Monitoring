@@ -402,7 +402,7 @@ namespace HSMServer.DataLayer
 
         public void RemoveRegistrationTicket(Guid id)
         {
-            _database.ReadRegistrationTicket(id);
+            _database.RemoveRegistrationTicket(id);
         }
 
         public void WriteRegistrationTicket(RegistrationTicket ticket)

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using Xunit;
 
 namespace HSMServer.Tests.DatabaseTests
@@ -348,6 +349,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
+            Thread.Sleep(1000);
             _databaseFixture.DatabaseAdapter.RemoveRegistrationTicket(ticket.Id);
             var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
 

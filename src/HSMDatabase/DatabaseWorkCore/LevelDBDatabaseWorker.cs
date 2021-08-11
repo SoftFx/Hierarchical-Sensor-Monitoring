@@ -790,7 +790,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 lock (_accessLock)
                 {
-                    var value = _database.Get(GetRegistrationTicket(id));
+                    var value = _database.Get(GetRegistrationTicketKey(id));
                     result = JsonSerializer.Deserialize<RegisterTicketEntity>(value);
                 }
             }
@@ -806,7 +806,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string key = GetRegistrationTicket(id);
+                string key = GetRegistrationTicketKey(id);
                 lock (_accessLock)
                 {
                     _database.Delete(key);
@@ -822,7 +822,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string key = GetRegistrationTicket(ticket.Id);
+                string key = GetRegistrationTicketKey(ticket.Id);
                 string value = JsonSerializer.Serialize(ticket);
                 lock (_accessLock)
                 {
@@ -841,7 +841,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string GetUniqueConfigurationObjectKey(string name)
         {
-            return $"{PrefixConstants.CONFIGURATION_OBJECT_PREFIX}_{name}";
+            return PrefixConstants.GetUniqueConfigurationObjectKey(name);
         }
         private string GetUniqueUserKey(string userName)
         {
@@ -880,9 +880,9 @@ namespace HSMDatabase.DatabaseWorkCore
             return PrefixConstants.GetProductInfoKey(name);
         }
 
-        private string GetRegistrationTicket(Guid id)
+        private string GetRegistrationTicketKey(Guid id)
         {
-            return $"{PrefixConstants.REGISTRATION_TICKET_PREFIX}_{id}";
+            return PrefixConstants.GetRegistrationTicketKey(id);
         }
 
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)

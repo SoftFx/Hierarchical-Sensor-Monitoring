@@ -280,35 +280,118 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #endregion
 
+        #region Configuration objects
 
         public ConfigurationEntity ReadConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read configuration object info");
+                }
+
+                return JsonSerializer.Deserialize<ConfigurationEntity>(Encoding.UTF8.GetString(value));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read configuration object {name}");
+            }
+
+            return null;
         }
 
         public void WriteConfigurationObject(ConfigurationEntity obj)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            string stringValue = JsonSerializer.Serialize(obj);
+            byte[] bytesValue = Encoding.UTF8.GetBytes(stringValue);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write configuration object {obj.Name}");
+            }
         }
 
         public void RemoveConfigurationObject(string name)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write configuration object {name}");
+            }
         }
+
+        #endregion
+
+        #region Registration ticket
 
         public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetRegistrationTicketKey(id);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read ticket info");
+                }
+
+                return JsonSerializer.Deserialize<RegisterTicketEntity>(Encoding.UTF8.GetString(value));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read registration ticket {id}");
+            }
+
+            return null;
         }
 
         public void RemoveRegistrationTicket(Guid id)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetRegistrationTicketKey(id);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write registration ticket {id}");
+            }
         }
 
         public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
-            throw new NotImplementedException();
+            var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            string stringValue = JsonSerializer.Serialize(ticket);
+            byte[] bytesValue = Encoding.UTF8.GetBytes(stringValue);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write registration ticket {ticket.Id}");
+            }
         }
+
+        #endregion
+
+
     }
 }
