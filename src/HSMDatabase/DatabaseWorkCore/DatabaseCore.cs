@@ -102,29 +102,6 @@ namespace HSMDatabase.DatabaseWorkCore
                     continue;
 
                 result.AddRange(database.GetSensorValuesBetween(productName, path, from, to));
-                ////Read data if all the period is from one database
-                //if (database.DatabaseMinTicks < from.Ticks && database.DatabaseMaxTicks > to.Ticks)
-                //{
-                //    result.AddRange(database.GetSensorValuesBetween(productName, path, from, to));
-                //    break;
-                //}
-
-                ////Period starts inside the database
-                //if (database.DatabaseMinTicks < from.Ticks)
-                //{
-                //    result.AddRange(database.GetSensorValuesFrom(productName, path, from));
-                //    continue;
-                //}
-
-                ////Period ends inside the database
-                //if (database.DatabaseMaxTicks > to.Ticks)
-                //{
-                //    result.AddRange(database.GetSensorValuesBetween(productName, path, database.DatabaseMinDateTime, to));
-                //    break;
-                //}
-
-                ////Database period is fully inside the 'from'-'to' period
-                //result.AddRange(database.GetAllSensorValues(productName, path));
             }
 
             return result;

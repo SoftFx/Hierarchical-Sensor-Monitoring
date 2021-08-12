@@ -4,7 +4,6 @@ using HSMDatabase.LevelDB;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Text;
 using System.Text.Json;
 
@@ -517,67 +516,83 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-
-
         #endregion
 
-        public void WriteDatabaseInfo(MonitoringDatabaseInfoEntity entity)
+        public List<string> GetMonitoringDatabases()
         {
-            var key = PrefixConstants.GetDatabaseInfoKey(entity.Id);
-            var bytesKey = Encoding.UTF8.GetBytes(key);
-            var value = JsonSerializer.Serialize(entity);
-            var bytesValue = Encoding.UTF8.GetBytes(value);
+            string listKey = PrefixConstants.GetMonitoringDatabasesListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
+            List<string> result = new List<string>();
             try
             {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read databases list!");
+                }
+
+                List<string> products = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                result.AddRange(products);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get databases list");
+            }
+
+            return result;
+        }
+
+        public void AddMonitoringDatabaseToList(string folderName)
+        {
+            var key = PrefixConstants.GetMonitoringDatabasesListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                byte[] value = _database.Read(bytesKey);
+
+                List<string> currentList = value == null
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value));
+                if (!currentList.Contains(folderName))
+                    currentList.Add(folderName);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
                 _database.Put(bytesKey, bytesValue);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write database info {entity.FolderName}");
+                _logger.Error(e, "Failed to add monitoring database to list");
             }
         }
 
-        public void RemoveDatabaseInfo(long Id)
+        public void RemoveMonitoringDatabaseFromList(string folderName)
         {
-            var key = PrefixConstants.GetDatabaseInfoKey(Id);
-            var bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove database info for db: {Id}");
-            }
-        }
-
-        public List<MonitoringDatabaseInfoEntity> GetMonitoringDatabases()
-        {
-            var key = PrefixConstants.GetDatabaseInfoSearchKey();
+            var key = PrefixConstants.GetMonitoringDatabasesListKey();
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            List<MonitoringDatabaseInfoEntity> dbs = new List<MonitoringDatabaseInfoEntity>();
             try
             {
-                List<byte[]> values = _database.GetAllStartingWith(bytesKey);
-                foreach (var value in values)
+                bool result = _database.TryRead(bytesKey, out byte[] value);
+                if (!result)
                 {
-                    try
-                    {
-                        dbs.Add(
-                            JsonSerializer.Deserialize<MonitoringDatabaseInfoEntity>(Encoding.UTF8.GetString(value)));
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to MonitoringDatabaseInfoEntity");
-                    }
+                    throw new ServerDatabaseException("Failed to read products list!");
                 }
+
+                string stringValue = Encoding.UTF8.GetString(value);
+                List<string> currentList = string.IsNullOrEmpty(stringValue)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(stringValue);
+
+                currentList.Remove(folderName);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to read users!");
+                _logger.Error(e, "Failed to add prodct to list");
             }
-
-            return dbs;
         }
     }
 }

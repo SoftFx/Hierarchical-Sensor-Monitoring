@@ -55,8 +55,8 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #endregion
 
-        void WriteDatabaseInfo(MonitoringDatabaseInfoEntity entity);
-        void RemoveDatabaseInfo(long Id);
-        List<MonitoringDatabaseInfoEntity> GetMonitoringDatabases();
+        List<string> GetMonitoringDatabases();
+        void AddMonitoringDatabaseToList(string folderName);
+        void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }
