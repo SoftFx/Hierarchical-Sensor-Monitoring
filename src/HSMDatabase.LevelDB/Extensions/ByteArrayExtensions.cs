@@ -28,5 +28,17 @@ namespace HSMDatabase.LevelDB.Extensions
 
             return initialArray.Length.CompareTo(anotherBytes.Length) > 0;
         }
+
+        public static bool IsGreaterOrEquals(this byte[] initialArray, byte[] anotherBytes)
+        {
+            for (int i = 0; i < Math.Min(initialArray.Length, anotherBytes.Length); ++i)
+            {
+                var cmpResult = initialArray[i].CompareTo(anotherBytes[i]);
+                if (cmpResult < 0)
+                    return false;
+            }
+
+            return initialArray.Length.CompareTo(anotherBytes.Length) >= 0;
+        }
     }
 }

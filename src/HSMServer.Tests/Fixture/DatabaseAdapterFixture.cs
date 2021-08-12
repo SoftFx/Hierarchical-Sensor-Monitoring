@@ -98,11 +98,17 @@ namespace HSMServer.Tests.Fixture
 
         public const string OneValueSensorPath = "sensors/OneValue";
         public const string SensorPath = "sensors/Sensor";
+        public const string SensorPath2 = "sensors/Sensor2";
 
 
         public SensorInfo CreateOneValueSensorInfo()
         {
             return CreateSensorInfo(OneValueSensorPath, "OneValue", FirstProductName);
+        }
+
+        public SensorInfo CreateSensorInfo2()
+        {
+            return CreateSensorInfo(SensorPath2, "Sensor2", FirstProductName);
         }
         public SensorInfo CreateSensorInfo()
         {
@@ -128,6 +134,16 @@ namespace HSMServer.Tests.Fixture
             return CreateDataEntity(OneValueSensorPath, "File bytes", 0);
         }
 
+        public List<SensorDataEntity> CreateSensorValues2()
+        {
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            for (int i = 0; i < 20; i++)
+            {
+                result.Add(CreateDataEntity(SensorPath2, i.ToString(), i));
+            }
+
+            return result;
+        }
         public List<SensorDataEntity> CreateSensorValues()
         {
             List<SensorDataEntity> result = new List<SensorDataEntity>();
@@ -193,6 +209,14 @@ namespace HSMServer.Tests.Fixture
             DatabaseAdapter?.RemoveUserOld(CreateThirdUser());
             DatabaseAdapter?.RemoveRegistrationTicketOld(_ticket.Id);
             DatabaseAdapter?.RemoveConfigurationObjectOld(ConfigurationObjectName);
+            DatabaseAdapter?.RemoveProduct(FirstProductName);
+            DatabaseAdapter?.RemoveProduct(SecondProductName);
+            DatabaseAdapter?.RemoveProduct(ThirdProductName);
+            DatabaseAdapter?.RemoveUser(CreateFirstUser());
+            DatabaseAdapter?.RemoveUser(CreateSecondUser());
+            DatabaseAdapter?.RemoveUser(CreateThirdUser());
+            DatabaseAdapter?.RemoveRegistrationTicket(_ticket.Id);
+            DatabaseAdapter?.RemoveConfigurationObject(ConfigurationObjectName);
         }
     }
 }

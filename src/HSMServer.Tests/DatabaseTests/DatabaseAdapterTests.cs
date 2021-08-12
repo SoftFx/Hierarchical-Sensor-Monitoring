@@ -290,8 +290,8 @@ namespace HSMServer.Tests.DatabaseTests
         {
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
-            var info = _databaseFixture.CreateSensorInfo();
-            var data = _databaseFixture.CreateSensorValues();
+            var info = _databaseFixture.CreateSensorInfo2();
+            var data = _databaseFixture.CreateSensorValues2();
             _databaseFixture.DatabaseAdapter.AddProduct(product);
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 

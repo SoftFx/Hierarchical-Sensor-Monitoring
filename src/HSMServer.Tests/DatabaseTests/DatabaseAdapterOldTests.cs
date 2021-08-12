@@ -159,6 +159,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.AddSensorOld(info);
+            Thread.Sleep(1000);
             var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfoOld(product.Name, info.Path);
 
             //Assert
