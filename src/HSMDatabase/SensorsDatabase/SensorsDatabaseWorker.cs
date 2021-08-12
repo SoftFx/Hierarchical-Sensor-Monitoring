@@ -104,8 +104,31 @@ namespace HSMDatabase.SensorsDatabase
         public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
-            var bytesKey = Encoding.UTF8.GetBytes(readKey);
-            return GetValuesWithKeyEqualOrGreater(bytesKey);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(readKey);
+            var startWithKey = PrefixConstants.GetSensorReadValueKey(productName, path);
+            byte[] startWithBytes = Encoding.UTF8.GetBytes(startWithKey);
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            try
+            {
+                var values = _database.GetAllStartingWithAndSeek(startWithBytes, bytesKey);
+                foreach (var value in values)
+                {
+                    try
+                    {
+                        result.Add(JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value)));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to SensorDataEntity");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read all sensors values for {Encoding.UTF8.GetString(bytesKey)}");
+            }
+
+            return result;
         }
 
         public List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to)

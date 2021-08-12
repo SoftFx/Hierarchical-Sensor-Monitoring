@@ -80,12 +80,19 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (database.DatabaseMaxTicks < from.Ticks)
                     continue;
 
-                //If from is in the middle of database, add just values starting from 'from' DateTime
-                if (database.DatabaseMinTicks < from.Ticks)
-                    result.AddRange(database.GetSensorValuesFrom(productName, path, from));
+                ////If from is in the middle of database, add just values starting from 'from' DateTime
+                //if (database.DatabaseMinTicks <= from.Ticks)
+                //{
+                //    //result.AddRange(database.GetSensorValuesFrom(productName, path, from));
+                //    //var values = database.GetAllSensorValues(productName, path);
+                //    //result.AddRange(values.Where(v => v.TimeCollected >= from));
+                //    result.AddRange(database.GetSensorValuesFrom(productName, path, from));
+                //    continue;
+                //}
 
                 //Add all values from databases that begin after the 'from' time
-                result.AddRange(database.GetAllSensorValues(productName, path));
+                //result.AddRange(database.GetAllSensorValues(productName, path));
+                result.AddRange(database.GetSensorValuesFrom(productName, path, from));
             }
 
             return result;

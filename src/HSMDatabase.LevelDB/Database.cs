@@ -2,6 +2,7 @@
 using LevelDB;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using Exception = System.Exception;
 
@@ -74,6 +75,11 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public byte[] Read(byte[] key)
+        {
+            return _database.Get(key);
+        }
+
         public void Put(byte[] key, byte[] value)
         {
             try
@@ -109,6 +115,10 @@ namespace HSMDatabase.LevelDB
 
         public List<byte[]> GetRange(byte[] from, byte[] to)
         {
+            Debug.Print("from:");
+            ArrToDebug(from);
+            Debug.Print("to");
+            ArrToDebug(to);
             try
             {
                 List<byte[]> values = new List<byte[]>();
@@ -116,6 +126,9 @@ namespace HSMDatabase.LevelDB
                 for (iterator.Seek(from); iterator.IsValid() && !iterator.Key().StartsWith(to);
                     iterator.Next())
                 {
+                    var key = iterator.Key();
+                    Debug.Print("key:");
+                    ArrToDebug(key);
                     values.Add(iterator.Value());                    
                 }
 
@@ -134,6 +147,26 @@ namespace HSMDatabase.LevelDB
                 List<byte[]> values = new List<byte[]>();
                 var iterator = _database.CreateIterator(new ReadOptions());
                 for (iterator.Seek(startWithKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey);
+                    iterator.Next())
+                {
+                    values.Add(iterator.Value());
+                }
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public List<byte[]> GetAllStartingWithAndSeek(byte[] startWithKey, byte[] seekKey)
+        {
+            try
+            {
+                List<byte[]> values = new List<byte[]>();
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.Seek(seekKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey);
                     iterator.Next())
                 {
                     values.Add(iterator.Value());
@@ -173,7 +206,15 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-
+        private void ArrToDebug(byte[] arr)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < arr.Length; i++)
+            {
+                sb.Append($"{arr[i]} ");
+            }
+            Debug.Print(sb.ToString());
+        }
         public void Dispose()
         {
             _database?.Dispose();

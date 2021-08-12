@@ -7,7 +7,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xunit;
+using Xunit.Sdk;
+using Assert = Xunit.Assert;
 
 namespace HSMServer.Tests.DatabaseTests
 {
@@ -283,7 +286,7 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         [Fact]
-        public void RequestedSensorValuesMustBeReturned()
+        public void SensorValuesAfterSpecifiedDateMustBeReturned()
         {
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
@@ -294,11 +297,50 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
+            DateTime dateTime = DateTime.Now.AddDays(-1 * 9);
+            var expectedData = data.Where(e => e.TimeCollected > dateTime).ToList();
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, dateTime);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
-            Assert.Equal(10, dataFromDB.Count);
+            Assert.Equal(expectedData.Count, dataFromDB.Count);
+            expectedData.Sort((d1, d2) => d2.TimeCollected.CompareTo(d1.TimeCollected));
+            dataFromDB.Sort((d1, d2) => d2.Time.CompareTo(d1.Time));
+            for (int i = 0; i < expectedData.Count; ++i)
+            {
+                Assert.Equal(expectedData[i].TypedData, dataFromDB[i].TypedData);
+                Assert.Equal(expectedData[i].DataType, (byte)dataFromDB[i].SensorType);
+            }
+        }
+
+        [Fact]
+        public void SensorValuesFromTheGivenPeriodMustBeReturned()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            DateTime from = DateTime.Now.AddDays(-1 * 15);
+            DateTime to = DateTime.Now.AddDays(-1 * 4);
+            var expectedData = data.Where(e => e.TimeCollected < to
+                && e.TimeCollected > from).ToList();
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, from, to);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(expectedData.Count, dataFromDB.Count);
+            expectedData.Sort((d1, d2) => d2.TimeCollected.CompareTo(d1.TimeCollected));
+            dataFromDB.Sort((d1, d2) => d2.Time.CompareTo(d1.Time));
+            for (int i = 0; i < expectedData.Count; ++i)
+            {
+                Assert.Equal(expectedData[i].TypedData, dataFromDB[i].TypedData);
+                Assert.Equal(expectedData[i].DataType, (byte)dataFromDB[i].SensorType);
+            }
         }
 
         [Fact]

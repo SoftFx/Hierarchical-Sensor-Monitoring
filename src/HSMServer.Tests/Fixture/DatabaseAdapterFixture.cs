@@ -142,8 +142,8 @@ namespace HSMServer.Tests.Fixture
         {
             SensorDataEntity entity = new SensorDataEntity();
             entity.Path = path;
-            entity.Time = DateTime.Now;
             entity.TimeCollected = DateTime.Now.AddDays(-1 * days);
+            entity.Time = entity.TimeCollected;
             entity.Status = (byte) SensorStatus.Ok;
             entity.DataType = (byte) SensorType.IntSensor;
             entity.TypedData = value;
