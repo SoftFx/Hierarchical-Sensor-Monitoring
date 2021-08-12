@@ -14,7 +14,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public const string USER_INFO_PREFIX = "UserInfo";
         public const string CONFIGURATION_OBJECT_PREFIX = "ConfigurationObject";
         public const string REGISTRATION_TICKET_PREFIX = "RegistrationTicket";
-
+        public const string MONITORING_DATABASE_INFO_PREFIX = "MonitoringDatabases";
         public static string GetUniqueUserKey(string userName)
         {
             return $"{USER_INFO_PREFIX}_{userName}";
@@ -64,6 +64,16 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             return
                 $"{SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime.Ticks}";
+        }
+
+        public static string GetDatabaseInfoKey(long Id)
+        {
+            return $"{MONITORING_DATABASE_INFO_PREFIX}_{Id}";
+        }
+
+        public static string GetDatabaseInfoSearchKey()
+        {
+            return MONITORING_DATABASE_INFO_PREFIX;
         }
     }
 }

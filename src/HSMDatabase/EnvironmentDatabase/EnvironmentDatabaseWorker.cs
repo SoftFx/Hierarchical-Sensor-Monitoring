@@ -4,6 +4,7 @@ using HSMDatabase.LevelDB;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 using System.Text.Json;
 
@@ -516,6 +517,67 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
+
+
         #endregion
+
+        public void WriteDatabaseInfo(MonitoringDatabaseInfoEntity entity)
+        {
+            var key = PrefixConstants.GetDatabaseInfoKey(entity.Id);
+            var bytesKey = Encoding.UTF8.GetBytes(key);
+            var value = JsonSerializer.Serialize(entity);
+            var bytesValue = Encoding.UTF8.GetBytes(value);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write database info {entity.FolderName}");
+            }
+        }
+
+        public void RemoveDatabaseInfo(long Id)
+        {
+            var key = PrefixConstants.GetDatabaseInfoKey(Id);
+            var bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove database info for db: {Id}");
+            }
+        }
+
+        public List<MonitoringDatabaseInfoEntity> GetMonitoringDatabases()
+        {
+            var key = PrefixConstants.GetDatabaseInfoSearchKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            List<MonitoringDatabaseInfoEntity> dbs = new List<MonitoringDatabaseInfoEntity>();
+            try
+            {
+                List<byte[]> values = _database.GetAllStartingWith(bytesKey);
+                foreach (var value in values)
+                {
+                    try
+                    {
+                        dbs.Add(
+                            JsonSerializer.Deserialize<MonitoringDatabaseInfoEntity>(Encoding.UTF8.GetString(value)));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to MonitoringDatabaseInfoEntity");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read users!");
+            }
+
+            return dbs;
+        }
     }
 }

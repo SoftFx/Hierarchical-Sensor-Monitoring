@@ -54,5 +54,9 @@ namespace HSMDatabase.EnvironmentDatabase
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
+
+        void WriteDatabaseInfo(MonitoringDatabaseInfoEntity entity);
+        void RemoveDatabaseInfo(long Id);
+        List<MonitoringDatabaseInfoEntity> GetMonitoringDatabases();
     }
 }

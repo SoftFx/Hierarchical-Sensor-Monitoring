@@ -11,6 +11,7 @@ using System.Text.Json;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
+    [Obsolete("12.08.2021. Use new databases.")]
     internal class LevelDBDatabaseWorker : IDatabaseWorker
     {
         #region Singleton

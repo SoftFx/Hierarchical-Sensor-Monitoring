@@ -4,6 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
+    [Obsolete("12.08.2021. Use new databases.")]
     internal interface IDatabaseWorker : IDisposable
     {
         #region Management
