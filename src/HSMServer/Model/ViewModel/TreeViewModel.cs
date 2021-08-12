@@ -22,9 +22,9 @@ namespace HSMServer.Model.ViewModel
 
         private void AddSensor(SensorData sensor)
         {
-            var path = (sensor.Product + "/" + sensor.Path);
-            path = path.Substring(0, path.LastIndexOf('/'));
-            path = path.Replace('/', '_');
+            var path = (sensor.Product + "/" + sensor.Path); //product/path/...
+            path = path.Substring(0, path.LastIndexOf('/')); //without sensor
+            //path = path.Replace('/', '_');
 
             if (Paths.FirstOrDefault(x => x.Equals(path)) == null)
                 Paths.Add(path);
