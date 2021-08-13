@@ -2,7 +2,6 @@
 using LevelDB;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Text;
 using Exception = System.Exception;
 
@@ -115,10 +114,6 @@ namespace HSMDatabase.LevelDB
 
         public List<byte[]> GetRange(byte[] from, byte[] to)
         {
-            Debug.Print("From");
-            ArrToDebug(from);
-            Debug.Print("To");
-            ArrToDebug(to);
             try
             {
                 List<byte[]> values = new List<byte[]>();
@@ -126,9 +121,6 @@ namespace HSMDatabase.LevelDB
                 for (iterator.Seek(from); iterator.IsValid() && iterator.Key().IsSmallerOrEquals(to);
                     iterator.Next())
                 {
-                    var key = iterator.Key();
-                    Debug.Print("Current key");
-                    ArrToDebug(key);
                     values.Add(iterator.Value());                    
                 }
 
@@ -206,15 +198,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        private void ArrToDebug(byte[] arr)
-        {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < arr.Length; i++)
-            {
-                sb.Append($"{arr[i]} ");
-            }
-            Debug.Print(sb.ToString());
-        }
         public void Dispose()
         {
             _database?.Dispose();

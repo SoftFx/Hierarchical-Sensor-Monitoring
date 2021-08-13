@@ -177,6 +177,7 @@ namespace HSMServer.Tests.DatabaseTests
             var key = _databaseFixture.GetFirstTestProduct().Key;
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(key, ProductRoleEnum.ProductManager));
             existingUser.Update(user);
+            Thread.Sleep(1000);
             _databaseFixture.DatabaseAdapter.UpdateUser(existingUser);
             var newUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
 
