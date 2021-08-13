@@ -4,6 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseInterface
 {
+    [Obsolete("13.08.2021. Use new IDatabaseCore interface")]
     public interface IPublicAdapter : IDisposable
     {
         #region Products

@@ -95,7 +95,7 @@ namespace HSMServer.Products
 
         private void AddDefaultProduct()
         {
-            Product product = new Product(TextConstants.DefaultProductName, TextConstants.DefaultProductName, DateTime.Now);
+            Product product = new Product(TextConstants.DefaultProductKey, TextConstants.DefaultProductName, DateTime.Now);
             AddProduct(product);
         }
 

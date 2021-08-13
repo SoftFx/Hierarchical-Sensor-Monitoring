@@ -255,7 +255,7 @@ namespace HSMServer.DataLayer
 
         public List<Product> GetProducts()
         {
-            var productEntities = _adapter.GetAllProducts();
+            var productEntities = _database.GetAllProducts();
             if (productEntities == null || !productEntities.Any())
                 return new List<Product>();
 
@@ -344,7 +344,7 @@ namespace HSMServer.DataLayer
 
         public List<SensorInfo> GetProductSensors(Product product)
         {
-            var sensorEntities = _adapter.GetProductSensors(product.Name);
+            var sensorEntities = _database.GetProductSensors(product.Name);
             if (sensorEntities == null || !sensorEntities.Any())
                 return new List<SensorInfo>();
             return sensorEntities.Select(e => new SensorInfo(e)).ToList();
