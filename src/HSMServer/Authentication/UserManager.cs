@@ -58,9 +58,22 @@ namespace HSMServer.Authentication
                 _logger.LogInformation("Default user added");
             }
 
+            MigrateUsersToNewDatabase();
+
             CheckUsersUpToDate();
 
             _logger.LogInformation("UserManager initialized");
+        }
+
+        /// <summary>
+        /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
+        /// </summary>
+        private void MigrateUsersToNewDatabase()
+        {
+            foreach (var user in _users)
+            {
+                _databaseAdapter.AddUser(user);
+            }
         }
 
         #region Interface implementation
@@ -86,7 +99,7 @@ namespace HSMServer.Authentication
                     StringComparison.InvariantCultureIgnoreCase));
                 _users.Remove(existingUser);
 
-                _databaseAdapter.RemoveUserOld(existingUser);
+                _databaseAdapter.RemoveUser(existingUser);
             }
         }
 
@@ -109,7 +122,7 @@ namespace HSMServer.Authentication
             if (page < 1 || pageSize < 1)
                 return new List<User>();
             
-            return _databaseAdapter.GetUsersPageOld(page, pageSize);
+            return _databaseAdapter.GetUsersPage(page, pageSize);
         }
 
         public void AddUser(User user)
@@ -119,7 +132,7 @@ namespace HSMServer.Authentication
                 _users.Add(user);
             }
 
-            Task.Run(() => _databaseAdapter.AddUserOld(user));
+            Task.Run(() => _databaseAdapter.AddUser(user));
         }
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
@@ -275,7 +288,7 @@ namespace HSMServer.Authentication
 
         private List<User> ReadUserFromDatabase()
         {
-            return _databaseAdapter.GetUsersOld();
+            return _databaseAdapter.GetUsers();
         }
 
         private void MigrateUsersToDatabase()
@@ -488,7 +501,7 @@ namespace HSMServer.Authentication
                 }
                 Task.Run(() =>
                 {
-                    _databaseAdapter.UpdateUserOld(existingUser);
+                    _databaseAdapter.UpdateUser(existingUser);
                 });
             }
         }

@@ -73,6 +73,9 @@ namespace HSMServer.DataLayer
         [Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
         void RemoveConfigurationObjectOld(string name);
 
+        [Obsolete("13.08.2021. Split databases, use methods without 'Old' postfix")]
+        List<ConfigurationObject> GetAllConfigurationObjectsOld();
+
         #endregion
 
         #region Registration Ticket Old
@@ -82,6 +85,8 @@ namespace HSMServer.DataLayer
         void RemoveRegistrationTicketOld(Guid id);
         [Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
         void WriteRegistrationTicketOld(RegistrationTicket ticket);
+        [Obsolete("13.08.2021. Split databases, use methods without 'Old' postfix")]
+        List<RegistrationTicket> GetAllTicketsOld();
 
         #endregion
 

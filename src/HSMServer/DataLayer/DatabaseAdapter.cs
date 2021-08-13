@@ -181,6 +181,14 @@ namespace HSMServer.DataLayer
             _adapter.RemoveConfigurationObject(name);
         }
 
+        public List<ConfigurationObject> GetAllConfigurationObjectsOld()
+        {
+            var configurationObjects = _adapter.ReadAllConfigurationEntities();
+            if (configurationObjects == null || !configurationObjects.Any())
+                return new List<ConfigurationObject>();
+
+            return configurationObjects.Select(e => new ConfigurationObject(e)).ToList();
+        }
         #endregion
 
         #region Register tickets Old
@@ -201,6 +209,15 @@ namespace HSMServer.DataLayer
             _adapter.WriteRegistrationTicket(Convert(ticket));
         }
 
+        public List<RegistrationTicket> GetAllTicketsOld()
+        {
+            var ticketEntities = _adapter.ReadAllRegisterTicketEntities();
+            if (ticketEntities == null || !ticketEntities.Any())
+                return new List<RegistrationTicket>();
+
+            return ticketEntities.Select(e => new RegistrationTicket(e)).ToList();
+        }
+        
         #endregion
 
         #region Product

@@ -45,6 +45,7 @@ namespace HSMDatabase.DatabaseInterface
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
+        List<ConfigurationEntity> ReadAllConfigurationEntities();
 
         #endregion
 
@@ -53,6 +54,7 @@ namespace HSMDatabase.DatabaseInterface
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
+        List<RegisterTicketEntity> ReadAllRegisterTicketEntities();
 
         #endregion
     }

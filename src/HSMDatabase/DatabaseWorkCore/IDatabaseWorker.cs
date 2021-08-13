@@ -62,6 +62,7 @@ namespace HSMDatabase.DatabaseWorkCore
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
+        List<ConfigurationEntity> ReadAllConfigurationEntities();
 
         #endregion
 
@@ -70,6 +71,7 @@ namespace HSMDatabase.DatabaseWorkCore
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
+        List<RegisterTicketEntity> ReadAllRegisterTicketEntities();
 
         #endregion
     }

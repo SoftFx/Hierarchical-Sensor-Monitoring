@@ -28,6 +28,7 @@ namespace HSMServer.Products
             _databaseAdapter = databaseAdapter;
             _converter = converter;
             _products = new List<Product>();
+            MigrateProductsToNewDatabase();
             InitializeProducts();
         }
 
@@ -41,7 +42,22 @@ namespace HSMServer.Products
                 }
             }
         }
-
+        /// <summary>
+        /// This method MUST be called when update from version 2.1.4 or lower to versions 2.1.5 or higher
+        /// </summary>
+        private void MigrateProductsToNewDatabase()
+        {
+            var existingProducts = _databaseAdapter.GetProductsOld();
+            foreach (var product in existingProducts)
+            {
+                var sensors = _databaseAdapter.GetProductSensorsOld(product);
+                _databaseAdapter.AddProduct(product);
+                foreach (var sensor in sensors)
+                {
+                    _databaseAdapter.AddSensor(sensor);
+                }
+            }
+        }
         //TODO: read products via product info, like users are read now
         private void InitializeProducts()
         {

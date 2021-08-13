@@ -670,6 +670,44 @@ namespace HSMDatabase.DatabaseWorkCore
                 _logger.Error(e, $"Failed to remove configuration entity named {name}");
             }
         }
+
+        public List<ConfigurationEntity> ReadAllConfigurationEntities()
+        {
+            List<ConfigurationEntity> result = new List<ConfigurationEntity>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetConfigurationObjectSearchKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        {
+                            if (!iterator.Key().StartsWith(searchKey))
+                                continue;
+
+                            try
+                            {
+                                var typedValue = JsonSerializer.Deserialize<ConfigurationEntity>(iterator.ValueAsString());
+                                result.Add(typedValue);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed to read ConfigurationEntity");
+                            }
+
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get configuration tickets");
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Users
@@ -836,6 +874,43 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        public List<RegisterTicketEntity> ReadAllRegisterTicketEntities()
+        {
+            List<RegisterTicketEntity> result = new List<RegisterTicketEntity>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetRegistrationTicketSearchKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        {
+                            if (!iterator.Key().StartsWith(searchKey))
+                                continue;
+
+                            try
+                            {
+                                var typedValue = JsonSerializer.Deserialize<RegisterTicketEntity>(iterator.ValueAsString());
+                                result.Add(typedValue);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed to read RegistrationTicket");
+                            }
+
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get register tickets");
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Private methods
@@ -884,6 +959,16 @@ namespace HSMDatabase.DatabaseWorkCore
         private string GetRegistrationTicketKey(Guid id)
         {
             return PrefixConstants.GetRegistrationTicketKey(id);
+        }
+
+        private string GetRegistrationTicketSearchKey()
+        {
+            return PrefixConstants.REGISTRATION_TICKET_PREFIX;
+        }
+
+        private string GetConfigurationObjectSearchKey()
+        {
+            return PrefixConstants.CONFIGURATION_OBJECT_PREFIX;
         }
 
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)
