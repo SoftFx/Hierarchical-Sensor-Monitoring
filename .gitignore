@@ -116,3 +116,9 @@ HSMServer/monitoring/
 
 # New monitoring database
 src/HSMServer/MonitoringData/
+
+# Environment database
+src/HSMServer/EnvironmentData/
+
+# Environment database
+src/HSMServer/Databases/

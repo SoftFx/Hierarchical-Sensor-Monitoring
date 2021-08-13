@@ -64,6 +64,8 @@ namespace HSMServer
 
             //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
             services.AddTransient<IPublicAdapter, PublicAdapter>();
+            //Use singleton, created in DatabaseCore
+            //services.AddSingleton<IDatabaseCore, DatabaseCore>();
             services.AddTransient<IDatabaseAdapter, DatabaseAdapter>();
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();

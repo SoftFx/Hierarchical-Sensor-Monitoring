@@ -2,27 +2,18 @@
 using System.Collections.Generic;
 using HSMDatabase.Entity;
 
-namespace HSMDatabase.DatabaseWorkCore
+namespace HSMDatabase.EnvironmentDatabase
 {
-    [Obsolete("12.08.2021. Use new databases.")]
-    internal interface IDatabaseWorker : IDisposable
+    internal interface IEnvironmentDatabase
     {
-        #region Management
-
-        void CloseDatabase();
-        void OpenDatabase(string databaseName);
-        void DeleteDatabase();
-
-        #endregion
-
         #region Products
 
         void AddProductToList(string productName);
         List<string> GetProductsList();
         ProductEntity GetProductInfo(string productName);
         void PutProductInfo(ProductEntity product);
-        void RemoveProductInfo(string name);
-        void RemoveProductFromList(string name);
+        void RemoveProductInfo(string productName);
+        void RemoveProductFromList(string productName);
 
         #endregion
 
@@ -30,26 +21,17 @@ namespace HSMDatabase.DatabaseWorkCore
 
         void RemoveSensor(string productName, string path);
         void AddSensor(SensorEntity info);
-        void WriteSensorData(SensorDataEntity dataObject, string productName);
-        /// <summary>
-        /// Use for sensors, for which only last value must be stored
-        /// </summary>
-        /// <param name="dataObject"></param>
-        /// <param name="productName"></param>
-        void WriteOneValueSensorData(SensorDataEntity dataObject, string productName);
-        SensorDataEntity GetOneValueSensorValue(string productName, string path);
-        SensorDataEntity GetLastSensorValue(string productName, string path);
-        List<SensorDataEntity> GetSensorDataHistory(string productName, string path, long n);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorsList(string productName);
-        void RemoveSensorFromList(string productName, string sensorName);
+        void RemoveSensorFromList(string productName, string path);
         SensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
 
         #endregion
 
         #region Users
+
         void AddUser(UserEntity user);
         List<UserEntity> ReadUsers();
         void RemoveUser(UserEntity user);
@@ -62,7 +44,6 @@ namespace HSMDatabase.DatabaseWorkCore
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
-        List<ConfigurationEntity> ReadAllConfigurationEntities();
 
         #endregion
 
@@ -71,8 +52,11 @@ namespace HSMDatabase.DatabaseWorkCore
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
-        List<RegisterTicketEntity> ReadAllRegisterTicketEntities();
 
         #endregion
+
+        List<string> GetMonitoringDatabases();
+        void AddMonitoringDatabaseToList(string folderName);
+        void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }

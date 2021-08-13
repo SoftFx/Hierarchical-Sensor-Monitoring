@@ -22,6 +22,7 @@ namespace HSMServer.Tests.Fixture
         public DatabaseAdapterFixture()
         {
             IPublicAdapter publicAdapter = new PublicAdapter();
+            IDatabaseCore core = DatabaseCore.GetInstance();
             DatabaseAdapter = new DatabaseAdapter(publicAdapter);
         }
         
@@ -97,11 +98,17 @@ namespace HSMServer.Tests.Fixture
 
         public const string OneValueSensorPath = "sensors/OneValue";
         public const string SensorPath = "sensors/Sensor";
+        public const string SensorPath2 = "sensors/Sensor2";
 
 
         public SensorInfo CreateOneValueSensorInfo()
         {
             return CreateSensorInfo(OneValueSensorPath, "OneValue", FirstProductName);
+        }
+
+        public SensorInfo CreateSensorInfo2()
+        {
+            return CreateSensorInfo(SensorPath2, "Sensor2", FirstProductName);
         }
         public SensorInfo CreateSensorInfo()
         {
@@ -119,30 +126,40 @@ namespace HSMServer.Tests.Fixture
 
         public SensorDataEntity CreateOneDataEntity()
         {
-            return CreateDataEntity(SensorPath, "Test");
+            return CreateDataEntity(SensorPath, "Test", 0);
         }
 
         public SensorDataEntity CreateOneValueSensorDataEntity()
         {
-            return CreateDataEntity(OneValueSensorPath, "File bytes");
+            return CreateDataEntity(OneValueSensorPath, "File bytes", 0);
         }
 
+        public List<SensorDataEntity> CreateSensorValues2()
+        {
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            for (int i = 0; i < 20; i++)
+            {
+                result.Add(CreateDataEntity(SensorPath2, i.ToString(), i));
+            }
+
+            return result;
+        }
         public List<SensorDataEntity> CreateSensorValues()
         {
             List<SensorDataEntity> result = new List<SensorDataEntity>();
             for (int i = 0; i < 20; i++)
             {
-                result.Add(CreateDataEntity(SensorPath, i.ToString()));
+                result.Add(CreateDataEntity(SensorPath, i.ToString(), i));
             }
 
             return result;
         }
-        private SensorDataEntity CreateDataEntity(string path, string value)
+        private SensorDataEntity CreateDataEntity(string path, string value, int days)
         {
             SensorDataEntity entity = new SensorDataEntity();
             entity.Path = path;
-            entity.Time = DateTime.Now;
-            entity.TimeCollected = DateTime.Now;
+            entity.TimeCollected = DateTime.Now.AddDays(-1 * days);
+            entity.Time = entity.TimeCollected;
             entity.Status = (byte) SensorStatus.Ok;
             entity.DataType = (byte) SensorType.IntSensor;
             entity.TypedData = value;
@@ -184,6 +201,14 @@ namespace HSMServer.Tests.Fixture
         /// </summary>
         public void Dispose()
         {
+            DatabaseAdapter?.RemoveProductOld(FirstProductName);
+            DatabaseAdapter?.RemoveProductOld(SecondProductName);
+            DatabaseAdapter?.RemoveProductOld(ThirdProductName);
+            DatabaseAdapter?.RemoveUserOld(CreateFirstUser());
+            DatabaseAdapter?.RemoveUserOld(CreateSecondUser());
+            DatabaseAdapter?.RemoveUserOld(CreateThirdUser());
+            DatabaseAdapter?.RemoveRegistrationTicketOld(_ticket.Id);
+            DatabaseAdapter?.RemoveConfigurationObjectOld(ConfigurationObjectName);
             DatabaseAdapter?.RemoveProduct(FirstProductName);
             DatabaseAdapter?.RemoveProduct(SecondProductName);
             DatabaseAdapter?.RemoveProduct(ThirdProductName);
