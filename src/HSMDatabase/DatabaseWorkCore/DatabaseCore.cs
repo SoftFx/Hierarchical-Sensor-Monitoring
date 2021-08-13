@@ -42,10 +42,11 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private const string DatabaseFolderName = "MonitoringData";
+        private const string DatabaseParentFolder = "Databases";
         private const string EnvironmentDatabaseName = "EnvironmentData";
         private DatabaseCore()
         {
-            _environmentDatabase = new EnvironmentDatabaseWorker(EnvironmentDatabaseName);
+            _environmentDatabase = new EnvironmentDatabaseWorker($"{DatabaseParentFolder}/{EnvironmentDatabaseName}");
             _sensorsDatabases = new TimeDatabaseDictionary();
             OpenAllExistingSensorDatabases();
         }
@@ -58,7 +59,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 GetDatesFromFolderName(databaseName, out DateTime from, out DateTime to);
                 if (from != DateTime.MinValue && to != DateTime.MinValue)
                 {
-                    ISensorsDatabase database = new SensorsDatabaseWorker(databaseName, from, to);
+                    ISensorsDatabase database = new SensorsDatabaseWorker($"{DatabaseParentFolder}/{databaseName}", from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
             }
@@ -139,7 +140,7 @@ namespace HSMDatabase.DatabaseWorkCore
             DateTime minDateTime = DateTimeMethods.GetMinDateTime(entity.TimeCollected);
             DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(entity.TimeCollected);
             string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
-            ISensorsDatabase newDatabase = new SensorsDatabaseWorker(newDatabaseName, minDateTime, maxDateTime);
+            ISensorsDatabase newDatabase = new SensorsDatabaseWorker($"{DatabaseParentFolder}/{newDatabaseName}", minDateTime, maxDateTime);
             _sensorsDatabases.AddDatabase(newDatabase);
             _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName);
             newDatabase.PutSensorData(entity, productName);
