@@ -25,8 +25,9 @@ namespace HSMServer.HtmlHelpers
         public static string Recursion(NodeViewModel node)
         {
             StringBuilder result = new StringBuilder();
+            var name = SensorPathHelper.Encode(node.Path);
 
-            result.Append($"<li id='{node.Path.Replace(' ', '-')}' " +
+            result.Append($"<li id='{name}' " +
                           "data-jstree='{\"icon\" : \"fas fa-circle " +
                           ViewHelper.GetStatusHeaderColorClass(node.Status) + 
                           "\"}'>" + $"{node.Name} ({node.Count} sensors)");

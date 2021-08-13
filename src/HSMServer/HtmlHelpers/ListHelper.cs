@@ -44,7 +44,7 @@ namespace HSMServer.HtmlHelpers
 
             foreach(var path in model.Paths)
             {
-                string formattedPath = path.Replace(' ', '-');
+                string formattedPath = SensorPathHelper.Encode(path);
                 if (!string.IsNullOrEmpty(selectedPath) 
                     && selectedPath.Equals(formattedPath)) continue;
 
@@ -58,7 +58,7 @@ namespace HSMServer.HtmlHelpers
         {
             if (path == null) return string.Empty;
 
-            var nodes = path.Split('_');
+            var nodes = path.Split('/');
             var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
             NodeViewModel node = existingNode;
             if (nodes[0].Length < path.Length)
@@ -68,25 +68,27 @@ namespace HSMServer.HtmlHelpers
             }
 
             StringBuilder result = new StringBuilder();
-            string formattedPath = fullPath.Replace(' ', '-');
+            string formattedPath = SensorPathHelper.Encode(fullPath);
 
             result.Append($"<div class='accordion' id='list_{formattedPath}' style='display: none;'>");
             if (node.Sensors != null)
                 foreach (var sensor in node.Sensors)
                 {
-                    result.Append(CreateSensor(formattedPath, sensor));
+                    result.Append(CreateSensor(fullPath, sensor));
                 }
             result.Append("</div>");
 
             return result.ToString();
         }
 
-        public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
+        public static StringBuilder CreateSensor(string path, SensorViewModel sensor)
         {
             StringBuilder result = new StringBuilder();
-            string name = sensor.Name.Replace(' ', '-');
+            string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
+            string formattedPath = SensorPathHelper.Encode(path);
+
             result.Append("<div class='accordion-item'>" +
-                          $"<h2 class='accordion-header' id='heading_{formattedPath}_{name}'>");
+                          $"<h2 class='accordion-header' id='heading_{name}'>");
 
             var time = (DateTime.UtcNow - sensor.Time);
 
@@ -96,28 +98,28 @@ namespace HSMServer.HtmlHelpers
                 string fileName = GetFileNameString(sensor.StringValue);
 
                 //button
-                result.Append($"<button id='{formattedPath}_{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
-                          $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='true' aria-controls='collapse_{formattedPath}_{name}'>" +
+                result.Append($"<button id='{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
+                          $"data-bs-target='#collapse_{name}' aria-expanded='true' aria-controls='collapse_{name}'>" +
                           "<div>" +
                           $"<div class='row'><div class='col-md-auto'>{sensor.Name}</div>" +
                           $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                 //body
-                result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse' " +
-                          $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                result.Append($"<div id='collapse_{name}' class='accordion-collapse' " +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
                           "<div class='accordion-body'>");
 
                 result.Append("<div style='width: 100%'>" +
                           "<div class='row justify-content-between'><div class='col-md-auto'>" +
-                          $"<li id='status_{formattedPath}_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                          $"<li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
                           $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
-                          $"<div class='col-md-auto time-ago-div' id='update_{formattedPath}_{name}' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
+                          $"<div class='col-md-auto time-ago-div' id='update_{name}' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
                           $"{sensor.ShortStringValue}</div>" +
                               "<div class='row'><div class='col-md-auto'>" +
-                              $"<button id='button_view_{formattedPath}_{name}_{fileName}' " +
+                              $"<button id='button_view_{name}' " +
                               "class='button-view-file-sensor btn btn-secondary' title='View'>" +
                               "<i class='fas fa-eye'></i></button></div>" +
-                              "<div class='col'>" +
-                              $"<button id='button_download_{formattedPath}_{name}_{fileName}'" +
+                              $"<div class='col'><input style='display: none;' id='fileType_{name}' value='{fileName}'>" +
+                              $"<button id='button_download_{name}'" +
                               " class='button-download-file-sensor-value btn btn-secondary'" +
                               " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
 
@@ -127,33 +129,33 @@ namespace HSMServer.HtmlHelpers
                 return result;
             }
 
-            result.Append($"<button id='{formattedPath}_{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
-                          $"data-bs-target='#collapse_{formattedPath}_{name}' aria-expanded='false' aria-controls='collapse_{formattedPath}_{name}'>" +
+            result.Append($"<button id='{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
+                          $"data-bs-target='#collapse_{name}' aria-expanded='false' aria-controls='collapse_{name}'>" +
                           "<div style='width: 100%'>" +
                           "<div class='row justify-content-between'>" +
-                          $"<div class='col-md-auto'><li id='status_{formattedPath}_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                          $"<div class='col-md-auto'><li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
                           $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
                           $"{sensor.Name}</div><div class='col-md-auto'>" +
-                          $"<input id='sensor_type_{formattedPath}_{name}' value='{(int)sensor.SensorType}' style='display: none' />" +
-                          $"<div id='update_{formattedPath}_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
-                          $"<div id='value_{formattedPath}_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
+                          $"<input id='sensor_type_{name}' value='{(int)sensor.SensorType}' style='display: none' />" +
+                          $"<div id='update_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
+                          $"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
 
-            result.Append($"<div id='collapse_{formattedPath}_{name}' class='accordion-collapse collapse'" +
-                          $"aria-labelledby='heading_{formattedPath}_{name}' data-bs-parent='#list_{formattedPath}'>" +
+            result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'" +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
                           "<div class='accordion-body'>" +
                           "<div class='mb-3 row'>" +
-                          $"<label for='inputCount_{formattedPath}_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
+                          $"<label for='inputCount_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
                           "<div class='col-sm-3'>" +
-                          $"<input type='number' class='form-control' id='inputCount_{formattedPath}_{name}' value='10' min='10'></div>" +
+                          $"<input type='number' class='form-control' id='inputCount_{name}' value='10' min='10'></div>" +
                           "<div class='col-sm-1'>" +
-                          $"<button id='reload_{formattedPath}_{name}' type='button' class='btn btn-secondary'>" +
+                          $"<button id='reload_{name}' type='button' class='btn btn-secondary'>" +
                           "<i class='fas fa-redo-alt'></i></button>" +
-                          $"<input style='display: none' id='listId_{formattedPath}_{name}' value='{formattedPath}'/></div>");
+                          $"<input style='display: none' id='listId_{name}' value='{formattedPath}'/></div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(isPlottingSupported(sensor.SensorType)
-                            ? GetNavTabsForHistory(formattedPath, name)
-                            : GetValuesDivForHistory(formattedPath, name));
+                            ? GetNavTabsForHistory(name)
+                            : GetValuesDivForHistory(name));
 
             result.Append("</div></div></div></div></div>");
 
@@ -191,19 +193,19 @@ namespace HSMServer.HtmlHelpers
             return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
-        private static string GetNavTabsForHistory(string formattedPath, string name)
+        private static string GetNavTabsForHistory(string name)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("<ul class='nav nav-tabs'>");
 
             //Graph tab
-            string graphElementId = $"graph_{formattedPath}_{name}";
-            string graphParentDivId = $"graph_parent_{formattedPath}_{name}";
+            string graphElementId = $"graph_{name}";
+            string graphParentDivId = $"graph_parent_{name}";
             sb.Append($"<li class='nav-item'><a class='nav-link active' data-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
-            string valuesElementId = $"values_{formattedPath}_{name}";
-            string valuesParentDivId = $"values_parent_{formattedPath}_{name}";
+            string valuesElementId = $"values_{name}";
+            string valuesParentDivId = $"values_parent_{name}";
             sb.Append($"<li class='nav-item'><a class='nav-link' data-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
@@ -213,9 +215,9 @@ namespace HSMServer.HtmlHelpers
             return sb.ToString();
         }
 
-        private static string GetValuesDivForHistory(string formattedPath, string name)
+        private static string GetValuesDivForHistory(string name)
         {
-            return $"<div id='values_{formattedPath}_{name}'></div>";
+            return $"<div id='values_{name}'></div>";
         }
         private static bool isPlottingSupported(SensorType sensorType)
         {
@@ -273,7 +275,7 @@ namespace HSMServer.HtmlHelpers
 
         private static NodeViewModel GetNodeRecursion(string path, NodeViewModel model)
         {
-            var nodes = path.Split('_');
+            var nodes = path.Split('/');
 
             if (nodes[0].Length == path.Length)
                 return model.Nodes.First(x => x.Name.Equals(nodes[0]));

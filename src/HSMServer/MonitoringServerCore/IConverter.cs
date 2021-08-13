@@ -68,7 +68,8 @@ namespace HSMServer.MonitoringServerCore
             TransactionType type);
         #endregion
 
-        SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected);
+        SensorData ConvertUnitedValue(UnitedSensorValue value, string productName,
+            DateTime timeCollected, TransactionType transactionType);
         //SensorDataObject ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected);
         SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected);
         BarSensorValueBase GetBarSensorValue(UnitedSensorValue value);

@@ -137,12 +137,6 @@
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var listId = "";
         if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
-        //var selectedHistory = $('[class*=accordion][style*="display: block;"]')[0];
-        //var listId = "";
-        //if (selectedHistory != undefined) 
-            //listId = selectedHistory.id;
-
-        //console.log(listId);
 
         //removing invisible lists
         $('[id^="list_"][style*="display: none;"]').each(function (index) {
@@ -209,6 +203,8 @@
             sensorsData = sensorsData.slice(0, sensorsData.length - 2);
             sensorsData = sensorsData.replaceAll("\\", "");
 
+            //console.log(sensorsData);
+
             if ($('#' + listId) == undefined) {
                 $('#listContainer').append("<div class='accordion'" +
                     "id = '" + listId + "' style = 'display: block;' ></div> ");
@@ -216,6 +212,7 @@
             }
 
             $('#' + listId).append(sensorsData); 
+            initializeDataHistoryRequests();
         });
 
         $('#updateTime').empty();

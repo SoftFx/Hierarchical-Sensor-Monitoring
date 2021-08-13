@@ -21,27 +21,9 @@ function getExtensionFromName(fileName) {
     return fileName.substring(dotIndex + 1, fileName.length);
 }
 
-
-//function getFileName(product, path, fileName) {
-//    let newDate = new Date();
-//    let date = newDate.toLocaleDateString("ru-RU");
-//    let time = newDate.toLocaleTimeString("ru-Ru").replace(':', '.');
-//    let dotIndex = fileName.indexOf('.');
-//    //has dot and does not start from dot
-//    if (dotIndex > 0) {
-//       return fileName;
-
-//    }
-
-//    if (dotIndex === 0) {
-//        return product + "_" + path + "_" + date + "_" + time + fileName;
-//    }
-//    return product + "_" + path + "_" + date + "_" + time + "." + fileName;
-//}
-
-function viewFile(product, path, fileName, viewFileAction) {
+function viewFile(path, fileName, viewFileAction) {
     let fileType = getMimeType(fileName);
-    //console.log(fileType);
+    console.log(fileType);
     //var xhr = new XMLHttpRequest();
     //xhr.open('POST', viewFileAction, true);
     //xhr.responseType = 'blob';
@@ -54,21 +36,17 @@ function viewFile(product, path, fileName, viewFileAction) {
     //xhr.send(JSON.stringify(fileData(product, path)));
     $.ajax({
         type: 'POST',
-        data: JSON.stringify(fileData(product, path)),
-        url: viewFileAction,
+        url: viewFileAction + "?Selected=" + path,
         cache: false,
         contentType: "application/json",
         success: function (response) {
             if (fileType === undefined) {
                 fileType = "text/html";
             }
+            console.log(fileType);
             let blob = new Blob([response], { type: fileType });
             let url = window.URL.createObjectURL(blob);
             window.open(url);
         }
     });
-}
-
-function fileData(product, path) {
-    return { "Product": product, "Path": path };
 }
