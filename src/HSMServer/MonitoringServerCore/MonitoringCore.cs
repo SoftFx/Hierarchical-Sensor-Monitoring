@@ -19,6 +19,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.Entity;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
@@ -98,8 +99,26 @@ namespace HSMServer.MonitoringServerCore
             _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
             _converter = converter;
+            MigrateSensorsValuesToNewDatabase();
+            Thread.Sleep(5000);
             FillValuesCache();
             _logger.LogInformation("Monitoring core initialized");
+        }
+
+        private void MigrateSensorsValuesToNewDatabase()
+        {
+            foreach (var product in _productManager.Products)
+            {
+                var sensors = _productManager.GetProductSensors(product.Name);
+                foreach (var sensor in sensors)
+                {
+                    var history = _databaseAdapter.GetAllSensorDataOld(product.Name, sensor.Path);
+                    foreach (var historyItem in history)
+                    {
+                        _databaseAdapter.PutSensorData(historyItem, product.Name);
+                    }
+                }
+            }
         }
 
         private void FillValuesCache()
@@ -110,7 +129,8 @@ namespace HSMServer.MonitoringServerCore
                 var sensors = _productManager.GetProductSensors(product.Name);
                 foreach (var sensor in sensors)
                 {
-                    var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
+                    //var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
+                    var lastVal = _databaseAdapter.GetLastSensorValue(product.Name, sensor.Path);
                     if (lastVal != null)
                     {
                         _valuesCache.AddValue(product.Name, _converter.Convert(lastVal, sensor, product.Name));
@@ -531,25 +551,6 @@ namespace HSMServer.MonitoringServerCore
                 productsList = productsList.Where(p => 
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
             
-            //foreach (var product in productsList)
-            //{
-                //result.AddRange();
-                //var sensorsList = _productManager.GetProductSensors(product.Name);
-                //foreach (var sensor in sensorsList)
-                //{
-                //    var cachedVal = _valuesCache.GetValue(product.Name, sensor.Path);
-                //    if (cachedVal != null)
-                //    {
-                //        result.Add(cachedVal);
-                //        continue;
-                //    }
-                //    var lastVal = _database.GetLastSensorValue(product.Name, sensor.Path);
-                //    if (lastVal != null)
-                //    {
-                //        result.Add(_converter.Convert(lastVal, product.Name));
-                //    }
-                //}
-            //}
             result.AddRange(_valuesCache.GetValues(productsList.Select(p => p.Name).ToList()));
 
             return result;

@@ -48,6 +48,8 @@ namespace HSMServer.DataLayer
         SensorHistoryData GetOneValueSensorValueOld(string productName, string path);
         [Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
         List<SensorInfo> GetProductSensorsOld(Product product);
+        [Obsolete("13.08.2021. Use for migration only!")]
+        List<SensorDataEntity> GetAllSensorDataOld(string productName, string path);
         #endregion
 
         #region User Old
@@ -73,7 +75,7 @@ namespace HSMServer.DataLayer
         [Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
         void RemoveConfigurationObjectOld(string name);
 
-        [Obsolete("13.08.2021. Split databases, use methods without 'Old' postfix")]
+        [Obsolete("13.08.2021. Use for migration only!")]
         List<ConfigurationObject> GetAllConfigurationObjectsOld();
 
         #endregion
@@ -85,7 +87,7 @@ namespace HSMServer.DataLayer
         void RemoveRegistrationTicketOld(Guid id);
         [Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
         void WriteRegistrationTicketOld(RegistrationTicket ticket);
-        [Obsolete("13.08.2021. Split databases, use methods without 'Old' postfix")]
+        [Obsolete("13.08.2021. Use for migration only!")]
         List<RegistrationTicket> GetAllTicketsOld();
 
         #endregion

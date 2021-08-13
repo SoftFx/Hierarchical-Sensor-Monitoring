@@ -122,6 +122,15 @@ namespace HSMServer.DataLayer
             return sensorEntities.Select(e => new SensorInfo(e)).ToList();
         }
 
+        public List<SensorDataEntity> GetAllSensorDataOld(string productName, string path)
+        {
+            var dataEntities = _adapter.GetSensorHistory(productName, path, -1);
+            if (dataEntities == null || !dataEntities.Any())
+                return new List<SensorDataEntity>();
+
+            return dataEntities;
+        }
+
         #endregion
 
         #region Users Old
