@@ -17,28 +17,36 @@ namespace HSMDatabase.LevelDB.Extensions
             return true;
         }
 
-        public static bool IsGreater(this byte[] initialArray, byte[] anotherBytes)
+        public static bool IsGreaterOrEquals(this byte[] initialArray, byte[] anotherBytes)
         {
-            for (int i = 0; i < Math.Min(initialArray.Length, anotherBytes.Length); ++i)
+            if (initialArray.Length != anotherBytes.Length)
+                return initialArray.Length.CompareTo(anotherBytes.Length) >= 0;
+
+
+            for (int i = 0; i < initialArray.Length; ++i)
             {
                 var cmpResult = initialArray[i].CompareTo(anotherBytes[i]);
                 if (cmpResult != 0)
-                    return cmpResult > 0;
+                    return cmpResult < 0;
             }
 
-            return initialArray.Length.CompareTo(anotherBytes.Length) > 0;
+            return true;
         }
 
-        public static bool IsGreaterOrEquals(this byte[] initialArray, byte[] anotherBytes)
+        public static bool IsSmallerOrEquals(this byte[] initialArray, byte[] anotherBytes)
         {
-            for (int i = 0; i < Math.Min(initialArray.Length, anotherBytes.Length); ++i)
+            if (initialArray.Length != anotherBytes.Length)
+                return initialArray.Length.CompareTo(anotherBytes.Length) <= 0;
+
+
+            for (int i = 0; i < initialArray.Length; ++i)
             {
                 var cmpResult = initialArray[i].CompareTo(anotherBytes[i]);
-                if (cmpResult < 0)
-                    return false;
+                if (cmpResult != 0)
+                    return cmpResult < 0;
             }
 
-            return initialArray.Length.CompareTo(anotherBytes.Length) >= 0;
+            return true;
         }
     }
 }

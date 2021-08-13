@@ -1,5 +1,8 @@
-﻿using HSMDatabase.DatabaseInterface;
+﻿using HSMCommon.Model.SensorsData;
+using HSMDatabase.DatabaseInterface;
+using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Entity;
+using HSMSensorDataObjects;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.DataLayer.Model;
@@ -7,8 +10,6 @@ using HSMServer.Registration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
 
 namespace HSMServer.DataLayer
 {
@@ -16,10 +17,10 @@ namespace HSMServer.DataLayer
     {
         private IPublicAdapter _adapter;
         private IDatabaseCore _database;
-        public DatabaseAdapter(IPublicAdapter adapter, IDatabaseCore database)
+        public DatabaseAdapter(IPublicAdapter adapter)
         {
             _adapter = adapter;
-            _database = database;
+            _database = DatabaseCore.GetInstance();
         }
 
         #region Product Old

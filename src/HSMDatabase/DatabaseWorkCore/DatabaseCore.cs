@@ -4,7 +4,6 @@ using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
@@ -48,12 +47,21 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase = new EnvironmentDatabaseWorker(EnvironmentDatabaseName);
             _sensorsDatabases = new TimeDatabaseDictionary();
-
+            OpenAllExistingSensorDatabases();
         }
 
         private void OpenAllExistingSensorDatabases()
         {
-
+            List<string> databasesList = _environmentDatabase.GetMonitoringDatabases();
+            foreach (var databaseName in databasesList)
+            {
+                GetDatesFromFolderName(databaseName, out DateTime from, out DateTime to);
+                if (from != DateTime.MinValue && to != DateTime.MinValue)
+                {
+                    ISensorsDatabase database = new SensorsDatabaseWorker(databaseName, from, to);
+                    _sensorsDatabases.AddDatabase(database);
+                }
+            }
         }
 
         #region Sensors methods
@@ -121,7 +129,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensorValue(SensorDataEntity entity, string productName)
         {
-            Debug.Print("PutSensorData call");
             bool isExists = _sensorsDatabases.TryGetDatabase(entity.TimeCollected, out var database);
             if (isExists)
             {
@@ -134,6 +141,7 @@ namespace HSMDatabase.DatabaseWorkCore
             string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
             ISensorsDatabase newDatabase = new SensorsDatabaseWorker(newDatabaseName, minDateTime, maxDateTime);
             _sensorsDatabases.AddDatabase(newDatabase);
+            _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName);
             newDatabase.PutSensorData(entity, productName);
         }
 
@@ -309,6 +317,14 @@ namespace HSMDatabase.DatabaseWorkCore
             return $"{DatabaseFolderName}_{from.Ticks}_{to.Ticks}";
         }
 
+        private void GetDatesFromFolderName(string folder, out DateTime from, out DateTime to)
+        {
+            var splitResults = folder.Split('_');
+            bool success1 = long.TryParse(splitResults[1], out long fromTicks);
+            from = success1 ? new DateTime(fromTicks) : DateTime.MinValue;
+            bool success2 = long.TryParse(splitResults[2], out long toTicks);
+            to = success2 ? new DateTime(toTicks) : DateTime.MinValue;
+        }
         #endregion
     }
 }

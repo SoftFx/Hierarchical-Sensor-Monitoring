@@ -23,7 +23,7 @@ namespace HSMServer.Tests.Fixture
         {
             IPublicAdapter publicAdapter = new PublicAdapter();
             IDatabaseCore core = DatabaseCore.GetInstance();
-            DatabaseAdapter = new DatabaseAdapter(publicAdapter, core);
+            DatabaseAdapter = new DatabaseAdapter(publicAdapter);
         }
         
         #region Product
