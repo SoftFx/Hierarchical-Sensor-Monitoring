@@ -77,7 +77,7 @@ namespace HSMServer
                                 portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
                             });
                         });
-                        options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
+                        options.Listen(IPAddress.Any, ConfigurationConstants.SitePort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                             listenOptions.UseHttps(portOptions =>
@@ -142,7 +142,7 @@ namespace HSMServer
         //                        portOptions.ServerCertificate = Config.ServerCertificate;
         //                    });
         //                });
-        //                options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
+        //                options.Listen(IPAddress.Any, ConfigurationConstants.SitePort, listenOptions =>
         //                {
         //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
         //                    listenOptions.UseHttps(portOptions =>

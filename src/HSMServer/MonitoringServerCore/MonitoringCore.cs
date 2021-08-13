@@ -170,7 +170,8 @@ namespace HSMServer.MonitoringServerCore
         private void SaveSensorValue(SensorDataEntity dataObject, string productName)
         {
             //_productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
-            Task.Run(() => _databaseAdapter.PutSensorDataOld(dataObject, productName));
+            //Task.Run(() => _databaseAdapter.PutSensorDataOld(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
         }
 
         /// <summary>
@@ -180,7 +181,8 @@ namespace HSMServer.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveOneValueSensorValue(SensorDataEntity dataObject, string productName)
         {
-            Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
+            //Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
         }
 
         public void AddSensorsValues(IEnumerable<CommonSensorValue> values)
@@ -580,13 +582,8 @@ namespace HSMServer.MonitoringServerCore
 
         public string GetFileSensorValue(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
-            if (historyList.Count < 1)
-            {
-                return string.Empty;
-            }
-
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
                 return typedData.FileContent;
@@ -598,21 +595,17 @@ namespace HSMServer.MonitoringServerCore
 
         public byte[] GetFileSensorValueBytes(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
-            if (historyList.Count < 1)
-            {
-                return new byte[1];
-            }
-
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+            
             try
             {
-                var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(historyList[0].TypedData);
+                var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
                 return typedData2?.FileContent;
             }
             catch { }
             
 
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
                 return Encoding.Default.GetBytes(typedData.FileContent);
@@ -622,17 +615,13 @@ namespace HSMServer.MonitoringServerCore
         }
         public string GetFileSensorValueExtension(User user, string product, string path)
         {
-            var historyList = _databaseAdapter.GetSensorHistoryOld(product, path, 1);
-            if (historyList.Count < 1)
-            {
-                return string.Empty;
-            }
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(historyList[0].TypedData);
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
                 return typedData.Extension;
             }
-            var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(historyList[0].TypedData);
+            var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
             if (typedData2 != null)
             {
                 return typedData2.Extension;

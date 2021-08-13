@@ -36,6 +36,7 @@ namespace HSMServer.Authentication
             _certificateManager = certificateManager;
             _users = new List<User>();
             _databaseAdapter = databaseAdapter;
+            MigrateUsersToNewDatabase();
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
             if (File.Exists(_usersFilePath))
@@ -58,8 +59,6 @@ namespace HSMServer.Authentication
                 _logger.LogInformation("Default user added");
             }
 
-            MigrateUsersToNewDatabase();
-
             CheckUsersUpToDate();
 
             _logger.LogInformation("UserManager initialized");
@@ -70,7 +69,8 @@ namespace HSMServer.Authentication
         /// </summary>
         private void MigrateUsersToNewDatabase()
         {
-            foreach (var user in _users)
+            var users = _databaseAdapter.GetUsersOld();
+            foreach (var user in users)
             {
                 _databaseAdapter.AddUser(user);
             }
