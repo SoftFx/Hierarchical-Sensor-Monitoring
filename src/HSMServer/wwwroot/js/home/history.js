@@ -43,6 +43,68 @@ function initializeDataHistoryRequests() {
     );
 }
 
+function InitializePeriodRequests() {
+    $('[id^="hour_"]').on("click",
+        function() {
+            let path = this.id.substring("hour_".length);
+            let type = getTypeForSensor(path);
+            console.log('About to have history for ' + path + 'of type ' + type);
+            initializeHistory(path, historyHourAction, type);
+        }
+    );
+
+    $('[id^="day_"]').on("click",
+        function () {
+            let path = this.id.substring("day_".length);
+        }
+    );
+
+    $('[id^="three_days_"]').on("click",
+        function () {
+            let path = this.id.substring("three_days_".length);
+        }
+    );
+
+    $('[id^="week_"]').on("click",
+        function () {
+            let path = this.id.substring("week_".length);
+        }
+    );
+
+    $('[id^="month_"]').on("click",
+        function () {
+            let path = this.id.substring("month_".length);
+        }
+    );
+
+    $('[id^="all_"]').on("click",
+        function () {
+            let path = this.id.substring("all_".length);
+        }
+    );
+}
+
+function initializeHistory(path, historyAction, type) {
+    $.ajax({
+        type: 'POST',
+        url: historyAction + "?Path" + path + "&Type" + type,
+        contentType: 'application/json',
+        cache: false,
+        async: true
+    }).done(function (data) {
+        data = data.replace('{"value":"', ''); //fix sometime
+        data = data.replace('"}', '');
+
+        $(`#values_${path}`).empty();
+        $(`#values_${path}`).append(data);
+    });
+}
+
+function getTypeForSensor(name) {
+    let element = document.getElementById("sensor_type_" + name);
+    return element.value;
+}
+
 function getCountForId(id) {
     let inputCount = $('#inputCount_' + id).val();
     if (inputCount === undefined) {

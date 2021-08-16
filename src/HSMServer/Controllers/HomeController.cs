@@ -3,14 +3,19 @@ using HSMCommon.Model.SensorsData;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model.ViewModel;
+using HSMServer.MonitoringHistoryProcessor.Factory;
 using HSMServer.MonitoringServerCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.StaticFiles;
 using System.Text;
+using HSMSensorDataObjects;
+using HSMServer.MonitoringHistoryProcessor;
+using HSMServer.MonitoringHistoryProcessor.Processor;
 
 namespace HSMServer.Controllers
 {
@@ -20,12 +25,15 @@ namespace HSMServer.Controllers
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
+        private readonly IHistoryProcessorFactory _historyProcessorFactory;
 
-        public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager)
+        public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
+            IHistoryProcessorFactory factory)
         {
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;
+            _historyProcessorFactory = factory;
         }
 
         public IActionResult Index()
@@ -139,6 +147,138 @@ namespace HSMServer.Controllers
             return new JsonResult(commonHistory);
         }
 
+        #region SensorsHistory
+
+        [HttpPost]
+        public HtmlString HistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddHours(-1 * 1);
+            return GetHistory(product, path, type, from, to, PeriodType.Hour);
+        }
+
+        [HttpPost]
+        public HtmlString HistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 1);
+            return GetHistory(product, path, type, from, to, PeriodType.Day);
+        }
+
+        [HttpPost]
+        public HtmlString HistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 3);
+            return GetHistory(product, path, type, from, to, PeriodType.ThreeDays);
+        }
+
+        [HttpPost]
+        public HtmlString HistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 7);
+            return GetHistory(product, path, type, from, to, PeriodType.Week);
+        }
+
+        [HttpPost]
+        public HtmlString HistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddMonths(-1 * 1);
+            return GetHistory(product, path, type, from, to, PeriodType.Month);
+        }
+
+        [HttpPost]
+        public HtmlString HistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            var result = _monitoringCore.GetAllSensorHistory(HttpContext.User as User, product, path);
+
+            return new HtmlString(TableHelper.CreateHistoryTable(result));
+        }
+
+        private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
+        {
+            List<SensorHistoryData> unprocessedData =
+                _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
+
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            var processedData = processor.ProcessHistory(unprocessedData);
+            return new HtmlString(TableHelper.CreateHistoryTable(processedData));
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddHours(-1 * 1);
+            return GetRawHistory(product, path, type, from, to, PeriodType.Hour);
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 1);
+            return GetRawHistory(product, path, type, from, to, PeriodType.Day);
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 3);
+            return GetRawHistory(product, path, type, from, to, PeriodType.ThreeDays);
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddDays(-1 * 7);
+            return GetRawHistory(product, path, type, from, to, PeriodType.Week);
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime to = DateTime.Now;
+            DateTime from = to.AddMonths(-1 * 1);
+            return GetRawHistory(product, path, type, from, to, PeriodType.Month);
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            var result = _monitoringCore.GetAllSensorHistory(HttpContext.User as User, product, path);
+
+            return new JsonResult(result);
+        }
+
+        private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
+        {
+            List<SensorHistoryData> unprocessedData =
+                _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
+
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            var processedData = processor.ProcessHistory(unprocessedData);
+            return new JsonResult(processedData);
+        }
+
+        #endregion
+
         [HttpGet]
         public FileResult GetFile([FromQuery(Name = "Selected")] string selectedSensor)
         {
@@ -179,6 +319,14 @@ namespace HSMServer.Controllers
             }
 
             return contentType;
+        }
+
+        private void ParseProductAndPath(string encodedPath, out string product, out string path)
+        {
+            var decodedPath = SensorPathHelper.Decode(encodedPath);
+            int index = decodedPath.IndexOf('/');
+            product = decodedPath.Substring(0, index);
+            path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
         }
     }
 }

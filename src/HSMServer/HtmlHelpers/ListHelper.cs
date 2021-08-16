@@ -142,18 +142,29 @@ namespace HSMServer.HtmlHelpers
 
             result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'" +
                           $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
-                          "<div class='accordion-body'>" +
+                          $"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>" +
                           "<div class='mb-3 row'>" +
-                          $"<label for='inputCount_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
-                          "<div class='col-sm-3'>" +
-                          $"<input type='number' class='form-control' id='inputCount_{name}' value='10' min='10'></div>" +
-                          "<div class='col-sm-1'>" +
-                          $"<button id='reload_{name}' type='button' class='btn btn-secondary'>" +
-                          "<i class='fas fa-redo-alt'></i></button>" +
-                          $"<input style='display: none' id='listId_{name}' value='{formattedPath}'/></div>");
+                          //$"<label for='inputCount_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
+                          //"<div class='col-sm-3'>" +
+                          //$"<input type='number' class='form-control' id='inputCount_{name}' value='10' min='10'></div>" +
+                          //"<div class='col-sm-1'>" +
+                          //$"<button id='reload_{name}' type='button' class='btn btn-secondary'>" +
+                          //"<i class='fas fa-redo-alt'></i></button>" +
+                          $"<div class='col-sm-1'><button id='hour_{name}' type='button' class='btn btn-light' " +
+                          "value='Last hour'>1H</button></div>" +
+                          $"<div class='col-sm-1'><button id='day_{name}' type='button' class='btn btn-light'" +
+                          " value='Last day'>1D</button></div>" +
+                          $"<div class='col-sm-1'><button id='three_days_{name}' type='button' class='btn btn-light'" +
+                          " value='Three days'>3D</button></div>" +
+                          $"<div class='col-sm-1'><button id='week_{name}' type='button' class='btn btn-light'" +
+                          " value='Last week'>1W</button></div>" +
+                          $"<div class='col-sm-1'><button id='month_{name}' type='button' class='btn btn-light'" +
+                          " value='Last month'>1M</button></div>" +
+                          $"<div class='col-sm-1'><button id='all_{name}' type='button' class='btn btn-light'" +
+                          " value='All history'>All</button></div>");
 
             result.Append("<div style='margin-top: 15px'>");
-            result.Append(isPlottingSupported(sensor.SensorType)
+            result.Append(IsPlottingSupported(sensor.SensorType)
                             ? GetNavTabsForHistory(name)
                             : GetValuesDivForHistory(name));
 
@@ -219,7 +230,7 @@ namespace HSMServer.HtmlHelpers
         {
             return $"<div id='values_{name}'></div>";
         }
-        private static bool isPlottingSupported(SensorType sensorType)
+        private static bool IsPlottingSupported(SensorType sensorType)
         {
             if (sensorType == SensorType.IntSensor || sensorType == SensorType.DoubleSensor)
                 return true;

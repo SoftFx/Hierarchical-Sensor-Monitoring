@@ -560,6 +560,22 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
+        #region Sensors History
+
+        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to)
+        {
+            var historyValues = _databaseAdapter.GetSensorHistory(product, path, from, to);
+
+            return historyValues;
+        }
+
+        public List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path)
+        {
+            var allValues = _databaseAdapter.GetAllSensorHistory(product, path);
+
+            return allValues;
+        }
+
         public List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model)
         {
             return GetSensorHistory(user, model.Path, model.Product, model.TotalCount);
@@ -573,7 +589,7 @@ namespace HSMServer.MonitoringServerCore
             {
                 historyList.Add(_converter.Convert(lastValue));
             }
-            
+
             if (n != -1)
             {
                 historyList = historyList.TakeLast((int)n).ToList();
@@ -591,28 +607,28 @@ namespace HSMServer.MonitoringServerCore
                 return typedData.FileContent;
             }
 
-            
+
             return string.Empty;
         }
 
         public byte[] GetFileSensorValueBytes(User user, string product, string path)
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
-            
+
             try
             {
                 var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
                 return typedData2?.FileContent;
             }
             catch { }
-            
+
 
             var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
                 return Encoding.Default.GetBytes(typedData.FileContent);
             }
-            
+
             return new byte[1];
         }
         public string GetFileSensorValueExtension(User user, string product, string path)
@@ -632,6 +648,11 @@ namespace HSMServer.MonitoringServerCore
             return string.Empty;
         }
 
+        #endregion
+
+
+        #region Product
+
         public Product GetProduct(string productKey)
         {
             var product = _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
@@ -644,7 +665,7 @@ namespace HSMServer.MonitoringServerCore
         {
             if (user.ProductsRoles == null || !user.ProductsRoles.Any()) return null;
 
-            return _productManager.Products.Where(p => 
+            return _productManager.Products.Where(p =>
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
         }
 
@@ -696,7 +717,7 @@ namespace HSMServer.MonitoringServerCore
         }
 
         public bool RemoveProduct(string productKey, out string error)
-        {           
+        {
             bool result = false;
             error = string.Empty;
             string productName = string.Empty;
@@ -709,7 +730,7 @@ namespace HSMServer.MonitoringServerCore
                 _valuesCache.RemoveProduct(productName);
                 result = true;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 result = false;
                 error = ex.Message;
@@ -726,7 +747,7 @@ namespace HSMServer.MonitoringServerCore
                 var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
                 if (count == 0)
                     continue;
-                
+
                 usersToEdit.Add(user);
             }
 
@@ -740,6 +761,9 @@ namespace HSMServer.MonitoringServerCore
         {
             _productManager.UpdateProduct(product);
         }
+
+        #endregion
+
 
         public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
             RSAParameters rsaParameters)

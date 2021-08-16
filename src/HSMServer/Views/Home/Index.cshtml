@@ -6,7 +6,6 @@
     ViewData["Title"] = "Tree";
 }
 <script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
     var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
     var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
@@ -16,6 +15,20 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+
+    var historyHourAction = "@Html.Raw(Url.Action(ViewConstants.HistoryHourAction, ViewConstants.HomeController))";
+    var historyDayAction = "@Html.Raw(Url.Action(ViewConstants.HistoryDayAction, ViewConstants.HomeController))";
+    var historyThreeDaysAction = "@Html.Raw(Url.Action(ViewConstants.HistoryThreeDaysAction, ViewConstants.HomeController))";
+    var historyWeekAction = "@Html.Raw(Url.Action(ViewConstants.HistoryWeekAction, ViewConstants.HomeController))";
+    var historyMonthAction = "@Html.Raw(Url.Action(ViewConstants.HistoryMonthAction, ViewConstants.HomeController))";
+    var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
+
+    var rawHistoryHourAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryHourAction, ViewConstants.HomeController))";
+    var rawHistoryDayAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryDayAction, ViewConstants.HomeController))";
+    var rawHistoryThreeDaysAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryThreeDaysAction, ViewConstants.HomeController))";
+    var rawHistoryWeekAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryWeekAction, ViewConstants.HomeController))";
+    var rawHistoryMonthAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryMonthAction, ViewConstants.HomeController))";
+    var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -96,7 +109,7 @@
 <script>
     initializeTree();
     initializeDataHistoryRequests();
-
+    InitializePeriodRequests();
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
         .build();
