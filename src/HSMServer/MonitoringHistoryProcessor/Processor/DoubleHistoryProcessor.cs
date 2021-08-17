@@ -12,7 +12,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
         }
         public override List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
         {
-            throw new System.NotImplementedException();
+            return uncompressedData;
         }
     }
 }

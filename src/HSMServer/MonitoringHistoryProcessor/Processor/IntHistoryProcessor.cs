@@ -22,7 +22,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             //    IntSensorData data = JsonSerializer.Deserialize<IntSensorData>(dataItem.TypedData);
 
             //}
-            throw new NotImplementedException();
+            return uncompressedData;
         }
     }
 }

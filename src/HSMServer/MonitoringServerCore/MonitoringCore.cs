@@ -565,14 +565,22 @@ namespace HSMServer.MonitoringServerCore
         public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to)
         {
             var historyValues = _databaseAdapter.GetSensorHistory(product, path, from, to);
-
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
+            {
+                historyValues.Add(_converter.Convert(lastValue));
+            }
             return historyValues;
         }
 
         public List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path)
         {
             var allValues = _databaseAdapter.GetAllSensorHistory(product, path);
-
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null)
+            {
+                allValues.Add(_converter.Convert(lastValue));
+            }
             return allValues;
         }
 
