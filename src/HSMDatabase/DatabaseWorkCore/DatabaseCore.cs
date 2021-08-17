@@ -41,13 +41,12 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
-        private const string DatabaseFolderName = "MonitoringData";
-        private const string DatabaseParentFolder = "Databases";
+        internal const string DatabaseParentFolder = "Databases";
         private const string EnvironmentDatabaseName = "EnvironmentData";
         private DatabaseCore()
         {
             _environmentDatabase = new EnvironmentDatabaseWorker($"{DatabaseParentFolder}/{EnvironmentDatabaseName}");
-            _sensorsDatabases = new TimeDatabaseDictionary();
+            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase);
             OpenAllExistingSensorDatabases();
         }
 
@@ -130,20 +129,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensorValue(SensorDataEntity entity, string productName)
         {
-            bool isExists = _sensorsDatabases.TryGetDatabase(entity.TimeCollected, out var database);
-            if (isExists)
-            {
-                database.PutSensorData(entity, productName);
-                return;
-            }
-
-            DateTime minDateTime = DateTimeMethods.GetMinDateTime(entity.TimeCollected);
-            DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(entity.TimeCollected);
-            string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
-            ISensorsDatabase newDatabase = new SensorsDatabaseWorker($"{DatabaseParentFolder}/{newDatabaseName}", minDateTime, maxDateTime);
-            _sensorsDatabases.AddDatabase(newDatabase);
-            _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName);
-            newDatabase.PutSensorData(entity, productName);
+            var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
+            database.PutSensorData(entity, productName);
         }
 
         public SensorDataEntity GetLatestSensorValue(string productName, string path)
@@ -313,10 +300,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Private methods
 
-        private string CreateSensorsDatabaseName(DateTime from, DateTime to)
-        {
-            return $"{DatabaseFolderName}_{from.Ticks}_{to.Ticks}";
-        }
+        
 
         private void GetDatesFromFolderName(string folder, out DateTime from, out DateTime to)
         {
