@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xunit;
 using Xunit.Sdk;
@@ -285,6 +286,27 @@ namespace HSMServer.Tests.DatabaseTests
             Assert.NotEmpty(dataFromDB);
             Assert.Equal(data.Count, dataFromDB.Count);
         }
+
+        [Fact]
+        public void AllSensorValuesFromDifferentThreadsMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => Task.Run(() => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name)));
+            Thread.Sleep(3000);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(data.Count, dataFromDB.Count);
+        }
+
 
         [Fact]
         public void SensorValuesAfterSpecifiedDateMustBeReturned()
