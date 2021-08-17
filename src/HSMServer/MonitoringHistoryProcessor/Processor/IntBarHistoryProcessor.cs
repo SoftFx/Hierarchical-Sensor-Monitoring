@@ -24,23 +24,27 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             if(uncompressedData == null || !uncompressedData.Any())
                 return new List<SensorHistoryData>();
 
-            uncompressedData.Sort((d1, d2) => d2.Time.CompareTo(d1.Time));
+            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
             List<SensorHistoryData> result = new List<SensorHistoryData>();
             IntBarSensorData currentItem = new IntBarSensorData();
             DateTime startDate = uncompressedData[0].Time;
-            foreach (var dataItem in uncompressedData)
+            for (int i = 0; i < uncompressedData.Count; ++i)
             {
-                IntBarSensorData typedData = JsonSerializer.Deserialize<IntBarSensorData>(dataItem.TypedData);
-                if (dataItem.Time > startDate + PeriodInterval)
+                IntBarSensorData typedData = JsonSerializer.Deserialize<IntBarSensorData>(uncompressedData[i].TypedData);
+                if (uncompressedData[i].Time > startDate + PeriodInterval || i == uncompressedData.Count - 1)
                 {
                     AddDataFromLists(currentItem);
+                    currentItem.StartTime = startDate;
+                    currentItem.EndTime = startDate + PeriodInterval;
                     ClearLists();
                     result.Add(Convert(currentItem, startDate + PeriodInterval));
                     currentItem = new IntBarSensorData();
+                    currentItem.Min = int.MaxValue;
+                    currentItem.Max = int.MinValue;
                     //TODO: count intervals properly
                     startDate += PeriodInterval;
                 }
-                
+
                 ProcessItem(typedData, currentItem);
                 AddDataToList(typedData);
             }
@@ -88,8 +92,8 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             currentItem.Mean = (int)(_MeanList.Sum() / currentItem.Count);
             currentItem.Percentiles = new List<PercentileValueInt>();
             currentItem.Percentiles.Add(new PercentileValueInt() {Percentile = 0.5, Value = _MedianList[(int)(_MedianList.Count / 2)]});
-            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = _Q1List.Sum() / currentItem.Count });
-            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = _Q3List.Sum() / currentItem.Count });
+            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = _Q1List.Min() });
+            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = _Q3List.Max() });
         }
 
         private void ClearLists()

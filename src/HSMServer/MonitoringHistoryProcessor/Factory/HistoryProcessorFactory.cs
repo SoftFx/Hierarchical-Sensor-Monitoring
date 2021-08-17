@@ -34,7 +34,19 @@ namespace HSMServer.MonitoringHistoryProcessor.Factory
 
         private TimeSpan ConvertPeriod(PeriodType periodType)
         {
-            //TODO: Use normal time periods
+            switch (periodType)
+            {
+                case PeriodType.Hour:
+                    return TimeSpan.FromMinutes(5);
+                case PeriodType.Day:
+                    return TimeSpan.FromHours(1);
+                case PeriodType.ThreeDays:
+                    return TimeSpan.FromHours(3);
+                case PeriodType.Week:
+                    return TimeSpan.FromHours(6);
+                case PeriodType.Month:
+                    return TimeSpan.FromDays(1);
+            }
             return TimeSpan.FromDays(1);
         }
     }

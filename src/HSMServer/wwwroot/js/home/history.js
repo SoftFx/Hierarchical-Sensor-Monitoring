@@ -8,9 +8,9 @@ function initializeDataHistoryRequests() {
         type = document.getElementById("sensor_type_" + id).value;
 
         if (type !== "3" && type !== "6" && type !== "7") {
-            initializeGraph(id, type, totalCount, rawHistoryAction);
+            initializeGraph(id, rawHistoryHourAction, type);
         }
-        initializeHistory(id, totalCount, historyAction);
+        initializeHistory(id, historyHourAction, type);
     });
 
     $('[id^="reload_"]').on("click",
@@ -48,55 +48,72 @@ function InitializePeriodRequests() {
         function() {
             let path = this.id.substring("hour_".length);
             let type = getTypeForSensor(path);
-            console.log('About to have history for ' + path + 'of type ' + type);
-            initializeHistory(path, historyHourAction, type);
+            initializeHistories(path, historyHourAction, rawHistoryHourAction, type);
         }
     );
 
     $('[id^="day_"]').on("click",
         function () {
             let path = this.id.substring("day_".length);
+            let type = getTypeForSensor(path);
+            initializeHistories(path, historyDayAction, rawHistoryDayAction, type);
         }
     );
 
     $('[id^="three_days_"]').on("click",
         function () {
             let path = this.id.substring("three_days_".length);
+            let type = getTypeForSensor(path);
+            initializeHistories(path, historyThreeDaysAction, rawHistoryThreeDaysAction, type);
         }
     );
 
     $('[id^="week_"]').on("click",
         function () {
             let path = this.id.substring("week_".length);
+            let type = getTypeForSensor(path);
+            initializeHistories(path, historyWeekAction, rawHistoryWeekAction, type);
         }
     );
 
     $('[id^="month_"]').on("click",
         function () {
             let path = this.id.substring("month_".length);
+            let type = getTypeForSensor(path);
+            initializeHistories(path, historyMonthAction, rawHistoryMonthAction, type);
         }
     );
 
     $('[id^="all_"]').on("click",
         function () {
             let path = this.id.substring("all_".length);
+            let type = getTypeForSensor(path);
+            initializeHistories(path, historyAllAction, rawHistoryAllAction, type);
         }
     );
 }
 
+function initializeHistories(path, historyAction, rawHistoryAction, type) {
+    initializeHistory(path, historyAction, type);
+    initializeGraph(path, rawHistoryAction, type);
+}
+
 function initializeHistory(path, historyAction, type) {
+
     $.ajax({
         type: 'POST',
-        url: historyAction + "?Path" + path + "&Type" + type,
+        url: historyAction + "?Path=" + path + "&Type=" + type,
         contentType: 'application/json',
+        dataType: 'html',
         cache: false,
         async: true
     }).done(function (data) {
-        data = data.replace('{"value":"', ''); //fix sometime
-        data = data.replace('"}', '');
+        console.log(data);
+        //data = data.replace('{"value":"', ''); //fix sometime
+        //data = data.replace('"}', '');
 
         $(`#values_${path}`).empty();
-        $(`#values_${path}`).append(data);
+        $(`#values_${path}`).append(JSON.parse(data).value);
     });
 }
 
@@ -119,26 +136,26 @@ function data(path, totalCount) {
     return { "Path": path, "TotalCount": totalCount };
 }
 
-function initializeHistory(path, totalCount, historyAction) {
-    if (totalCount == undefined)
-        totalCount = 10;
+//function initializeHistory(path, totalCount, historyAction) {
+//    if (totalCount == undefined)
+//        totalCount = 10;
 
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(data(path, totalCount)),
-        url: historyAction,
-        dataType: 'html',
-        contentType: 'application/json',
-        cache: false,
-        async: true
-    }).done(function (data) {
-        data = data.replace('{"value":"', ''); //fix sometime
-        data = data.replace('"}', '');
+//    $.ajax({
+//        type: 'POST',
+//        data: JSON.stringify(data(path, totalCount)),
+//        url: historyAction,
+//        dataType: 'html',
+//        contentType: 'application/json',
+//        cache: false,
+//        async: true
+//    }).done(function (data) {
+//        data = data.replace('{"value":"', ''); //fix sometime
+//        data = data.replace('"}', '');
 
-        $(`#values_${path}`).empty();
-        $(`#values_${path}`).append(data);
-    });
-}
+//        $(`#values_${path}`).empty();
+//        $(`#values_${path}`).append(data);
+//    });
+//}
 
 function initializeGraph(id, type, totalCount, rawHistoryAction) {
     if (totalCount == undefined)
@@ -155,5 +172,19 @@ function initializeGraph(id, type, totalCount, rawHistoryAction) {
     }).done(function (data) {
         let graphDivId = "graph_" + id;
         displayGraph(data, type, graphDivId, id);
+    });
+}
+
+function initializeGraph(path, rawHistoryAction, type) {
+    $.ajax({
+        type: 'POST',
+        url: rawHistoryAction + "?Path=" + path + "&Type=" + type,
+        contentType: 'application/json',
+        dataType: 'html',
+        cache: false,
+        async: true
+    }).done(function (data) {
+        let graphDivId = "graph_" + path;
+        displayGraph(data, type, graphDivId, path);
     });
 }
