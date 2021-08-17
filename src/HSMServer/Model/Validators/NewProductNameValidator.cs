@@ -1,6 +1,5 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
-using HSMServer.DataLayer.Model;
 using HSMServer.MonitoringServerCore;
 using System;
 using System.Linq;
@@ -19,7 +18,7 @@ namespace HSMServer.Model.Validators
                 .WithMessage(ErrorConstants.NameNotNull)
                 .Must(IsUniqueName)
                 .WithMessage(ErrorConstants.NameUnique)
-                .Matches(@"^[0-9a-zA-Z ]+$")
+                .Matches(@"^[0-9a-zA-Z .,_\-=!#:;%&*()]+$")
                 .WithMessage(ErrorConstants.ProductNameLatin);
         }
 

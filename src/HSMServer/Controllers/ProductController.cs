@@ -80,8 +80,6 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void UpdateProduct([FromBody] ProductViewModel model)
         {
-            model.Name = model.Name.Replace('-', ' ');
-
             Product product = GetModelFromViewModel(model);
             _monitoringCore.UpdateProduct(HttpContext.User as User, product);
         }
