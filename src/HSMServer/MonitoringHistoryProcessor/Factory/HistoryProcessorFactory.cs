@@ -13,14 +13,14 @@ namespace HSMServer.MonitoringHistoryProcessor.Factory
             TimeSpan convertedPeriod = ConvertPeriod(periodType);
             switch (sensorType)
             {
-                case SensorType.DoubleSensor:
-                    return new DoubleHistoryProcessor(convertedPeriod);
                 case SensorType.DoubleBarSensor:
                     return new DoubleBarHistoryProcessor(convertedPeriod);
                 case SensorType.IntegerBarSensor:
                     return new IntBarHistoryProcessor(convertedPeriod);
+                //Do not process numbers
+                case SensorType.DoubleSensor:
                 case SensorType.IntSensor:
-                    return new IntHistoryProcessor(convertedPeriod);
+                    return new EmptyHistoryProcessor(convertedPeriod);
                 //Do nothing for strings and booleans
                 case SensorType.BooleanSensor:
                 case SensorType.StringSensor:

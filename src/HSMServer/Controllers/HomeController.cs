@@ -1,9 +1,12 @@
 ﻿using HSMCommon.Model;
 using HSMCommon.Model.SensorsData;
+using HSMSensorDataObjects;
 using HSMServer.Authentication;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model.ViewModel;
+using HSMServer.MonitoringHistoryProcessor;
 using HSMServer.MonitoringHistoryProcessor.Factory;
+using HSMServer.MonitoringHistoryProcessor.Processor;
 using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
@@ -13,9 +16,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using HSMSensorDataObjects;
-using HSMServer.MonitoringHistoryProcessor;
-using HSMServer.MonitoringHistoryProcessor.Processor;
 
 namespace HSMServer.Controllers
 {
@@ -270,7 +270,7 @@ namespace HSMServer.Controllers
         private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
             List<SensorHistoryData> unprocessedData =
-                _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(), to.ToUniversalTime());
+                _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);

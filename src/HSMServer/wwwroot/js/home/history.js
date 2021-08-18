@@ -108,7 +108,6 @@ function initializeHistory(path, historyAction, type) {
         cache: false,
         async: true
     }).done(function (data) {
-        console.log(data);
         //data = data.replace('{"value":"', ''); //fix sometime
         //data = data.replace('"}', '');
 
