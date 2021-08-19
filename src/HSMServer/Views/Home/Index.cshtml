@@ -196,7 +196,10 @@
                 $('#status_' + id).addClass(array[i].status);
 
                 var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                $('#reload_' + selectedAccordion.attr('id')).click();
+                let selectedRadio = $('input[type="radio"]:checked');
+                if (selectedRadio !== undefined) {
+                    selectedRadio.click();
+                }
             }
         });
 
@@ -290,7 +293,11 @@
                     $('#status_' + id).addClass(array[i].status);
 
                     var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                    $('#reload_' + selectedAccordion.attr('id')).click();
+                    //$('#reload_' + selectedAccordion.attr('id')).click();
+                    let selectedRadio = $('input[type="radio"]:checked');
+                    if (selectedRadio !== undefined) {
+                        selectedRadio.click();
+                    }
                 }
             });
 
