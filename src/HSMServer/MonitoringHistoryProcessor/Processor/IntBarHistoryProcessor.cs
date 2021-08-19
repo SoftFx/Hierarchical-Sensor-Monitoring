@@ -37,7 +37,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    //Console.WriteLine(e);
                 }
             }
             //var typedDatas = uncompressedData.Select(d => JsonSerializer.Deserialize<IntBarSensorData>(d.TypedData))
