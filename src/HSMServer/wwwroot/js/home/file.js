@@ -23,7 +23,6 @@ function getExtensionFromName(fileName) {
 
 function viewFile(path, fileName, viewFileAction) {
     let fileType = getMimeType(fileName);
-    console.log(fileType);
     //var xhr = new XMLHttpRequest();
     //xhr.open('POST', viewFileAction, true);
     //xhr.responseType = 'blob';
@@ -43,7 +42,7 @@ function viewFile(path, fileName, viewFileAction) {
             if (fileType === undefined) {
                 fileType = "text/html";
             }
-            console.log(fileType);
+
             let blob = new Blob([response], { type: fileType });
             let url = window.URL.createObjectURL(blob);
             window.open(url);

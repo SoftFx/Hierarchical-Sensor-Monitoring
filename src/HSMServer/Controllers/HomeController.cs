@@ -64,7 +64,10 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.Update(sensors);
+
+            var model = oldModel;
+            if (sensors != null && sensors.Count > 0)
+                model = oldModel.Update(sensors);
 
             return ViewHelper.CreateNotSelectedLists(selectedList, model);
         }
@@ -75,7 +78,10 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.Update(sensors);
+
+            var model = oldModel;
+            if (sensors != null && sensors.Count > 0)
+                model = oldModel.Update(sensors);
 
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
@@ -99,7 +105,10 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.Update(sensors);
+
+            var model = oldModel;
+            if (sensors != null && sensors.Count > 0)
+                model = oldModel.Update(sensors);
 
             int index = selectedList.IndexOf('_');
             var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);

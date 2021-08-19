@@ -12,3 +12,4 @@
 
     $('#list_' + data.node.id).css('display', 'block');
 }
+

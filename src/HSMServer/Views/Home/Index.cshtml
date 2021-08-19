@@ -117,7 +117,6 @@
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
-
     hubConnection.on('SendSensorUpdates', function (sensors) {
         if (sensors == undefined) return;
 
@@ -151,11 +150,6 @@
         var listId = "";
         if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
 
-        //removing invisible lists
-        $('[id^="list_"][style*="display: none;"]').each(function (index) {
-            this.remove();
-        });
-
         //update invisible lists
         $.ajax({
             type: 'POST',
@@ -166,6 +160,11 @@
             cache: false,
             async: true
         }).done(function (listsData) {
+            //removing invisible lists
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+                this.remove();
+            });
+
             listsData = listsData.replace('{"value":"', '');
             listsData = listsData.slice(0, listsData.length - 2);
             listsData = listsData.replaceAll("\\", "");
@@ -216,15 +215,13 @@
             sensorsData = sensorsData.slice(0, sensorsData.length - 2);
             sensorsData = sensorsData.replaceAll("\\", "");
 
-            //console.log(sensorsData);
-
             if ($('#' + listId) == undefined) {
                 $('#listContainer').append("<div class='accordion'" +
                     "id = '" + listId + "' style = 'display: block;' ></div> ");
                 $('#noData').css('display', 'none');
             }
 
-            $('#' + listId).append(sensorsData); 
+            $('#' + listId).append(sensorsData);
             initializeDataHistoryRequests();
         });
 
@@ -243,4 +240,66 @@
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
     });
+
+    function update() {
+        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+        var listId = "";
+        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+
+        //update invisible lists
+        $.ajax({
+            type: 'POST',
+            url: updateLists + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (listsData) {
+            //removing invisible lists
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+                this.remove();
+            });
+
+            listsData = listsData.replace('{"value":"', '');
+            listsData = listsData.slice(0, listsData.length - 2);
+            listsData = listsData.replaceAll("\\", "");
+
+            $('#listContainer').append(listsData);
+
+            initializeDataHistoryRequests();
+        });
+
+        if (listId != "" && listId != undefined)
+            //update selected list
+            $.ajax({
+                type: 'POST',
+                url: updateSelectedList + '?Selected=' + listId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (listsData) {
+                var array = JSON.parse(listsData);
+                for (let i = 0; i < array.length; i++) {
+                    var id = array[i].id.substring('list_'.length, array[i].id.length);
+
+                    $('#value_' + id).empty().append(array[i].value);
+                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                    $('#status_' + id).removeClass('tree-icon-unknown ' +
+                        'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                    $('#status_' + id).addClass(array[i].status);
+
+                    var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                    $('#reload_' + selectedAccordion.attr('id')).click();
+                }
+            });
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+        $("#state").empty();
+        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+
+    }
+
+    setInterval(update, 30000);
 </script>
