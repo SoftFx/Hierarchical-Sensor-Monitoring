@@ -175,6 +175,7 @@ function initializeGraph(id, type, totalCount, rawHistoryAction) {
 }
 
 function initializeGraph(path, rawHistoryAction, type) {
+    //console.log('Request graph data via ' + rawHistoryAction);
     $.ajax({
         type: 'POST',
         url: rawHistoryAction + "?Path=" + path + "&Type=" + type,

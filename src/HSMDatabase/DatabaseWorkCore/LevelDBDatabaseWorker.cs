@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using DB = LevelDB.DB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -113,8 +114,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _logger = LogManager.GetCurrentClassLogger();
             try
             {
-                _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
-
+                _database = new DB( _dbOptions, DATABASE_NAME, Encoding.UTF8);
             }
             catch (System.Exception e)
             {
@@ -133,7 +133,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 lock (_accessLock)
                 {
-                    _database.Close();
+                    //_database.Close();
                     _database.Dispose();
                     _database = null;
                 }
@@ -157,7 +157,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
                     if (_database != null)
                     {
-                        _database.Close();
+                        //_database.Close();
                         _database.Dispose();
                         _database = null;
                     }

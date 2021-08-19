@@ -375,10 +375,10 @@ namespace HSMServer.MonitoringServerCore
                 Count = sensorValue.Count,
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime.ToUniversalTime(),
-                EndTime = sensorValue.EndTime.ToUniversalTime(),
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
+            typedData.EndTime = (sensorValue.EndTime == DateTime.MinValue) ? DateTime.Now : sensorValue.EndTime;
             return typedData;
         }
         #endregion

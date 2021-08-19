@@ -39,7 +39,6 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 {
                     Console.WriteLine(e);
                 }
-                
             }
             //var typedDatas = uncompressedData.Select(d => JsonSerializer.Deserialize<IntBarSensorData>(d.TypedData))
             //    .ToList();

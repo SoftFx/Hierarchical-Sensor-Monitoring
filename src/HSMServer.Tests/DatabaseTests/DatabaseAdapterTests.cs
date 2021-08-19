@@ -8,9 +8,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xunit;
-using Xunit.Sdk;
 using Assert = Xunit.Assert;
 
 namespace HSMServer.Tests.DatabaseTests
