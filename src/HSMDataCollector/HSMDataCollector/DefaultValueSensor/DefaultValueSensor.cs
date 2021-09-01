@@ -10,7 +10,7 @@ namespace HSMDataCollector.DefaultValueSensor
     internal class DefaultValueSensor<T> : SensorBase, ILastValueSensor<T>
     {
         private readonly SensorType _type;
-        protected readonly object _syncRoot;
+        protected readonly object _syncRoot = new object();
         protected T _currentValue;
         protected string _currentComment;
         protected SensorStatus _currentStatus;
