@@ -30,8 +30,21 @@ namespace HSMServer.Configuration
             _logger = logger;
             _databaseAdapter = databaseAdapter;
             _logger.LogInformation("ConfigurationProvider initialized.");
+
+            MigrateConfigurationObjectsToNewDatabase();
         }
 
+        /// <summary>
+        /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
+        /// </summary>
+        private void MigrateConfigurationObjectsToNewDatabase()
+        {
+            var currentObjects = _databaseAdapter.GetAllConfigurationObjectsOld();
+            foreach (var currentObject in currentObjects)
+            {
+                _databaseAdapter.WriteConfigurationObject(currentObject);   
+            }
+        }
         #region Public interface implementation
 
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TextConstants.ClientAppFolderName);
@@ -45,20 +58,23 @@ namespace HSMServer.Configuration
         public void AddConfigurationObject(string name, string value)
         {
             var config = new ConfigurationObject() { Name = name, Value = value };
+            //_databaseAdapter.WriteConfigurationObjectOld(config);
             _databaseAdapter.WriteConfigurationObject(config);
         }
 
         public void SetConfigurationObjectToDefault(string name)
         {
+            //_databaseAdapter.RemoveConfigurationObjectOld(name);
             _databaseAdapter.RemoveConfigurationObject(name);
         }
 
         ///Use 'name' from ConfigurationConstants! 
         public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
+            //var currentObject = _databaseAdapter.GetConfigurationObjectOld(name);
             var currentObject = _databaseAdapter.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
-                ConfigurationConstants.GetDefault(name));
+                ConfigurationConstants.GetDefault(name), ConfigurationConstants.GetDescription(name));
         }
 
         public List<ConfigurationObject> GetAllConfigurationObjects()
@@ -74,7 +90,13 @@ namespace HSMServer.Configuration
 
         public ConfigurationObject ReadConfigurationObject(string name)
         {
-            return _databaseAdapter.GetConfigurationObject(name);
+            //var objectFromDB = _databaseAdapter.GetConfigurationObjectOld(name);
+            var objectFromDB = _databaseAdapter.GetConfigurationObject(name);
+            if (objectFromDB != null)
+            {
+                objectFromDB.Description = ConfigurationConstants.GetDescription(name);
+            }
+            return objectFromDB;
         }
 
         public event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
@@ -87,6 +109,7 @@ namespace HSMServer.Configuration
         }
         private void SaveConfigurationObject(ConfigurationObject configurationObject)
         {
+            //_databaseAdapter.WriteConfigurationObjectOld(configurationObject);
             _databaseAdapter.WriteConfigurationObject(configurationObject);
         }
 

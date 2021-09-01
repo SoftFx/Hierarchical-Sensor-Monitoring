@@ -6,7 +6,6 @@
     ViewData["Title"] = "Tree";
 }
 <script>
-    var urlAction = "@Html.Raw(Url.Action(ViewConstants.UpdateAction, ViewConstants.HomeController))";
     var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
     var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
     var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
@@ -16,6 +15,20 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+
+    var historyHourAction = "@Html.Raw(Url.Action(ViewConstants.HistoryHourAction, ViewConstants.HomeController))";
+    var historyDayAction = "@Html.Raw(Url.Action(ViewConstants.HistoryDayAction, ViewConstants.HomeController))";
+    var historyThreeDaysAction = "@Html.Raw(Url.Action(ViewConstants.HistoryThreeDaysAction, ViewConstants.HomeController))";
+    var historyWeekAction = "@Html.Raw(Url.Action(ViewConstants.HistoryWeekAction, ViewConstants.HomeController))";
+    var historyMonthAction = "@Html.Raw(Url.Action(ViewConstants.HistoryMonthAction, ViewConstants.HomeController))";
+    var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
+
+    var rawHistoryHourAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryHourAction, ViewConstants.HomeController))";
+    var rawHistoryDayAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryDayAction, ViewConstants.HomeController))";
+    var rawHistoryThreeDaysAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryThreeDaysAction, ViewConstants.HomeController))";
+    var rawHistoryWeekAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryWeekAction, ViewConstants.HomeController))";
+    var rawHistoryMonthAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryMonthAction, ViewConstants.HomeController))";
+    var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -64,10 +77,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
 
 <script src="/js/signalr/dist/browser/signalr.min.js"></script>
-<script src="/js/plotting.js"></script>
-<script src="~/js/file.js"></script>
-<script src="~/js/tree.js"></script>
-<script src="~/js/history.js"></script>
+<script src="/js/home/plotting.js"></script>
+<script src="~/js/home/list.js"></script>
+<script src="~/js/home/file.js"></script>
+<script src="~/js/home/tree.js"></script>
+<script src="~/js/home/history.js"></script>
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
 
@@ -95,14 +109,13 @@
 <script>
     initializeTree();
     initializeDataHistoryRequests();
-
+    InitializePeriodRequests();
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
         .build();
 
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-
 
     hubConnection.on('SendSensorUpdates', function (sensors) {
         if (sensors == undefined) return;
@@ -124,7 +137,7 @@
             treeData = treeData.replaceAll("\\", "");
 
             $('#treeContainer').empty();
-            $('#treeContainer').append(treeData);
+            $('#treeContainer').append(treeData); 
 
             $('#jstree').jstree();
             if (node !== undefined && node != undefined) {
@@ -133,13 +146,9 @@
             initializeClickTree();
         });
 
-        var selectedHistory = $('[class*=accordion][style*="display: block;"]')[0];
-        var listId = selectedHistory.id;
-
-        //removing invisible lists
-        $('[id^="list_"][style*="display: none;"]').each(function (index) {
-            this.remove();
-        });
+        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+        var listId = "";
+        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
 
         //update invisible lists
         $.ajax({
@@ -151,6 +160,11 @@
             cache: false,
             async: true
         }).done(function (listsData) {
+            //removing invisible lists
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+                this.remove();
+            });
+
             listsData = listsData.replace('{"value":"', '');
             listsData = listsData.slice(0, listsData.length - 2);
             listsData = listsData.replaceAll("\\", "");
@@ -160,6 +174,7 @@
             initializeDataHistoryRequests();
         });
 
+        if (listId != "" && listId != undefined)
         //update selected list
         $.ajax({
             type: 'POST',
@@ -181,10 +196,14 @@
                 $('#status_' + id).addClass(array[i].status);
 
                 var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                $('#reload_' + selectedAccordion.attr('id')).click();
+                let selectedRadio = $('input[type="radio"]:checked');
+                if (selectedRadio !== undefined) {
+                    selectedRadio.click();
+                }
             }
         });
 
+        if (listId != "" && listId != undefined)
         //add new sensors
         $.ajax({
             type: 'POST',
@@ -199,7 +218,14 @@
             sensorsData = sensorsData.slice(0, sensorsData.length - 2);
             sensorsData = sensorsData.replaceAll("\\", "");
 
-            $('#' + listId).append(sensorsData); 
+            if ($('#' + listId) == undefined) {
+                $('#listContainer').append("<div class='accordion'" +
+                    "id = '" + listId + "' style = 'display: block;' ></div> ");
+                $('#noData').css('display', 'none');
+            }
+
+            $('#' + listId).append(sensorsData);
+            initializeDataHistoryRequests();
         });
 
         $('#updateTime').empty();
@@ -217,4 +243,70 @@
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
     });
+
+    function update() {
+        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+        var listId = "";
+        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+
+        //update invisible lists
+        $.ajax({
+            type: 'POST',
+            url: updateLists + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (listsData) {
+            //removing invisible lists
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+                this.remove();
+            });
+
+            listsData = listsData.replace('{"value":"', '');
+            listsData = listsData.slice(0, listsData.length - 2);
+            listsData = listsData.replaceAll("\\", "");
+
+            $('#listContainer').append(listsData);
+
+            initializeDataHistoryRequests();
+        });
+
+        if (listId != "" && listId != undefined)
+            //update selected list
+            $.ajax({
+                type: 'POST',
+                url: updateSelectedList + '?Selected=' + listId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (listsData) {
+                var array = JSON.parse(listsData);
+                for (let i = 0; i < array.length; i++) {
+                    var id = array[i].id.substring('list_'.length, array[i].id.length);
+
+                    $('#value_' + id).empty().append(array[i].value);
+                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                    $('#status_' + id).removeClass('tree-icon-unknown ' +
+                        'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                    $('#status_' + id).addClass(array[i].status);
+
+                    var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                    //$('#reload_' + selectedAccordion.attr('id')).click();
+                    let selectedRadio = $('input[type="radio"]:checked');
+                    if (selectedRadio !== undefined) {
+                        selectedRadio.click();
+                    }
+                }
+            });
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+        $("#state").empty();
+        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+
+    }
+
+    setInterval(update, 30000);
 </script>

@@ -1,12 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.DataLayer.Model;
 using HSMServer.Keys;
 using HSMServer.Tests.Fixture;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
+using Assert = Xunit.Assert;
 
 namespace HSMServer.Tests.DatabaseTests
 {
@@ -77,7 +80,7 @@ namespace HSMServer.Tests.DatabaseTests
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
             var key = KeyGenerator.GenerateExtraProductKey(product.Name, _databaseFixture.ExtraKeyName);
-            var extraKey = new ExtraProductKey {Key = key, Name = _databaseFixture.ExtraKeyName};
+            var extraKey = new ExtraProductKey { Key = key, Name = _databaseFixture.ExtraKeyName };
             product.ExtraKeys = new List<ExtraProductKey> { extraKey };
 
             //Act
@@ -110,6 +113,43 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         [Fact]
+        public void UsersPageMustBeRead()
+        {
+            //Arrange
+            var user1 = _databaseFixture.CreateFirstUser();
+            var user2 = _databaseFixture.CreateSecondUser();
+            var user3 = _databaseFixture.CreateThirdUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user1);
+            _databaseFixture.DatabaseAdapter.AddUser(user2);
+            _databaseFixture.DatabaseAdapter.AddUser(user3);
+            var page = _databaseFixture.DatabaseAdapter.GetUsersPage(2, 1);
+
+            //Assert
+            Assert.NotNull(page);
+            Assert.Equal(1, page.Count);
+        }
+
+        [Fact]
+        public void UsersEmptyPageMustBeReturned()
+        {
+            //Arrange
+            var user1 = _databaseFixture.CreateFirstUser();
+            var user2 = _databaseFixture.CreateSecondUser();
+            var user3 = _databaseFixture.CreateThirdUser();
+
+            //Act
+            _databaseFixture.DatabaseAdapter.AddUser(user1);
+            _databaseFixture.DatabaseAdapter.AddUser(user2);
+            _databaseFixture.DatabaseAdapter.AddUser(user3);
+            var page = _databaseFixture.DatabaseAdapter.GetUsersPage(3, 5);
+
+            //Assert
+            Assert.NotNull(page);
+            Assert.Empty(page);
+        }
+        [Fact]
         public void UserMustBeRemoved()
         {
             //Arrange
@@ -136,6 +176,7 @@ namespace HSMServer.Tests.DatabaseTests
             var key = _databaseFixture.GetFirstTestProduct().Key;
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(key, ProductRoleEnum.ProductManager));
             existingUser.Update(user);
+            Thread.Sleep(1000);
             _databaseFixture.DatabaseAdapter.UpdateUser(existingUser);
             var newUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
 
@@ -197,12 +238,12 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
 
             //Assert
-            Assert.NotEmpty(dataFromDB);
-            Assert.Equal(data.DataType, (byte)dataFromDB[0].SensorType);
-            Assert.Equal(data.TypedData, dataFromDB[0].TypedData);
+            Assert.NotNull(dataFromDB);
+            Assert.Equal(data.DataType, (byte)dataFromDB.SensorType);
+            Assert.Equal(data.TypedData, dataFromDB.TypedData);
         }
 
         [Fact]
@@ -216,7 +257,7 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.PutOneValueSensorData(data, product.Name);
+            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
             var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
 
             //Assert
@@ -237,7 +278,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -245,7 +286,56 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         [Fact]
-        public void RequestedSensorValuesMustBeReturned()
+        public void AllSensorValuesFromDifferentThreadsMustBeAdded()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo();
+            var data = _databaseFixture.CreateSensorValues();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => Task.Run(() => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name)));
+            Thread.Sleep(3000);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(data.Count, dataFromDB.Count);
+        }
+
+
+        [Fact]
+        public void SensorValuesAfterSpecifiedDateMustBeReturned()
+        {
+            //Arrange
+            var product = _databaseFixture.GetFirstTestProduct();
+            var info = _databaseFixture.CreateSensorInfo2();
+            var data = _databaseFixture.CreateSensorValues2();
+            _databaseFixture.DatabaseAdapter.AddProduct(product);
+            _databaseFixture.DatabaseAdapter.AddSensor(info);
+
+            //Act
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            DateTime dateTime = DateTime.Now.AddDays(-1 * 9);
+            var expectedData = data.Where(e => e.TimeCollected > dateTime).ToList();
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, dateTime);
+
+            //Assert
+            Assert.NotEmpty(dataFromDB);
+            Assert.Equal(expectedData.Count, dataFromDB.Count);
+            expectedData.Sort((d1, d2) => d2.TimeCollected.CompareTo(d1.TimeCollected));
+            dataFromDB.Sort((d1, d2) => d2.Time.CompareTo(d1.Time));
+            for (int i = 0; i < expectedData.Count; ++i)
+            {
+                Assert.Equal(expectedData[i].TypedData, dataFromDB[i].TypedData);
+                Assert.Equal(expectedData[i].DataType, (byte)dataFromDB[i].SensorType);
+            }
+        }
+
+        [Fact]
+        public void SensorValuesFromTheGivenPeriodMustBeReturned()
         {
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
@@ -256,11 +346,22 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, 10);
+            DateTime from = DateTime.Now.AddDays(-1 * 15);
+            DateTime to = DateTime.Now.AddDays(-1 * 4);
+            var expectedData = data.Where(e => e.TimeCollected < to
+                && e.TimeCollected > from).ToList();
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, from, to);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
-            Assert.Equal(10, dataFromDB.Count);
+            Assert.Equal(expectedData.Count, dataFromDB.Count);
+            expectedData.Sort((d1, d2) => d2.TimeCollected.CompareTo(d1.TimeCollected));
+            dataFromDB.Sort((d1, d2) => d2.Time.CompareTo(d1.Time));
+            for (int i = 0; i < expectedData.Count; ++i)
+            {
+                Assert.Equal(expectedData[i].TypedData, dataFromDB[i].TypedData);
+                Assert.Equal(expectedData[i].DataType, (byte)dataFromDB[i].SensorType);
+            }
         }
 
         [Fact]
@@ -275,8 +376,9 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            Thread.Sleep(5000);
             _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, -1);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
 
             //Assert
             Assert.NotNull(dataFromDB);
@@ -311,6 +413,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.WriteRegistrationTicket(ticket);
+            Thread.Sleep(1000);
             _databaseFixture.DatabaseAdapter.RemoveRegistrationTicket(ticket.Id);
             var ticketFromDB = _databaseFixture.DatabaseAdapter.ReadRegistrationTicket(ticket.Id);
 

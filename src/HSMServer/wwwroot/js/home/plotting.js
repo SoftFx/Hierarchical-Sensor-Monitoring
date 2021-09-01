@@ -97,7 +97,10 @@ function convertToGraphData(graphData, graphType, graphName) {
 
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
-            return d.StartTime;
+            if (d.EndTime.startsWith("0001")) {
+                return d.StartTime;
+            }
+            return d.EndTime;
         });
     }
 

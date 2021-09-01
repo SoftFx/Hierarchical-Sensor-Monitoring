@@ -6,13 +6,15 @@ namespace HSMServer.Configuration
     {
         public string Name { get; set; }
         public string Value { get; set; }
+        public string Description { get; set; }
 
-        public static ConfigurationObject CreateConfiguration(string name, string value)
+        public static ConfigurationObject CreateConfiguration(string name, string value, string description)
         {
             return new ConfigurationObject()
             {
                 Name = name,
-                Value = value
+                Value = value,
+                Description = description
             };
         }
 

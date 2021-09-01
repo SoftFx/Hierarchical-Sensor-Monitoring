@@ -19,7 +19,7 @@ namespace HSMServer.Middleware
         public async Task InvokeAsync(HttpContext context)
         {
             var port = context.Connection.LocalPort;
-            if (port == ConfigurationConstants.ApiPort)
+            if (port == ConfigurationConstants.SitePort)
             {
                 var currentUser = context.User;
                 var correspondingUser = _userManager.GetUserByUserName(currentUser?.Identity?.Name);

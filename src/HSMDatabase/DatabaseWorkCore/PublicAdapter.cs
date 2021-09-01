@@ -184,6 +184,11 @@ namespace HSMDatabase.DatabaseWorkCore
             _databaseWorker.RemoveConfigurationObject(name);
         }
 
+        public List<ConfigurationEntity> ReadAllConfigurationEntities()
+        {
+            return _databaseWorker.ReadAllConfigurationEntities();
+        }
+
         public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
             return _databaseWorker.ReadRegistrationTicket(id);
@@ -197,6 +202,11 @@ namespace HSMDatabase.DatabaseWorkCore
         public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
             _databaseWorker.WriteRegistrationTicket(ticket);
+        }
+
+        public List<RegisterTicketEntity> ReadAllRegisterTicketEntities()
+        {
+            return _databaseWorker.ReadAllRegisterTicketEntities();
         }
 
         public void Dispose()

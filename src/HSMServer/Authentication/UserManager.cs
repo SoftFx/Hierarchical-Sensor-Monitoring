@@ -36,6 +36,7 @@ namespace HSMServer.Authentication
             _certificateManager = certificateManager;
             _users = new List<User>();
             _databaseAdapter = databaseAdapter;
+            MigrateUsersToNewDatabase();
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
             if (File.Exists(_usersFilePath))
@@ -61,6 +62,18 @@ namespace HSMServer.Authentication
             CheckUsersUpToDate();
 
             _logger.LogInformation("UserManager initialized");
+        }
+
+        /// <summary>
+        /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
+        /// </summary>
+        private void MigrateUsersToNewDatabase()
+        {
+            var users = _databaseAdapter.GetUsersOld();
+            foreach (var user in users)
+            {
+                _databaseAdapter.AddUser(user);
+            }
         }
 
         #region Interface implementation

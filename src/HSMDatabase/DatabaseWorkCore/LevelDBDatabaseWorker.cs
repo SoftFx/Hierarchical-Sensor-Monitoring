@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.Entity;
-using HSMDatabase.Extensions;
-using HSMServer.DataLayer;
+using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 using NLog;
 using System;
@@ -9,9 +8,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using DB = LevelDB.DB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
+    [Obsolete("12.08.2021. Use new databases.")]
     internal class LevelDBDatabaseWorker : IDatabaseWorker
     {
         #region Singleton
@@ -113,8 +114,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _logger = LogManager.GetCurrentClassLogger();
             try
             {
-                _database = new DB(_dbOptions, DATABASE_NAME, Encoding.UTF8);
-
+                _database = new DB( _dbOptions, DATABASE_NAME, Encoding.UTF8);
             }
             catch (System.Exception e)
             {
@@ -133,7 +133,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 lock (_accessLock)
                 {
-                    _database.Close();
+                    //_database.Close();
                     _database.Dispose();
                     _database = null;
                 }
@@ -157,7 +157,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
                     if (_database != null)
                     {
-                        _database.Close();
+                        //_database.Close();
                         _database.Dispose();
                         _database = null;
                     }
@@ -670,6 +670,44 @@ namespace HSMDatabase.DatabaseWorkCore
                 _logger.Error(e, $"Failed to remove configuration entity named {name}");
             }
         }
+
+        public List<ConfigurationEntity> ReadAllConfigurationEntities()
+        {
+            List<ConfigurationEntity> result = new List<ConfigurationEntity>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetConfigurationObjectSearchKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        {
+                            if (!iterator.Key().StartsWith(searchKey))
+                                continue;
+
+                            try
+                            {
+                                var typedValue = JsonSerializer.Deserialize<ConfigurationEntity>(iterator.ValueAsString());
+                                result.Add(typedValue);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed to read ConfigurationEntity");
+                            }
+
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get configuration tickets");
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Users
@@ -791,7 +829,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 lock (_accessLock)
                 {
-                    var value = _database.Get(GetRegistrationTicket(id));
+                    var value = _database.Get(GetRegistrationTicketKey(id));
                     result = JsonSerializer.Deserialize<RegisterTicketEntity>(value);
                 }
             }
@@ -807,7 +845,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string key = GetRegistrationTicket(id);
+                string key = GetRegistrationTicketKey(id);
                 lock (_accessLock)
                 {
                     _database.Delete(key);
@@ -823,7 +861,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             try
             {
-                string key = GetRegistrationTicket(ticket.Id);
+                string key = GetRegistrationTicketKey(ticket.Id);
                 string value = JsonSerializer.Serialize(ticket);
                 lock (_accessLock)
                 {
@@ -836,30 +874,67 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        public List<RegisterTicketEntity> ReadAllRegisterTicketEntities()
+        {
+            List<RegisterTicketEntity> result = new List<RegisterTicketEntity>();
+            try
+            {
+                byte[] searchKey = Encoding.UTF8.GetBytes(GetRegistrationTicketSearchKey());
+                lock (_accessLock)
+                {
+                    using (var iterator = _database.CreateIterator())
+                    {
+                        for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+                        {
+                            if (!iterator.Key().StartsWith(searchKey))
+                                continue;
+
+                            try
+                            {
+                                var typedValue = JsonSerializer.Deserialize<RegisterTicketEntity>(iterator.ValueAsString());
+                                result.Add(typedValue);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(e, "Failed to read RegistrationTicket");
+                            }
+
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to get register tickets");
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Private methods
 
         private string GetUniqueConfigurationObjectKey(string name)
         {
-            return $"{PrefixConstants.CONFIGURATION_OBJECT_PREFIX}_{name}";
+            return PrefixConstants.GetUniqueConfigurationObjectKey(name);
         }
         private string GetUniqueUserKey(string userName)
         {
-            return $"{PrefixConstants.USER_INFO_PREFIX}_{userName}";
+            return PrefixConstants.GetUniqueUserKey(userName);
         }
 
         private string GetUserReadKey()
         {
-            return PrefixConstants.USER_INFO_PREFIX;
+            return PrefixConstants.GetUsersReadKey();
         }
         private string GetSensorsListKey(string productName)
         {
-            return $"{PrefixConstants.SENSORS_LIST_PREFIX}_{productName}";
+            return PrefixConstants.GetSensorsListKey(productName);
         }
         private string GetSensorReadValueKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_VALUE_PREFIX}_{productName}_{path}";
+            return PrefixConstants.GetSensorReadValueKey(productName, path);
         }
 
         private string GetOneValueSensorWriteKey(string productName, string path)
@@ -874,16 +949,26 @@ namespace HSMDatabase.DatabaseWorkCore
         
         private string GetSensorInfoKey(string productName, string path)
         {
-            return $"{PrefixConstants.SENSOR_KEY_PREFIX}_{productName}_{path}";
+            return PrefixConstants.GetSensorInfoKey(productName, path);
         }
         private string GetProductInfoKey(string name)
         {
-            return $"{PrefixConstants.PRODUCT_INFO_PREFIX}_{name}";
+            return PrefixConstants.GetProductInfoKey(name);
         }
 
-        private string GetRegistrationTicket(Guid id)
+        private string GetRegistrationTicketKey(Guid id)
         {
-            return $"{PrefixConstants.REGISTRATION_TICKET_PREFIX}_{id}";
+            return PrefixConstants.GetRegistrationTicketKey(id);
+        }
+
+        private string GetRegistrationTicketSearchKey()
+        {
+            return PrefixConstants.REGISTRATION_TICKET_PREFIX;
+        }
+
+        private string GetConfigurationObjectSearchKey()
+        {
+            return PrefixConstants.CONFIGURATION_OBJECT_PREFIX;
         }
 
         private DateTime GetTimeFromSensorWriteKey(byte[] keyBytes)

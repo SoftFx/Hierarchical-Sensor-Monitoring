@@ -90,7 +90,6 @@
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\TotalCPUSensor.cs" />
-    <Compile Include="PerformanceSensor\SystemMonitoring\FreeDiskSpaceSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\FreeMemorySensor.cs" />
     <Compile Include="PerformanceSensor\Base\IPerformanceSensor.cs" />
     <Compile Include="PerformanceSensor\Base\PerformanceSensorBase.cs" />

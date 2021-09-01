@@ -4,6 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseInterface
 {
+    [Obsolete("13.08.2021. Use new IDatabaseCore interface")]
     public interface IPublicAdapter : IDisposable
     {
         #region Products
@@ -45,6 +46,7 @@ namespace HSMDatabase.DatabaseInterface
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
+        List<ConfigurationEntity> ReadAllConfigurationEntities();
 
         #endregion
 
@@ -53,6 +55,7 @@ namespace HSMDatabase.DatabaseInterface
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
+        List<RegisterTicketEntity> ReadAllRegisterTicketEntities();
 
         #endregion
     }

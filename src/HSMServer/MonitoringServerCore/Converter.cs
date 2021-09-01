@@ -375,10 +375,10 @@ namespace HSMServer.MonitoringServerCore
                 Count = sensorValue.Count,
                 Comment = sensorValue.Comment,
                 StartTime = sensorValue.StartTime.ToUniversalTime(),
-                EndTime = sensorValue.EndTime.ToUniversalTime(),
                 Percentiles = sensorValue.Percentiles,
                 LastValue = sensorValue.LastValue
             };
+            typedData.EndTime = (sensorValue.EndTime == DateTime.MinValue) ? DateTime.Now : sensorValue.EndTime;
             return typedData;
         }
         #endregion
@@ -974,11 +974,13 @@ namespace HSMServer.MonitoringServerCore
         #endregion
 
         #region UnitedSensorValue to update messages
-        public SensorData ConvertUnitedValue(UnitedSensorValue value, string productName, DateTime timeCollected)
+        public SensorData ConvertUnitedValue(UnitedSensorValue value, string productName,
+            DateTime timeCollected, TransactionType type)
         {
             AddCommonValues(value, productName, timeCollected, out var data);
             data.StringValue = GetStringValue(value, timeCollected);
             data.ShortStringValue = GetShortStringValue(value);
+            data.TransactionType = type;
             return data;
         }
 

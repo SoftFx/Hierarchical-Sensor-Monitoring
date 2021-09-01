@@ -42,5 +42,23 @@
 
         public const string SaveConfigObjectAction = "SaveConfigObject";
         public const string SetConfigObjectToDefaultAction = "SetToDefault";
+
+        #region Sensors history
+
+        public const string HistoryHourAction = "HistoryHour";
+        public const string HistoryDayAction = "HistoryDay";
+        public const string HistoryThreeDaysAction = "HistoryThreeDays";
+        public const string HistoryWeekAction = "HistoryWeek";
+        public const string HistoryMonthAction = "HistoryMonth";
+        public const string HistoryAllAction = "HistoryAll";
+
+        public const string RawHistoryHourAction = "RawHistoryHour";
+        public const string RawHistoryDayAction = "RawHistoryDay";
+        public const string RawHistoryThreeDaysAction = "RawHistoryThreeDays";
+        public const string RawHistoryWeekAction = "RawHistoryWeek";
+        public const string RawHistoryMonthAction = "RawHistoryMonth";
+        public const string RawHistoryAllAction = "RawHistoryAll";
+
+        #endregion
     }
 }

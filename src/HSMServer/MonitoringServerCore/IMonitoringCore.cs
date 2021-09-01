@@ -36,6 +36,8 @@ namespace HSMServer.MonitoringServerCore
         //public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
         List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
         List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model);
+        List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to);
+        List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path);
         string GetFileSensorValue(User user, string product, string path);
         byte[] GetFileSensorValueBytes(User user, string product, string path);
         //public StringMessage GetFileSensorValueExtension(User user, string product, string path);

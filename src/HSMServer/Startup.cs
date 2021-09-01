@@ -25,6 +25,7 @@ using System.IO;
 using System.Linq;
 using HSMServer.BackgroundTask;
 using HSMServer.DataLayer;
+using HSMServer.MonitoringHistoryProcessor.Factory;
 
 namespace HSMServer
 {
@@ -64,6 +65,9 @@ namespace HSMServer
 
             //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
             services.AddTransient<IPublicAdapter, PublicAdapter>();
+            services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
+            //Use singleton, created in DatabaseCore
+            //services.AddSingleton<IDatabaseCore, DatabaseCore>();
             services.AddTransient<IDatabaseAdapter, DatabaseAdapter>();
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();

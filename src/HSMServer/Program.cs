@@ -58,7 +58,6 @@ namespace HSMServer
                         options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http2;
-                            //listenOptions.UseHttps(Config.ServerCertificate);
                             listenOptions.UseHttps(portOptions =>
                             {
                                 portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
@@ -77,7 +76,7 @@ namespace HSMServer
                                 portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
                             });
                         });
-                        options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
+                        options.Listen(IPAddress.Any, ConfigurationConstants.SitePort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                             listenOptions.UseHttps(portOptions =>
@@ -85,7 +84,7 @@ namespace HSMServer
                                 portOptions.CheckCertificateRevocation = false;
                                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                 portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                //portOptions.ServerCertificate = Config.ServerCertificate;
+                                portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
                             });
                         });
                         options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
@@ -142,7 +141,7 @@ namespace HSMServer
         //                        portOptions.ServerCertificate = Config.ServerCertificate;
         //                    });
         //                });
-        //                options.Listen(IPAddress.Any, ConfigurationConstants.ApiPort, listenOptions =>
+        //                options.Listen(IPAddress.Any, ConfigurationConstants.SitePort, listenOptions =>
         //                {
         //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
         //                    listenOptions.UseHttps(portOptions =>

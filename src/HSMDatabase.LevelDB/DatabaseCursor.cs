@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
+namespace HSMDatabase.LevelDB
 {
-    class FreeDiskSpaceSensor
+    public class DatabaseCursor
     {
     }
 }

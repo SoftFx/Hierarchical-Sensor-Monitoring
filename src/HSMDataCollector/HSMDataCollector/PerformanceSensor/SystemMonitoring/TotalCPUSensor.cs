@@ -10,10 +10,10 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     internal class TotalCPUSensor : StandardPerformanceSensorBase<int>
     {
         private const string _sensorName = "Total CPU";
-        public TotalCPUSensor(string productKey, IValuesQueue queue)
-            : base($"{TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
+        public TotalCPUSensor(string productKey, IValuesQueue queue, string nodeName = TextConstants.PerformanceNodeName)
+            : base($"{nodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
         {
-            InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
+            InternalBar = new BarSensor<int>($"{nodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)

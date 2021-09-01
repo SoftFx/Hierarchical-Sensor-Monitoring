@@ -593,14 +593,16 @@ namespace HSMServer.HtmlHelpers
                           "<th scope='col'>#</th>" +
                           "<th scope='col'>Parameter name</th>" +
                           "<th scope='col'>Parameter value</th>" +
-                          "<th scope='col'>Action</th>");
+                          "<th scope='col'>Action</th></tr></thead>");
 
             sb.Append("<tbody>");
 
             for (int i = 0; i < configurationObjects.Count; ++i)
             {
-                sb.Append($"<tr><th scope='row'>{i}</th><td>{configurationObjects[i].Name}</td>" +
-                          $"<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
+                sb.Append($"<tr><th scope='row'>{i}</th><td><label class='config-name'>{configurationObjects[i].Name}</label>" +
+                          "<a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' " +
+                          $" data-bs-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'></i></a></td>" +
+                          "<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
                           $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
 
                 if (configurationObjects[i].IsDefault)

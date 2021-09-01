@@ -3,6 +3,7 @@
     public class TextConstants
     {
         public const string PerformanceNodeName = "System monitoring";
+        public const string CurrentProcessNodeName = "CurrentProcess";
 
         public const string LogTargetFile = "file";
         public const string LogDefaultFolder = "Logs";

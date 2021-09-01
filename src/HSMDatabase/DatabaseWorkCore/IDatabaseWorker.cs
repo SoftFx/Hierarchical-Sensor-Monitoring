@@ -4,6 +4,7 @@ using HSMDatabase.Entity;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
+    [Obsolete("12.08.2021. Use new databases.")]
     internal interface IDatabaseWorker : IDisposable
     {
         #region Management
@@ -61,6 +62,7 @@ namespace HSMDatabase.DatabaseWorkCore
         ConfigurationEntity ReadConfigurationObject(string name);
         void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
+        List<ConfigurationEntity> ReadAllConfigurationEntities();
 
         #endregion
 
@@ -69,6 +71,7 @@ namespace HSMDatabase.DatabaseWorkCore
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
+        List<RegisterTicketEntity> ReadAllRegisterTicketEntities();
 
         #endregion
     }

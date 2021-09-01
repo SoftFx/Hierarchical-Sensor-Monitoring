@@ -70,6 +70,19 @@ namespace HSMServer.Cache
             //}
         }
 
+        public void RemoveProduct(string productName)
+        {
+            lock (_syncRoot)
+            {
+                var exists = _productSensorDictionary.TryGetValue(productName, out var list);
+                if (exists)
+                {
+                    list?.Clear();
+                    _productSensorDictionary.Remove(productName);
+                }
+            }
+        }
+
         public SensorData GetValue(string productName, string path)
         {
             //bool res = _productSensorDictionary.TryGetValue(productName, out var dict);

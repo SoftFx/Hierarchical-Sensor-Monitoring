@@ -28,6 +28,7 @@ namespace HSMServer.Products
             _databaseAdapter = databaseAdapter;
             _converter = converter;
             _products = new List<Product>();
+            MigrateProductsToNewDatabase();
             InitializeProducts();
         }
 
@@ -41,11 +42,27 @@ namespace HSMServer.Products
                 }
             }
         }
-
+        /// <summary>
+        /// This method MUST be called when update from version 2.1.4 or lower to versions 2.1.5 or higher
+        /// </summary>
+        private void MigrateProductsToNewDatabase()
+        {
+            var existingProducts = _databaseAdapter.GetProductsOld();
+            foreach (var product in existingProducts)
+            {
+                var sensors = _databaseAdapter.GetProductSensorsOld(product);
+                _databaseAdapter.AddProduct(product);
+                foreach (var sensor in sensors)
+                {
+                    _databaseAdapter.AddSensor(sensor);
+                }
+            }
+        }
         //TODO: read products via product info, like users are read now
         private void InitializeProducts()
         {
             int count = 0;
+            //var existingProducts = _databaseAdapter.GetProductsOld();
             var existingProducts = _databaseAdapter.GetProducts();
             foreach (var product in existingProducts)
             {
@@ -53,6 +70,7 @@ namespace HSMServer.Products
                 {
                     _products.Add(product);
                 }
+                //var sensors = _databaseAdapter.GetProductSensorsOld(product);
                 var sensors = _databaseAdapter.GetProductSensors(product);
                 lock (_dictionaryLock)
                 {
@@ -77,7 +95,7 @@ namespace HSMServer.Products
 
         private void AddDefaultProduct()
         {
-            Product product = new Product(TextConstants.DefaultProductName, TextConstants.DefaultProductName, DateTime.Now);
+            Product product = new Product(TextConstants.DefaultProductKey, TextConstants.DefaultProductName, DateTime.Now);
             AddProduct(product);
         }
 
@@ -85,6 +103,7 @@ namespace HSMServer.Products
         {
             try
             {
+                //_databaseAdapter.RemoveProductOld(name);
                 _databaseAdapter.RemoveProduct(name);
                 var product = GetProductByName(name);
                 if (product != null)
@@ -118,6 +137,7 @@ namespace HSMServer.Products
         {
             try
             {
+                //_databaseAdapter.AddProductOld(product);
                 _databaseAdapter.AddProduct(product);
                 lock (_productsLock)
                 {
@@ -154,6 +174,7 @@ namespace HSMServer.Products
 
             Task.Run(() =>
             {
+                //_databaseAdapter.UpdateProductOld(currentProduct);
                 _databaseAdapter.UpdateProduct(currentProduct);
             });
         }
@@ -180,6 +201,7 @@ namespace HSMServer.Products
                 _productSensorsDictionary[productName].Add(newObject);
             }
 
+            //Task.Run(() => _databaseAdapter.AddSensorOld(newObject));
             Task.Run(() => _databaseAdapter.AddSensor(newObject));
         }
 
@@ -207,6 +229,7 @@ namespace HSMServer.Products
 
             if (needToAdd)
             {
+                //Task.Run(() => _databaseAdapter.AddSensorOld(newObject));
                 Task.Run(() => _databaseAdapter.AddSensor(newObject));
             }
         }
@@ -222,9 +245,7 @@ namespace HSMServer.Products
                 _productSensorsDictionary[sensorInfo.ProductName].Add(sensorInfo);
             }
 
-            //ThreadPool.QueueUserWorkItem(_ => _databaseAdapter.AddSensor(sensorInfo));
-            //ThreadPool.QueueUserWorkItem(_ =>
-            //    _databaseAdapter.AddNewSensorToList(sensorInfo.ProductName, sensorInfo.Path));
+            //Task.Run(() => _databaseAdapter.AddSensorOld(sensorInfo));
             Task.Run(() => _databaseAdapter.AddSensor(sensorInfo));
         }
         public void RemoveSensor(string productName, string path)
@@ -240,6 +261,7 @@ namespace HSMServer.Products
                     }
                 }
 
+                //Task.Run(() => _databaseAdapter.RemoveSensorOld(productName, path));
                 Task.Run(() => _databaseAdapter.RemoveSensor(productName, path));
             }
             catch (Exception e)
@@ -274,6 +296,17 @@ namespace HSMServer.Products
             lock (_productsLock)
             {
                 product = _products.FirstOrDefault(p => p.Name.Equals(name));
+            }
+
+            return product;
+        }
+
+        public Product GetProductByKey(string key)
+        {
+            Product product = default(Product);
+            lock (_productsLock)
+            {
+                product = _products.FirstOrDefault(p => p.Key.Equals(key));
             }
 
             return product;

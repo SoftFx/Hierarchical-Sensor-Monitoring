@@ -46,7 +46,7 @@ namespace HSMServer.BackgroundTask
                         var sensors = _productManager.GetProductSensors(product.Name);
                         foreach (var sensor in sensors)
                         {
-                            var lastValue = _databaseAdapter.GetLastSensorValue(sensor.ProductName, sensor.Path);
+                            var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
                             if (lastValue == null)
                                 continue;
 
