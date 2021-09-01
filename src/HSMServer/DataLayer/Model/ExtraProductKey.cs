@@ -1,7 +1,9 @@
 ﻿using HSMDatabase.Entity;
+using HSMServer.Attributes;
 
 namespace HSMServer.DataLayer.Model
 {
+    [SwaggerIgnore]
     public class ExtraProductKey
     {
         public string Name { get; set; }

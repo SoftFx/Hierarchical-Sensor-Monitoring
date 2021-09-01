@@ -1,11 +1,13 @@
-﻿using System;
+﻿using HSMDatabase.Entity;
+using HSMServer.Attributes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using HSMDatabase.Entity;
 
 namespace HSMServer.Authentication
 {
+    [SwaggerIgnore]
     public class User : ClaimsPrincipal
     {
         public Guid Id { get; set; }
