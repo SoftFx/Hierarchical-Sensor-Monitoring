@@ -219,37 +219,37 @@ namespace HSMDatabase.LevelDB
             _database?.Dispose();
         }
 
-        private class ByteArraysComparer : IComparer<NativeArray>
-        {
-            public int Compare(NativeArray x, NativeArray y)
-            {
-                unsafe
-                {
-                    //might need to compare length via bytes too
-                    int* xLengthPtr = (int*) x.byteLength.ToPointer();
-                    int* yLengthPtr = (int*) y.byteLength.ToPointer();
-                    var lengthCompare = (*xLengthPtr).CompareTo(*yLengthPtr);
-                    if (lengthCompare != 0) return lengthCompare;
-                    int len = (*xLengthPtr);
-                    int i = 0;
-                    byte* xStartPointer = (byte*) x.baseAddr.ToPointer();
-                    byte* yStartPointer = (byte*) y.baseAddr.ToPointer();
-                    byte* xStartCopy = &(*xStartPointer);
-                    byte* yStartCopy = &(*yStartPointer);
-                    while (i++ < len)
-                    {
-                        var cmpRes = (*xStartCopy).CompareTo(*yStartCopy);
-                        if (cmpRes != 0)
-                            return cmpRes;
+        //private class ByteArraysComparer : IComparer<NativeArray>
+        //{
+        //    public int Compare(NativeArray x, NativeArray y)
+        //    {
+        //        unsafe
+        //        {
+        //            //might need to compare length via bytes too
+        //            int* xLengthPtr = (int*) x.byteLength.ToPointer();
+        //            int* yLengthPtr = (int*) y.byteLength.ToPointer();
+        //            var lengthCompare = (*xLengthPtr).CompareTo(*yLengthPtr);
+        //            if (lengthCompare != 0) return lengthCompare;
+        //            int len = (*xLengthPtr);
+        //            int i = 0;
+        //            byte* xStartPointer = (byte*) x.baseAddr.ToPointer();
+        //            byte* yStartPointer = (byte*) y.baseAddr.ToPointer();
+        //            byte* xStartCopy = &(*xStartPointer);
+        //            byte* yStartCopy = &(*yStartPointer);
+        //            while (i++ < len)
+        //            {
+        //                var cmpRes = (*xStartCopy).CompareTo(*yStartCopy);
+        //                if (cmpRes != 0)
+        //                    return cmpRes;
 
-                        ++xStartCopy;
-                        ++yStartCopy;
-                    }
+        //                ++xStartCopy;
+        //                ++yStartCopy;
+        //            }
 
-                    return 0;
-                }
-            }
-        }
+        //            return 0;
+        //        }
+        //    }
+        //}
 
     }
 }
