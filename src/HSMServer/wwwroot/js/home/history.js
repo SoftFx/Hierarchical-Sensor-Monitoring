@@ -115,13 +115,11 @@ function initializeHistory(path, historyAction, type) {
         let values = JSON.parse(data).value;
 
         if (values === "") {
-            console.log('empty value case');
             $('#history_' + path).hide();
             $('#no_data_' + path).show();
             return;
         }
 
-        console.log('not empty value case');
         $('#history_' + path).show();
         $('#no_data_' + path).hide();
         $(`#values_${path}`).append(values);
