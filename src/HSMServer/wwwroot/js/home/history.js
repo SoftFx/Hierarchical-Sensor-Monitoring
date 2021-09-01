@@ -111,11 +111,20 @@ function initializeHistory(path, historyAction, type) {
         cache: false,
         async: true
     }).done(function (data) {
-        //data = data.replace('{"value":"', ''); //fix sometime
-        //data = data.replace('"}', '');
-
         $(`#values_${path}`).empty();
-        $(`#values_${path}`).append(JSON.parse(data).value);
+        let values = JSON.parse(data).value;
+
+        if (values === "") {
+            console.log('empty value case');
+            $('#history_' + path).hide();
+            $('#no_data_' + path).show();
+            return;
+        }
+
+        console.log('not empty value case');
+        $('#history_' + path).show();
+        $('#no_data_' + path).hide();
+        $(`#values_${path}`).append(values);
     });
 }
 

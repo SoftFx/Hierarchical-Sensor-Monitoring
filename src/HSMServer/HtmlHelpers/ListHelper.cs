@@ -170,11 +170,13 @@ namespace HSMServer.HtmlHelpers
                           CreateRadioButton(name, "all", "All") + "</div>");
 
             result.Append("<div style='margin-top: 15px'>");
+            result.Append(GetNoDataDivForSensor(name));
+            result.Append($"<div id='history_{name}'>");
             result.Append(IsPlottingSupported(sensor.SensorType)
                             ? GetNavTabsForHistory(name)
                             : GetValuesDivForHistory(name));
 
-            result.Append("</div></div></div></div></div>");
+            result.Append("</div></div></div></div></div></div>");
 
             return result;
         }
@@ -216,6 +218,10 @@ namespace HSMServer.HtmlHelpers
             return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
+        private static string GetNoDataDivForSensor(string name)
+        {
+            return $"<div id='no_data_{name}' style='display: none'><p>No data for the specified period</p></div>";
+        }
         private static string GetNavTabsForHistory(string name)
         {
             StringBuilder sb = new StringBuilder();
