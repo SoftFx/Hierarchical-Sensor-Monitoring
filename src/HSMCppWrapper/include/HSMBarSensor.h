@@ -17,7 +17,7 @@ namespace hsm_wrapper
 		HSMBarSensor() = delete;
 		HSMBarSensor(const HSMBarSensor&) = delete;
 		HSMBarSensor& operator=(const HSMBarSensor&) = delete;
-		HSMBarSensor& operator=(HSMBarSensor&& sensor) = delete;
+		HSMBarSensor& operator=(HSMBarSensor&&) = delete;
 
 		void AddValue(T value);
 	private:

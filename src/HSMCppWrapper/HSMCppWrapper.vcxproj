@@ -156,12 +156,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="HSMBarSensorImpl.h" />
+    <ClInclude Include="HSMBaseFuncSensor.h" />
     <ClInclude Include="HSMLastValueSensorImpl.h" />
+    <ClInclude Include="HSMParamsFuncSensorImpl.h" />
     <ClInclude Include="HSMSensorImpl.h" />
     <ClInclude Include="include\DataCollector.h" />
     <ClInclude Include="include\HSMBarSensor.h" />
     <ClInclude Include="include\HSMCppWrapper.h" />
     <ClInclude Include="include\HSMLastValueSensor.h" />
+    <ClInclude Include="include\HSMParamsFuncSensor.h" />
     <ClInclude Include="include\HSMSensor.h" />
     <ClInclude Include="include\SensorStatus.h" />
     <ClInclude Include="pch.h" />
@@ -170,6 +173,7 @@
     <ClCompile Include="DataCollector.cpp" />
     <ClCompile Include="HSMBarSensor.cpp" />
     <ClCompile Include="HSMLastValueSensor.cpp" />
+    <ClCompile Include="HSMParamsFuncSensor.cpp" />
     <ClCompile Include="HSMSensor.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

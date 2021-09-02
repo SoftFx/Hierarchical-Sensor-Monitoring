@@ -7,3 +7,4 @@
 #include "HSMSensor.h"
 #include "HSMBarSensor.h"
 #include "HSMLastValueSensor.h"
+#include "HSMParamsFuncSensor.h"

@@ -43,6 +43,15 @@
     <ClInclude Include="HSMLastValueSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
+    <ClInclude Include="HSMParamsFuncSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMBaseFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMParamsFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DataCollector.cpp">
@@ -58,6 +67,9 @@
       <Filter>Sensors</Filter>
     </ClCompile>
     <ClCompile Include="HSMLastValueSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMParamsFuncSensor.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
   </ItemGroup>
