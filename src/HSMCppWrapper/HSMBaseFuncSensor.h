@@ -6,101 +6,92 @@ using System::Func;
 using System::String;
 using System::Collections::Generic::List;
 
-template<class T, class U>
-class HSMBaseFuncSensor;
-
-template<class T, class U>
-ref class DelegateWrapper
+namespace hsm_wrapper
 {
-public:
-	DelegateWrapper(HSMBaseFuncSensor<T, U>* base) : base(base)
-	{
-	}
 
-	template<class X = T, class Y = U>
-	typename std::enable_if_t<std::is_arithmetic_v<X> && std::is_arithmetic_v<Y>, X>
-		Call(List<Y>^ values)
+	template<class T, class U>
+	class HSMBaseFuncSensor;
+
+	template<class T, class U>
+	ref class DelegateWrapper
 	{
-		std::list<U> converted_values;
-		for each(U value in values)
+	public:
+		DelegateWrapper(HSMBaseFuncSensor<T, U>* base) : base(base)
 		{
-			converted_values.push_back(value);
 		}
-		return base->Func(converted_values);
-	}
 
-	template<class X = T, class Y = U>
-	typename std::enable_if_t<std::is_same_v<X, std::string> && std::is_arithmetic_v<Y>, String^>
-		Call(List<Y>^ values)
-	{
-		std::list<U> converted_values;
-		for each(U value in values)
+		template<class X = T, class Y = U>
+		typename std::enable_if_t<std::is_arithmetic_v<X> && std::is_arithmetic_v<Y>, X>
+			Call(List<Y>^ values)
 		{
-			converted_values.push_back(value);
+			std::list<U> converted_values;
+			for each(U value in values)
+			{
+				converted_values.push_back(value);
+			}
+			return base->Func(converted_values);
 		}
-		return gcnew String(base->Func(converted_values).c_str());
-	}
 
-	template<class X = T, class Y = U>
-	typename std::enable_if_t<std::is_arithmetic_v<X> && std::is_same_v<Y, std::string>, X>
-		Call(List<String^>^ values)
-	{
-		std::list<std::string> converted_values;
-		for each(String^ value in values)
+		template<class X = T, class Y = U>
+		typename std::enable_if_t<std::is_same_v<X, std::string> && std::is_arithmetic_v<Y>, String^>
+			Call(List<Y>^ values)
 		{
-			converted_values.push_back(move(msclr::interop::marshal_as<std::string>(value)));
+			std::list<U> converted_values;
+			for each(U value in values)
+			{
+				converted_values.push_back(value);
+			}
+			return gcnew String(base->Func(converted_values).c_str());
 		}
-		return base->Func(converted_values);
-	}
 
-	template<class X = T, class Y = U>
-	typename std::enable_if_t<std::is_same_v<X, std::string> && std::is_same_v<Y, std::string>, String^>
-		Call(List<String^>^ values)
-	{
-		std::list<std::string> converted_values;
-		for each(String^ value in values)
+		template<class X = T, class Y = U>
+		typename std::enable_if_t<std::is_arithmetic_v<X> && std::is_same_v<Y, std::string>, X>
+			Call(List<String^>^ values)
 		{
-			converted_values.push_back(move(msclr::interop::marshal_as<std::string>(value)));
+			std::list<std::string> converted_values;
+			for each(String^ value in values)
+			{
+				converted_values.push_back(move(msclr::interop::marshal_as<std::string>(value)));
+			}
+			return base->Func(converted_values);
 		}
-		return gcnew String(base->Func(converted_values).c_str());
-	}
 
-private:
-	HSMBaseFuncSensor<T, U>* base;
-};
+		template<class X = T, class Y = U>
+		typename std::enable_if_t<std::is_same_v<X, std::string> && std::is_same_v<Y, std::string>, String^>
+			Call(List<String^>^ values)
+		{
+			std::list<std::string> converted_values;
+			for each(String^ value in values)
+			{
+				converted_values.push_back(move(msclr::interop::marshal_as<std::string>(value)));
+			}
+			return gcnew String(base->Func(converted_values).c_str());
+		}
 
-template<class T, class U>
-class HSMBaseFuncSensor
-{
-public:
-	DelegateWrapper<T, U>^ GetDelegateWrapper()
+	private:
+		HSMBaseFuncSensor<T, U>* base;
+	};
+
+	template<class T, class U>
+	class HSMBaseFuncSensor
 	{
-		return delegate_wrapper.get();
-	}
+	public:
+		DelegateWrapper<T, U>^ GetDelegateWrapper();
+		void SetFunc(std::function<T(std::list<U>)> function);
+		T Func(const std::list<U>& values);
 
-	void SetFunc(std::function<T(std::list<U>)> function)
-	{
-		func = function;
-	}
+	protected:
+		HSMBaseFuncSensor();
 
-	T Func(const std::list<U>& values)
-	{
-		return func(values);
-	}
+		virtual ~HSMBaseFuncSensor() = default;
+		HSMBaseFuncSensor(const HSMBaseFuncSensor&) = default;
+		HSMBaseFuncSensor(HSMBaseFuncSensor&&) = default;
+		HSMBaseFuncSensor& operator=(const HSMBaseFuncSensor&) = default;
+		HSMBaseFuncSensor& operator=(HSMBaseFuncSensor&&) = default;
 
-protected:
-	HSMBaseFuncSensor()
-	{
-		delegate_wrapper = gcnew DelegateWrapper<T, U>(this);
-	}
+	private:
+		std::function<T(std::list<U>)> func;
+		msclr::auto_gcroot<DelegateWrapper<T, U>^> delegate_wrapper;
+	};
 
-	virtual ~HSMBaseFuncSensor() = default;
-	HSMBaseFuncSensor(const HSMBaseFuncSensor&) = default;
-	HSMBaseFuncSensor(HSMBaseFuncSensor&&) = default;
-	HSMBaseFuncSensor& operator=(const HSMBaseFuncSensor&) = default;
-	HSMBaseFuncSensor& operator=(HSMBaseFuncSensor&&) = default;
-
-private:
-	std::function<T(std::list<U>)> func;
-	msclr::auto_gcroot<DelegateWrapper<T, U>^> delegate_wrapper;
-};
+}

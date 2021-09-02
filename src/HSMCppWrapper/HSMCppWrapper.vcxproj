@@ -172,6 +172,7 @@
   <ItemGroup>
     <ClCompile Include="DataCollector.cpp" />
     <ClCompile Include="HSMBarSensor.cpp" />
+    <ClCompile Include="HSMBaseFuncSensor.cpp" />
     <ClCompile Include="HSMLastValueSensor.cpp" />
     <ClCompile Include="HSMParamsFuncSensor.cpp" />
     <ClCompile Include="HSMSensor.cpp" />

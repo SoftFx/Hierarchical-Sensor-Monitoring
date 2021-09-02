@@ -5,7 +5,7 @@
 
 namespace hsm_wrapper
 {
-	template<class T, class U, typename = void>
+	template<class T, class U>
 	class HSMParamsFuncSensorImpl;
 
 	template<class T, class U>
@@ -30,15 +30,13 @@ namespace hsm_wrapper
 		std::function<T(std::list<U>)> func;
 	};
 	
-	template<class T, class U, typename = void>
-	class HSMParamsFuncSensor;
-
 	template<class T, class U>
-	class HSMParamsFuncSensor<T, U, typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U>>>
+	class HSMParamsFuncSensor
 	{
 	public:
-		using ResultType = T;
-		using ElementType = U;
+		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
+		using ElementType = typename std::conditional<std::is_arithmetic_v<U>, U, std::string>::type;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<U>, U, const U&>::type;
 
 		HSMParamsFuncSensor(std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper) : impl_wrapper(impl_wrapper)
 		{
@@ -54,96 +52,12 @@ namespace hsm_wrapper
 			impl_wrapper->RestartTimer(time_interval);
 		}
 
-		void AddValue(U value)
+		void AddValue(ElementParameterType value)
 		{
-			impl_wrapper->AddValue(value);
-		}
-	private:
-		std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper;
-	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensor<T, U, typename std::enable_if_t<!std::is_arithmetic_v<T> && std::is_arithmetic_v<U>>>
-	{
-	public:
-		using ResultType = std::string;
-		using ElementType = U;
-
-		HSMParamsFuncSensor(std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper) : impl_wrapper(impl_wrapper)
-		{
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			impl_wrapper->GetInterval();
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			impl_wrapper->RestartTimer(time_interval);
-		}
-
-		void AddValue(U value)
-		{
-			impl_wrapper->AddValue(value);
-		}
-	private:
-		std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper;
-	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensor<T, U, typename std::enable_if_t<std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>>>
-	{
-	public:
-		using ResultType = T;
-		using ElementType = std::string;
-
-		HSMParamsFuncSensor(std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper) : impl_wrapper(impl_wrapper)
-		{
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			impl_wrapper->GetInterval();
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			impl_wrapper->RestartTimer(time_interval);
-		}
-
-		void AddValue(const U& value)
-		{
-			impl_wrapper->AddValue(value.ToString());
-		}
-	private:
-		std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper;
-	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensor<T, U, typename std::enable_if_t<!std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>>>
-	{
-	public:
-		using ResultType = std::string;
-		using ElementType = std::string;
-
-		HSMParamsFuncSensor(std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper) : impl_wrapper(impl_wrapper)
-		{
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			impl_wrapper->GetInterval();
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			impl_wrapper->RestartTimer(time_interval);
-		}
-
-		void AddValue(const U& value)
-		{
-			impl_wrapper->AddValue(value.ToString());
+			if constexpr (std::is_arithmetic_v<U> || std::is_same_v<U, std::string>)
+				impl_wrapper->AddValue(value);
+			else
+				impl_wrapper->AddValue(value.ToString());
 		}
 	private:
 		std::shared_ptr<HSMParamsFuncSensorImplWrapper<ResultType, ElementType>> impl_wrapper;

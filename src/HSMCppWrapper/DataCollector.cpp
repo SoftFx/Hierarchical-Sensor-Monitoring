@@ -47,55 +47,19 @@ namespace hsm_wrapper
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 		
 		template<class T, class U>
-		typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>>>  
+		typename std::conditional<std::is_arithmetic_v<T>, 
+			typename std::conditional<std::is_arithmetic_v<U>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, std::string>>>::type,
+			typename std::conditional<std::is_arithmetic_v<U>, shared_ptr<HSMParamsFuncSensorImplWrapper<std::string, U>>, shared_ptr<HSMParamsFuncSensorImplWrapper<std::string, std::string>>>::type>::type
 			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> function, const std::chrono::milliseconds& interval)
 		{
-			std::shared_ptr<HSMParamsFuncSensorImpl<T, U>> params_func_sensor_impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
+			using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type;
+			using ElementType = typename std::conditional<std::is_arithmetic_v<U>, U, String^>::type;
+			auto params_func_sensor_impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
 			params_func_sensor_impl->SetFunc(function);
-			DelegateWrapper<T, U>^ delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
-			IParamsFuncSensor<T, U>^ params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), gcnew Func<List<U>^, T>(delegate_wrapper, &DelegateWrapper<T, U>::Call), interval.count());
+			auto delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
+			auto params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), gcnew Func<List<ElementType>^, ResultType>(delegate_wrapper, &DelegateWrapper<T, U>::Call), interval.count());
 			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
-			std::shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> params_func_sensor_impl_wrapper = std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
-			return params_func_sensor_impl_wrapper;
-		}
-
-		template<class T, class U>
-		typename std::enable_if_t<std::is_same_v<T, std::string> && std::is_arithmetic_v<U>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>>>
-			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> function, const std::chrono::milliseconds& interval)
-		{
-			std::shared_ptr<HSMParamsFuncSensorImpl<T, U>> params_func_sensor_impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
-			params_func_sensor_impl->SetFunc(function);
-			DelegateWrapper<T, U>^ delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
-			IParamsFuncSensor<String^, U>^ params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), gcnew Func<List<U>^, String^>(delegate_wrapper, &DelegateWrapper<T, U>::Call), interval.count());
-			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
-			std::shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> params_func_sensor_impl_wrapper = std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
-			return params_func_sensor_impl_wrapper;
-		}
-
-		template<class T, class U>
-		typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_same_v<U, std::string>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>>>
-			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> function, const std::chrono::milliseconds& interval)
-		{
-			std::shared_ptr<HSMParamsFuncSensorImpl<T, U>> params_func_sensor_impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
-			params_func_sensor_impl->SetFunc(function);
-			DelegateWrapper<T, U>^ delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
-			IParamsFuncSensor<T, String^>^ params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), gcnew Func<List<String^>^, T>(delegate_wrapper, &DelegateWrapper<T, U>::Call), interval.count());
-			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
-			std::shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> params_func_sensor_impl_wrapper = std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
-			return params_func_sensor_impl_wrapper;
-		}
-
-		template<class T, class U>
-		typename std::enable_if_t<std::is_same_v<T, std::string> && std::is_same_v<U, std::string>, shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>>>
-			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> function, const std::chrono::milliseconds& interval)
-		{
-			std::shared_ptr<HSMParamsFuncSensorImpl<T, U>> params_func_sensor_impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
-			params_func_sensor_impl->SetFunc(function);
-			DelegateWrapper<T, U>^ delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
-			IParamsFuncSensor<String^, String^>^ params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), gcnew Func<List<String^>^, String^>(delegate_wrapper, &DelegateWrapper<T, U>::Call), interval.count());
-			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
-			std::shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> params_func_sensor_impl_wrapper = std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
-			return params_func_sensor_impl_wrapper;
+			return std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
 		}
 
 	private:
@@ -414,6 +378,93 @@ shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> DataCollectorImplWrapper::Creat
 	}
 }
 
+
+
+
+DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port) : impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port))
+{
+}
+
+void DataCollectorProxy::Initialize(bool use_logging, const std::string& folder_path, const std::string& file_name_format)
+{
+	impl_wrapper->Initialize(use_logging, folder_path, file_name_format);
+}
+
+void DataCollectorProxy::Stop()
+{
+	impl_wrapper->Stop();
+}
+
+void DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
+{
+	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
+}
+
+void DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
+{
+	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
+}
+
+void DataCollectorProxy::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads)
+{
+	impl_wrapper->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads);
+}
+
+void DataCollectorProxy::MonitoringServiceAlive()
+{
+	impl_wrapper->MonitoringServiceAlive();
+}
+
+
+BoolSensor DataCollectorProxy::CreateBoolSensor(const std::string& path, const std::string& description)
+{
+	return impl_wrapper->CreateBoolSensor(path, description);
+}
+
+IntSensor DataCollectorProxy::CreateIntSensor(const std::string& path, const std::string& description)
+{
+	return impl_wrapper->CreateIntSensor(path, description);
+}
+
+DoubleSensor DataCollectorProxy::CreateDoubleSensor(const std::string& path, const std::string& description)
+{
+	return impl_wrapper->CreateDoubleSensor(path, description);
+}
+
+StringSensor DataCollectorProxy::CreateStringSensor(const std::string& path, const std::string& description)
+{
+	return impl_wrapper->CreateStringSensor(path, description);
+}
+
+BoolLastValueSensor DataCollectorProxy::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
+{
+	return impl_wrapper->CreateLastValueBoolSensor(path, default_value, description);
+}
+
+IntLastValueSensor DataCollectorProxy::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
+{
+	return impl_wrapper->CreateLastValueIntSensor(path, default_value, description);
+}
+
+DoubleLastValueSensor DataCollectorProxy::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
+{
+	return impl_wrapper->CreateLastValueDoubleSensor(path, default_value, description);
+}
+
+StringLastValueSensor DataCollectorProxy::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
+{
+	return impl_wrapper->CreateLastValueStringSensor(path, default_value, description);
+}
+
+IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
+{
+	return impl_wrapper->CreateIntBarSensor(path, timeout, small_period, description);
+}
+
+DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
+{
+	return impl_wrapper->CreateDoubleBarSensor(path, timeout, small_period, precision, description);
+}
 
 
 

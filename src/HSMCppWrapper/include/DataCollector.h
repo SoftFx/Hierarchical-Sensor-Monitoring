@@ -46,12 +46,10 @@ namespace hsm_wrapper
 		std::shared_ptr<DataCollectorImpl> impl;
 	};
 
-	class DataCollectorProxy
+	class HSMWRAPPER_API DataCollectorProxy
 	{
 	public:
-		DataCollectorProxy(const std::string& product_key, const std::string& address, int port) : impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port))
-		{
-		}
+		DataCollectorProxy(const std::string& product_key, const std::string& address, int port);
 
 		DataCollectorProxy() = delete;
 		~DataCollectorProxy() = default;
@@ -60,86 +58,23 @@ namespace hsm_wrapper
 		DataCollectorProxy& operator=(const DataCollectorProxy&) = default;
 		DataCollectorProxy& operator=(DataCollectorProxy&&) = default;
 
-		void Initialize(bool use_logging = true, const std::string& folder_path = "", const std::string& file_name_format = "")
-		{
-			impl_wrapper->Initialize(use_logging, folder_path, file_name_format);
-		}
+		void Initialize(bool use_logging = true, const std::string& folder_path = "", const std::string& file_name_format = "");
+		void Stop();
+		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
+		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
+		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads);
+		void MonitoringServiceAlive();
 
-		void Stop()
-		{
-			impl_wrapper->Stop();
-		}
-
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
-		{
-			impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
-		}
-
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
-		{
-			impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
-		}
-
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads)
-		{
-			impl_wrapper->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads);
-		}
-
-		void MonitoringServiceAlive()
-		{
-			impl_wrapper->MonitoringServiceAlive();
-		}
-
-
-		BoolSensor CreateBoolSensor(const std::string& path, const std::string& description = "")
-		{
-			return impl_wrapper->CreateBoolSensor(path, description);
-		}
-
-		IntSensor CreateIntSensor(const std::string& path, const std::string& description = "")
-		{
-			return impl_wrapper->CreateIntSensor(path, description);
-		}
-
-		DoubleSensor CreateDoubleSensor(const std::string& path, const std::string& description = "")
-		{
-			return impl_wrapper->CreateDoubleSensor(path, description);
-		}
-
-		StringSensor CreateStringSensor(const std::string& path, const std::string& description = "")
-		{
-			return impl_wrapper->CreateStringSensor(path, description);
-		}
-
-		BoolLastValueSensor CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "")
-		{
-			return impl_wrapper->CreateLastValueBoolSensor(path, default_value, description);
-		}
-
-		IntLastValueSensor CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "")
-		{
-			return impl_wrapper->CreateLastValueIntSensor(path, default_value, description);
-		}
-
-		DoubleLastValueSensor CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "")
-		{
-			return impl_wrapper->CreateLastValueDoubleSensor(path, default_value, description);
-		}
-
-		StringLastValueSensor CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "")
-		{
-			return impl_wrapper->CreateLastValueStringSensor(path, default_value, description);
-		}
-
-		IntBarSensor CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "")
-		{
-			return impl_wrapper->CreateIntBarSensor(path, timeout, small_period, description);
-		}
-
-		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "")
-		{
-			return impl_wrapper->CreateDoubleBarSensor(path, timeout, small_period, precision, description);
-		}
+		BoolSensor CreateBoolSensor(const std::string& path, const std::string& description = "");
+		IntSensor CreateIntSensor(const std::string& path, const std::string& description = "");
+		DoubleSensor CreateDoubleSensor(const std::string& path, const std::string& description = "");
+		StringSensor CreateStringSensor(const std::string& path, const std::string& description = "");
+		BoolLastValueSensor CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
+		IntLastValueSensor CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
+		DoubleLastValueSensor CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
+		StringLastValueSensor CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
+		IntBarSensor CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
+		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 
 		template<class T, class U>
 		typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U>, HSMParamsFuncSensor<T, U>> 

@@ -72,5 +72,8 @@
     <ClCompile Include="HSMParamsFuncSensor.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
+    <ClCompile Include="HSMBaseFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

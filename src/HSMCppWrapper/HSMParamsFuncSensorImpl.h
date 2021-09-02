@@ -13,163 +13,20 @@ using System::Collections::Generic::List;
 namespace hsm_wrapper
 {
 	template<class T, class U>
-	class HSMParamsFuncSensorImpl<T, U, typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U>>> : public HSMBaseFuncSensor<T, U>
+	class HSMParamsFuncSensorImpl : public HSMBaseFuncSensor<T, U>
 	{
 	public:
-		using ResultType = T;
-		using ElementType = U;
+		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type;
+		using ElementType = typename std::conditional<std::is_arithmetic_v<U>, U, String^>::type;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<U>, U, const std::string&>::type;
 
-		HSMParamsFuncSensorImpl()
-		{
-		}
+		void SetParamsFuncSensor(IParamsFuncSensor<ResultType, ElementType>^ new_sensor);
+		std::chrono::milliseconds GetInterval();
+		void RestartTimer(std::chrono::milliseconds time_interval);
+		void AddValue(ElementParameterType value);
 
-		~HSMParamsFuncSensorImpl() = default;
-		HSMParamsFuncSensorImpl(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl(HSMParamsFuncSensorImpl&&) = default;
-		HSMParamsFuncSensorImpl& operator=(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl& operator=(HSMParamsFuncSensorImpl&&) = default;
-
-		void SetParamsFuncSensor(IParamsFuncSensor<ResultType, ElementType>^ new_sensor)
-		{
-			sensor = new_sensor;
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			return std::chrono::milliseconds(static_cast<int>(sensor->GetInterval().TotalMilliseconds));
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			sensor->RestartTimer(TimeSpan::FromMilliseconds(time_interval.count()));
-		}
-
-		void AddValue(U value)
-		{
-			sensor->AddValue(value);
-		}
 	private:
 		msclr::auto_gcroot<IParamsFuncSensor<ResultType, ElementType>^> sensor;
 	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensorImpl<T, U, typename std::enable_if_t<!std::is_arithmetic_v<T> && std::is_arithmetic_v<U>>> : public HSMBaseFuncSensor<T, U>
-	{
-	public:
-		using ResultType = String^;
-		using ElementType = U;
-
-		HSMParamsFuncSensorImpl()
-		{
-		}
-
-		~HSMParamsFuncSensorImpl() = default;
-		HSMParamsFuncSensorImpl(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl(HSMParamsFuncSensorImpl&&) = default;
-		HSMParamsFuncSensorImpl& operator=(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl& operator=(HSMParamsFuncSensorImpl&&) = default;
-
-		void SetParamsFuncSensor(IParamsFuncSensor<ResultType, ElementType>^ new_sensor)
-		{
-			sensor = new_sensor;
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			return std::chrono::milliseconds(static_cast<int>(sensor->GetInterval().TotalMilliseconds));
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			sensor->RestartTimer(TimeSpan::FromMilliseconds(time_interval.count()));
-		}
-
-		void AddValue(U value)
-		{
-			sensor->AddValue(value);
-		}
-	private:
-		msclr::auto_gcroot<IParamsFuncSensor<ResultType, ElementType>^> sensor;
-	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensorImpl<T, U, typename std::enable_if_t<std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>>> : public HSMBaseFuncSensor<T, U>
-	{
-	public:
-		using ResultType = T;
-		using ElementType = String^;
-
-		HSMParamsFuncSensorImpl()
-		{
-		}
-
-		~HSMParamsFuncSensorImpl() = default;
-		HSMParamsFuncSensorImpl(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl(HSMParamsFuncSensorImpl&&) = default;
-		HSMParamsFuncSensorImpl& operator=(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl& operator=(HSMParamsFuncSensorImpl&&) = default;
-
-		void SetParamsFuncSensor(IParamsFuncSensor<ResultType, ElementType>^ new_sensor)
-		{
-			sensor = new_sensor;
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			return std::chrono::milliseconds(static_cast<int>(sensor->GetInterval().TotalMilliseconds));
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			sensor->RestartTimer(TimeSpan::FromMilliseconds(time_interval.count()));
-		}
-
-		void AddValue(const std::string& value)
-		{
-			sensor->AddValue(gcnew String(value.c_str()));
-		}
-	private:
-		msclr::auto_gcroot<IParamsFuncSensor<ResultType, ElementType>^> sensor;
-	};
-
-	template<class T, class U>
-	class HSMParamsFuncSensorImpl<T, U, typename std::enable_if_t<!std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>>> : public HSMBaseFuncSensor<T, U>
-	{
-	public:
-		using ResultType = String^;
-		using ElementType = String^;
-
-		HSMParamsFuncSensorImpl()
-		{
-		}
-
-		~HSMParamsFuncSensorImpl() = default;
-		HSMParamsFuncSensorImpl(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl(HSMParamsFuncSensorImpl&&) = default;
-		HSMParamsFuncSensorImpl& operator=(const HSMParamsFuncSensorImpl&) = default;
-		HSMParamsFuncSensorImpl& operator=(HSMParamsFuncSensorImpl&&) = default;
-
-		void SetParamsFuncSensor(IParamsFuncSensor<ResultType, ElementType>^ new_sensor)
-		{
-			sensor = new_sensor;
-		}
-
-		std::chrono::milliseconds GetInterval()
-		{
-			return std::chrono::milliseconds(static_cast<int>(sensor->GetInterval().TotalMilliseconds));
-		}
-
-		void RestartTimer(std::chrono::milliseconds time_interval)
-		{
-			sensor->RestartTimer(TimeSpan::FromMilliseconds(time_interval.count()));
-		}
-
-		void AddValue(const std::string& value)
-		{
-			sensor->AddValue(gcnew String(value.c_str()));
-		}
-	private:
-		msclr::auto_gcroot<IParamsFuncSensor<ResultType, ElementType>^> sensor;
-	};
-
+	
 }
