@@ -4,6 +4,7 @@
     {
         //ToDo: get from configuration
         public const string ApiServer = "https://localhost:44330";
+        public const string ApiSwagger = "/api/swagger/index.html";
 
         public const string HomeController = "Home";
         public const string AccountController = "Account";
