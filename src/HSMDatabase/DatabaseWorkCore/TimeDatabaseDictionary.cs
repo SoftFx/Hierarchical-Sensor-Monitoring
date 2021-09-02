@@ -95,7 +95,10 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (y == null)
                     return 1;
 
-                return (int)(x.DatabaseMinTicks - y.DatabaseMinTicks);
+                long longResult = x.DatabaseMinTicks - y.DatabaseMinTicks;
+                if (longResult < 0) return -1;
+                if (longResult > 0) return 1;
+                return 0;
             }
         }
     }
