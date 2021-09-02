@@ -164,7 +164,7 @@ namespace HSMServer.HtmlHelpers
                           //" value='All history'>All</button></div>"
                           CreateRadioButton(name, "hour", "1H") +
                           CreateRadioButton(name, "day", "1D") +
-                          CreateRadioButton(name, "threeDays", "3D") +
+                          CreateRadioButton(name, "three_days", "3D") +
                           CreateRadioButton(name, "week", "1W") +
                           CreateRadioButton(name, "month", "1M") + 
                           CreateRadioButton(name, "all", "All") + "</div>");
