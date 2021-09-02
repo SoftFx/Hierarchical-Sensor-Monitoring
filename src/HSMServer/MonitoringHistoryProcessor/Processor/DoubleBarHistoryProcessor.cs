@@ -54,6 +54,9 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 //Finish bar if necessary
                 if (i > 0 && (startDate + PeriodInterval < typedDatas[i].StartTime || i == typedDatas.Count - 1))
                 {
+                    if (processingCount < 1)
+                        continue;
+
                     AddDataFromLists(currentItem);
                     ClearLists();
                     currentItem.StartTime = startDate;

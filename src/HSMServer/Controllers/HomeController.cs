@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -26,14 +27,15 @@ namespace HSMServer.Controllers
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-
+        private readonly ILogger<HomeController> _logger;
         public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
-            IHistoryProcessorFactory factory)
+            IHistoryProcessorFactory factory, ILogger<HomeController> logger)
         {
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;
             _historyProcessorFactory = factory;
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -214,11 +216,13 @@ namespace HSMServer.Controllers
 
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
+            _logger.LogInformation($"GetHistory for {product}/{path} from {from:u} to {to:u} started at {DateTime.Now:u}");
             List<SensorHistoryData> unprocessedData =
                 _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
+            _logger.LogInformation($"GetHistory for {product}/{path} from {from:u} to {to:u} finished at {DateTime.Now:u}");
             return new HtmlString(TableHelper.CreateHistoryTable(processedData));
         }
 
@@ -278,11 +282,13 @@ namespace HSMServer.Controllers
 
         private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
+            _logger.LogInformation($"GetRawHistory for {product}/{path} from {from:u} to {to:u} started at {DateTime.Now:u}");
             List<SensorHistoryData> unprocessedData =
                 _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
+            _logger.LogInformation($"GetRawHistory for {product}/{path} from {from:u} to {to:u} finished at {DateTime.Now:u}");
             return new JsonResult(processedData);
         }
 

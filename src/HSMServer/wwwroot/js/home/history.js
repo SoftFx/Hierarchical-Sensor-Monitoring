@@ -1,30 +1,39 @@
 ﻿//Add event listeners to buttons
 function initializeDataHistoryRequests() {
-    $(".accordion-button").on("click", function () {
-        id = this.id;
+    $('[id^="collapse"]').on('show.bs.collapse', function(e) {
+        id = this.id.substring("collapse_".length);
         selected = id;
 
         totalCount = getCountForId(id);
         type = document.getElementById("sensor_type_" + id).value;
         $('#radio_hour_' + id).attr('checked', 'checked').trigger('click');
-
-        //if (type !== "3" && type !== "6" && type !== "7") {
-        //    initializeGraph(id, rawHistoryHourAction, type);
-        //}
-        //initializeHistory(id, historyHourAction, type);
     });
 
-    $('[id^="reload_"]').on("click",
-        function () {
-            id = this.id.substring("reload_".length, this.id.length);
-            totalCount = getCountForId(id);
-            type = document.getElementById("sensor_type_" + id).value;
+    //$(".accordion-button").on("click", function () {
+    //    id = this.id;
+    //    selected = id;
 
-            if (type !== "3" && type !== "6" && type !== "7") {
-                initializeGraph(id, type, totalCount, rawHistoryAction);
-            }
-            initializeHistory(id, totalCount, historyAction);
-        });
+    //    totalCount = getCountForId(id);
+    //    type = document.getElementById("sensor_type_" + id).value;
+    //    $('#radio_hour_' + id).attr('checked', 'checked').trigger('click');
+
+    //    //if (type !== "3" && type !== "6" && type !== "7") {
+    //    //    initializeGraph(id, rawHistoryHourAction, type);
+    //    //}
+    //    //initializeHistory(id, historyHourAction, type);
+    //});
+
+    //$('[id^="reload_"]').on("click",
+    //    function () {
+    //        id = this.id.substring("reload_".length, this.id.length);
+    //        totalCount = getCountForId(id);
+    //        type = document.getElementById("sensor_type_" + id).value;
+
+    //        if (type !== "3" && type !== "6" && type !== "7") {
+    //            initializeGraph(id, type, totalCount, rawHistoryAction);
+    //        }
+    //        initializeHistory(id, totalCount, historyAction);
+    //    });
 
     $('[id^="button_view"]').on("click",
         function () {
