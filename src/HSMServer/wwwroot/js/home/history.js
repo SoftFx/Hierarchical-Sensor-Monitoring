@@ -9,6 +9,7 @@ function initializeDataHistoryRequests() {
         $('#radio_hour_' + id).attr('checked', 'checked').trigger('click');
     });
 
+    InitializePeriodRequests();
     //$(".accordion-button").on("click", function () {
     //    id = this.id;
     //    selected = id;
