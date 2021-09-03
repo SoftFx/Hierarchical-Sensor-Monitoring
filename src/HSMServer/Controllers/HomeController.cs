@@ -216,13 +216,11 @@ namespace HSMServer.Controllers
 
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
-            _logger.LogInformation($"GetHistory for {product}/{path} from {from:u} to {to:u} started at {DateTime.Now:u}");
             List<SensorHistoryData> unprocessedData =
                 _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
-            _logger.LogInformation($"GetHistory for {product}/{path} from {from:u} to {to:u} finished at {DateTime.Now:u}");
             return new HtmlString(TableHelper.CreateHistoryTable(processedData));
         }
 
@@ -282,13 +280,11 @@ namespace HSMServer.Controllers
 
         private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
-            _logger.LogInformation($"GetRawHistory for {product}/{path} from {from:u} to {to:u} started at {DateTime.Now:u}");
             List<SensorHistoryData> unprocessedData =
                 _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
-            _logger.LogInformation($"GetRawHistory for {product}/{path} from {from:u} to {to:u} finished at {DateTime.Now:u}");
             return new JsonResult(processedData);
         }
 
