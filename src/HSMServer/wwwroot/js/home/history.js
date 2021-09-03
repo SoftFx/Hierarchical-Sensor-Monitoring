@@ -55,54 +55,57 @@ function initializeDataHistoryRequests() {
 }
 
 function InitializePeriodRequests() {
-    $('[id^="radio_hour_"]').on("click",
-        function() {
-            let path = this.id.substring("radio_hour_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyHourAction, rawHistoryHourAction, type);
-        }
-    );
+    console.log('Add period event listeners');
 
-    $('[id^="radio_day_"]').on("click",
-        function () {
-            let path = this.id.substring("radio_day_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyDayAction, rawHistoryDayAction, type);
-        }
-    );
+    $('[id^="radio_hour_"]').off("click").on("click", requestHistoryHour);
 
-    $('[id^="radio_three_days_"]').on("click",
-        function () {
-            let path = this.id.substring("radio_three_days_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyThreeDaysAction, rawHistoryThreeDaysAction, type);
-        }
-    );
+    $('[id^="radio_day_"]').off("click").on("click", requestHistoryDay);
 
-    $('[id^="radio_week_"]').on("click",
-        function () {
-            let path = this.id.substring("radio_week_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyWeekAction, rawHistoryWeekAction, type);
-        }
-    );
+    $('[id^="radio_three_days_"]').off("click").on("click", requestHistoryThreeDays);
 
-    $('[id^="radio_month_"]').on("click",
-        function () {
-            let path = this.id.substring("radio_month_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyMonthAction, rawHistoryMonthAction, type);
-        }
-    );
+    $('[id^="radio_week_"]').off("click").on("click", requestHistoryWeek);
 
-    $('[id^="radio_all_"]').on("click",
-        function () {
-            let path = this.id.substring("radio_all_".length);
-            let type = getTypeForSensor(path);
-            initializeHistories(path, historyAllAction, rawHistoryAllAction, type);
-        }
-    );
+    $('[id^="radio_month_"]').off("click").on("click", requestHistoryMonth);
+
+    $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
 }
+
+function requestHistoryHour() {
+    let path = this.id.substring("radio_hour_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyHourAction, rawHistoryHourAction, type);
+}
+
+function requestHistoryDay() {
+    let path = this.id.substring("radio_day_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyDayAction, rawHistoryDayAction, type);
+}
+
+function requestHistoryThreeDays() {
+    let path = this.id.substring("radio_three_days_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyThreeDaysAction, rawHistoryThreeDaysAction, type);
+}
+
+function requestHistoryWeek() {
+    let path = this.id.substring("radio_week_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyWeekAction, rawHistoryWeekAction, type);
+}
+
+function requestHistoryMonth() {
+    let path = this.id.substring("radio_month_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyMonthAction, rawHistoryMonthAction, type);
+}
+
+function requestHistoryAll() {
+    let path = this.id.substring("radio_all_".length);
+    let type = getTypeForSensor(path);
+    initializeHistories(path, historyAllAction, rawHistoryAllAction, type);
+}
+
 
 function initializeHistories(path, historyAction, rawHistoryAction, type) {
     initializeHistory(path, historyAction, type);
