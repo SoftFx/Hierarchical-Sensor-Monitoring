@@ -36,26 +36,23 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                     typedDatas.Add(JsonSerializer.Deserialize<IntBarSensorData>(unProcessed.TypedData));
                 }
                 catch (Exception e)
-                {
-                    //Console.WriteLine(e);
-                }
+                { }
             }
-            //var typedDatas = uncompressedData.Select(d => JsonSerializer.Deserialize<IntBarSensorData>(d.TypedData))
-            //    .ToList();
-
-            //If bars interval is more than period, simply skip
-            if (typedDatas[0].EndTime - typedDatas[0].StartTime > PeriodInterval)
-                return uncompressedData;
-
-
+            
             List<SensorHistoryData> result = new List<SensorHistoryData>();
-            IntBarSensorData currentItem = new IntBarSensorData();
+            IntBarSensorData currentItem = new IntBarSensorData() {Count = 0, Max = int.MinValue, Min = int.MaxValue};
             DateTime startDate = typedDatas[0].StartTime;
             int processingCount = 0;
+            bool currentBarTooBig = false;
             for (int i = 0; i < typedDatas.Count; ++i)
             {
+                if (typedDatas[i].EndTime - typedDatas[i].StartTime > PeriodInterval)
+                {
+                    currentBarTooBig = true;
+                }
+
                 //Finish bar if necessary
-                if (i > 0 && (startDate + PeriodInterval < typedDatas[i].StartTime || i == typedDatas.Count - 1))
+                if (i > 0 && (startDate + PeriodInterval < typedDatas[i].StartTime || i == typedDatas.Count - 1 || currentBarTooBig))
                 {
                     if(processingCount < 1)
                         continue;
@@ -65,8 +62,19 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                     currentItem.StartTime = startDate;
                     currentItem.EndTime = typedDatas[i - 1].EndTime;
                     result.Add(Convert(currentItem, typedDatas[i - 1].EndTime));
-                    currentItem = new IntBarSensorData();
+                    currentItem = new IntBarSensorData() { Count = 0, Max = int.MinValue, Min = int.MaxValue };
                     processingCount = 0;
+                }
+
+                if (currentBarTooBig)
+                {
+                    result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
+                    currentBarTooBig = false;
+                    if (i != typedDatas.Count)
+                    {
+                        startDate = typedDatas[i + 1].StartTime;
+                    }
+                    continue;
                 }
 
                 //Start new bar, might need this right after finished previous
@@ -135,8 +143,6 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             currentItem.Percentiles = new List<PercentileValueInt>();
             var median = _MedianList[(int) (_MedianList.Count / 2)];
             currentItem.Percentiles.Add(new PercentileValueInt() {Percentile = 0.5, Value = median});
-            //currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = _Q1List[(int)(_Q1List.Count * 0.25)] });
-            //currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = _Q3List[(int)(_Q3List.Count * 0.75)] });
             currentItem.Percentiles.Add(new PercentileValueInt() {Percentile = 0.25, Value = (int)(median * 0.5)});
             currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = (int)(median * 1.5) });
         }
