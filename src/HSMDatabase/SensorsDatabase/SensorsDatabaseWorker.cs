@@ -135,12 +135,14 @@ namespace HSMDatabase.SensorsDatabase
         {
             string fromKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
             string toKey = PrefixConstants.GetSensorWriteValueKey(productName, path, to);
+            string startWithKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             byte[] fromBytes = Encoding.UTF8.GetBytes(fromKey);
             byte[] toBytes = Encoding.UTF8.GetBytes(toKey);
+            byte[] startWithBytes = Encoding.UTF8.GetBytes(startWithKey);
             List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
-                var values = _database.GetRange(fromBytes, toBytes);
+                var values = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
                 foreach (var value in values)
                 {
                     try
@@ -154,10 +156,7 @@ namespace HSMDatabase.SensorsDatabase
                 }
             }
             catch (Exception e)
-            {
-                Console.WriteLine(e);
-                throw;
-            }
+            { }
 
             return result;
         }
