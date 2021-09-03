@@ -15,7 +15,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             string nodeName = TextConstants.CurrentProcessNodeName)
             : base($"{nodeName}/{_sensorName}", "Process", "Working set", processName)
         {
-            InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
+            InternalBar = new BarSensor<int>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)
