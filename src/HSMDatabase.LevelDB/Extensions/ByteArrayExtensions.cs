@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace HSMDatabase.LevelDB.Extensions
 {
@@ -36,8 +37,7 @@ namespace HSMDatabase.LevelDB.Extensions
         public static bool IsSmallerOrEquals(this byte[] initialArray, byte[] anotherBytes)
         {
             if (initialArray.Length != anotherBytes.Length)
-                return initialArray.Length.CompareTo(anotherBytes.Length) <= 0;
-
+                return initialArray.Length.CompareTo(anotherBytes.Length) > 0;
 
             for (int i = 0; i < initialArray.Length; ++i)
             {

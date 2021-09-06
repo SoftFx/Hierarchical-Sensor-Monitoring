@@ -79,7 +79,7 @@ namespace HSMServer.MonitoringServerCore
         private void CheckOutdatedCallback(object state)
         {
             List<ExtendedBarSensorData> list = new List<ExtendedBarSensorData>();
-            DateTime checkDate = DateTime.Now;
+            DateTime checkDate = DateTime.Now.ToUniversalTime();
             lock (_syncObject)
             {
                 foreach (var value in _lastValues)

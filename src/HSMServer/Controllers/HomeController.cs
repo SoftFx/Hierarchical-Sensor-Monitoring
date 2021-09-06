@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -26,14 +27,15 @@ namespace HSMServer.Controllers
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-
+        private readonly ILogger<HomeController> _logger;
         public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
-            IHistoryProcessorFactory factory)
+            IHistoryProcessorFactory factory, ILogger<HomeController> logger)
         {
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;
             _historyProcessorFactory = factory;
+            _logger = logger;
         }
 
         public IActionResult Index()

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.ApiControllers
 {
+    [ApiExplorerSettings(IgnoreApi = true)]
     [ApiController]
     [Route("api/[controller]")]
     public class ViewController : Controller

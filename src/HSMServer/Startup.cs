@@ -25,6 +25,7 @@ using System.IO;
 using System.Linq;
 using HSMServer.BackgroundTask;
 using HSMServer.DataLayer;
+using HSMServer.Filters;
 using HSMServer.MonitoringHistoryProcessor.Factory;
 
 namespace HSMServer
@@ -101,6 +102,7 @@ namespace HSMServer
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMServer.xml");
                 options.IncludeXmlComments(xmlPath, true);
+                options.DocumentFilter<SwaggerIgnoreFilter>();
             });
 
             this.services = services;

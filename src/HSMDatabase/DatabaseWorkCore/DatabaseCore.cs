@@ -136,7 +136,8 @@ namespace HSMDatabase.DatabaseWorkCore
         public SensorDataEntity GetLatestSensorValue(string productName, string path)
         {
             List<ISensorsDatabase> databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases.AsEnumerable().Reverse())
+            databases.Reverse();
+            foreach (var database in databases)
             {
                 var currentLatestValue = database.GetLatestSensorValue(productName, path);
                 if (currentLatestValue != null)

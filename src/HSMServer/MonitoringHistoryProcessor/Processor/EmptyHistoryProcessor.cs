@@ -12,6 +12,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
 
         public override List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
         {
+            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
             return uncompressedData;
         }
     }

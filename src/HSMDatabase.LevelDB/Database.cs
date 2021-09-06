@@ -1,7 +1,8 @@
-﻿using HSMDatabase.LevelDB.Extensions;
+﻿using System;
+using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
-using LevelDB.NativePointer;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using Exception = System.Exception;
 
@@ -113,12 +114,8 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetRange(byte[] from, byte[] to)
+        public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
-            //Debug.Print("From");
-            //ArrToDebug(from);
-            //Debug.Print("To");
-            //ArrToDebug(to);
             try
             {
                 List<byte[]> values = new List<byte[]>();
@@ -126,9 +123,10 @@ namespace HSMDatabase.LevelDB
                 for (iterator.Seek(from); iterator.IsValid() && iterator.Key().IsSmallerOrEquals(to);
                     iterator.Next())
                 {
-                    //var key = iterator.Key();
-                    //ArrToDebug(key);
-                    values.Add(iterator.Value());                    
+                    if (iterator.Key().StartsWith(startWithKey))
+                    {
+                        values.Add(iterator.Value());
+                    }
                 }
 
                 return values;

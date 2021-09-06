@@ -144,6 +144,7 @@
                 $('#jstree').jstree('select_node', node.id);
             }
             initializeClickTree();
+            //initializeDataHistoryRequests();
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
@@ -170,7 +171,6 @@
             listsData = listsData.replaceAll("\\", "");
 
             $('#listContainer').append(listsData);
-
             initializeDataHistoryRequests();
         });
 
@@ -195,6 +195,7 @@
                     'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
                 $('#status_' + id).addClass(array[i].status);
 
+                initializeDataHistoryRequests();
                 var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
                 let selectedRadio = $('input[type="radio"]:checked');
                 if (selectedRadio !== undefined) {
@@ -292,8 +293,9 @@
                         'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
                     $('#status_' + id).addClass(array[i].status);
 
+                    initializeDataHistoryRequests();
                     var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                    //$('#reload_' + selectedAccordion.attr('id')).click();
+                    $('#reload_' + selectedAccordion.attr('id')).click();
                     let selectedRadio = $('input[type="radio"]:checked');
                     if (selectedRadio !== undefined) {
                         selectedRadio.click();

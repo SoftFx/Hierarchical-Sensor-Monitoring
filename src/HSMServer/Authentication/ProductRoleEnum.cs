@@ -1,5 +1,8 @@
-﻿namespace HSMServer.Authentication
+﻿using HSMServer.Attributes;
+
+namespace HSMServer.Authentication
 {
+    [SwaggerIgnore]
     public enum ProductRoleEnum
     {
         ProductManager = 0,
