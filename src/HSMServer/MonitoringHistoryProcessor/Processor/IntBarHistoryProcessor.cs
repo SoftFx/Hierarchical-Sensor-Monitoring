@@ -71,7 +71,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 {
                     result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
                     currentBarTooBig = false;
-                    if (i != typedDatas.Count)
+                    if (i != typedDatas.Count - 1)
                     {
                         startDate = typedDatas[i + 1].StartTime;
                     }
