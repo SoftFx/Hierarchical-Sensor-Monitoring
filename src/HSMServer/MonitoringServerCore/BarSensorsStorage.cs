@@ -74,6 +74,17 @@ namespace HSMServer.MonitoringServerCore
             return result;
         }
 
+        public List<ExtendedBarSensorData> GetAllLastValues()
+        {
+            List<ExtendedBarSensorData> result = new List<ExtendedBarSensorData>();
+            lock (_syncObject)
+            {
+                result.AddRange(_lastValues.Values);
+            }
+
+            return result;
+        }
+
         public event EventHandler<ExtendedBarSensorData> IncompleteBarOutdated;
 
         private void CheckOutdatedCallback(object state)

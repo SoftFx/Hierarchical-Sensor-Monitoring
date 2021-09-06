@@ -142,22 +142,27 @@ namespace HSMServer.MonitoringServerCore
         #region Sensor saving
         private void BarsStorage_IncompleteBarOutdated(object sender, ExtendedBarSensorData e)
         {
-            switch (e.ValueType)
+            ProcessExtendedBarData(e);
+        }
+
+        private void ProcessExtendedBarData(ExtendedBarSensorData extendedData)
+        {
+            switch (extendedData.ValueType)
             {
                 case SensorType.IntegerBarSensor:
                 {
-                    var typedValue = e.Value as IntBarSensorValue;
+                    var typedValue = extendedData.Value as IntBarSensorValue;
                     typedValue.EndTime = DateTime.Now.ToUniversalTime();
-                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
-                    SaveSensorValue(obj, e.ProductName);
+                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, extendedData.TimeCollected);
+                    SaveSensorValue(obj, extendedData.ProductName);
                     break;
                 }
                 case SensorType.DoubleBarSensor:
                 {
-                    var typedValue = e.Value as DoubleBarSensorValue;
+                    var typedValue = extendedData.Value as DoubleBarSensorValue;
                     typedValue.EndTime = DateTime.Now.ToUniversalTime();
-                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, e.TimeCollected);
-                    SaveSensorValue(obj, e.ProductName);
+                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, extendedData.TimeCollected);
+                    SaveSensorValue(obj, extendedData.ProductName);
                     break;
                 }
             }
@@ -800,6 +805,11 @@ namespace HSMServer.MonitoringServerCore
 
         public void Dispose()
         {
+            var lastBarsValues = _barsStorage.GetAllLastValues();
+            foreach (var lastBarValue in lastBarsValues)
+            {
+                ProcessExtendedBarData(lastBarValue);
+            }
             _barsStorage?.Dispose();
         }
     }
