@@ -2,9 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Attributes;
 
 namespace HSMServer.DataLayer.Model
 {
+    [SwaggerIgnore]
     public class Product
     {
         public string Key { get; set; }

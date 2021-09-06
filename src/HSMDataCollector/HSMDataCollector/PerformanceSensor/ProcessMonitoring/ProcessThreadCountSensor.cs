@@ -14,7 +14,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             string nodeName = TextConstants.CurrentProcessNodeName)
             : base($"{nodeName}/{_sensorName}", "Process", "Thread Count", processName)
         {
-            InternalBar = new BarSensor<int>($"{TextConstants.PerformanceNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
+            InternalBar = new BarSensor<int>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)
@@ -29,7 +29,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 
         public override UnitedSensorValue GetLastValueNew()
         {
-            throw new NotImplementedException();
+            return InternalBar.GetLastValueNew();
         }
 
         public override void Dispose()

@@ -266,7 +266,7 @@ namespace HSMServer.MonitoringServerCore
                     _productManager.AddSensor(productName, value);
                     type = TransactionType.Add;
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected, type);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -331,7 +331,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -356,7 +356,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -381,7 +381,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -406,7 +406,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -431,7 +431,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -456,7 +456,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -480,7 +480,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
@@ -513,7 +513,7 @@ namespace HSMServer.MonitoringServerCore
                     isNew = true;
                     _productManager.AddSensor(productName, value);
                 }
-                DateTime timeCollected = DateTime.Now;
+                DateTime timeCollected = DateTime.Now.ToUniversalTime();
                 SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
                 _queueManager.AddSensorData(updateMessage);
                 _valuesCache.AddValue(productName, updateMessage);
