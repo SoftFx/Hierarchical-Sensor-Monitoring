@@ -34,7 +34,7 @@ jobs:
         path: ${{ github.workspace }}\Release
         name: Release    
         
-  publish pre-release:
+  publish-pre-release:
     runs-on: ubuntu-latest
     needs: build
     environment: DockerHub
