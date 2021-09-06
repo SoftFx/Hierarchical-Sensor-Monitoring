@@ -565,7 +565,7 @@ namespace HSMServer.MonitoringServerCore
         public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to)
         {
             var historyValues = _databaseAdapter.GetSensorHistory(product, path, 
-                from.ToUniversalTime(), to.ToUniversalTime());
+                from, to);
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
             {

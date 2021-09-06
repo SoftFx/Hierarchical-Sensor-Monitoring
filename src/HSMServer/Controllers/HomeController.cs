@@ -217,7 +217,8 @@ namespace HSMServer.Controllers
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
             List<SensorHistoryData> unprocessedData =
-                _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
+                _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
+                    to.ToUniversalTime());
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
@@ -281,7 +282,8 @@ namespace HSMServer.Controllers
         private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
             List<SensorHistoryData> unprocessedData =
-                _monitoringCore.GetSensorHistory(User as User, product, path, from, to);
+                _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
+                    to.ToUniversalTime());
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             var processedData = processor.ProcessHistory(unprocessedData);
