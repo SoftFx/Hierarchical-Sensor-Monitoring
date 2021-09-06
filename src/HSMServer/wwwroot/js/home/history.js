@@ -55,7 +55,6 @@ function initializeDataHistoryRequests() {
 }
 
 function InitializePeriodRequests() {
-    console.log('Add period event listeners');
 
     $('[id^="radio_hour_"]').off("click").on("click", requestHistoryHour);
 
