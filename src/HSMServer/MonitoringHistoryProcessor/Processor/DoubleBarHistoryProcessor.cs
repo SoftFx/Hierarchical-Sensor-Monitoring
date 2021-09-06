@@ -150,8 +150,15 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = 0.0 });
                 return;
             }
-            
+
             _percentilesList.Sort();
+            if (_percentilesList.Count == 3)
+            {
+                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = _percentilesList[1] });
+                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = _percentilesList[0] });
+                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = _percentilesList[2] });
+                return;
+            }
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = CountMedian() });
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = CountQ1() });
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = CountQ3() });
