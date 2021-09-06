@@ -29,7 +29,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 
         public override UnitedSensorValue GetLastValueNew()
         {
-            throw new NotImplementedException();
+            return InternalBar.GetLastValueNew();
         }
 
         public override void Dispose()
