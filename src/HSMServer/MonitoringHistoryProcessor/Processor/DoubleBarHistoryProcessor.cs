@@ -44,39 +44,55 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             DoubleBarSensorData currentItem = new DoubleBarSensorData() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
             DateTime startDate = typedDatas[0].StartTime;
             int processingCount = 0;
-            bool currentBarTooBig = false;
+            bool needToAddCurrentAsSingle = false;
+            bool addingCurrent = false;
             for (int i = 0; i < typedDatas.Count; ++i)
             {
-                if (typedDatas[i].EndTime - typedDatas[i].StartTime > PeriodInterval)
+                if (typedDatas[i].EndTime - typedDatas[i].StartTime > PeriodInterval ||
+                    (processingCount > 0 && startDate + PeriodInterval < typedDatas[i].EndTime
+                                         && i == typedDatas.Count - 1))
                 {
-                    currentBarTooBig = true;
+                    needToAddCurrentAsSingle = true;
                 }
 
+                if (typedDatas[i].EndTime < startDate + PeriodInterval && i == typedDatas.Count - 1)
+                {
+                    AddDataToList(typedDatas[i]);
+                    ProcessItem(typedDatas[i], currentItem);
+                    addingCurrent = true;
+                }
                 //Finish bar if necessary
-                if (i > 0 && (startDate + PeriodInterval < typedDatas[i].StartTime || i == typedDatas.Count - 1 || currentBarTooBig))
+                if (i > 0 && (startDate + PeriodInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
+                    || i == typedDatas.Count - 1))
                 {
-                    if (processingCount < 1)
-                        break;
-
-                    AddDataFromLists(currentItem);
-                    ClearLists();
-                    currentItem.StartTime = startDate;
-                    currentItem.EndTime = typedDatas[i - 1].EndTime;
-                    result.Add(Convert(currentItem, typedDatas[i - 1].EndTime));
-                    currentItem = new DoubleBarSensorData() {Count = 0, Max = double.MinValue, Min = double.MaxValue };
-                    processingCount = 0;
+                    if (processingCount > 0)
+                    {
+                        AddDataFromLists(currentItem);
+                        ClearLists();
+                        currentItem.StartTime = startDate;
+                        currentItem.EndTime = addingCurrent ? typedDatas[i].EndTime : typedDatas[i - 1].EndTime;
+                        result.Add(Convert(currentItem));
+                        currentItem = new DoubleBarSensorData() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
+                        processingCount = 0;
+                    }
                 }
 
-                if (currentBarTooBig)
+                if (needToAddCurrentAsSingle)
                 {
-                    result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
-                    currentBarTooBig = false;
+                    result.Add(Convert(typedDatas[i]));
+                    needToAddCurrentAsSingle = false;
                     if (i != typedDatas.Count - 1)
                     {
                         startDate = typedDatas[i + 1].StartTime;
+                        continue;
                     }
-                    continue;
                 }
+
+                //if (i == typedDatas.Count - 1)
+                //{
+                //    result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
+                //}
+
                 //Start new bar, might need this right after finished previous
                 if (processingCount == 0 && i != typedDatas.Count - 1)
                 {
@@ -91,15 +107,14 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 ProcessItem(typedDatas[i], currentItem);
                 ++processingCount;
             }
-
             return result;
         }
 
-        private SensorHistoryData Convert(DoubleBarSensorData typedData, DateTime time)
+        private SensorHistoryData Convert(DoubleBarSensorData typedData)
         {
             SensorHistoryData result = new SensorHistoryData();
             result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Time = time;
+            result.Time = typedData.EndTime;
             result.SensorType = SensorType.DoubleBarSensor;
             return result;
         }
@@ -143,7 +158,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             currentItem.Mean = _MeanList.Sum() / _MeanList.Count == 0 ? 1 : _MeanList.Count;
             currentItem.Percentiles = new List<PercentileValueDouble>();
             //var median = _MedianList[(int) (_MedianList.Count / 2)];
-            if (_percentilesList.Count < 0)
+            if (_percentilesList.Count < 1)
             {
                 currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = 0.0 });
                 currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = 0.0 });
