@@ -4,7 +4,7 @@ using HSMServer.MonitoringHistoryProcessor.Processor;
 
 namespace HSMServer.MonitoringHistoryProcessor.Factory
 {
-    internal class HistoryProcessorFactory : IHistoryProcessorFactory
+    public class HistoryProcessorFactory : IHistoryProcessorFactory
     {
         public HistoryProcessorFactory(){}
 
