@@ -13,6 +13,11 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             PeriodInterval = periodInterval;
         }
 
-        public abstract List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData);
+        public virtual List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
+        {
+            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
+            return uncompressedData;
+        }
+        public abstract string GetCsvHistory(List<SensorHistoryData> originalData);
     }
 }

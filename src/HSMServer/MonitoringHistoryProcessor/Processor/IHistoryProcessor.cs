@@ -3,8 +3,9 @@ using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.MonitoringHistoryProcessor.Processor
 {
-    public interface IHistoryProcessor
+    internal interface IHistoryProcessor
     {
         List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData);
+        string GetCsvHistory(List<SensorHistoryData> originalData);
     }
 }

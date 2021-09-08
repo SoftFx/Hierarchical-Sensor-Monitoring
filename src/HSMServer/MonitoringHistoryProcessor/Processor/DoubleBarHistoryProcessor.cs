@@ -1,7 +1,9 @@
 ﻿using HSMCommon.Model.SensorsData;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
@@ -11,6 +13,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
 {
     internal class DoubleBarHistoryProcessor : HistoryProcessorBase
     {
+        private readonly NumberFormatInfo _format;
         //private readonly List<double> _Q1List = new List<double>();
         //private readonly List<double> _Q3List = new List<double>();
         //private readonly List<double> _MedianList = new List<double>();
@@ -18,6 +21,8 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
         private readonly List<double> _MeanList = new List<double>();
         public DoubleBarHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
+            _format = new NumberFormatInfo();
+            _format.NumberDecimalSeparator = ".";
         }
 
         public override List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
@@ -28,18 +33,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             if (uncompressedData.Count == 1)
                 return uncompressedData;
 
-            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
-            List<DoubleBarSensorData> typedDatas = new List<DoubleBarSensorData>();
-            foreach (var unProcessed in uncompressedData)
-            {
-                try
-                {
-                    typedDatas.Add(JsonSerializer.Deserialize<DoubleBarSensorData>(unProcessed.TypedData));
-                }
-                catch (Exception e)
-                { }
-            }
-
+            List<DoubleBarSensorData> typedDatas = GetTypeDatas(uncompressedData);
             List<SensorHistoryData> result = new List<SensorHistoryData>();
             DoubleBarSensorData currentItem = new DoubleBarSensorData() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
             DateTime startDate = typedDatas[0].StartTime;
@@ -108,6 +102,38 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
                 ++processingCount;
             }
             return result;
+        }
+
+        public override string GetCsvHistory(List<SensorHistoryData> originalData)
+        {
+            List<DoubleBarSensorData> typedDatas = GetTypeDatas(originalData);
+            StringBuilder sb = new StringBuilder();
+            sb.Append($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last{Environment.NewLine}");
+            for (int i = 0; i < typedDatas.Count; ++i)
+            {
+                sb.Append($"{i},{typedDatas[i].StartTime},{typedDatas[i].EndTime},{typedDatas[i].Min.ToString(_format)}," +
+                          $"{typedDatas[i].Max.ToString(_format)},{typedDatas[i].Mean.ToString(_format)}," +
+                          $"{typedDatas[i].Count},{typedDatas[i].LastValue.ToString(_format)}{Environment.NewLine}");
+            }
+
+            return sb.ToString();
+        }
+
+        private List<DoubleBarSensorData> GetTypeDatas(List<SensorHistoryData> uncompressedData)
+        {
+            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
+            List<DoubleBarSensorData> typedDatas = new List<DoubleBarSensorData>();
+            foreach (var unProcessed in uncompressedData)
+            {
+                try
+                {
+                    typedDatas.Add(JsonSerializer.Deserialize<DoubleBarSensorData>(unProcessed.TypedData));
+                }
+                catch (Exception e)
+                { }
+            }
+
+            return typedDatas;
         }
 
         private SensorHistoryData Convert(DoubleBarSensorData typedData)

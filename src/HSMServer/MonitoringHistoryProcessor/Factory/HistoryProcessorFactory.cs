@@ -17,14 +17,14 @@ namespace HSMServer.MonitoringHistoryProcessor.Factory
                     return new DoubleBarHistoryProcessor(convertedPeriod);
                 case SensorType.IntegerBarSensor:
                     return new IntBarHistoryProcessor(convertedPeriod);
-                //Do not process numbers
                 case SensorType.DoubleSensor:
+                    return new DoubleHistoryProcessor(convertedPeriod);
                 case SensorType.IntSensor:
-                    return new EmptyHistoryProcessor(convertedPeriod);
-                //Do nothing for strings and booleans
+                    return new IntHistoryProcessor(convertedPeriod);
                 case SensorType.BooleanSensor:
+                    return new BoolHistoryProcessor(convertedPeriod);
                 case SensorType.StringSensor:
-                    return new EmptyHistoryProcessor(convertedPeriod);
+                    return new StringHistoryProcessor(convertedPeriod);
                 //Types that typically won't occur in that case
                 default:
                     return new EmptyHistoryProcessor(convertedPeriod);
