@@ -140,8 +140,6 @@ function initializeHistories(path, action, rawAction, type, reqData) {
 }
 
 function initializeHistory(path, historyAction, type, body) {
-    console.log(body);
-
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
