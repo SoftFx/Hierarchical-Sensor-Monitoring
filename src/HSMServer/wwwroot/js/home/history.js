@@ -119,7 +119,7 @@ function exportCsv() {
     let path = this.id.substring("button_export_csv_".length);
     let type = getTypeForSensor(path);
     let action = getExportAction(path);
-    window.location.href = action + "?Path=" + path + "&?Type=" + type;
+    window.location.href = action + "?Path=" + path + "&Type=" + type;
 }
 
 function initializeHistory(path, historyAction, type) {

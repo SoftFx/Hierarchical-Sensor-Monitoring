@@ -297,7 +297,8 @@ namespace HSMServer.Controllers
             DateTime from = to.AddHours(-1 * 1);
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.Hour);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.Hour, fileName);
         }
 
         public FileResult ExportHistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
@@ -307,7 +308,8 @@ namespace HSMServer.Controllers
             DateTime from = to.AddDays(-1 * 1);
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.Day);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.Day, fileName);
         }
 
         public FileResult ExportHistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
@@ -317,7 +319,8 @@ namespace HSMServer.Controllers
             DateTime from = to.AddDays(-1 * 3);
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.ThreeDays);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.ThreeDays, fileName);
         }
         public FileResult ExportHistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
@@ -326,7 +329,8 @@ namespace HSMServer.Controllers
             DateTime from = to.AddDays(-1 * 7);
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.Week);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.Week, fileName);
         }
         public FileResult ExportHistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
@@ -335,24 +339,23 @@ namespace HSMServer.Controllers
             DateTime from = to.AddMonths(-1 * 1);
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.Month);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.Month, fileName);
         }
         public FileResult ExportHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to;
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            return GetExportHistory(product, path, historyList, type, PeriodType.All);
+            List<SensorHistoryData> historyList = _monitoringCore.GetAllSensorHistory(User as User,
+                product, path);
+            string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
+            return GetExportHistory(product, path, historyList, type, PeriodType.All, fileName);
         }
 
         private FileResult GetExportHistory(string product, string path, List<SensorHistoryData> dataList,
-            int type, PeriodType periodType)
+            int type, PeriodType periodType, string fileName)
         {
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
             string csv = processor.GetCsvHistory(dataList);
-            string fileName = $"{product}_{path.Replace('/', '_')}.csv";
             byte[] fileContents = Encoding.UTF8.GetBytes(csv);
             return File(fileContents, GetFileTypeByExtension(fileName), fileName);
         }

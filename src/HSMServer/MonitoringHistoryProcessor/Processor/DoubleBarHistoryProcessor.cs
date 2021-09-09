@@ -111,9 +111,10 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             sb.Append($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last{Environment.NewLine}");
             for (int i = 0; i < typedDatas.Count; ++i)
             {
-                sb.Append($"{i},{typedDatas[i].StartTime},{typedDatas[i].EndTime},{typedDatas[i].Min.ToString(_format)}," +
-                          $"{typedDatas[i].Max.ToString(_format)},{typedDatas[i].Mean.ToString(_format)}," +
-                          $"{typedDatas[i].Count},{typedDatas[i].LastValue.ToString(_format)}{Environment.NewLine}");
+                sb.Append($"{i},{typedDatas[i].StartTime.ToUniversalTime():s},{typedDatas[i].EndTime.ToUniversalTime():s}," +
+                          $"{typedDatas[i].Min.ToString(_format)},{typedDatas[i].Max.ToString(_format)}," +
+                          $"{typedDatas[i].Mean.ToString(_format)},{typedDatas[i].Count}," +
+                          $"{typedDatas[i].LastValue.ToString(_format)}{Environment.NewLine}");
             }
 
             return sb.ToString();
