@@ -21,8 +21,6 @@
         public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
         public const string UpdateSelectedListAction = "UpdateSelectedList";
         public const string AddNewSensorsAction = "AddNewSensors";
-        public const string HistoryAction = "History";
-        public const string RawHistoryAction = "RawHistory";
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
@@ -46,18 +44,10 @@
 
         #region Sensors history
 
-        public const string HistoryHourAction = "HistoryHour";
-        public const string HistoryDayAction = "HistoryDay";
-        public const string HistoryThreeDaysAction = "HistoryThreeDays";
-        public const string HistoryWeekAction = "HistoryWeek";
-        public const string HistoryMonthAction = "HistoryMonth";
+        public const string HistoryAction = "History";
         public const string HistoryAllAction = "HistoryAll";
 
-        public const string RawHistoryHourAction = "RawHistoryHour";
-        public const string RawHistoryDayAction = "RawHistoryDay";
-        public const string RawHistoryThreeDaysAction = "RawHistoryThreeDays";
-        public const string RawHistoryWeekAction = "RawHistoryWeek";
-        public const string RawHistoryMonthAction = "RawHistoryMonth";
+        public const string RawHistoryAction = "RawHistory";
         public const string RawHistoryAllAction = "RawHistoryAll";
 
         public const string ExportHistoryHour = "ExportHistoryHour";
