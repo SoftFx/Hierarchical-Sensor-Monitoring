@@ -67,6 +67,8 @@ function InitializePeriodRequests() {
     $('[id^="radio_month_"]').off("click").on("click", requestHistoryMonth);
 
     $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
+
+    $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
 }
 
 function requestHistoryHour() {
@@ -113,6 +115,13 @@ function initializeHistories(path, historyAction, rawHistoryAction, type) {
     }
 }
 
+function exportCsv() {
+    let path = this.id.substring("button_export_csv_".length);
+    let type = getTypeForSensor(path);
+    let action = getExportAction(path);
+    window.location.href = action + "?Path=" + path + "&?Type=" + type;
+}
+
 function initializeHistory(path, historyAction, type) {
 
     $.ajax({
@@ -136,6 +145,25 @@ function initializeHistory(path, historyAction, type) {
         $('#no_data_' + path).hide();
         $(`#values_${path}`).append(values);
     });
+}
+
+function getExportAction(path) {
+    if ($('#radio_hour_' + path).is(":checked")) {
+        return exportHistoryHourAction;
+    }
+    if ($('#radio_day_' + path).is(":checked")) {
+        return exportHistoryDayAction;
+    }
+    if ($('#radio_three_days_' + path).is(":checked")) {
+        return exportHistoryThreeDaysAction;
+    }
+    if ($('#radio_week_' + path).is(":checked")) {
+        return exportHistoryWeekAction;
+    }
+    if ($('#radio_month_' + path).is(":checked")) {
+        return exportHistoryMonthAction;
+    }
+    return exportHistoryAllAction;
 }
 
 function getTypeForSensor(name) {
