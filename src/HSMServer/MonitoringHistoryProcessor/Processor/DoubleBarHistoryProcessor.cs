@@ -158,7 +158,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             currentItem.Mean = _MeanList.Sum() / _MeanList.Count == 0 ? 1 : _MeanList.Count;
             currentItem.Percentiles = new List<PercentileValueDouble>();
             //var median = _MedianList[(int) (_MedianList.Count / 2)];
-            if (_percentilesList.Count < 1)
+            if (_percentilesList.Count < 3)
             {
                 currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = 0.0 });
                 currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = 0.0 });
