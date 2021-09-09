@@ -8,3 +8,4 @@
 #include "HSMBarSensor.h"
 #include "HSMLastValueSensor.h"
 #include "HSMParamsFuncSensor.h"
+#include "HSMNoParamsFuncSensor.h"

@@ -17,12 +17,6 @@ namespace hsm_wrapper
 	}
 
 	template<class T>
-	HSMLastValueSensor<T>::HSMLastValueSensor(HSMLastValueSensor&& sensor) : impl(sensor.impl)
-	{
-		sensor.impl = nullptr;
-	}
-
-	template<class T>
 	void HSMLastValueSensor<T>::AddValue(T value)
 	{
 		impl->AddValue(value);

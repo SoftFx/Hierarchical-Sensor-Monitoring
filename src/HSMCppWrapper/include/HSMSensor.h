@@ -14,12 +14,6 @@ namespace hsm_wrapper
 		using type = T;
 
 		HSMSensor(std::shared_ptr<HSMSensorImpl<T>> sensor_impl);
-		HSMSensor(HSMSensor&& sensor);
-		~HSMSensor() = default;
-		HSMSensor() = delete;
-		HSMSensor(const HSMSensor&) = delete;
-		HSMSensor& operator=(const HSMSensor&) = delete;
-		HSMSensor& operator=(HSMSensor&& sensor) = delete;
 
 		void AddValue(T value);
 		void AddValue(T value, const std::string& comment);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "msclr/auto_gcroot.h"
+#include "msclr/marshal_cppstd.h"
 
 using System::Func;
 using System::String;
@@ -9,17 +10,27 @@ using System::Collections::Generic::List;
 namespace hsm_wrapper
 {
 
-	template<class T, class U>
-	class HSMBaseFuncSensor;
+	template<class T>
+	class HSMBaseNoParamsFuncSensor;
 
-	template<class T, class U>
-	ref class DelegateWrapper
+	template<class T>
+	ref class NoParamsFuncDelegateWrapper
 	{
 	public:
-		DelegateWrapper(HSMBaseFuncSensor<T, U>* base) : base(base)
+		NoParamsFuncDelegateWrapper(HSMBaseNoParamsFuncSensor<T>* base) : base(base)
 		{
 		}
 
+		typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type
+			Call()
+		{
+			if constexpr (std::is_arithmetic_v<T>)
+				return base->Func();
+			else
+				return gcnew String(base->Func().c_str());
+		}
+
+		/*
 		template<class X = T, class Y = U>
 		typename std::enable_if_t<std::is_arithmetic_v<X> && std::is_arithmetic_v<Y>, X>
 			Call(List<Y>^ values)
@@ -67,31 +78,26 @@ namespace hsm_wrapper
 			}
 			return gcnew String(base->Func(converted_values).c_str());
 		}
+		*/
 
 	private:
-		HSMBaseFuncSensor<T, U>* base;
+		HSMBaseNoParamsFuncSensor<T>* base;
 	};
 
-	template<class T, class U>
-	class HSMBaseFuncSensor
+	template<class T>
+	class HSMBaseNoParamsFuncSensor
 	{
 	public:
-		DelegateWrapper<T, U>^ GetDelegateWrapper();
-		void SetFunc(std::function<T(std::list<U>)> function);
-		T Func(const std::list<U>& values);
+		NoParamsFuncDelegateWrapper<T>^ GetDelegateWrapper();
+		void SetFunc(std::function<T()> function);
+		T Func();
 
 	protected:
-		HSMBaseFuncSensor();
-
-		virtual ~HSMBaseFuncSensor() = default;
-		HSMBaseFuncSensor(const HSMBaseFuncSensor&) = default;
-		HSMBaseFuncSensor(HSMBaseFuncSensor&&) = default;
-		HSMBaseFuncSensor& operator=(const HSMBaseFuncSensor&) = default;
-		HSMBaseFuncSensor& operator=(HSMBaseFuncSensor&&) = default;
+		HSMBaseNoParamsFuncSensor();
 
 	private:
-		std::function<T(std::list<U>)> func;
-		msclr::auto_gcroot<DelegateWrapper<T, U>^> delegate_wrapper;
+		std::function<T()> func;
+		msclr::auto_gcroot<NoParamsFuncDelegateWrapper<T>^> delegate_wrapper;
 	};
 
 }

@@ -2,7 +2,7 @@
 
 #include "msclr/auto_gcroot.h"
 
-#include "HSMBaseFuncSensor.h"
+#include "HSMBaseParamsFuncSensor.h"
 
 using namespace HSMDataCollector::PublicInterface;
 using System::Func;
@@ -13,7 +13,7 @@ using System::Collections::Generic::List;
 namespace hsm_wrapper
 {
 	template<class T, class U>
-	class HSMParamsFuncSensorImpl : public HSMBaseFuncSensor<T, U>
+	class HSMParamsFuncSensorImpl : public HSMBaseParamsFuncSensor<T, U>
 	{
 	public:
 		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type;

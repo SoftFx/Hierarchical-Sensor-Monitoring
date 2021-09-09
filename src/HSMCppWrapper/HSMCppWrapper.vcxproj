@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -155,15 +155,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="DataCollectorImpl.h" />
     <ClInclude Include="HSMBarSensorImpl.h" />
-    <ClInclude Include="HSMBaseFuncSensor.h" />
+    <ClInclude Include="HSMBaseNoParamsFuncSensor.h" />
+    <ClInclude Include="HSMBaseParamsFuncSensor.h" />
     <ClInclude Include="HSMLastValueSensorImpl.h" />
+    <ClInclude Include="HSMNoParamsFuncSensorImpl.h" />
     <ClInclude Include="HSMParamsFuncSensorImpl.h" />
     <ClInclude Include="HSMSensorImpl.h" />
     <ClInclude Include="include\DataCollector.h" />
     <ClInclude Include="include\HSMBarSensor.h" />
     <ClInclude Include="include\HSMCppWrapper.h" />
     <ClInclude Include="include\HSMLastValueSensor.h" />
+    <ClInclude Include="include\HSMNoParamsFuncSensor.h" />
     <ClInclude Include="include\HSMParamsFuncSensor.h" />
     <ClInclude Include="include\HSMSensor.h" />
     <ClInclude Include="include\SensorStatus.h" />
@@ -172,8 +176,10 @@
   <ItemGroup>
     <ClCompile Include="DataCollector.cpp" />
     <ClCompile Include="HSMBarSensor.cpp" />
-    <ClCompile Include="HSMBaseFuncSensor.cpp" />
+    <ClCompile Include="HSMBaseNoParamsFuncSensor.cpp" />
+    <ClCompile Include="HSMBaseParamsFuncSensor.cpp" />
     <ClCompile Include="HSMLastValueSensor.cpp" />
+    <ClCompile Include="HSMNoParamsFuncSensor.cpp" />
     <ClCompile Include="HSMParamsFuncSensor.cpp" />
     <ClCompile Include="HSMSensor.cpp" />
     <ClCompile Include="pch.cpp">

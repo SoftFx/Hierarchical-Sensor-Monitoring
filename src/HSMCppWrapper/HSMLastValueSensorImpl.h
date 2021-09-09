@@ -25,12 +25,6 @@ namespace hsm_wrapper
 	{
 	public:
 		HSMLastValueSensorImpl(typename DefaultSensorType<T>::type sensor);
-		~HSMLastValueSensorImpl() = default;
-		HSMLastValueSensorImpl() = delete;
-		HSMLastValueSensorImpl(const HSMLastValueSensorImpl&) = delete;
-		HSMLastValueSensorImpl(HSMLastValueSensorImpl&&) = delete;
-		HSMLastValueSensorImpl& operator=(const HSMLastValueSensorImpl&) = delete;
-		HSMLastValueSensorImpl& operator=(HSMLastValueSensorImpl&&) = delete;
 
 		void AddValue(T value);
 		void AddValue(T value, const std::string& comment);

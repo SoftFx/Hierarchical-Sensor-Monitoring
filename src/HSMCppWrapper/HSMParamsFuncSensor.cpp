@@ -78,50 +78,27 @@ T HSMParamsFuncSensorImplWrapper<T, U>::Func(const std::list<U>& values)
 
 
 
-template HSMParamsFuncSensorImplWrapper<int, int>;
-template HSMParamsFuncSensorImpl<int, int>;
+#define InstantiateTemplates(X, Y)\
+template HSMParamsFuncSensorImplWrapper<X, Y>;\
+template HSMParamsFuncSensorImpl<X, Y>;
 
-template HSMParamsFuncSensorImplWrapper<int, double>;
-template HSMParamsFuncSensorImpl<int, double>;
 
-template HSMParamsFuncSensorImplWrapper<int, bool>;
-template HSMParamsFuncSensorImpl<int, bool>;
+InstantiateTemplates(int, int)
+InstantiateTemplates(int, double)
+InstantiateTemplates(int, bool)
+InstantiateTemplates(int, string)
 
-template HSMParamsFuncSensorImplWrapper<int, string>;
-template HSMParamsFuncSensorImpl<int, string>;
+InstantiateTemplates(double, int)
+InstantiateTemplates(double, double)
+InstantiateTemplates(double, bool)
+InstantiateTemplates(double, string)
 
-template HSMParamsFuncSensorImplWrapper<double, int>;
-template HSMParamsFuncSensorImpl<double, int>;
+InstantiateTemplates(bool, int)
+InstantiateTemplates(bool, double)
+InstantiateTemplates(bool, bool)
+InstantiateTemplates(bool, string)
 
-template HSMParamsFuncSensorImplWrapper<double, double>;
-template HSMParamsFuncSensorImpl<double, double>;
-
-template HSMParamsFuncSensorImplWrapper<double, bool>;
-template HSMParamsFuncSensorImpl<double, bool>;
-
-template HSMParamsFuncSensorImplWrapper<double, string>;
-template HSMParamsFuncSensorImpl<double, string>;
-
-template HSMParamsFuncSensorImplWrapper<bool, int>;
-template HSMParamsFuncSensorImpl<bool, int>;
-
-template HSMParamsFuncSensorImplWrapper<bool, double>;
-template HSMParamsFuncSensorImpl<bool, double>;
-
-template HSMParamsFuncSensorImplWrapper<bool, bool>;
-template HSMParamsFuncSensorImpl<bool, bool>;
-
-template HSMParamsFuncSensorImplWrapper<bool, string>;
-template HSMParamsFuncSensorImpl<bool, string>;
-
-template HSMParamsFuncSensorImplWrapper<string, int>;
-template HSMParamsFuncSensorImpl<string, int>;
-
-template HSMParamsFuncSensorImplWrapper<string, double>;
-template HSMParamsFuncSensorImpl<string, double>;
-
-template HSMParamsFuncSensorImplWrapper<string, bool>;
-template HSMParamsFuncSensorImpl<string, bool>;
-
-template HSMParamsFuncSensorImplWrapper<string, string>;
-template HSMParamsFuncSensorImpl<string, string>;
+InstantiateTemplates(string, int)
+InstantiateTemplates(string, double)
+InstantiateTemplates(string, bool)
+InstantiateTemplates(string, string)

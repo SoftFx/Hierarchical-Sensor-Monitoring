@@ -17,12 +17,6 @@ namespace hsm_wrapper
 	}
 
 	template<class T>
-	HSMSensor<T>::HSMSensor(HSMSensor&& sensor) : impl(sensor.impl)
-	{
-		sensor.impl = nullptr;
-	}
-
-	template<class T>
 	void HSMSensor<T>::AddValue(T value)
 	{
 		impl->AddValue(value);

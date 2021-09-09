@@ -12,12 +12,6 @@ namespace hsm_wrapper
 		using type = T;
 
 		HSMBarSensor(std::shared_ptr<HSMBarSensorImpl<T>> sensor_impl);
-		HSMBarSensor(HSMBarSensor&& sensor);
-		~HSMBarSensor() = default;
-		HSMBarSensor() = delete;
-		HSMBarSensor(const HSMBarSensor&) = delete;
-		HSMBarSensor& operator=(const HSMBarSensor&) = delete;
-		HSMBarSensor& operator=(HSMBarSensor&&) = delete;
 
 		void AddValue(T value);
 	private:

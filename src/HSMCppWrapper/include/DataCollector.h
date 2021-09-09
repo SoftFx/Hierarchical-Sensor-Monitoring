@@ -11,6 +11,7 @@
 #include "HSMBarSensor.h"
 #include "HSMLastValueSensor.h"
 #include "HSMParamsFuncSensor.h"
+#include "HSMNoParamsFuncSensor.h"
 
 namespace hsm_wrapper
 {
@@ -39,6 +40,9 @@ namespace hsm_wrapper
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 
+		template<class T>
+		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> function, const std::chrono::milliseconds& interval);
+
 		template<class T, class U> 
 		std::shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T (const std::list<U>&)> function, const std::chrono::milliseconds& interval);
 
@@ -50,13 +54,6 @@ namespace hsm_wrapper
 	{
 	public:
 		DataCollectorProxy(const std::string& product_key, const std::string& address, int port);
-
-		DataCollectorProxy() = delete;
-		~DataCollectorProxy() = default;
-		DataCollectorProxy(const DataCollectorProxy&) = default;
-		DataCollectorProxy(DataCollectorProxy&&) = default;
-		DataCollectorProxy& operator=(const DataCollectorProxy&) = default;
-		DataCollectorProxy& operator=(DataCollectorProxy&&) = default;
 
 		void Initialize(bool use_logging = true, const std::string& folder_path = "", const std::string& file_name_format = "");
 		void Stop();
@@ -76,11 +73,28 @@ namespace hsm_wrapper
 		IntBarSensor CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 
+		template<class T>
+		HSMNoParamsFuncSensor<T> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> func, const std::chrono::milliseconds& interval)
+		{
+			if constexpr (std::is_arithmetic_v<T> || std::is_same_v<T, std::string>)
+			{
+				return HSMNoParamsFuncSensor<T>{impl_wrapper->CreateNoParamsFuncSensor(path, description, func, interval)};
+			}
+			else
+			{
+				std::function<std::string()> wrapped_func = [func]()
+				{
+					return func().ToString();
+				};
+				return HSMNoParamsFuncSensor<T>{impl_wrapper->CreateNoParamsFuncSensor(path, description, wrapped_func, interval)};
+			}
+		}
+
 		template<class T, class U>
 		typename std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U>, HSMParamsFuncSensor<T, U>> 
 			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> func, const std::chrono::milliseconds& interval)
 		{
-			return  HSMParamsFuncSensor<T, U>{ impl_wrapper->CreateParamsFuncSensor(path, description, func, interval) };
+			return HSMParamsFuncSensor<T, U>{ impl_wrapper->CreateParamsFuncSensor(path, description, func, interval) };
 		}
 
 		template<class T, class U>
@@ -90,14 +104,14 @@ namespace hsm_wrapper
 			std::function<std::string(const std::list<U>&)> wrapped_func;
 			if constexpr (std::is_same_v<T, std::string>)
 			{
-				wrapped_func = [func](const std::list<U>& values) -> std::string
+				wrapped_func = [func](const std::list<U>& values)
 				{
 					return func(values);
 				};
 			}
 			else
 			{
-				wrapped_func = [func](const std::list<U>& values) -> std::string
+				wrapped_func = [func](const std::list<U>& values)
 				{
 					return func(values).ToString();
 				};
@@ -122,26 +136,25 @@ namespace hsm_wrapper
 		}
 
 		template<class T, class U>
-		typename std::enable_if_t<!std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>, HSMParamsFuncSensor<T, U>> 
+		typename std::enable_if_t<!std::is_arithmetic_v<T> && !std::is_arithmetic_v<U>, HSMParamsFuncSensor<T, U>>
 			CreateParamsFuncSensor(const std::string& path, const std::string& description, std::function<T(const std::list<U>&)> func, const std::chrono::milliseconds& interval)
 		{
 			std::function<std::string(const std::list<std::string>&)> wrapped_func;
 			if constexpr (std::is_same_v<T, std::string>)
 			{
-				wrapped_func = [func](const std::list<std::string>& values) -> std::string
+				wrapped_func = [func](const std::list<std::string>& values)
 				{
 					std::list<U> converted_values;
 					for (const std::string& value : values)
 					{
 						converted_values.push_back(move(U(value)));
 					}
-					return func(converted_values);		
+					return func(converted_values);
 				};
-				
 			}
 			else
 			{
-				wrapped_func = [func](const std::list<std::string>& values) -> std::string
+				wrapped_func = [func](const std::list<std::string>& values)
 				{
 					std::list<U> converted_values;
 					for (const std::string& value : values)
@@ -152,7 +165,7 @@ namespace hsm_wrapper
 				};
 			}
 			return HSMParamsFuncSensor<T, U>{ impl_wrapper->CreateParamsFuncSensor(path, description, wrapped_func, interval) };
-		}
+		}	
 
 	private:
 		std::shared_ptr<DataCollectorImplWrapper> impl_wrapper;

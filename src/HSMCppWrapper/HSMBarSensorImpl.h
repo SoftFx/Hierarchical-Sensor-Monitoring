@@ -19,12 +19,6 @@ namespace hsm_wrapper
 	{
 	public:
 		HSMBarSensorImpl(typename BarSensorType<T>::type sensor);
-		~HSMBarSensorImpl() = default;
-		HSMBarSensorImpl() = delete;
-		HSMBarSensorImpl(const HSMBarSensorImpl&) = delete;
-		HSMBarSensorImpl(HSMBarSensorImpl&&) = delete;
-		HSMBarSensorImpl& operator=(const HSMBarSensorImpl&) = delete;
-		HSMBarSensorImpl& operator=(HSMBarSensorImpl&&) = delete;
 
 		void AddValue(T value);
 	private:
