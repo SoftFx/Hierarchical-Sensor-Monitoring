@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
@@ -69,8 +70,13 @@ namespace HSMServer.Controllers
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
-                model = oldModel.Update(sensors);
+            {
+                foreach (var sensor in sensors)
+                    sensor.TransactionType = TransactionType.Update;
 
+                model = oldModel.Update(sensors);
+            }
+               
             return ViewHelper.CreateNotSelectedLists(selectedList, model);
         }
 
@@ -83,7 +89,12 @@ namespace HSMServer.Controllers
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
+            {
+                foreach (var sensor in sensors)
+                    sensor.TransactionType = TransactionType.Update;
+
                 model = oldModel.Update(sensors);
+            }
 
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
@@ -123,10 +134,20 @@ namespace HSMServer.Controllers
                 {
                     if (sensor.TransactionType == TransactionType.Add)
                     {
-                        result.Append(ListHelper.CreateSensor(formattedPath, sensor));
                         sensor.TransactionType = TransactionType.Update;
+                        result.Append(ListHelper.CreateSensor(formattedPath, sensor));
                     }
                 }
+
+            if (sensors != null && sensors.Count > 0)
+            {
+                var addedSensors = sensors.Where(s => s.TransactionType == TransactionType.Add).ToList();
+
+                foreach (var sensor in addedSensors)
+                    sensor.TransactionType = TransactionType.Update;
+
+                model = model.Update(addedSensors);
+            }
 
             return new HtmlString(result.ToString());
         }
