@@ -105,8 +105,8 @@ namespace HSMServer.Controllers
             if (node?.Sensors != null)
                 foreach(var sensor in node.Sensors)
                 {
-                    if (sensor.TransactionType != TransactionType.Add)
-                        result.Add(new SensorDataViewModel(selectedList, sensor));
+                    //if (sensor.TransactionType != TransactionType.Add)
+                    result.Add(new SensorDataViewModel(selectedList, sensor));
                 }
 
             return Json(result);
@@ -135,7 +135,7 @@ namespace HSMServer.Controllers
                     if (sensor.TransactionType == TransactionType.Add)
                     {
                         sensor.TransactionType = TransactionType.Update;
-                        result.Append(ListHelper.CreateSensor(formattedPath, sensor));
+                        result.Append(ListHelper.CreateSensor(path, sensor));
                     }
                 }
 
