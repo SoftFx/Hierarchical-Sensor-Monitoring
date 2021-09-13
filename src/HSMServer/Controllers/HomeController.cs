@@ -56,7 +56,14 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.Update(sensors);
+            var model = oldModel;
+            if (sensors != null && sensors.Count > 0)
+            {
+                foreach (var sensor in sensors)
+                    sensor.TransactionType = TransactionType.Update;
+
+                model = oldModel.Update(sensors);
+            }
 
             return ViewHelper.CreateTree(model);
         }
