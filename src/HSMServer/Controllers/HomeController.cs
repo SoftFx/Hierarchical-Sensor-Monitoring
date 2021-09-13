@@ -17,11 +17,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Web;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
