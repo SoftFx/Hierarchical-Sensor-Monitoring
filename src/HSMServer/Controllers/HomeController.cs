@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
@@ -69,8 +70,13 @@ namespace HSMServer.Controllers
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
-                model = oldModel.Update(sensors);
+            {
+                foreach (var sensor in sensors)
+                    sensor.TransactionType = TransactionType.Update;
 
+                model = oldModel.Update(sensors);
+            }
+               
             return ViewHelper.CreateNotSelectedLists(selectedList, model);
         }
 
@@ -83,7 +89,12 @@ namespace HSMServer.Controllers
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
+            {
+                foreach (var sensor in sensors)
+                    sensor.TransactionType = TransactionType.Update;
+
                 model = oldModel.Update(sensors);
+            }
 
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
@@ -94,8 +105,8 @@ namespace HSMServer.Controllers
             if (node?.Sensors != null)
                 foreach(var sensor in node.Sensors)
                 {
-                    if (sensor.TransactionType != TransactionType.Add)
-                        result.Add(new SensorDataViewModel(selectedList, sensor));
+                    //if (sensor.TransactionType != TransactionType.Add)
+                    result.Add(new SensorDataViewModel(selectedList, sensor));
                 }
 
             return Json(result);
@@ -123,87 +134,61 @@ namespace HSMServer.Controllers
                 {
                     if (sensor.TransactionType == TransactionType.Add)
                     {
-                        result.Append(ListHelper.CreateSensor(formattedPath, sensor));
                         sensor.TransactionType = TransactionType.Update;
+                        result.Append(ListHelper.CreateSensor(path, sensor));
                     }
                 }
+
+            if (sensors != null && sensors.Count > 0)
+            {
+                var addedSensors = sensors.Where(s => s.TransactionType == TransactionType.Add).ToList();
+
+                foreach (var sensor in addedSensors)
+                    sensor.TransactionType = TransactionType.Update;
+
+                model = model.Update(addedSensors);
+            }
 
             return new HtmlString(result.ToString());
         }
 
-        [HttpPost]
-        public HtmlString History([FromBody] GetSensorHistoryModel model)
-        {
-            var path = SensorPathHelper.Decode(model.Path);
-            int index = path.IndexOf('/');
-            model.Product = path.Substring(0, index);
-            model.Path = path.Substring(index + 1, path.Length - index - 1);
+        //[HttpPost]
+        //public HtmlString History([FromBody] GetSensorHistoryModel model)
+        //{
+        //    var path = SensorPathHelper.Decode(model.Path);
+        //    int index = path.IndexOf('/');
+        //    model.Product = path.Substring(0, index);
+        //    model.Path = path.Substring(index + 1, path.Length - index - 1);
 
-            var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+        //    var result = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
 
-            return new HtmlString(TableHelper.CreateHistoryTable(result));
-        }
+        //    return new HtmlString(TableHelper.CreateHistoryTable(result));
+        //}
 
-        [HttpPost]
-        public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
-        {
-            var path = SensorPathHelper.Decode(model.Path);
-            int index = path.IndexOf('/');
-            model.Product = path.Substring(0, index);
-            model.Path = path.Substring(index + 1, path.Length - index - 1);
+        //[HttpPost]
+        //public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
+        //{
+        //    var path = SensorPathHelper.Decode(model.Path);
+        //    int index = path.IndexOf('/');
+        //    model.Product = path.Substring(0, index);
+        //    model.Path = path.Substring(index + 1, path.Length - index - 1);
 
-            var commonHistory = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
-            //var selected = commonHistory.Select(h => h.TypedData).ToList();
+        //    var commonHistory = _monitoringCore.GetSensorHistory(HttpContext.User as User, model);
+        //    //var selected = commonHistory.Select(h => h.TypedData).ToList();
 
-            return new JsonResult(commonHistory);
-        }
+        //    return new JsonResult(commonHistory);
+        //}
 
         #region SensorsHistory
 
         [HttpPost]
-        public HtmlString HistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        public HtmlString History([FromBody]GetSensorHistoryModel model)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddHours(-1 * 1);
-            return GetHistory(product, path, type, from, to, PeriodType.Hour);
+            ParseProductAndPath(model.Path, out string product, out string path);
+            return GetHistory(product, path, model.Type, model.From, model.To,
+                GetPeriodType(model.From, model.To));
         }
 
-        [HttpPost]
-        public HtmlString HistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 1);
-            return GetHistory(product, path, type, from, to, PeriodType.Day);
-        }
-
-        [HttpPost]
-        public HtmlString HistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 3);
-            return GetHistory(product, path, type, from, to, PeriodType.ThreeDays);
-        }
-
-        [HttpPost]
-        public HtmlString HistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 7);
-            return GetHistory(product, path, type, from, to, PeriodType.Week);
-        }
-
-        [HttpPost]
-        public HtmlString HistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddMonths(-1 * 1);
-            return GetHistory(product, path, type, from, to, PeriodType.Month);
-        }
 
         [HttpPost]
         public HtmlString HistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
@@ -226,48 +211,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public JsonResult RawHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddHours(-1 * 1);
-            return GetRawHistory(product, path, type, from, to, PeriodType.Hour);
-        }
-
-        [HttpPost]
-        public JsonResult RawHistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 1);
-            return GetRawHistory(product, path, type, from, to, PeriodType.Day);
-        }
-
-        [HttpPost]
-        public JsonResult RawHistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 3);
-            return GetRawHistory(product, path, type, from, to, PeriodType.ThreeDays);
-        }
-
-        [HttpPost]
-        public JsonResult RawHistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 7);
-            return GetRawHistory(product, path, type, from, to, PeriodType.Week);
-        }
-
-        [HttpPost]
-        public JsonResult RawHistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddMonths(-1 * 1);
-            return GetRawHistory(product, path, type, from, to, PeriodType.Month);
+            ParseProductAndPath(model.Path, out string product, out string path);
+            return GetRawHistory(product, path, model.Type, model.From, model.To,
+                GetPeriodType(model.From, model.To));
         }
 
         [HttpPost]
@@ -340,6 +288,23 @@ namespace HSMServer.Controllers
             int index = decodedPath.IndexOf('/');
             product = decodedPath.Substring(0, index);
             path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
+        }
+
+        private PeriodType GetPeriodType(DateTime from, DateTime to)
+        {
+            var difference = to - from;
+            if (difference.Days > 29)
+                return PeriodType.Month;
+
+            if (difference.Days > 6)
+                return PeriodType.Week;
+
+            if (difference.Days > 2)
+                return PeriodType.ThreeDays;
+
+            if (difference.Hours > 1)
+                return PeriodType.Day;
+            return PeriodType.Hour;
         }
     }
 }
