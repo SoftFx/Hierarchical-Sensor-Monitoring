@@ -149,8 +149,9 @@ function exportCsv() {
         return;
     }
 
-    let from, to = getFromAndTo(path);
+    const {from, to} = getFromAndTo(path);
     let data = Data(to, from, type, path);
+    exportFileViaBlob(data, exportHistoryAction);
 }
 
 function exportFileViaBlob(requestBody, action) {
@@ -161,9 +162,12 @@ function exportFileViaBlob(requestBody, action) {
         contentType: 'application/json',
         dataType: 'html',
         cache: false,
-        async: true
-    }).success(function(data) {
-        document.location.href = data;
+        async: true,
+        success: function(data) {
+            var blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
+            let url = window.URL.createObjectURL(blob);
+            window.open(url);
+        }
     });
 }
 
@@ -198,33 +202,34 @@ function isAllHistorySelected(path) {
 }
 
 function getFromAndTo(path) {
+    let from = null;
+    let to = null;
     if ($('#radio_hour_' + path).is(":checked")) {
-        let to = new Date();
-        let from = to.AddHours(-1);
-        return from, to;
+        to = new Date();
+        from = to.AddHours(-1);
     }
 
     if ($('#radio_day_' + path).is(":checked")) {
-        let to = new Date();
-        let from = to.AddDays(-1);
-        return from, to;
+        to = new Date();
+        from = to.AddDays(-1);
     }
 
     if ($('#radio_three_days_' + path).is(":checked")) {
-        let to = new Date();
-        let from = to.AddDays(-3);
-        return from, to;
+        to = new Date();
+        from = to.AddDays(-3);
     }
 
     if ($('#radio_week_' + path).is(":checked")) {
-        let to = new Date();
-        let from = to.AddDays(-7);
-        return from, to;
+        to = new Date();
+        from = to.AddDays(-7);
     }
 
-    let to = new Date();
-    let from = to.AddDays(-30);
-    return from, to;
+    if ($('#radio_month_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddDays(-30);
+    }
+
+    return { from, to };
 }
 //function getExportAction(path) {
 //    if ($('#radio_hour_' + path).is(":checked")) {

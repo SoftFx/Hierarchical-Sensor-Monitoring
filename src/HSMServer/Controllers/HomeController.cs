@@ -218,6 +218,7 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
+        [HttpPost]
         public FileResult ExportHistory([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.Path, out string product, out string path);
