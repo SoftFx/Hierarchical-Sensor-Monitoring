@@ -55,7 +55,8 @@
         public const string ExportHistoryThreeDays = "ExportHistoryThreeDays";
         public const string ExportHistoryWeek = "ExportHistoryWeek";
         public const string ExportHistoryMonth = "ExportHistoryMonth";
-        public const string ExportHistoryAll = "ExportHistoryAll";
+        public const string ExportHistoryAction = "ExportHistory";
+        public const string ExportHistoryAllAction = "ExportHistoryAll";
         #endregion
     }
 }

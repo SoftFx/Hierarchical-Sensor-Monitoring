@@ -217,6 +217,17 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
+        public FileResult ExportHistory([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type,
+            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime fromUTC = from.ToUniversalTime();
+            DateTime toUTC = to.ToUniversalTime();
+            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+                fromUTC, toUTC);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
+            return GetExportHistory(product, path, historyList, type, GetPeriodType(fromUTC, toUTC), fileName);
+        }
         public FileResult ExportHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
