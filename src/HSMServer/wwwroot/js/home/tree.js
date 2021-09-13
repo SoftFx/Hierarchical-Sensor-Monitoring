@@ -1,4 +1,5 @@
 ﻿function initializeTree() {
+    //$('#jstree').jstree({ "plugins": ["state"] });
     $('#jstree').jstree();
 
     $('#updateTime').empty();

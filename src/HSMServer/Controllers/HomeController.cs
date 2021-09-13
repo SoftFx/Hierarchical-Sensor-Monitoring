@@ -309,7 +309,7 @@ namespace HSMServer.Controllers
             if (difference.Days > 2)
                 return PeriodType.ThreeDays;
 
-            if (difference.Hours > 1)
+            if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
         }
