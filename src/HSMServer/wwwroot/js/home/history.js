@@ -144,8 +144,27 @@ function initializeHistories(path, action, rawAction, type, reqData) {
 function exportCsv() {
     let path = this.id.substring("button_export_csv_".length);
     let type = getTypeForSensor(path);
-    let action = getExportAction(path);
-    window.location.href = action + "?Path=" + path + "&Type=" + type;
+    if (isAllHistorySelected(path)) {
+        window.location.href = exportHistoryAllAction + "?Path=" + path + "&Type=" + type;
+        return;
+    }
+
+    let from, to = getFromAndTo(path);
+    let data = Data(to, from, type, path);
+}
+
+function exportFileViaBlob(requestBody, action) {
+    $.ajax({
+        type: 'POST',
+        data: JSON.stringify(requestBody),
+        url: action,
+        contentType: 'application/json',
+        dataType: 'html',
+        cache: false,
+        async: true
+    }).success(function(data) {
+        document.location.href = data;
+    });
 }
 
 function initializeHistory(path, historyAction, type, body) {
@@ -174,24 +193,57 @@ function initializeHistory(path, historyAction, type, body) {
     });
 }
 
-function getExportAction(path) {
-    if ($('#radio_hour_' + path).is(":checked")) {
-        return exportHistoryHourAction;
-    }
-    if ($('#radio_day_' + path).is(":checked")) {
-        return exportHistoryDayAction;
-    }
-    if ($('#radio_three_days_' + path).is(":checked")) {
-        return exportHistoryThreeDaysAction;
-    }
-    if ($('#radio_week_' + path).is(":checked")) {
-        return exportHistoryWeekAction;
-    }
-    if ($('#radio_month_' + path).is(":checked")) {
-        return exportHistoryMonthAction;
-    }
-    return exportHistoryAllAction;
+function isAllHistorySelected(path) {
+    return $('#radio_all_' + path).is(":checked");
 }
+
+function getFromAndTo(path) {
+    if ($('#radio_hour_' + path).is(":checked")) {
+        let to = new Date();
+        let from = to.AddHours(-1);
+        return from, to;
+    }
+
+    if ($('#radio_day_' + path).is(":checked")) {
+        let to = new Date();
+        let from = to.AddDays(-1);
+        return from, to;
+    }
+
+    if ($('#radio_three_days_' + path).is(":checked")) {
+        let to = new Date();
+        let from = to.AddDays(-3);
+        return from, to;
+    }
+
+    if ($('#radio_week_' + path).is(":checked")) {
+        let to = new Date();
+        let from = to.AddDays(-7);
+        return from, to;
+    }
+
+    let to = new Date();
+    let from = to.AddDays(-30);
+    return from, to;
+}
+//function getExportAction(path) {
+//    if ($('#radio_hour_' + path).is(":checked")) {
+//        return exportHistoryHourAction;
+//    }
+//    if ($('#radio_day_' + path).is(":checked")) {
+//        return exportHistoryDayAction;
+//    }
+//    if ($('#radio_three_days_' + path).is(":checked")) {
+//        return exportHistoryThreeDaysAction;
+//    }
+//    if ($('#radio_week_' + path).is(":checked")) {
+//        return exportHistoryWeekAction;
+//    }
+//    if ($('#radio_month_' + path).is(":checked")) {
+//        return exportHistoryMonthAction;
+//    }
+//    return exportHistoryAllAction;
+//}
 
 function getTypeForSensor(name) {
     let element = document.getElementById("sensor_type_" + name);

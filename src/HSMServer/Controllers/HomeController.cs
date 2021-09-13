@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Web;
 
 namespace HSMServer.Controllers
 {
@@ -217,69 +218,68 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
-        public FileResult ExportHistory([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type,
-            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
+        public FileResult ExportHistory([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime fromUTC = from.ToUniversalTime();
-            DateTime toUTC = to.ToUniversalTime();
+            ParseProductAndPath(model.Path, out string product, out string path);
+            DateTime fromUTC = model.From.ToUniversalTime();
+            DateTime toUTC = model.To.ToUniversalTime();
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 fromUTC, toUTC);
             string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
-            return GetExportHistory(product, path, historyList, type, GetPeriodType(fromUTC, toUTC), fileName);
+            return GetExportHistory(product, path, historyList, model.Type, GetPeriodType(fromUTC, toUTC), fileName);
         }
-        public FileResult ExportHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddHours(-1 * 1);
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.Hour, fileName);
-        }
+        //public FileResult ExportHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        //{
+        //    ParseProductAndPath(encodedPath, out string product, out string path);
+        //    DateTime to = DateTime.Now;
+        //    DateTime from = to.AddHours(-1 * 1);
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        from.ToUniversalTime(), to.ToUniversalTime());
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+        //    return GetExportHistory(product, path, historyList, type, PeriodType.Hour, fileName);
+        //}
 
-        public FileResult ExportHistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 1);
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.Day, fileName);
-        }
+        //public FileResult ExportHistoryDay([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        //{
+        //    ParseProductAndPath(encodedPath, out string product, out string path);
+        //    DateTime to = DateTime.Now;
+        //    DateTime from = to.AddDays(-1 * 1);
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        from.ToUniversalTime(), to.ToUniversalTime());
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+        //    return GetExportHistory(product, path, historyList, type, PeriodType.Day, fileName);
+        //}
 
-        public FileResult ExportHistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 3);
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.ThreeDays, fileName);
-        }
-        public FileResult ExportHistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddDays(-1 * 7);
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.Week, fileName);
-        }
-        public FileResult ExportHistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            DateTime to = DateTime.Now;
-            DateTime from = to.AddMonths(-1 * 1);
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
-                from.ToUniversalTime(), to.ToUniversalTime());
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.Month, fileName);
-        }
+        //public FileResult ExportHistoryThreeDays([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        //{
+        //    ParseProductAndPath(encodedPath, out string product, out string path);
+        //    DateTime to = DateTime.Now;
+        //    DateTime from = to.AddDays(-1 * 3);
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        from.ToUniversalTime(), to.ToUniversalTime());
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+        //    return GetExportHistory(product, path, historyList, type, PeriodType.ThreeDays, fileName);
+        //}
+        //public FileResult ExportHistoryWeek([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        //{
+        //    ParseProductAndPath(encodedPath, out string product, out string path);
+        //    DateTime to = DateTime.Now;
+        //    DateTime from = to.AddDays(-1 * 7);
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        from.ToUniversalTime(), to.ToUniversalTime());
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+        //    return GetExportHistory(product, path, historyList, type, PeriodType.Week, fileName);
+        //}
+        //public FileResult ExportHistoryMonth([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        //{
+        //    ParseProductAndPath(encodedPath, out string product, out string path);
+        //    DateTime to = DateTime.Now;
+        //    DateTime from = to.AddMonths(-1 * 1);
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        from.ToUniversalTime(), to.ToUniversalTime());
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{from.ToUniversalTime():s}_to{to.ToUniversalTime():s}.csv";
+        //    return GetExportHistory(product, path, historyList, type, PeriodType.Month, fileName);
+        //}
         public FileResult ExportHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
