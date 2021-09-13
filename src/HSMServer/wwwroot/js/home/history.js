@@ -150,25 +150,7 @@ function exportCsv() {
     }
 
     const {from, to} = getFromAndTo(path);
-    let data = Data(to, from, type, path);
-    exportFileViaBlob(data, exportHistoryAction);
-}
-
-function exportFileViaBlob(requestBody, action) {
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(requestBody),
-        url: action,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true,
-        success: function(data) {
-            var blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
-            let url = window.URL.createObjectURL(blob);
-            window.open(url);
-        }
-    });
+    window.location.href = exportHistoryAction + "?Path=" + path + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
 }
 
 function initializeHistory(path, historyAction, type, body) {

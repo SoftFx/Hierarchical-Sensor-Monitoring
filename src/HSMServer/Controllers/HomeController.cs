@@ -218,17 +218,30 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
-        [HttpPost]
-        public FileResult ExportHistory([FromBody] GetSensorHistoryModel model)
+        public FileResult ExportHistory([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type,
+            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            ParseProductAndPath(model.Path, out string product, out string path);
-            DateTime fromUTC = model.From.ToUniversalTime();
-            DateTime toUTC = model.To.ToUniversalTime();
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime fromUTC = from.ToUniversalTime();
+            DateTime toUTC = to.ToUniversalTime();
             List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
                 fromUTC, toUTC);
             string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
-            return GetExportHistory(product, path, historyList, model.Type, GetPeriodType(fromUTC, toUTC), fileName);
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+            return GetExportHistory(historyList, type, GetPeriodType(fromUTC, toUTC), fileName);
         }
+        [HttpPost]
+        //public ActionResult ExportHistory([FromBody] GetSensorHistoryModel model)
+        //{
+        //    ParseProductAndPath(model.Path, out string product, out string path);
+        //    DateTime fromUTC = model.From.ToUniversalTime();
+        //    DateTime toUTC = model.To.ToUniversalTime();
+        //    List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+        //        fromUTC, toUTC);
+        //    string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
+        //    Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+        //    return GetExportHistory(historyList, model.Type, GetPeriodType(fromUTC, toUTC), fileName);
+        //}
         //public FileResult ExportHistoryHour([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         //{
         //    ParseProductAndPath(encodedPath, out string product, out string path);
@@ -287,10 +300,10 @@ namespace HSMServer.Controllers
             List<SensorHistoryData> historyList = _monitoringCore.GetAllSensorHistory(User as User,
                 product, path);
             string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
-            return GetExportHistory(product, path, historyList, type, PeriodType.All, fileName);
+            return GetExportHistory(historyList, type, PeriodType.All, fileName);
         }
 
-        private FileResult GetExportHistory(string product, string path, List<SensorHistoryData> dataList,
+        private FileResult GetExportHistory(List<SensorHistoryData> dataList,
             int type, PeriodType periodType, string fileName)
         {
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
@@ -362,7 +375,7 @@ namespace HSMServer.Controllers
             if (difference.Days > 2)
                 return PeriodType.ThreeDays;
 
-            if (difference.Hours > 1)
+            if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
         }
