@@ -135,18 +135,8 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             try
             {
                 _MeanList.Add(data.Mean);
-                //var median = data.Percentiles.FirstOrDefault(med => Math.Abs(med.Percentile - 0.5) < double.Epsilon);
-                //if (median != null)
-                //    _MedianList.Add(median.Value);
-
-                //var q1 = data.Percentiles.FirstOrDefault(q => Math.Abs(q.Percentile - 0.25) < double.Epsilon);
-                //if (q1 != null)
-                //    _Q1List.Add(q1.Value);
-
-                //var q3 = data.Percentiles.FirstOrDefault(q => Math.Abs(q.Percentile - 0.75) < double.Epsilon);
-                //if (q3 != null)
-                //    _Q3List.Add(q3.Value);
-                _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
+                if (data.Percentiles != null && data.Percentiles.Any())
+                    _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
             }
             catch (Exception e)
             {
@@ -160,9 +150,9 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             currentItem.Percentiles = new List<PercentileValueInt>();
             if (_percentilesList.Count < 3)
             {
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = 0 });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = 0 });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = 0 });
+                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = currentItem.Mean });
+                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = currentItem.Min });
+                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = currentItem.Max });
                 return;
             }
 
