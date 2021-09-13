@@ -1,4 +1,20 @@
-﻿//Add event listeners to buttons
+﻿Date.prototype.AddDays = function(days) {
+    let date = new Date(this.valueOf());
+    date.setDate(date.getDate() + days);
+    return date;
+}
+
+Date.prototype.AddHours = function(hours) {
+    let newDate = new Date(this.valueOf());
+    newDate.setHours(newDate.getHours() + hours);
+    return newDate;
+}
+
+function Data(to, from, type, path) {
+    return { "To": to, "From": from, "Type": type, "Path": path };
+}
+
+//Add event listeners to buttons
 function initializeDataHistoryRequests() {
     $('[id^="collapse"]').on('show.bs.collapse', function(e) {
         id = this.id.substring("collapse_".length);
@@ -72,51 +88,61 @@ function InitializePeriodRequests() {
 function requestHistoryHour() {
     let path = this.id.substring("radio_hour_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyHourAction, rawHistoryHourAction, type);
+    const to = new Date();
+    const from = to.AddHours(-1);
+    initializeHistories(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
 }
 
 function requestHistoryDay() {
     let path = this.id.substring("radio_day_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyDayAction, rawHistoryDayAction, type);
+    const to = new Date();
+    const from = to.AddDays(-1);
+    initializeHistories(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
 }
 
 function requestHistoryThreeDays() {
     let path = this.id.substring("radio_three_days_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyThreeDaysAction, rawHistoryThreeDaysAction, type);
+    const to = new Date();
+    const from = to.AddDays(-3);
+    initializeHistories(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
 }
 
 function requestHistoryWeek() {
     let path = this.id.substring("radio_week_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyWeekAction, rawHistoryWeekAction, type);
+    const to = new Date();
+    const from = to.AddDays(-7);
+    initializeHistories(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
 }
 
 function requestHistoryMonth() {
     let path = this.id.substring("radio_month_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyMonthAction, rawHistoryMonthAction, type);
+    const to = new Date();
+    const from = to.AddDays(-30);
+    initializeHistories(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
 }
 
 function requestHistoryAll() {
     let path = this.id.substring("radio_all_".length);
     let type = getTypeForSensor(path);
-    initializeHistories(path, historyAllAction, rawHistoryAllAction, type);
+    initializeHistories(path, historyAllAction, rawHistoryAllAction, type, {});
 }
 
 
-function initializeHistories(path, historyAction, rawHistoryAction, type) {
-    initializeHistory(path, historyAction, type);
+function initializeHistories(path, action, rawAction, type, reqData) {
+    initializeHistory(path, action, type, reqData);
     if (type !== "3" && type !== "6" && type !== "7") {
-        initializeGraph(path, rawHistoryAction, type);
+        initializeGraph(path, rawAction, type, reqData);
     }
 }
 
-function initializeHistory(path, historyAction, type) {
-
+function initializeHistory(path, historyAction, type, body) {
     $.ajax({
         type: 'POST',
+        data: JSON.stringify(body),
         url: historyAction + "?Path=" + path + "&Type=" + type,
         contentType: 'application/json',
         dataType: 'html',
@@ -151,10 +177,6 @@ function getCountForId(id) {
     }
 
     return inputCount;
-}
-
-function data(path, totalCount) {
-    return { "Path": path, "TotalCount": totalCount };
 }
 
 //function initializeHistory(path, totalCount, historyAction) {
@@ -196,10 +218,10 @@ function initializeGraph(id, type, totalCount, rawHistoryAction) {
     });
 }
 
-function initializeGraph(path, rawHistoryAction, type) {
-    //console.log('Request graph data via ' + rawHistoryAction);
+function initializeGraph(path, rawHistoryAction, type, body) {
     $.ajax({
         type: 'POST',
+        data: JSON.stringify(body),
         url: rawHistoryAction + "?Path=" + path + "&Type=" + type,
         contentType: 'application/json',
         dataType: 'html',

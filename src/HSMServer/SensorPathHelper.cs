@@ -17,7 +17,7 @@ namespace HSMServer
         {
             //return Encoding.Unicode.GetString(Convert.FromBase64String(
             //HttpUtility.UrlDecode(path)));
-            path = path.Replace(':', '/').Replace('-', '+').Replace('_', '=');
+            path = path.Replace('/', ':').Replace('-', '+').Replace('_', '=');
             return Encoding.Unicode.GetString(Convert.FromBase64String(path));
         }
     }
