@@ -50,11 +50,6 @@
         public const string RawHistoryAction = "RawHistory";
         public const string RawHistoryAllAction = "RawHistoryAll";
 
-        public const string ExportHistoryHour = "ExportHistoryHour";
-        public const string ExportHistoryDay = "ExportHistoryDay";
-        public const string ExportHistoryThreeDays = "ExportHistoryThreeDays";
-        public const string ExportHistoryWeek = "ExportHistoryWeek";
-        public const string ExportHistoryMonth = "ExportHistoryMonth";
         public const string ExportHistoryAction = "ExportHistory";
         public const string ExportHistoryAllAction = "ExportHistoryAll";
         #endregion
