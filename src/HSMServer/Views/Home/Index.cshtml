@@ -129,10 +129,10 @@
             $('#treeContainer').empty();
             $('#treeContainer').append(treeData); 
 
-            $('#jstree').jstree();
-            if (node !== undefined && node != undefined) {
-                $('#jstree').jstree('select_node', node.id);
-            }
+            $('#jstree').jstree({"plugins": ["state"]});
+            //if (node !== undefined && node != undefined) {
+                //$('#jstree').jstree('select_node', node.id);
+            //}
             initializeClickTree();
             //initializeDataHistoryRequests();
         });

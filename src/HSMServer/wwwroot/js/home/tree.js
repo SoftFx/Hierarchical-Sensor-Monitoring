@@ -1,5 +1,5 @@
 ﻿function initializeTree() {
-    $('#jstree').jstree();
+    $('#jstree').jstree({ "plugins": ["state"] });
 
     $('#updateTime').empty();
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());
