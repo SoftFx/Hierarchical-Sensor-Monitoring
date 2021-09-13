@@ -129,6 +129,7 @@
             $('#treeContainer').empty();
             $('#treeContainer').append(treeData); 
 
+            //$('#jstree').jstree({"plugins": ["state"]});
             $('#jstree').jstree();
             if (node !== undefined && node != undefined) {
                 $('#jstree').jstree('select_node', node.id);
