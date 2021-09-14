@@ -71,7 +71,6 @@
         let value = $('#value_' + name).val();
         let data = createData(name, value, false);
 
-        console.log(data);
         $.ajax({
             type: 'POST',
             url: saveAction,
