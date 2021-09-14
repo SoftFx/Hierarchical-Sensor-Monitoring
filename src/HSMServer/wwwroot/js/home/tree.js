@@ -1,6 +1,6 @@
 ﻿function initializeTree() {
-    //$('#jstree').jstree({ "plugins": ["state"] });
-    $('#jstree').jstree();
+    $('#jstree').jstree({ "plugins": ["state"] });
+    //$('#jstree').jstree();
 
     $('#updateTime').empty();
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());

@@ -120,22 +120,16 @@
             cache: false,
             async: true
         }).done(function (treeData) {
-            var node = $('#jstree').jstree().get_selected(true)[0];
+            //var node = $('#jstree').jstree().get_selected(true)[0];
 
             treeData = treeData.replace('{"value":"', '');
             treeData = treeData.slice(0, treeData.length - 2);
             treeData = treeData.replaceAll("\\", "");
 
-            $('#treeContainer').empty();
-            $('#treeContainer').append(treeData); 
+            $('#jstree').jstree(true).settings.core.data = treeData;
+            $('#jstree').jstree(true).refresh(true);
 
-            //$('#jstree').jstree({"plugins": ["state"]});
-            $('#jstree').jstree();
-            if (node !== undefined && node != undefined) {
-                $('#jstree').jstree('select_node', node.id);
-            }
             initializeClickTree();
-            //initializeDataHistoryRequests();
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];

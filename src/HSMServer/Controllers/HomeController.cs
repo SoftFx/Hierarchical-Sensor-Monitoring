@@ -65,7 +65,7 @@ namespace HSMServer.Controllers
                 model = oldModel.Update(sensors);
             }
 
-            return ViewHelper.CreateTree(model);
+            return ViewHelper.UpdateTree(model);
         }
 
         [HttpPost]

@@ -27,6 +27,11 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TreeHelper.CreateTree(model).ToString());
         }
 
+        public static HtmlString UpdateTree(TreeViewModel model)
+        {
+            return new HtmlString(TreeHelper.UpdateTree(model).ToString());
+        }
+
         public static HtmlString CreateFullLists(TreeViewModel model)
         {
             return new HtmlString(ListHelper.CreateFullLists(model));
