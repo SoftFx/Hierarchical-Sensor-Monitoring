@@ -20,7 +20,7 @@ namespace HSMServer.DataLayer
         public DatabaseAdapter(IPublicAdapter adapter)
         {
             _adapter = adapter;
-            _database = DatabaseCore.GetInstance();
+            _database = IDatabaseCore.GetInstance();
         }
 
         #region Product Old

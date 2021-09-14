@@ -4,17 +4,16 @@ using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public class DatabaseCore : IDatabaseCore
+    internal class DatabaseCore : IDatabaseCore
     {
         #region Singleton
 
         private static volatile DatabaseCore _instance;
         private static readonly object _singletonLockObj = new object();
-        public static IDatabaseCore GetInstance()
+        public IDatabaseCore GetInstance()
         {
             return Instance;
         }
