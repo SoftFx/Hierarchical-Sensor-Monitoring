@@ -29,32 +29,22 @@
 
 <script>
     //Description popovers
-    //$(document).ready(function () {
-    //    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    //    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-    //        return new bootstrap.Tooltip(tooltipTriggerEl);
-    //    });
+    $(document).ready(function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
 
-    //    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    //    var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
-    //        return new bootstrap.Popover(popoverTriggerEl);
-    //    });
-    //});
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
 
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl);
-    });
-    var popover = new bootstrap.Popover(document.querySelector('.popover-dismiss'), {
-        trigger: 'focus'
+        var popover = new bootstrap.Popover(document.querySelector('.popover-dismiss'), {
+            trigger: 'focus'
+        });
     });
     
-
     function createData(name, value, isDefault) {
         return {
             "Name": name,
@@ -81,7 +71,6 @@
         let value = $('#value_' + name).val();
         let data = createData(name, value, false);
 
-        console.log(data);
         $.ajax({
             type: 'POST',
             url: saveAction,

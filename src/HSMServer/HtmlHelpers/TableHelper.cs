@@ -615,17 +615,17 @@ namespace HSMServer.HtmlHelpers
                 if (!configurationObjects[i].IsDefault)
                 {
                     sb.Append($"<button id='reset_{configurationObjects[i].Name}' style='margin-left: 5px' " +
-                              "type='button' class='btn btn-secondary' title='reset value to default'>" +
-                              "<i class='fas fa-undo-alt'></i></button>");
+                              "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                              " title='reset value to default'><i class='fas fa-undo-alt'></i></button>");
                 }
 
                 sb.Append($"<button disabled style='margin-left: 5px' id='ok_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' title='ok'>" +
-                          "<i class='fas fa-check'></i></button>" +
+                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                          " title='ok'><i class='fas fa-check'></i></button>" +
 
                           $"<button disabled style='margin-left: 5px' id='cancel_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' title='revert changes'>" +
-                          "<i class='fas fa-times'></i></button></td></tr>");
+                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                          " title='revert changes'><i class='fas fa-times'></i></button></td></tr>");
             }
 
             sb.Append("</tbody");

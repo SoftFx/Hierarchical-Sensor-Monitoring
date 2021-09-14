@@ -20,6 +20,7 @@ using Microsoft.Extensions.Logging;
 namespace HSMServer.Controllers
 {
     [Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;

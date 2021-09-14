@@ -143,7 +143,11 @@ namespace HSMServer
                 app.UseDeveloperExceptionPage();
             }
 
-            app.UseStaticFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = context =>
+                    context.Context.Response.Headers.Add("Cache-control", "no-cache")
+            });
             app.UseRouting();
             app.UseCors();
             app.UseAuthorization();

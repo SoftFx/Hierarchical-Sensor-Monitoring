@@ -144,30 +144,13 @@ namespace HSMServer.HtmlHelpers
                           $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
                           $"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>" +
                           "<div class='mb-3 row'><div>" +
-                          //$"<label for='inputCount_{name}' class='col-sm-2 col-form-label'>Total Count</label>" +
-                          //"<div class='col-sm-3'>" +
-                          //$"<input type='number' class='form-control' id='inputCount_{name}' value='10' min='10'></div>" +
-                          //"<div class='col-sm-1'>" +
-                          //$"<button id='reload_{name}' type='button' class='btn btn-secondary'>" +
-                          //"<i class='fas fa-redo-alt'></i></button>" +
-                          //$"<div class='col-sm-1'><button id='hour_{name}' type='button' class='btn btn-light' " +
-                          //"value='Last hour'>1H</button></div>" +
-                          //$"<div class='col-sm-1'><button id='day_{name}' type='button' class='btn btn-light'" +
-                          //" value='Last day'>1D</button></div>" +
-                          //$"<div class='col-sm-1'><button id='three_days_{name}' type='button' class='btn btn-light'" +
-                          //" value='Three days'>3D</button></div>" +
-                          //$"<div class='col-sm-1'><button id='week_{name}' type='button' class='btn btn-light'" +
-                          //" value='Last week'>1W</button></div>" +
-                          //$"<div class='col-sm-1'><button id='month_{name}' type='button' class='btn btn-light'" +
-                          //" value='Last month'>1M</button></div>" +
-                          //$"<div class='col-sm-1'><button id='all_{name}' type='button' class='btn btn-light'" +
-                          //" value='All history'>All</button></div>"
                           CreateRadioButton(name, "hour", "1H") +
                           CreateRadioButton(name, "day", "1D") +
                           CreateRadioButton(name, "three_days", "3D") +
                           CreateRadioButton(name, "week", "1W") +
                           CreateRadioButton(name, "month", "1M") + 
-                          CreateRadioButton(name, "all", "All") + "</div>");
+                          CreateRadioButton(name, "all", "All") + 
+                          CreateCsvButton(name) + "</div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(GetNoDataDivForSensor(name));
@@ -206,6 +189,11 @@ namespace HSMServer.HtmlHelpers
             return "no info";
         }
 
+        private static string CreateCsvButton(string name)
+        {
+            return "<div class='form-check form-check-inline'><button type='button'" +
+                   $" class='btn btn-primary' id='button_export_csv_{name}'>Export to CSV</button></div>";
+        }
         private static string CreateRadioButton(string name, string period, string shortPeriod)
         {
             return

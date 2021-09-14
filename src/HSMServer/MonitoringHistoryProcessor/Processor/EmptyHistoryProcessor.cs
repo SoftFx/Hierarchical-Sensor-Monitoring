@@ -9,11 +9,10 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
         public EmptyHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
         }
-
-        public override List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
+        
+        public override string GetCsvHistory(List<SensorHistoryData> originalData)
         {
-            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
-            return uncompressedData;
+            return string.Empty;
         }
     }
 }

@@ -83,6 +83,8 @@ function InitializePeriodRequests() {
     $('[id^="radio_month_"]').off("click").on("click", requestHistoryMonth);
 
     $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
+
+    $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
 }
 
 function requestHistoryHour() {
@@ -139,6 +141,18 @@ function initializeHistories(path, action, rawAction, type, reqData) {
     }
 }
 
+function exportCsv() {
+    let path = this.id.substring("button_export_csv_".length);
+    let type = getTypeForSensor(path);
+    if (isAllHistorySelected(path)) {
+        window.location.href = exportHistoryAllAction + "?Path=" + path + "&Type=" + type;
+        return;
+    }
+
+    const {from, to} = getFromAndTo(path);
+    window.location.href = exportHistoryAction + "?Path=" + path + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
+}
+
 function initializeHistory(path, historyAction, type, body) {
     $.ajax({
         type: 'POST',
@@ -163,6 +177,59 @@ function initializeHistory(path, historyAction, type, body) {
         $(`#values_${path}`).append(values);
     });
 }
+
+function isAllHistorySelected(path) {
+    return $('#radio_all_' + path).is(":checked");
+}
+
+function getFromAndTo(path) {
+    let from = null;
+    let to = null;
+    if ($('#radio_hour_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddHours(-1);
+    }
+
+    if ($('#radio_day_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddDays(-1);
+    }
+
+    if ($('#radio_three_days_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddDays(-3);
+    }
+
+    if ($('#radio_week_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddDays(-7);
+    }
+
+    if ($('#radio_month_' + path).is(":checked")) {
+        to = new Date();
+        from = to.AddDays(-30);
+    }
+
+    return { from, to };
+}
+//function getExportAction(path) {
+//    if ($('#radio_hour_' + path).is(":checked")) {
+//        return exportHistoryHourAction;
+//    }
+//    if ($('#radio_day_' + path).is(":checked")) {
+//        return exportHistoryDayAction;
+//    }
+//    if ($('#radio_three_days_' + path).is(":checked")) {
+//        return exportHistoryThreeDaysAction;
+//    }
+//    if ($('#radio_week_' + path).is(":checked")) {
+//        return exportHistoryWeekAction;
+//    }
+//    if ($('#radio_month_' + path).is(":checked")) {
+//        return exportHistoryMonthAction;
+//    }
+//    return exportHistoryAllAction;
+//}
 
 function getTypeForSensor(name) {
     let element = document.getElementById("sensor_type_" + name);
@@ -200,25 +267,7 @@ function getCountForId(id) {
 //    });
 //}
 
-function initializeGraph(id, type, totalCount, rawHistoryAction) {
-    if (totalCount == undefined)
-        totalCount = 10;
-
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(data(id, totalCount)),
-        url: rawHistoryAction,
-        dataType: 'html',
-        contentType: 'application/json',
-        cache: false,
-        async: true
-    }).done(function (data) {
-        let graphDivId = "graph_" + id;
-        displayGraph(data, type, graphDivId, id);
-    });
-}
-
-function initializeGraph(path, rawHistoryAction, type, body) {
+    function initializeGraph(path, rawHistoryAction, type, body) {
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),

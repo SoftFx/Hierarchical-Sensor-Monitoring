@@ -50,6 +50,8 @@
         public const string RawHistoryAction = "RawHistory";
         public const string RawHistoryAllAction = "RawHistoryAll";
 
+        public const string ExportHistoryAction = "ExportHistory";
+        public const string ExportHistoryAllAction = "ExportHistoryAll";
         #endregion
     }
 }
