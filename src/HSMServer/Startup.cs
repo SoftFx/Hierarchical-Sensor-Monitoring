@@ -1,15 +1,17 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
-using HSMServer.Authentication;
-using HSMServer.Cache;
-using HSMServer.ClientUpdateService;
-using HSMServer.Configuration;
+using HSMServer.BackgroundTask;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.MonitoringHistoryProcessor.Factory;
+using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.Products;
+using HSMServer.Core.Registration;
+using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;
-using HSMServer.MonitoringServerCore;
-using HSMServer.Products;
-using HSMServer.Registration;
 using HSMServer.Services;
 using HSMServer.SignalR;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -23,10 +25,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
-using HSMServer.BackgroundTask;
-using HSMServer.DataLayer;
-using HSMServer.Filters;
-using HSMServer.MonitoringHistoryProcessor.Factory;
+using HSMServer.Core.Cache;
 
 namespace HSMServer
 {
@@ -50,12 +49,12 @@ namespace HSMServer
 
             services.AddMvc().AddFluentValidation();
 
-            services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
-            {
-                options.MaxSendMessageSize = 40 * 1024 * 1024;
-                options.MaxReceiveMessageSize = 40 * 1024 * 1024;
-                options.EnableDetailedErrors = true;
-            });
+            //services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
+            //{
+            //    options.MaxSendMessageSize = 40 * 1024 * 1024;
+            //    options.MaxReceiveMessageSize = 40 * 1024 * 1024;
+            //    options.EnableDetailedErrors = true;
+            //});
             services.AddControllers();
             services.AddControllersWithViews();
 
@@ -81,10 +80,10 @@ namespace HSMServer
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
-            services.AddSingleton<ClientCertificateValidator>();
-            services.AddSingleton<IUpdateService, UpdateServiceCore>();
-            services.AddSingleton<Services.HSMService>();
-            services.AddSingleton<AdminService>();
+            //services.AddSingleton<ClientCertificateValidator>();
+            //services.AddSingleton<IUpdateService, UpdateServiceCore>();
+            //services.AddSingleton<Services.HSMService>();
+            //services.AddSingleton<AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
 
@@ -122,7 +121,7 @@ namespace HSMServer
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
             lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
-            app.UseCertificateValidator();
+            //app.UseCertificateValidator();
 
 
             app.UseAuthentication();
@@ -154,8 +153,8 @@ namespace HSMServer
             app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapGrpcService<Services.HSMService>();
-                endpoints.MapGrpcService<Services.AdminService>();
+                //endpoints.MapGrpcService<Services.HSMService>();
+                //endpoints.MapGrpcService<Services.AdminService>();
 
                 endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
                     {

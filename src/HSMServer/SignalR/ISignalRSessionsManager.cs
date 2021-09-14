@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using HSMServer.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
+using System.Collections.Generic;
 
 namespace HSMServer.SignalR
 {

@@ -1,8 +1,8 @@
-﻿using System;
+﻿using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Model;
-using HSMServer.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace HSMServer.Controllers
 {

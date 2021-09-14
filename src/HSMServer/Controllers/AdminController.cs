@@ -1,5 +1,6 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Configuration;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.Model;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

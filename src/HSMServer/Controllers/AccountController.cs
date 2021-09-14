@@ -1,20 +1,23 @@
-﻿using System.Collections.Generic;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Mvc;
-using System.Threading.Tasks;
-using HSMServer.Authentication;
+﻿using HSMCommon;
+using HSMCommon.Constants;
+using HSMServer.Attributes;
+using HSMServer.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Registration;
+using HSMServer.Filters;
+using HSMServer.Model.Validators;
+using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
-using HSMServer.Constants;
-using HSMServer.Model.Validators;
-using System.Linq;
-using HSMServer.Attributes;
-using HSMServer.Filters;
-using HSMServer.Model.ViewModel;
-using HSMServer.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using System;
-using HSMServer.Registration;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {

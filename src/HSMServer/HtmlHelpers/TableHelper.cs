@@ -2,9 +2,10 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.ApiControllers;
-using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.DataLayer.Model;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -160,10 +161,10 @@ namespace HSMServer.HtmlHelpers
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
                     "<th>---</th>" +
-                    $"<th>---</th>" +
-                    $"<th>---</th>" +
+                    "<th>---</th>" +
+                    "<th>---</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
-                    $"<i class='fas fa-plus'></i></button></th></tr>");
+                    "<i class='fas fa-plus'></i></button></th></tr>");
 
             if (products == null || products.Count == 0) return result.ToString();
 
@@ -174,7 +175,7 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.Name}</td>" +
                     $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
                     $"<button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
-                    $"<i class='far fa-copy'></i></button>" +
+                    "<i class='far fa-copy'></i></button>" +
                     $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
                     $"<td>{product.CreationDate}</td>" +
                     $"<td>{product.ManagerName}</td>");
@@ -183,15 +184,15 @@ namespace HSMServer.HtmlHelpers
                 if (UserRoleHelper.IsProductCRUDAllowed(user) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
-                    $"type='button' class='btn btn-secondary' title='edit'>" +
+                    "type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user))
                     result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
-                        $"type='button' class='btn btn-secondary' title='delete'>" +
-                        $"<i class='fas fa-trash-alt'></i></button>");
+                        "type='button' class='btn btn-secondary' title='delete'>" +
+                        "<i class='fas fa-trash-alt'></i></button>");
 
-                    result.Append("</tr>");
+                result.Append("</tr>");
                 index++;
             }
 

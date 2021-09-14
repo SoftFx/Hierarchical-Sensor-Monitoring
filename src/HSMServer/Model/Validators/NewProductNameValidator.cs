@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
-using HSMServer.MonitoringServerCore;
+using HSMServer.Core.MonitoringServerCore;
 using System;
 using System.Linq;
 
