@@ -15,9 +15,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMServer.Tests", "..\HSMSe
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDatabase", "..\HSMDatabase\HSMDatabase.csproj", "{E126B08A-A584-4A70-BA3A-E83FEDF05524}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDatabase.LevelDB", "..\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj", "{5FC809B2-13FF-4371-9273-AD247BBE7571}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSM.MonitoringCore", "..\HSM.MonitoringCore\HSM.MonitoringCore.csproj", "{79A4A676-2634-435B-B6F6-87174155CC05}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDatabase.LevelDB", "..\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj", "{5FC809B2-13FF-4371-9273-AD247BBE7571}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,17 +47,12 @@ Global
 		{5FC809B2-13FF-4371-9273-AD247BBE7571}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5FC809B2-13FF-4371-9273-AD247BBE7571}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5FC809B2-13FF-4371-9273-AD247BBE7571}.Release|Any CPU.Build.0 = Release|Any CPU
-		{79A4A676-2634-435B-B6F6-87174155CC05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{79A4A676-2634-435B-B6F6-87174155CC05}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{79A4A676-2634-435B-B6F6-87174155CC05}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{79A4A676-2634-435B-B6F6-87174155CC05}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5E6C1200-0B26-4EE0-819B-0EF93B3899D8} = {F5022C1D-010E-459E-A2DA-8F9DACB53AA1}
-		{79A4A676-2634-435B-B6F6-87174155CC05} = {F5022C1D-010E-459E-A2DA-8F9DACB53AA1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {87147EF6-89C6-4B9D-B8E2-DB28679905BD}

@@ -6,7 +6,6 @@ namespace HSMDatabase.DatabaseInterface
 {
     public interface IDatabaseCore
     {
-        IDatabaseCore GetInstance();
         #region Sensors
         List<SensorDataEntity> GetAllSensorData(string productName, string path);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from);
