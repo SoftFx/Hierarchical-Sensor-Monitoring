@@ -22,6 +22,20 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        public static string UpdateTree(TreeViewModel model)
+        {
+            if (model == null) return string.Empty;
+
+            StringBuilder result = new StringBuilder();
+            if (model.Nodes != null)
+                foreach (var node in model.Nodes)
+                {
+                    result.Append(Recursion(node));
+                }
+
+            return result.ToString();
+        }
+
         public static string Recursion(NodeViewModel node)
         {
             StringBuilder result = new StringBuilder();

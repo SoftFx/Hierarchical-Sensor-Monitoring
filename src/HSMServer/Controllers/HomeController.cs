@@ -12,16 +12,17 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;
@@ -65,7 +66,7 @@ namespace HSMServer.Controllers
                 model = oldModel.Update(sensors);
             }
 
-            return ViewHelper.CreateTree(model);
+            return ViewHelper.UpdateTree(model);
         }
 
         [HttpPost]
@@ -245,6 +246,36 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
+        public FileResult ExportHistory([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type,
+            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            DateTime fromUTC = from.ToUniversalTime();
+            DateTime toUTC = to.ToUniversalTime();
+            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+                fromUTC, toUTC);
+            string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+            return GetExportHistory(historyList, type, GetPeriodType(fromUTC, toUTC), fileName);
+        }
+        
+        public FileResult ExportHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            List<SensorHistoryData> historyList = _monitoringCore.GetAllSensorHistory(User as User,
+                product, path);
+            string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
+            return GetExportHistory(historyList, type, PeriodType.All, fileName);
+        }
+
+        private FileResult GetExportHistory(List<SensorHistoryData> dataList,
+            int type, PeriodType periodType, string fileName)
+        {
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            string csv = processor.GetCsvHistory(dataList);
+            byte[] fileContents = Encoding.UTF8.GetBytes(csv);
+            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
+        }
         #endregion
 
         [HttpGet]

@@ -5,6 +5,7 @@ using HSMSensorDataObjects.TypedDataObject;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace HSMServer.MonitoringHistoryProcessor.Processor
@@ -28,18 +29,7 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             if (uncompressedData.Count == 1)
                 return uncompressedData;
 
-            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
-            List<IntBarSensorData> typedDatas = new List<IntBarSensorData>();
-            foreach (var unProcessed in uncompressedData)
-            {
-                try
-                {
-                    typedDatas.Add(JsonSerializer.Deserialize<IntBarSensorData>(unProcessed.TypedData));
-                }
-                catch (Exception e)
-                { }
-            }
-            
+            List<IntBarSensorData> typedDatas = GetTypeDatas(uncompressedData);
             List<SensorHistoryData> result = new List<SensorHistoryData>();
             IntBarSensorData currentItem = new IntBarSensorData() {Count = 0, Max = int.MinValue, Min = int.MaxValue};
             DateTime startDate = typedDatas[0].StartTime;
@@ -111,6 +101,37 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
             return result;
         }
 
+        public override string GetCsvHistory(List<SensorHistoryData> originalData)
+        {
+            List<IntBarSensorData> typedDatas = GetTypeDatas(originalData);
+            StringBuilder sb = new StringBuilder();
+            sb.Append($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last{Environment.NewLine}");
+            for (int i = 0; i < typedDatas.Count; ++i)
+            {
+                sb.Append($"{i},{typedDatas[i].StartTime.ToUniversalTime():s},{typedDatas[i].EndTime.ToUniversalTime():s}" +
+                          $",{typedDatas[i].Min},{typedDatas[i].Max},{typedDatas[i].Mean},{typedDatas[i].Count}," +
+                          $"{typedDatas[i].LastValue}{Environment.NewLine}");
+            }
+
+            return sb.ToString();
+        }
+
+        private List<IntBarSensorData> GetTypeDatas(List<SensorHistoryData> uncompressedData)
+        {
+            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
+            List<IntBarSensorData> typedDatas = new List<IntBarSensorData>();
+            foreach (var unProcessed in uncompressedData)
+            {
+                try
+                {
+                    typedDatas.Add(JsonSerializer.Deserialize<IntBarSensorData>(unProcessed.TypedData));
+                }
+                catch (Exception e)
+                { }
+            }
+
+            return typedDatas;
+        }
         private SensorHistoryData Convert(IntBarSensorData typedData)
         {
             SensorHistoryData result = new SensorHistoryData();

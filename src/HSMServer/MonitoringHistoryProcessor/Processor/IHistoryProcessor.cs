@@ -6,5 +6,6 @@ namespace HSMServer.MonitoringHistoryProcessor.Processor
     public interface IHistoryProcessor
     {
         List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData);
+        string GetCsvHistory(List<SensorHistoryData> originalData);
     }
 }

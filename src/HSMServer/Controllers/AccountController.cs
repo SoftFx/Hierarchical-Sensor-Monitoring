@@ -19,6 +19,7 @@ using HSMServer.Registration;
 namespace HSMServer.Controllers
 {
     [Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
