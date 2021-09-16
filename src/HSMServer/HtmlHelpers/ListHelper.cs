@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
+using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;

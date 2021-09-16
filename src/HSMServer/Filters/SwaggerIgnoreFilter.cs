@@ -1,4 +1,4 @@
-﻿using HSMServer.Attributes;
+﻿using HSMCommon.Attributes;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System;

@@ -1,10 +1,5 @@
-using System;
-using System.Net;
-using System.Net.Security;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
-using HSMServer.Configuration;
-using HSMServer.Constants;
+using HSMCommon.Constants;
+using HSMServer.Core.Configuration;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -14,6 +9,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using NLog.Web;
+using System;
+using System.Net;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
 namespace HSMServer
 {
@@ -55,16 +55,16 @@ namespace HSMServer
                         {
                             httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                         });
-                        options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
-                        {
-                            listenOptions.Protocols = HttpProtocols.Http2;
-                            listenOptions.UseHttps(portOptions =>
-                            {
-                                portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
-                                portOptions.ClientCertificateValidation = ValidateClientCertificate;
-                                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                            });
-                        });
+                        //options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
+                        //{
+                        //    listenOptions.Protocols = HttpProtocols.Http2;
+                        //    listenOptions.UseHttps(portOptions =>
+                        //    {
+                        //        portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
+                        //        portOptions.ClientCertificateValidation = ValidateClientCertificate;
+                        //        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+                        //    });
+                        //});
                         options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -108,59 +108,6 @@ namespace HSMServer
                 serviceContext.Initialize();
             }
         }
-
-        //public static IHostBuilder CreateHostBuilder(string[] args) =>
-        //    Host.CreateDefaultBuilder(args)
-        //        .ConfigureWebHostDefaults(webBuilder =>
-        //        {
-        //            webBuilder.ConfigureKestrel(options =>
-        //            {
-        //                options.ConfigureHttpsDefaults(httpsOptions =>
-        //                {
-        //                    httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
-        //                });
-        //                options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
-        //                {
-        //                    listenOptions.Protocols = HttpProtocols.Http2;
-        //                    //listenOptions.UseHttps(Config.ServerCertificate);
-        //                    listenOptions.UseHttps(portOptions =>
-        //                    {
-        //                        portOptions.ServerCertificate = Config.ServerCertificate;
-        //                        portOptions.ClientCertificateValidation = ValidateClientCertificate;
-        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-        //                    });
-        //                });
-        //                options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort, listenOptions =>
-        //                {
-        //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-        //                    listenOptions.UseHttps(portOptions =>
-        //                    {
-        //                        portOptions.CheckCertificateRevocation = false;
-        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-        //                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-        //                        portOptions.ServerCertificate = Config.ServerCertificate;
-        //                    });
-        //                });
-        //                options.Listen(IPAddress.Any, ConfigurationConstants.SitePort, listenOptions =>
-        //                {
-        //                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-        //                    listenOptions.UseHttps(portOptions =>
-        //                    {
-        //                        portOptions.CheckCertificateRevocation = false;
-        //                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-        //                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-        //                        portOptions.ServerCertificate = Config.ServerCertificate;
-        //                    });
-        //                });
-        //                options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
-        //            });
-        //            webBuilder.UseStartup<Startup>();
-        //        })
-        //        .ConfigureLogging(logging =>
-        //        {
-        //            logging.ClearProviders();
-        //            logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-        //        }).UseNLog().UseConsoleLifetime();
 
         public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
             SslPolicyErrors policyErrors)

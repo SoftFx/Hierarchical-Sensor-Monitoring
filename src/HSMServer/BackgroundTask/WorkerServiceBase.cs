@@ -1,5 +1,5 @@
-﻿using HSMServer.DataLayer;
-using HSMServer.Products;
+﻿using HSMServer.Core.DataLayer;
+using HSMServer.Core.Products;
 using Microsoft.Extensions.Hosting;
 
 namespace HSMServer.BackgroundTask

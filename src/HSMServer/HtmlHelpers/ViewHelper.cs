@@ -1,12 +1,11 @@
-﻿using HSMServer.Authentication;
+﻿using HSMSensorDataObjects;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Html;
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Text;
-using HSMSensorDataObjects;
-using System;
-using HSMServer.Configuration;
 
 namespace HSMServer.HtmlHelpers
 {

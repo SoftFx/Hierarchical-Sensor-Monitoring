@@ -1,6 +1,5 @@
-﻿using HSMServer.DataLayer.Model;
+﻿using HSMServer.Core.Model;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
 {

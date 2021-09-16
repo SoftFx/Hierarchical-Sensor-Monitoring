@@ -1,4 +1,4 @@
-﻿using HSMServer.DataLayer.Model;
+﻿using HSMServer.Core.Model;
 
 namespace HSMServer.Model.ViewModel
 {

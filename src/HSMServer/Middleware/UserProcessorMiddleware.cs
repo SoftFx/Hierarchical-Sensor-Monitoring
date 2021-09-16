@@ -1,5 +1,5 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Constants;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 

@@ -1,10 +1,11 @@
-﻿using System;
-using System.Threading;
-using HSMCommon;
-using HSMServer.Authentication;
-using HSMServer.MonitoringServerCore;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.MonitoringServerCore;
 using HSMServer.SignalR;
 using Microsoft.AspNetCore.SignalR;
+using System;
+using System.Threading;
 
 namespace HSMServer.Services
 {

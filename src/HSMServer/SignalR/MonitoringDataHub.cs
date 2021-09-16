@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-using HSMCommon.Model.SensorsData;
-using HSMServer.Authentication;
-using HSMServer.Model.ViewModel;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Model.Authentication;
 using Microsoft.AspNetCore.SignalR;
 
 namespace HSMServer.SignalR

@@ -1,7 +1,7 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
+using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Model.ViewModel;
-using HSMServer.MonitoringServerCore;
 using System.Linq;
 
 namespace HSMServer.Model.Validators
