@@ -3,6 +3,8 @@
 #include "HSMSensor.h"
 #include "HSMSensorImpl.h"
 
+#include "msclr/marshal_cppstd.h"
+
 using namespace std;
 
 using System::String;
@@ -19,19 +21,40 @@ namespace hsm_wrapper
 	template<class T>
 	void HSMSensor<T>::AddValue(T value)
 	{
-		impl->AddValue(value);
+		try
+		{
+			impl->AddValue(value);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 	template<class T>
 	void HSMSensor<T>::AddValue(T value, const std::string& comment)
 	{
-		impl->AddValue(value, comment);
+		try
+		{
+			impl->AddValue(value, comment);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 	template<class T>
 	void HSMSensor<T>::AddValue(T value, HSMSensorStatus status, const std::string& comment)
 	{
-		impl->AddValue(value, status, comment);
+		try
+		{
+			impl->AddValue(value, status, comment);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 

@@ -3,6 +3,8 @@
 #include "HSMBarSensor.h"
 #include "HSMBarSensorImpl.h"
 
+#include "msclr/marshal_cppstd.h"
+
 using namespace std;
 
 using System::String;
@@ -19,7 +21,14 @@ namespace hsm_wrapper
 	template<class T>
 	void HSMBarSensor<T>::AddValue(T value)
 	{
-		impl->AddValue(value);
+		try
+		{
+			impl->AddValue(value);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 

@@ -159,13 +159,13 @@ namespace hsm_wrapper
 					std::list<U> converted_values;
 					for (const std::string& value : values)
 					{
-						converted_values.push_back(move(U(value)));
+						converted_values.push_back(std::move(U(value)));
 					}
 					return func(converted_values).ToString();
 				};
 			}
 			return HSMParamsFuncSensor<T, U>{ impl_wrapper->CreateParamsFuncSensor(path, description, wrapped_func, interval) };
-		}	
+		}		
 
 	private:
 		std::shared_ptr<DataCollectorImplWrapper> impl_wrapper;
