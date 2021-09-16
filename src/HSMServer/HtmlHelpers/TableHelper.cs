@@ -146,6 +146,7 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>#</th>" +
                 "<th scope='col'>Name</th>" +
                 "<th scope='col'>Key</th>" +
+                "<th scope='col colspan='2'></th>" +
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
@@ -161,6 +162,7 @@ namespace HSMServer.HtmlHelpers
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
                     "<th>---</th>" +
+                    "<th></th>" +
                     "<th>---</th>" +
                     "<th>---</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
@@ -173,8 +175,8 @@ namespace HSMServer.HtmlHelpers
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{product.Name}</td>" +
-                    $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
-                    $"<button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
+                    $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key}</td> " +
+                    $"<td><button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
                     "<i class='far fa-copy'></i></button>" +
                     $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
                     $"<td>{product.CreationDate}</td>" +
