@@ -23,20 +23,29 @@
     }
 </style>
 
-<div class="container row justify-content-center">
-    @ViewHelper.CreateConfigurationObjectsTable(Model);
+<div class="container">
+    <div class="row justify-content-center">
+        @if (!string.IsNullOrEmpty((string)ViewData["Version"]))
+        {
+            <div class="row align-items-center" style="margin-top: 10px">
+                <p>Current version: @ViewData["Version"]</p>
+            </div>
+        }
+        @ViewHelper.CreateConfigurationObjectsTable(Model)
+    </div>
 </div>
+
 
 <script>
     //Description popovers
     $(document).ready(function () {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl);
         });
 
@@ -44,7 +53,7 @@
             trigger: 'focus'
         });
     });
-    
+
     function createData(name, value, isDefault) {
         return {
             "Name": name,
@@ -53,13 +62,13 @@
         }
     }
 
-    $('[id^=cancel_]').on("click", function() {
+    $('[id^=cancel_]').on("click", function () {
         document.location.reload();
     });
 
     $('[id^=value_]').on("input", function () {
         name = this.id.substring("value_".length);
-        
+
         $('#ok_' + name).prop('disabled', false);
         $('#cancel_' + name).prop('disabled', false);
     });
@@ -78,12 +87,12 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function(result) {
+        }).done(function (result) {
             document.location.reload();
         });
     });
 
-    $('[id^=reset_]').on("click", function() {
+    $('[id^=reset_]').on("click", function () {
         name = this.id.substring("reset_".length);
 
         $.ajax({

@@ -629,7 +629,7 @@ namespace HSMServer.HtmlHelpers
                           " title='revert changes'><i class='fas fa-times'></i></button></td></tr>");
             }
 
-            sb.Append("</tbody");
+            sb.Append("</tbody></table></div>");
             return sb.ToString();
         }
 

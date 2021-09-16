@@ -28,5 +28,7 @@ namespace HSMServer.Core.Configuration
         /// </summary>
         /// <returns>List of <see cref="ConfigurationObject"/>.</returns>
         List<ConfigurationObject> GetAllConfigurationObjects();
+
+        string GetCurrentVersion();
     }
 }

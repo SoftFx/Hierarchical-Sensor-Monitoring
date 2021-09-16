@@ -89,6 +89,11 @@ namespace HSMServer.Core.Configuration
             return result;
         }
 
+        public string GetCurrentVersion()
+        {
+            return ReadCurrentVersion();
+        }
+
         public ConfigurationObject ReadConfigurationObject(string name)
         {
             //var objectFromDB = _databaseAdapter.GetConfigurationObjectOld(name);
@@ -104,6 +109,22 @@ namespace HSMServer.Core.Configuration
 
         #endregion
 
+        private string ReadCurrentVersion()
+        {
+            try
+            {
+                string versionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    ConfigurationConstants.VersionFileName);
+                string content = File.ReadAllText(versionFilePath);
+                return content;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to read current version");
+            }
+
+            return string.Empty;
+        }
         private void OnConfigurationObjectUpdated(ConfigurationObject newObject)
         {
             ConfigurationObjectUpdated?.Invoke(this, newObject);

@@ -35,6 +35,7 @@ namespace HSMServer.Controllers
                 viewModels.Add(new ConfigurationObjectViewModel(value, true));
             }
             viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
+            ViewData["Version"] = _configurationProvider.GetCurrentVersion();
 
             return View(viewModels);
         }
