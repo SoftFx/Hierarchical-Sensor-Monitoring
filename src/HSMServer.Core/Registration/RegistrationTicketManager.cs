@@ -16,14 +16,14 @@ namespace HSMServer.Core.Registration
         /// <summary>
         /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
         /// </summary>
-        private void MigrateTicketsToNewDatabase()
-        {
-            var currentTickets = _databaseAdapter.GetAllTicketsOld();
-            foreach (var ticket in currentTickets)
-            {
-                _databaseAdapter.WriteRegistrationTicket(ticket);
-            }
-        }
+        //private void MigrateTicketsToNewDatabase()
+        //{
+        //    var currentTickets = _databaseAdapter.GetAllTicketsOld();
+        //    foreach (var ticket in currentTickets)
+        //    {
+        //        _databaseAdapter.WriteRegistrationTicket(ticket);
+        //    }
+        //}
 
         public RegistrationTicket GetTicket(Guid id)
         {

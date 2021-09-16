@@ -32,20 +32,20 @@ namespace HSMServer.Core.Configuration
             _databaseAdapter = databaseAdapter;
             _logger.LogInformation("ConfigurationProvider initialized.");
 
-            MigrateConfigurationObjectsToNewDatabase();
+            //MigrateConfigurationObjectsToNewDatabase();
         }
 
         /// <summary>
         /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
         /// </summary>
-        private void MigrateConfigurationObjectsToNewDatabase()
-        {
-            var currentObjects = _databaseAdapter.GetAllConfigurationObjectsOld();
-            foreach (var currentObject in currentObjects)
-            {
-                _databaseAdapter.WriteConfigurationObject(currentObject);   
-            }
-        }
+        //private void MigrateConfigurationObjectsToNewDatabase()
+        //{
+        //    var currentObjects = _databaseAdapter.GetAllConfigurationObjectsOld();
+        //    foreach (var currentObject in currentObjects)
+        //    {
+        //        _databaseAdapter.WriteConfigurationObject(currentObject);   
+        //    }
+        //}
         #region Public interface implementation
 
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.ClientAppFolderName);

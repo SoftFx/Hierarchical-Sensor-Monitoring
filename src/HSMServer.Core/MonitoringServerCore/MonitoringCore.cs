@@ -101,27 +101,27 @@ namespace HSMServer.Core.MonitoringServerCore
             _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
             _converter = converter;
-            MigrateSensorsValuesToNewDatabase();
+            //MigrateSensorsValuesToNewDatabase();
             Thread.Sleep(5000);
             FillValuesCache();
             _logger.LogInformation("Monitoring core initialized");
         }
 
-        private void MigrateSensorsValuesToNewDatabase()
-        {
-            foreach (var product in _productManager.Products)
-            {
-                var sensors = _productManager.GetProductSensors(product.Name);
-                foreach (var sensor in sensors)
-                {
-                    var history = _databaseAdapter.GetAllSensorDataOld(product.Name, sensor.Path);
-                    foreach (var historyItem in history)
-                    {
-                        _databaseAdapter.PutSensorData(historyItem, product.Name);
-                    }
-                }
-            }
-        }
+        //private void MigrateSensorsValuesToNewDatabase()
+        //{
+        //    foreach (var product in _productManager.Products)
+        //    {
+        //        var sensors = _productManager.GetProductSensors(product.Name);
+        //        foreach (var sensor in sensors)
+        //        {
+        //            var history = _databaseAdapter.GetAllSensorDataOld(product.Name, sensor.Path);
+        //            foreach (var historyItem in history)
+        //            {
+        //                _databaseAdapter.PutSensorData(historyItem, product.Name);
+        //            }
+        //        }
+        //    }
+        //}
 
         private void FillValuesCache()
         {
