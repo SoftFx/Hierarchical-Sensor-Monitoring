@@ -64,7 +64,7 @@ namespace HSMServer
             });
 
             //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
-            services.AddTransient<IPublicAdapter, PublicAdapter>();
+            //services.AddTransient<IPublicAdapter, PublicAdapter>();
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
             //Use singleton, created in DatabaseCore
             //services.AddSingleton<IDatabaseCore, DatabaseCore>();
