@@ -81,8 +81,7 @@ namespace HSMServer.Core.Configuration
         public static void InitializeConfig()
         {
             _logger = LogManager.GetCurrentClassLogger();
-            IPublicAdapter publicAdapter = new PublicAdapter();
-            _databaseAdapter = new DatabaseAdapter(publicAdapter);
+            _databaseAdapter = new DatabaseAdapter();
 
             InitializeIndependentConstants();
 
@@ -173,7 +172,9 @@ namespace HSMServer.Core.Configuration
             //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
             if (!_isFirstLaunch)
             {
-                var pwdParam = _databaseAdapter.GetConfigurationObjectOld(ConfigurationConstants.ServerCertificatePassword);
+                //var pwdParam = _databaseAdapter.GetConfigurationObjectOld(ConfigurationConstants.ServerCertificatePassword);
+                var pwdParam =
+                    _databaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
                 if (pwdParam != null)
                 {
                     return new X509Certificate2(_serverCertificatePath,pwdParam.Value);

@@ -1,6 +1,4 @@
 ﻿using HSMCommon;
-using HSMDatabase.DatabaseInterface;
-using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Entity;
 using HSMSensorDataObjects;
 using HSMServer.Core.DataLayer;
@@ -20,9 +18,7 @@ namespace HSMServer.Tests.Fixture
         /// </summary>
         public DatabaseAdapterFixture()
         {
-            IPublicAdapter publicAdapter = new PublicAdapter();
-            IDatabaseCore core = DatabaseCore.GetInstance();
-            DatabaseAdapter = new DatabaseAdapter(publicAdapter);
+            DatabaseAdapter = new DatabaseAdapter();
         }
         
         #region Product
@@ -200,14 +196,6 @@ namespace HSMServer.Tests.Fixture
         /// </summary>
         public void Dispose()
         {
-            DatabaseAdapter?.RemoveProductOld(FirstProductName);
-            DatabaseAdapter?.RemoveProductOld(SecondProductName);
-            DatabaseAdapter?.RemoveProductOld(ThirdProductName);
-            DatabaseAdapter?.RemoveUserOld(CreateFirstUser());
-            DatabaseAdapter?.RemoveUserOld(CreateSecondUser());
-            DatabaseAdapter?.RemoveUserOld(CreateThirdUser());
-            DatabaseAdapter?.RemoveRegistrationTicketOld(_ticket.Id);
-            DatabaseAdapter?.RemoveConfigurationObjectOld(ConfigurationObjectName);
             DatabaseAdapter?.RemoveProduct(FirstProductName);
             DatabaseAdapter?.RemoveProduct(SecondProductName);
             DatabaseAdapter?.RemoveProduct(ThirdProductName);

@@ -599,20 +599,21 @@ namespace HSMServer.Core.MonitoringServerCore
         }
         public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
         {
-            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
-            //_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
-            var lastValue = _barsStorage.GetLastValue(product, path);
-            if (lastValue != null)
-            {
-                historyList.Add(_converter.Convert(lastValue));
-            }
+            //List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
+            ////_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
+            //var lastValue = _barsStorage.GetLastValue(product, path);
+            //if (lastValue != null)
+            //{
+            //    historyList.Add(_converter.Convert(lastValue));
+            //}
 
-            if (n != -1)
-            {
-                historyList = historyList.TakeLast((int)n).ToList();
-            }
+            //if (n != -1)
+            //{
+            //    historyList = historyList.TakeLast((int)n).ToList();
+            //}
 
-            return historyList;
+            //return historyList;
+            return new List<SensorHistoryData>();
         }
 
         public string GetFileSensorValue(User user, string product, string path)
