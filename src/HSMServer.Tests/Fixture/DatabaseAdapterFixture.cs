@@ -1,15 +1,14 @@
-﻿using HSMDatabase.DatabaseInterface;
+﻿using HSMCommon;
+using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
-using HSMServer.Authentication;
-using HSMServer.DataLayer;
-using HSMServer.DataLayer.Model;
-using HSMServer.Keys;
-using System;
-using System.Collections.Generic;
 using HSMDatabase.Entity;
 using HSMSensorDataObjects;
-using HSMServer.Configuration;
-using HSMServer.Registration;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Keys;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Tests.Fixture
 {

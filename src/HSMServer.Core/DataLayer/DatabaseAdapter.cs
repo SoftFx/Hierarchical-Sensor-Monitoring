@@ -21,6 +21,11 @@ namespace HSMServer.Core.DataLayer
             _database = DatabaseCore.GetInstance();
         }
 
+        public DatabaseAdapter()
+        {
+            _database = DatabaseCore.GetInstance();
+        }
+
         #region Product Old
 
         public void RemoveProductOld(string productName)

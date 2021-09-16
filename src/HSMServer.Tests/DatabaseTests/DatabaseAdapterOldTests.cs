@@ -1,12 +1,12 @@
-﻿using System;
+﻿using HSMServer.Core.Keys;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Tests.Fixture;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using HSMServer.Authentication;
-using HSMServer.DataLayer.Model;
-using HSMServer.Keys;
-using HSMServer.Tests.Fixture;
 using Xunit;
 
 namespace HSMServer.Tests.DatabaseTests

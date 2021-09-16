@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Text;
 
-namespace HSMServer
+namespace HSMServer.Core.Email
 {
     public class EmailSender
     {

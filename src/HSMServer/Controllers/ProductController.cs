@@ -2,6 +2,8 @@
 using HSMServer.Constants;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.Email;
+using HSMServer.Core.Encryption;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
