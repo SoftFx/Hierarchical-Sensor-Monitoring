@@ -29,13 +29,7 @@ jobs:
       run: dotnet restore src/HSMServer/HSMServer.sln
       
     - name: Build
-      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
-      
-    - name: Install Client Dependencies
-      run: dotnet restore src/HSMClient/HSMClient.sln
-      
-    - name: Build Client
-      run: dotnet build src/HSMClient/HSMClient.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release\Client'
+      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'          
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2
@@ -62,13 +56,7 @@ jobs:
       - name: Test
         run: |
           echo $RELEASE_VERSION
-          echo ${{ env.RELEASE_VERSION }}
-      #- name: Publish data collector
-      #  uses: rohith/publish-nuget@v2
-      #  with:
-      #    PROJECT_FILE_PATH: HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
-      #    NUGET_KEY: ${{ secrets.NUGETKEY }}
-      #    VERSION_STATIC: 1.0.5    
+          echo ${{ env.RELEASE_VERSION }}      
       
       - name: Restore nuget
         run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
@@ -137,12 +125,13 @@ jobs:
           name: Release
           path: ${{ github.workspace }}/Release
           
-      - name: Add client version file
+      - name: Add product version file
         uses: DamianReeves/write-file-action@master
         with: 
-           path: ${{ github.workspace }}/Release/Client/version.txt
+           path: ${{ github.workspace }}/Release/version.txt
            contents: "${{ env.RELEASE_VERSION }}"
            write-mode: overwrite    
+       
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: ${{ github.workspace }}/Release
