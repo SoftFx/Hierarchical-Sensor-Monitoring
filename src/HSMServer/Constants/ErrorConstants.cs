@@ -4,7 +4,7 @@
     {
         public const string NameNotNull = "Name must be not null.";
         public const string NameUnique = "Name must be unique.";
-        public const string ProductNameLatin = "Productname must include latin or numeric characters!";
+        public const string ProductNameSymbols = "Product name contains forbidden characters!";
 
         public const string PasswordNotNull = "Password must be not null.";
         public const string SecondPasswordNotNull = "Second password must be not null.";
