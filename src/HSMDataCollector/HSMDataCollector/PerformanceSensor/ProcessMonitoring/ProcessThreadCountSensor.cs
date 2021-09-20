@@ -2,8 +2,9 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
-using System;
 using HSMSensorDataObjects.FullDataObject;
+using System;
+using System.Diagnostics;
 
 namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
@@ -12,7 +13,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
         private const string _sensorName = "Process thread count";
         public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName,
             string nodeName = TextConstants.CurrentProcessNodeName)
-            : base($"{nodeName}/{_sensorName}", "Process", "Thread Count", processName)
+            : base($"{nodeName}/{_sensorName}", "Process", "Thread Count", processName, GetProcessThreadCountFunc())
         {
             InternalBar = new BarSensor<int>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
@@ -32,6 +33,15 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             return InternalBar.GetLastValueNew();
         }
 
+        private static Func<double> GetProcessThreadCountFunc()
+        {
+            Func<double> func = delegate()
+            {
+                Process currentProcess = Process.GetCurrentProcess();
+                return currentProcess.Threads.Count;
+            };
+            return func;
+        }
         public override void Dispose()
         {
             _monitoringTimer?.Dispose();

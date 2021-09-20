@@ -1,7 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using HSMServer.Core.Model.Sensor;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using HSMCommon.Model.SensorsData;
-using Microsoft.AspNetCore.SignalR;
 
 namespace HSMServer.SignalR
 {

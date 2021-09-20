@@ -1,4 +1,4 @@
-﻿namespace HSMCommon.Model
+﻿namespace HSMServer.Core.Model
 {
     public enum TransactionType
     {

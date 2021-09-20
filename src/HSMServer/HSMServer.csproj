@@ -51,8 +51,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
-    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
     <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
   </ItemGroup>
 

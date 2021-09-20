@@ -1,7 +1,7 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Linq;

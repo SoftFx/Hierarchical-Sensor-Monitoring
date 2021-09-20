@@ -1,8 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
-using HSMDatabase.DatabaseInterface;
-using HSMDatabase.DatabaseWorkCore;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
@@ -25,7 +24,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System;
 using System.IO;
 using System.Linq;
-using HSMServer.Core.Cache;
+using HSM.Core.Monitoring;
 
 namespace HSMServer
 {
@@ -79,15 +78,13 @@ namespace HSMServer
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
+            services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IMonitoringCore, MonitoringCore>();
-            //services.AddSingleton<ClientCertificateValidator>();
-            //services.AddSingleton<IUpdateService, UpdateServiceCore>();
-            //services.AddSingleton<Services.HSMService>();
-            //services.AddSingleton<AdminService>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
 
             services.AddHostedService<OutdatedSensorService>();
+            services.AddHostedService<DatabaseMonitoringService>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
@@ -125,6 +122,7 @@ namespace HSMServer
 
 
             app.UseAuthentication();
+            app.CountRequestStatistics();
             app.UseSwagger(c =>
             {
                 //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";
@@ -136,11 +134,6 @@ namespace HSMServer
                 c.RoutePrefix = "api/swagger";
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "HSM server api");
             });
-
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
 
             app.UseStaticFiles(new StaticFileOptions
             {

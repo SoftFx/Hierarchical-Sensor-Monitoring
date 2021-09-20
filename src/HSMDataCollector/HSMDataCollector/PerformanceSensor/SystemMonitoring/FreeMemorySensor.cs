@@ -1,9 +1,9 @@
-﻿using System;
-using HSMDataCollector.Bar;
+﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using System;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
@@ -12,7 +12,7 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
         private const string _sensorName = "Free memory MB";
         public FreeMemorySensor(string productKey, IValuesQueue queue,
             string nodeName = TextConstants.PerformanceNodeName) : 
-            base($"{nodeName}/{_sensorName}", "Memory", "Available MBytes", string.Empty)
+            base($"{nodeName}/{_sensorName}", "Memory", "Available MBytes", string.Empty, GetFreeMemoryFunc())
         {
             InternalBar = new BarSensor<int>($"{nodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
@@ -33,6 +33,11 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             return InternalBar.GetLastValueNew();
         }
 
+        private static Func<double> GetFreeMemoryFunc()
+        {
+            Func<double> func = () => Environment.WorkingSet;
+            return func;
+        }
         public override CommonSensorValue GetLastValue()
         {
             return InternalBar.GetLastValue();

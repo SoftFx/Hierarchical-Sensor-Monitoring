@@ -1,5 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects.TypedDataObject;
+﻿using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

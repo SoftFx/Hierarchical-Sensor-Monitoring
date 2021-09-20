@@ -28,6 +28,7 @@ namespace HSMDataCollector.Core
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor CPU and RAM usage of the current machine.
         /// Sensors will be placed at Product/System Monitoring node
+        /// Please note, that system monitoring is currently unavailable for non-windows operating systems (e.g. Linux)
         /// </summary>
         /// <param name="isCPU">Specifies whether the sensor for current CPU usage is created</param>
         /// <param name="isFreeRam">Specifies whether the sensor for current free RAM in mb is created</param>

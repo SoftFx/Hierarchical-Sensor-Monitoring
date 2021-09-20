@@ -1,6 +1,6 @@
-﻿using System;
+﻿using HSMServer.Core.Model.Sensor;
+using System;
 using System.Collections.Generic;
-using HSMCommon.Model.SensorsData;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {

@@ -1,11 +1,11 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.ApiControllers;
 using HSMServer.Constants;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;

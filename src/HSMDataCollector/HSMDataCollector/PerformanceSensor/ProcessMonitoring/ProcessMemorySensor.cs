@@ -1,9 +1,10 @@
-﻿using System;
-using HSMDataCollector.Bar;
+﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using System;
+using System.Diagnostics;
 
 namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
@@ -13,7 +14,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
         private const string _sensorName = "Process memory MB";
         public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName,
             string nodeName = TextConstants.CurrentProcessNodeName)
-            : base($"{nodeName}/{_sensorName}", "Process", "Working set", processName)
+            : base($"{nodeName}/{_sensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
         {
             InternalBar = new BarSensor<int>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
@@ -34,6 +35,15 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             return InternalBar.GetLastValueNew();
         }
 
+        private static Func<double> GetProcessMemoryFunc()
+        {
+            Func<double> func = delegate()
+            {
+                Process currentProcess = Process.GetCurrentProcess();
+                return currentProcess.PrivateMemorySize64;
+            };
+            return func;
+        }
         public override void Dispose()
         {
             _monitoringTimer?.Dispose();

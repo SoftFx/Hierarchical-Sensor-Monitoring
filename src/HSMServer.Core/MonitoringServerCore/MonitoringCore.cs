@@ -1,15 +1,18 @@
 ﻿using HSMCommon;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
 using HSMDatabase.Entity;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.Products;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,9 +24,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Helpers;
-using HSMServer.Core.Model.Authentication;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.Core.MonitoringServerCore
@@ -192,10 +192,9 @@ namespace HSMServer.Core.MonitoringServerCore
             Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
         }
 
-        public void AddSensorsValues(IEnumerable<CommonSensorValue> values)
+        public void AddSensorsValues(List<CommonSensorValue> values)
         {
-            var commonSensorValues = values.ToList();
-            foreach (var value in commonSensorValues)
+            foreach (var value in values)
             {
                 if (value == null)
                 {
@@ -246,10 +245,9 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #region Typed Sensors from UnitedSensorValue
 
-        public void AddSensorsValues(IEnumerable<UnitedSensorValue> values)
+        public void AddSensorsValues(List<UnitedSensorValue> values)
         {
-            List<UnitedSensorValue> valuesList = values.ToList();
-            foreach (var value in valuesList)
+            foreach (var value in values)
             {
                 try
                 {
@@ -592,11 +590,6 @@ namespace HSMServer.Core.MonitoringServerCore
             return allValues;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model)
-        {
-            //return GetSensorHistory(user, model.Path, model.Product, model.TotalCount);
-            return new List<SensorHistoryData>();
-        }
         public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
         {
             //List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);

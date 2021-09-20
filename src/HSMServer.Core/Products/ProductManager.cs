@@ -80,9 +80,10 @@ namespace HSMServer.Core.Products
                 ++count;
             }
 
-            if (count < 1)
+            var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
+            if (count < 1 || monitoringProduct == null)
             {
-                AddDefaultProduct();
+                AddSelfMonitoringProduct();
             }
 
             lock (_productsLock)
@@ -92,10 +93,12 @@ namespace HSMServer.Core.Products
             
         }
 
-        private void AddDefaultProduct()
+        private void AddSelfMonitoringProduct()
         {
-            Product product = new Product(CommonConstants.DefaultProductKey, CommonConstants.DefaultProductName, 
-                DateTime.Now);
+            //Product product = new Product(CommonConstants.DefaultProductKey, CommonConstants.DefaultProductName, 
+            //    DateTime.Now);
+            Product product = new Product(CommonConstants.SelfMonitoringProductKey,
+                CommonConstants.SelfMonitoringProductName, DateTime.Now);
             AddProduct(product);
         }
 

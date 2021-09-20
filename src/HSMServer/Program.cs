@@ -55,16 +55,6 @@ namespace HSMServer
                         {
                             httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                         });
-                        //options.Listen(IPAddress.Any, ConfigurationConstants.GrpcPort, listenOptions =>
-                        //{
-                        //    listenOptions.Protocols = HttpProtocols.Http2;
-                        //    listenOptions.UseHttps(portOptions =>
-                        //    {
-                        //        portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
-                        //        portOptions.ClientCertificateValidation = ValidateClientCertificate;
-                        //        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                        //    });
-                        //});
                         options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort, listenOptions =>
                         {
                             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -107,6 +97,11 @@ namespace HSMServer
                 var serviceContext = services.GetRequiredService<IClientMonitoringService>();
                 serviceContext.Initialize();
             }
+        }
+
+        private static void InitializeMonitoring()
+        {
+            
         }
 
         public static bool ValidateClientCertificate(X509Certificate2 certificate, X509Chain chain,
