@@ -10,10 +10,11 @@ namespace hsm_wrapper
 	{
 	public:
 		using ElementType = T;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<T>, T, const T&>::type;
 
 		HSMBarSensor(std::shared_ptr<HSMBarSensorImpl<T>> sensor_impl);
 
-		void AddValue(T value);
+		void AddValue(ElementParameterType value);
 	private:
 		std::shared_ptr<HSMBarSensorImpl<T>> impl;
 	};

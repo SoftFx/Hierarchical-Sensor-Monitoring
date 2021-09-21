@@ -75,10 +75,10 @@ HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path,
 	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
 }
 
-HSMSensor<const std::string&> DataCollectorImpl::CreateStringSensor(const std::string& path, const std::string& description)
+HSMSensor<string> DataCollectorImpl::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	auto string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
-	return HSMSensor<const std::string&>{std::make_shared<HSMSensorImpl<const std::string&>>(string_sensor)};
+	return HSMSensor<string>{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
 }
 
 HSMLastValueSensor<bool> DataCollectorImpl::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
@@ -99,10 +99,10 @@ HSMLastValueSensor<double> DataCollectorImpl::CreateLastValueDoubleSensor(const 
 	return HSMLastValueSensor<double>{std::make_shared<HSMLastValueSensorImpl<double>>(double_default_sensor)};
 }
 
-HSMLastValueSensor<const std::string&> DataCollectorImpl::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
+HSMLastValueSensor<std::string> DataCollectorImpl::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
 {
 	auto int_default_sensor = data_collector->CreateLastValueStringSensor(gcnew String(path.c_str()), gcnew String(default_value.c_str()), gcnew String(description.c_str()));
-	return HSMLastValueSensor<const std::string&>{std::make_shared<HSMLastValueSensorImpl<const std::string&>>(int_default_sensor)};
+	return HSMLastValueSensor<string>{std::make_shared<HSMLastValueSensorImpl<std::string>>(int_default_sensor)};
 }
 
 HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
@@ -236,7 +236,7 @@ HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path
 	}
 }
 
-HSMSensor<const std::string&> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const std::string& description)
+HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	try
 	{

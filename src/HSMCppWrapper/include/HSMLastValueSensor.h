@@ -12,12 +12,13 @@ namespace hsm_wrapper
 	{
 	public:
 		using ElementType = T;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<T>, T, const T&>::type;
 
 		HSMLastValueSensor(std::shared_ptr<HSMLastValueSensorImpl<T>> sensor_impl);
 
-		void AddValue(T value);
-		void AddValue(T value, const std::string& comment);
-		void AddValue(T value, HSMSensorStatus status, const std::string& comment);
+		void AddValue(ElementParameterType value);
+		void AddValue(ElementParameterType value, const std::string& comment);
+		void AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment);
 	private:
 		std::shared_ptr<HSMLastValueSensorImpl<T>> impl;
 	};
@@ -28,5 +29,5 @@ namespace hsm_wrapper
 	using BoolLastValueSensor = HSMLastValueSensor<bool>;
 	using IntLastValueSensor = HSMLastValueSensor<int>;
 	using DoubleLastValueSensor = HSMLastValueSensor<double>;
-	using StringLastValueSensor = HSMLastValueSensor<const std::string&>;
+	using StringLastValueSensor = HSMLastValueSensor<std::string>;
 }

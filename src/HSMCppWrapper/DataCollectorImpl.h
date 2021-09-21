@@ -35,11 +35,11 @@ namespace hsm_wrapper
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
 		HSMSensor<double> CreateDoubleSensor(const std::string& path, const std::string& description = "");
-		HSMSensor<const std::string&> CreateStringSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<std::string> CreateStringSensor(const std::string& path, const std::string& description = "");
 		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
 		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
 		HSMLastValueSensor<double> CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
-		HSMLastValueSensor<const std::string&> CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
+		HSMLastValueSensor<std::string> CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 

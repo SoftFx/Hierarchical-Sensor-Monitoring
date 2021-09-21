@@ -32,9 +32,9 @@ namespace hsm_wrapper
 	class HSMNoParamsFuncSensor
 	{
 	public:
-		using Type = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
+		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
 
-		HSMNoParamsFuncSensor(std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<Type>> impl_wrapper) : impl_wrapper(impl_wrapper)
+		HSMNoParamsFuncSensor(std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<ResultType>> impl_wrapper) : impl_wrapper(impl_wrapper)
 		{
 		}
 
@@ -49,6 +49,6 @@ namespace hsm_wrapper
 		}
 
 	private:
-		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<Type>> impl_wrapper;
+		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<ResultType>> impl_wrapper;
 	};
 }
