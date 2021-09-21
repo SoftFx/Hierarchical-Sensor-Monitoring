@@ -9,7 +9,7 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMBarSensor
 	{
 	public:
-		using type = T;
+		using ElementType = T;
 
 		HSMBarSensor(std::shared_ptr<HSMBarSensorImpl<T>> sensor_impl);
 

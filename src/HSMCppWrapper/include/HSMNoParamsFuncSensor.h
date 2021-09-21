@@ -12,7 +12,7 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMNoParamsFuncSensorImplWrapper
 	{
 	public:
-		using Type = T;
+		using ResultType = T;
 
 		HSMNoParamsFuncSensorImplWrapper(std::shared_ptr<HSMNoParamsFuncSensorImpl<T>> impl);
 
