@@ -7,8 +7,14 @@ namespace hsm_wrapper
 	template<class T>
 	class HSMSensorImpl;
 
+	class IHSMSensor
+	{
+	protected:
+		IHSMSensor() = default;
+	};
+
 	template<class T>
-	class HSMWRAPPER_API HSMSensor
+	class HSMWRAPPER_API HSMSensor : IHSMSensor
 	{
 	public:
 		using ElementType = T;

@@ -28,8 +28,14 @@ namespace hsm_wrapper
 		std::function<T()> func;
 	};
 
+	class IHSMNoParamsFuncSensor
+	{
+	protected:
+		IHSMNoParamsFuncSensor() = default;
+	};
+
 	template<class T>
-	class HSMNoParamsFuncSensor
+	class HSMNoParamsFuncSensor : IHSMNoParamsFuncSensor
 	{
 	public:
 		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
