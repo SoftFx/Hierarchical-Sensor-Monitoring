@@ -1,8 +1,7 @@
-﻿using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
-using HSMDatabase.Entity;
+﻿using HSMDatabase.Entity;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Sensor;
 using System;
 
 namespace HSMServer.Core.MonitoringServerCore

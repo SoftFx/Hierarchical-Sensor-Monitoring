@@ -9,9 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>HSMDataCollector</RootNamespace>
     <AssemblyName>HSMDataCollector</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
     <!-- <PackageId>HSMDataCollector.HSMDataCollector</PackageId> -->
     <!-- <Authors>vitali.vasilevich</Authors> -->
     <!-- <Company>SoftFX</Company> -->
@@ -87,6 +88,8 @@
     <Compile Include="InstantValue\InstantValueSensorString.cs" />
     <Compile Include="InstantValue\InstantValueTypedSensorBase.cs" />
     <Compile Include="Logging\Logger.cs" />
+    <Compile Include="PerformanceSensor\CounterContainer\ExtandedPerformanceCounter.cs" />
+    <Compile Include="PerformanceSensor\CounterContainer\IExtendedPerformanceCounter.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessCPUSensor.cs" />
     <Compile Include="PerformanceSensor\ProcessMonitoring\ProcessThreadCountSensor.cs" />
     <Compile Include="PerformanceSensor\SystemMonitoring\TotalCPUSensor.cs" />
@@ -123,6 +126,12 @@
       <Version>1.0.0</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualBasic">
+      <Version>10.3.0</Version>
+    </PackageReference>
+    <PackageReference Include="System.Runtime.InteropServices.RuntimeInformation">
+      <Version>4.3.0</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup />

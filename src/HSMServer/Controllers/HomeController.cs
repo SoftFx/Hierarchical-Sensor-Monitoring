@@ -1,8 +1,8 @@
-﻿using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
@@ -10,12 +10,12 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
+using HSMServer.Model;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,19 +32,14 @@ namespace HSMServer.Controllers
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
-        private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-        private readonly ILogger<HomeController> _logger;
         public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
-            IHistoryProcessorFactory factory, IProductManager productManager,
-            ILogger<HomeController> logger)
+                IHistoryProcessorFactory factory)
         {
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;
-            _productManager = productManager;
             _historyProcessorFactory = factory;
-            _logger = logger;
         }
 
         public IActionResult Index()
@@ -318,6 +313,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string selectedSensor)
         {
+            
             var path = SensorPathHelper.Decode(selectedSensor);
             int index = path.IndexOf('/');
             var product = path.Substring(0, index);

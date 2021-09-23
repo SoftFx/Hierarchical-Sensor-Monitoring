@@ -1,6 +1,6 @@
-﻿using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Sensor;
 using System;
 
 namespace HSMServer.Model.ViewModel

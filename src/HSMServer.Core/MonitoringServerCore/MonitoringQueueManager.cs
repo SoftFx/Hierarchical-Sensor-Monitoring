@@ -1,7 +1,7 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMServer.Core.Extensions;
+﻿using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using NLog;
 using System;
 using System.Collections.Generic;

@@ -1,11 +1,10 @@
-﻿using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
-using HSMDatabase.Entity;
+﻿using HSMDatabase.Entity;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Sensor;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Text.Json;

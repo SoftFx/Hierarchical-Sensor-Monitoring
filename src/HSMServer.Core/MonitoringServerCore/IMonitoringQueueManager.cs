@@ -1,5 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using System.Collections.Generic;
 using System.Net;
 

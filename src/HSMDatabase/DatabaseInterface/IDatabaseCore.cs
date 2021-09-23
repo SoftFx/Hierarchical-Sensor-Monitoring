@@ -6,6 +6,22 @@ namespace HSMDatabase.DatabaseInterface
 {
     public interface IDatabaseCore
     {
+        /// <summary>
+        /// Get size of the whole database
+        /// </summary>
+        /// <returns>Databases folder size in bytes, including environment and all monitoring databases</returns>
+        long GetDatabaseSize();
+        /// <summary>
+        /// Get the size of all monitoring data
+        /// </summary>
+        /// <returns>Size of all monitoring databases in bytes</returns>
+        long GetMonitoringDataSize();
+
+        /// <summary>
+        /// Get size of environment database
+        /// </summary>
+        /// <returns>Size of environment database in bytes</returns>
+        long GetEnvironmentDatabaseSize();
         #region Sensors
         List<SensorDataEntity> GetAllSensorData(string productName, string path);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from);
