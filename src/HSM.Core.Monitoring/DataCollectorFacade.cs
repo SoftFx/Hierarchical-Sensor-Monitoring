@@ -3,7 +3,6 @@ using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using System;
 using System.Linq;
-using NLog.Targets;
 
 namespace HSM.Core.Monitoring
 {
