@@ -20,6 +20,10 @@ namespace HSMServer.Core.MonitoringServerCore
         void AddSensorsValues(IEnumerable<CommonSensorValue> values);
         void AddSensorsValues(IEnumerable<UnitedSensorValue> values);
         //Task<bool> AddSensorValueAsync(BoolSensorValue value);
+
+        void RemoveSensor(string produtc, string path);
+        void RemoveSensors(string product, IEnumerable<string> paths);
+
         void AddSensorValue(BoolSensorValue value);
         void AddSensorValue(IntSensorValue value);
         void AddSensorValue(DoubleSensorValue value);
