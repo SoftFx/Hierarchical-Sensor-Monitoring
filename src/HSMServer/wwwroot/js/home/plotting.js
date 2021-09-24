@@ -2,7 +2,46 @@
   let convertedData = convertToGraphData(graphData, graphType, graphName);
 
     //console.log('converted graph data:', convertedData);
-    Plotly.newPlot(graphElementId, convertedData);
+    let zoomData = getPreviousZoomData(graphElementId);
+    if (zoomData == null) {
+        Plotly.newPlot(graphElementId, convertedData);    
+    } else {
+        let layout = createLayoutFromZoomData(zoomData);
+        Plotly.newPlot(graphElementId, convertedData, layout);
+    }
+
+    removeZoomDataFromSessionStorage();
+    let graphDiv = document.getElementById(graphElementId);
+    graphDiv.on('plotly_relayout',
+        function(eventData) {
+            window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
+        });
+}
+
+function createLayoutFromZoomData(zoomData) {
+    var layout = {
+        xaxis : {
+            range : zoomData.xaxis.range
+        },
+        yaxis : {
+            range : zoomData.yAxis.range
+        }
+    };
+    return layout;
+}
+
+function getPreviousZoomData(graphElementId) {
+    return window.sessionStorage.getItem(graphElementId);
+}
+
+function removeZoomDataFromSessionStorage() {
+    let n = window.sessionStorage.length;
+    for (var i = 0; i < n; i++) {
+        let key = window.sessionStorage.key(i);
+        if (key.startsWith('graph_')) {
+            window.sessionStorage.removeItem(key);
+        }
+    }
 }
 
 function convertToGraphData(graphData, graphType, graphName) {
