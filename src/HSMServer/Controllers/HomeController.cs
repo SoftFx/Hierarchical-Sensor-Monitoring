@@ -32,13 +32,15 @@ namespace HSMServer.Controllers
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
+        private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
         public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
-                IHistoryProcessorFactory factory)
+                IHistoryProcessorFactory factory, IProductManager productManager)
         {
             _monitoringCore = monitoringCore;
             _treeManager = treeManager;
             _userManager = userManager;
+            _productManager = productManager;
             _historyProcessorFactory = factory;
         }
 
@@ -69,7 +71,10 @@ namespace HSMServer.Controllers
 
             if (string.IsNullOrEmpty(path))
             {
-                _monitoringCore.RemoveProduct(product, out var error);
+                var productEntity = _productManager.GetProductByName(product);
+                if (productEntity == null) return;
+
+                _monitoringCore.RemoveProduct(productEntity, out var error);
             }
             else
             {
