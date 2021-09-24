@@ -19,7 +19,7 @@ namespace hsm_wrapper
 	}
 
 	template<class T>
-	void HSMBarSensor<T>::AddValue(T value)
+	void HSMBarSensor<T>::AddValue(ElementParameterType value)
 	{
 		try
 		{
@@ -36,12 +36,12 @@ namespace hsm_wrapper
 
 
 	template<class T>
-	HSMBarSensorImpl<T>::HSMBarSensorImpl(typename BarSensorType<T>::type sensor) : sensor(sensor)
+	HSMBarSensorImpl<T>::HSMBarSensorImpl(typename BarSensorType<T>::Type sensor) : sensor(sensor)
 	{
 	}
 
 	template<class T>
-	void HSMBarSensorImpl<T>::AddValue(T value)
+	void HSMBarSensorImpl<T>::AddValue(ElementParameterType value)
 	{
 		sensor->AddValue(value);
 	}

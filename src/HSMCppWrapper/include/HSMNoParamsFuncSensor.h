@@ -12,7 +12,7 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMNoParamsFuncSensorImplWrapper
 	{
 	public:
-		using Type = T;
+		using ResultType = T;
 
 		HSMNoParamsFuncSensorImplWrapper(std::shared_ptr<HSMNoParamsFuncSensorImpl<T>> impl);
 
@@ -28,13 +28,19 @@ namespace hsm_wrapper
 		std::function<T()> func;
 	};
 
+	class IHSMNoParamsFuncSensor
+	{
+	protected:
+		IHSMNoParamsFuncSensor() = default;
+	};
+
 	template<class T>
-	class HSMNoParamsFuncSensor
+	class HSMNoParamsFuncSensor : IHSMNoParamsFuncSensor
 	{
 	public:
-		using Type = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
+		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;
 
-		HSMNoParamsFuncSensor(std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<Type>> impl_wrapper) : impl_wrapper(impl_wrapper)
+		HSMNoParamsFuncSensor(std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<ResultType>> impl_wrapper) : impl_wrapper(impl_wrapper)
 		{
 		}
 
@@ -49,6 +55,6 @@ namespace hsm_wrapper
 		}
 
 	private:
-		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<Type>> impl_wrapper;
+		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<ResultType>> impl_wrapper;
 	};
 }

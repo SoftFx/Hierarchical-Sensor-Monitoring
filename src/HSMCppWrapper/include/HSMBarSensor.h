@@ -5,15 +5,22 @@ namespace hsm_wrapper
 	template<class T>
 	class HSMBarSensorImpl;
 
+	class IHSMBarSensor
+	{
+	protected:
+		IHSMBarSensor() = default;
+	};
+
 	template<class T>
-	class HSMWRAPPER_API HSMBarSensor
+	class HSMWRAPPER_API HSMBarSensor : IHSMBarSensor
 	{
 	public:
-		using type = T;
+		using ElementType = T;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<T>, T, const T&>::type;
 
 		HSMBarSensor(std::shared_ptr<HSMBarSensorImpl<T>> sensor_impl);
 
-		void AddValue(T value);
+		void AddValue(ElementParameterType value);
 	private:
 		std::shared_ptr<HSMBarSensorImpl<T>> impl;
 	};
