@@ -790,6 +790,35 @@ namespace HSMServer.Core.MonitoringServerCore
             return result;
         }
 
+        public bool RemoveProduct(Product product, out string error)
+        {
+            bool result = false;
+            error = string.Empty;
+            try
+            {
+                RemoveProductFromUsers(product);
+                _productManager.RemoveProduct(product.Name);
+                _valuesCache.RemoveProduct(product.Name);
+
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = product.Name;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to remove product, name = {product.Name}");
+            }
+            return result;
+        }
+
         private void RemoveProductFromUsers(Product product)
         {
             var usersToEdit = new List<User>();
