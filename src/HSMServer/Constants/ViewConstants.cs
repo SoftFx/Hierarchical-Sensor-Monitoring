@@ -22,6 +22,7 @@
         public const string UpdateSelectedListAction = "UpdateSelectedList";
         public const string AddNewSensorsAction = "AddNewSensors";
         public const string RemoveProductAction = "RemoveProduct";
+        public const string RemoveNodeAction = "RemoveNode";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";

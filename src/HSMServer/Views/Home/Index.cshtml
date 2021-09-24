@@ -13,6 +13,7 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+    var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
@@ -77,6 +78,25 @@
 <script src="~/js/home/history.js"></script>
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
+
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+                
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div style="margin: 10px">
     <div class="row">
@@ -167,7 +187,7 @@
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateSelectedList + '?Selected=' + listId,
+            url: updateSeleHtmltedList + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,

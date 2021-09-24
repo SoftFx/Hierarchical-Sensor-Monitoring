@@ -1,4 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Sensor;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -24,7 +25,6 @@ namespace HSMServer.Model.ViewModel
         {
             var path = (sensor.Product + "/" + sensor.Path); //product/path/...
             path = path.Substring(0, path.LastIndexOf('/')); //without sensor
-            //path = path.Replace('/', '_');
 
             if (Paths.FirstOrDefault(x => x.Equals(path)) == null)
                 Paths.Add(path);
@@ -32,7 +32,7 @@ namespace HSMServer.Model.ViewModel
             var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(sensor.Product));
             if (existingNode == null)
             {
-                Nodes?.Add(new NodeViewModel(sensor.Product, sensor.Product, sensor));
+                Nodes?.Add(new NodeViewModel(sensor.Product, sensor.Product, sensor, null));
             }
             else
             {
@@ -40,7 +40,42 @@ namespace HSMServer.Model.ViewModel
             }
         }
 
-        public NodeViewModel GetNode(string path)
+        private void RemoveSensor(SensorData sensor)
+        {
+            var path = (sensor.Product + "/" + sensor.Path);
+            path = path.Substring(0, path.LastIndexOf('/'));
+            var sensorName = sensor.Path.Substring(sensor.Path.LastIndexOf('/') + 1);
+
+            var node = GetNode(path);
+            if (node == null) return;
+
+            var existingSensor = node.Sensors?.FirstOrDefault(s => s.Name.Equals(sensorName));
+            node.Sensors?.Remove(existingSensor);
+
+            if ((node.Sensors == null || node.Sensors.Count == 0)
+                && (node.Nodes == null || node.Nodes.Count == 0))
+            {
+                node.Parent.Nodes.Remove(node);
+                Paths.Remove(path);
+            }
+        }
+
+        private void RemoveProduct(string product)
+        {
+            var node = GetNode(product);
+            if (node == null) return;
+
+            if (node.Sensors != null && node.Sensors.Count > 0)
+                node.Sensors.Clear();
+
+            if (node.Nodes != null && node.Nodes.Count > 0)
+                node.Nodes.Clear();
+
+            Nodes.Remove(node);
+            Paths.Remove(product);
+        }
+
+        public NodeViewModel GetNode(string path)//with product
         {
             if (Nodes != null)
                 foreach (var node in Nodes)
@@ -58,11 +93,23 @@ namespace HSMServer.Model.ViewModel
         {
             foreach (var sensor in sensors)
             {
-                AddSensor(sensor);   
+                if (sensor.TransactionType == TransactionType.Add
+                    || sensor.TransactionType == TransactionType.Unknown
+                    || sensor.TransactionType == TransactionType.Update)
+                    AddSensor(sensor);
+
+                if (sensor.TransactionType == TransactionType.Delete
+                    && string.IsNullOrEmpty(sensor.Path))
+                    RemoveProduct(sensor.Product);
+
+                else if (sensor.TransactionType == TransactionType.Delete)
+                    RemoveSensor(sensor);
             }
             UpdateNodeCharacteristics();
             return this;
         }
+
+        
 
         public void UpdateNodeCharacteristics()
         {

@@ -1,9 +1,9 @@
 ﻿using HSMCommon.Model;
-using HSMCommon.Model.SensorsData;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
@@ -17,9 +17,13 @@ namespace HSMServer.Core.MonitoringServerCore
     {
         //public void AddSensorValue(JobResult value);
         [Obsolete("08.07.2021. Use void AddSensorsValues(IEnumerable<CommonSensorValue> values)")]
-        void AddSensorsValues(IEnumerable<CommonSensorValue> values);
-        void AddSensorsValues(IEnumerable<UnitedSensorValue> values);
+        void AddSensorsValues(List<CommonSensorValue> values);
+        void AddSensorsValues(List<UnitedSensorValue> values);
         //Task<bool> AddSensorValueAsync(BoolSensorValue value);
+
+        void RemoveSensor(string produtc, string path);
+        void RemoveSensors(string product, IEnumerable<string> paths);
+
         void AddSensorValue(BoolSensorValue value);
         void AddSensorValue(IntSensorValue value);
         void AddSensorValue(DoubleSensorValue value);
@@ -38,7 +42,6 @@ namespace HSMServer.Core.MonitoringServerCore
         //public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
         [Obsolete("16.09.2021. Use GetSensorHistory(User user, GetSensorHistoryModel model) or pass product, path and dates")]
         List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
-        List<SensorHistoryData> GetSensorHistory(User user, GetSensorHistoryModel model);
         List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path);
         string GetFileSensorValue(User user, string product, string path);
@@ -52,6 +55,7 @@ namespace HSMServer.Core.MonitoringServerCore
         //public AddProductResultMessage AddProduct(User user, string productName);
         bool AddProduct(User user, string productName, out Product product, out string error);
         //public RemoveProductResultMessage RemoveProduct(User user, string productName);
+        bool RemoveProduct(Product product, out string error);
         bool RemoveProduct(string productKey, out string error);
         bool RemoveProduct(User user, string productName, out Product product, out string error);
         void UpdateProduct(User user, Product product);

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace HSMCommon.Model
+namespace HSMServer.Model
 {
     public class GetSensorHistoryModel
     {

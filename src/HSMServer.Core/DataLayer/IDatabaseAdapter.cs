@@ -1,7 +1,7 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMDatabase.Entity;
+﻿using HSMDatabase.Entity;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 
@@ -9,87 +9,13 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseAdapter
     {
-        //16.09.2021 Remove old functionality
-        //#region Product Old
+        #region Size
 
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void RemoveProductOld(string productName);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void AddProductOld(Product product);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void UpdateProductOld(Product product);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //Product GetProductOld(string productName);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //List<Product> GetProductsOld();
+        long GetDatabaseSize();
+        long GetMonitoringDataSize();
+        long GetEnvironmentDatabaseSize();
 
-        //#endregion
-
-        //#region Sensors Old
-
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void RemoveSensorOld(string productName, string path);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void AddSensorOld(SensorInfo info);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void UpdateSensorOld(SensorInfo info);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void PutSensorDataOld(SensorDataEntity data, string productName);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void PutOneValueSensorDataOld(SensorDataEntity data, string productName);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //SensorDataEntity GetLastSensorValueOld(string productName, string path);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //SensorInfo GetSensorInfoOld(string productName, string path);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //List<SensorHistoryData> GetSensorHistoryOld(string productName, string path, long n);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //SensorHistoryData GetOneValueSensorValueOld(string productName, string path);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //List<SensorInfo> GetProductSensorsOld(Product product);
-        //[Obsolete("13.08.2021. Use for migration only!")]
-        //List<SensorDataEntity> GetAllSensorDataOld(string productName, string path);
-        //#endregion
-
-        //#region User Old
-
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void AddUserOld(User user);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void UpdateUserOld(User user);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void RemoveUserOld(User user);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //List<User> GetUsersOld();
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //List<User> GetUsersPageOld(int page, int pageSize);
-
-        //#endregion
-
-        //#region Configuration Old
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //ConfigurationObject GetConfigurationObjectOld(string name);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void WriteConfigurationObjectOld(ConfigurationObject obj);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void RemoveConfigurationObjectOld(string name);
-
-        //[Obsolete("13.08.2021. Use for migration only!")]
-        //List<ConfigurationObject> GetAllConfigurationObjectsOld();
-
-        //#endregion
-
-        //#region Registration Ticket Old
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //RegistrationTicket ReadRegistrationTicketOld(Guid id);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void RemoveRegistrationTicketOld(Guid id);
-        //[Obsolete("10.08.2021. Split databases, use methods without 'Old' postfix")]
-        //void WriteRegistrationTicketOld(RegistrationTicket ticket);
-        //[Obsolete("13.08.2021. Use for migration only!")]
-        //List<RegistrationTicket> GetAllTicketsOld();
-
-        //#endregion
+        #endregion
 
         #region Product
 

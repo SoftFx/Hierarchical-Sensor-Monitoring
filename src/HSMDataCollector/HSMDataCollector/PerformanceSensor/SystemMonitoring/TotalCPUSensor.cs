@@ -1,9 +1,9 @@
-﻿using System;
-using HSMDataCollector.Bar;
+﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using System;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
@@ -11,7 +11,7 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     {
         private const string _sensorName = "Total CPU";
         public TotalCPUSensor(string productKey, IValuesQueue queue, string nodeName = TextConstants.PerformanceNodeName)
-            : base($"{nodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total")
+            : base($"{nodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
         {
             InternalBar = new BarSensor<int>($"{nodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
         }
@@ -30,6 +30,15 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
         public override UnitedSensorValue GetLastValueNew()
         {
             return InternalBar.GetLastValueNew();
+        }
+
+        private static Func<double> GetTotalCPUFunc()
+        {
+            Func<double> func = delegate()
+            {
+                return 0.0;
+            };
+            return func;
         }
 
         public override void Dispose()

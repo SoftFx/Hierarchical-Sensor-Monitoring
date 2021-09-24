@@ -3,6 +3,8 @@ using HSMServer.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Threading;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HSMServer.Controllers
 {
@@ -11,6 +13,7 @@ namespace HSMServer.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [AllowAnonymous]
     public class ValuesController : ControllerBase
     {
         private readonly ILogger<ValuesController> _logger;

@@ -169,9 +169,7 @@ namespace HSMDataCollector.Bar
                 mean = sum / values.Count;
             }
             catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+            { }
             return mean;
         }
         private double GetRoundedNumber(double number)
@@ -226,9 +224,7 @@ namespace HSMDataCollector.Bar
                 mean = (int)(sum / values.Count);
             }
             catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+            { }
 
             return mean;
         }
