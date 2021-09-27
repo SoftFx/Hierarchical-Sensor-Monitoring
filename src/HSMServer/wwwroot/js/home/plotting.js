@@ -10,7 +10,6 @@
         Plotly.newPlot(graphElementId, convertedData, layout);
     }
 
-    //removeZoomDataFromSessionStorage();
     let graphDiv = document.getElementById(graphElementId);
     graphDiv.on('plotly_relayout',
         function(eventData) {
@@ -33,16 +32,6 @@ function createLayoutFromZoomData(zoomData) {
 
 function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
-}
-
-function removeZoomDataFromSessionStorage() {
-    let n = window.sessionStorage.length;
-    for (var i = 0; i < n; i++) {
-        let key = window.sessionStorage.key(i);
-        if (key.startsWith('graph_')) {
-            window.sessionStorage.removeItem(key);
-        }
-    }
 }
 
 function convertToGraphData(graphData, graphType, graphName) {
@@ -103,6 +92,9 @@ function convertToGraphData(graphData, graphType, graphName) {
 
     function getIntegersData(escapedItems) {
         let integers = escapedItems.map(function (i) {
+            //let date = new Date();
+            //console.log(i);
+            //console.log(date - new Date(Date.parse(i.time)));
             return JSON.parse(i.typedData).IntValue;
         });
 

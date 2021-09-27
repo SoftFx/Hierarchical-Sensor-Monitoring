@@ -29,6 +29,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
+        private const int DEFAULT_REQUESTED_COUNT = 40;
         private readonly IMonitoringCore _monitoringCore;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
@@ -221,7 +222,18 @@ namespace HSMServer.Controllers
         #region SensorsHistory
 
         [HttpPost]
-        public HtmlString History([FromBody]GetSensorHistoryModel model)
+        public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
+        {
+            ParseProductAndPath(model.Path, out string product, out string path);
+            List<SensorHistoryData> unprocessedData = _monitoringCore.GetSensorHistory(HttpContext.User as User,
+                product, path, DEFAULT_REQUESTED_COUNT);
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
+            var processedData = processor.ProcessHistory(unprocessedData);
+            return new HtmlString(TableHelper.CreateHistoryTable(processedData, model.Path));
+        }
+
+        [HttpPost]
+        public HtmlString History([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.Path, out string product, out string path);
             return GetHistory(product, path, model.Type, model.From, model.To,
@@ -235,7 +247,7 @@ namespace HSMServer.Controllers
             ParseProductAndPath(encodedPath, out string product, out string path);
             var result = _monitoringCore.GetAllSensorHistory(HttpContext.User as User, product, path);
 
-            return new HtmlString(TableHelper.CreateHistoryTable(result));
+            return new HtmlString(TableHelper.CreateHistoryTable(result, encodedPath));
         }
 
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
@@ -244,9 +256,20 @@ namespace HSMServer.Controllers
                 _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
                     to.ToUniversalTime());
 
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
             var processedData = processor.ProcessHistory(unprocessedData);
-            return new HtmlString(TableHelper.CreateHistoryTable(processedData));
+            return new HtmlString(TableHelper.CreateHistoryTable(processedData, SensorPathHelper.Encode($"{product}/{path}")));
+        }
+
+        [HttpPost]
+        public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
+        {
+            ParseProductAndPath(model.Path, out string product, out string path);
+            List<SensorHistoryData> unprocessedData = _monitoringCore.GetSensorHistory(HttpContext.User as User,
+                product, path, DEFAULT_REQUESTED_COUNT);
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
+            var processedData = processor.ProcessHistory(unprocessedData);
+            return new JsonResult(processedData);
         }
 
         [HttpPost]
@@ -272,7 +295,7 @@ namespace HSMServer.Controllers
                 _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
                     to.ToUniversalTime());
 
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
             var processedData = processor.ProcessHistory(unprocessedData);
             return new JsonResult(processedData);
         }
@@ -302,7 +325,7 @@ namespace HSMServer.Controllers
         private FileResult GetExportHistory(List<SensorHistoryData> dataList,
             int type, PeriodType periodType, string fileName)
         {
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type, periodType);
+            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
             string csv = processor.GetCsvHistory(dataList);
             byte[] fileContents = Encoding.UTF8.GetBytes(csv);
             return File(fileContents, GetFileTypeByExtension(fileName), fileName);

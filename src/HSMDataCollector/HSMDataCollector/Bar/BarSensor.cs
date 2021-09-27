@@ -46,6 +46,7 @@ namespace HSMDataCollector.Bar
                 startTime = barStart;
                 endTime = DateTime.Now;
                 barStart = DateTime.Now;
+                _valuesList.Clear();
             }
 
             UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime, endTime);

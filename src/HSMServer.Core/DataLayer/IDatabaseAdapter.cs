@@ -38,6 +38,7 @@ namespace HSMServer.Core.DataLayer
         List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
+        List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
         List<SensorInfo> GetProductSensors(Product product);
 
