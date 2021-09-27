@@ -52,11 +52,15 @@ namespace HSMServer.Model.ViewModel
             var existingSensor = node.Sensors?.FirstOrDefault(s => s.Name.Equals(sensorName));
             node.Sensors?.Remove(existingSensor);
 
-            if ((node.Sensors == null || node.Sensors.Count == 0)
+            while((node.Sensors == null || node.Sensors.Count == 0)
                 && (node.Nodes == null || node.Nodes.Count == 0))
             {
+                var parent = node.Parent;
+
                 node.Parent.Nodes.Remove(node);
                 Paths.Remove(path);
+
+                node = parent;
             }
         }
 
