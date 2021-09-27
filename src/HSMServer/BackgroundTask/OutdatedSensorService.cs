@@ -1,13 +1,14 @@
-﻿using HSMServer.DataLayer;
-using HSMServer.Products;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model;
+using HSMServer.Core.Products;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Cache;
-using HSMServer.Configuration;
-using HSMServer.Constants;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.BackgroundTask
 {
@@ -46,7 +47,8 @@ namespace HSMServer.BackgroundTask
                         var sensors = _productManager.GetProductSensors(product.Name);
                         foreach (var sensor in sensors)
                         {
-                            var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
+                            //var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
+                            var lastValue = _databaseAdapter.GetLastSensorValue(sensor.ProductName, sensor.Path);
                             if (lastValue == null)
                                 continue;
 

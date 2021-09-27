@@ -1,5 +1,5 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Constants;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
@@ -19,6 +19,7 @@ namespace HSMServer.Middleware
         public async Task InvokeAsync(HttpContext context)
         {
             var port = context.Connection.LocalPort;
+            
             if (port == ConfigurationConstants.SitePort)
             {
                 var currentUser = context.User;

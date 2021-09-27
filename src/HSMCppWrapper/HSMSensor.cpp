@@ -3,6 +3,8 @@
 #include "HSMSensor.h"
 #include "HSMSensorImpl.h"
 
+#include "msclr/marshal_cppstd.h"
+
 using namespace std;
 
 using System::String;
@@ -17,66 +19,80 @@ namespace hsm_wrapper
 	}
 
 	template<class T>
-	void HSMSensor<T>::AddValue(T value)
+	void HSMSensor<T>::AddValue(ElementParameterType value)
 	{
-		impl->AddValue(value);
+		try
+		{
+			impl->AddValue(value);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 	template<class T>
-	void HSMSensor<T>::AddValue(T value, const std::string& comment)
+	void HSMSensor<T>::AddValue(ElementParameterType value, const std::string& comment)
 	{
-		impl->AddValue(value, comment);
+		try
+		{
+			impl->AddValue(value, comment);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 	template<class T>
-	void HSMSensor<T>::AddValue(T value, HSMSensorStatus status, const std::string& comment)
+	void HSMSensor<T>::AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment)
 	{
-		impl->AddValue(value, status, comment);
+		try
+		{
+			impl->AddValue(value, status, comment);
+		}
+		catch (System::Exception^ ex)
+		{
+			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+		}
 	}
 
 
 
 
 	template<class T>
-	HSMSensorImpl<T>::HSMSensorImpl(typename SensorType<T>::type sensor) : sensor(sensor)
+	HSMSensorImpl<T>::HSMSensorImpl(IInstantValueSensor<ElementType>^ sensor) : sensor(sensor)
 	{
 	}
 
 	template<class T>
-	void HSMSensorImpl<T>::AddValue(T value)
+	void HSMSensorImpl<T>::AddValue(ElementParameterType value)
 	{
-		sensor->AddValue(value);
+		if constexpr (std::is_arithmetic_v<T>)
+			sensor->AddValue(value);
+		else
+			sensor->AddValue(gcnew String(value.c_str()));
 	}
 
 	template<class T>
-	void HSMSensorImpl<T>::AddValue(T value, const std::string& comment)
+	void HSMSensorImpl<T>::AddValue(ElementParameterType value, const std::string& comment)
 	{
-		sensor->AddValue(value, gcnew String(comment.c_str()));
+		if constexpr (std::is_arithmetic_v<T>)
+			sensor->AddValue(value, gcnew String(comment.c_str()));
+		else
+			sensor->AddValue(gcnew String(value.c_str()), gcnew String(comment.c_str()));
 	}
 
 	template<class T>
-	void HSMSensorImpl<T>::AddValue(T value, HSMSensorStatus status, const std::string& comment)
+	void HSMSensorImpl<T>::AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment)
 	{
-		sensor->AddValue(value, SensorStatus(status), gcnew String(comment.c_str()));
+		if constexpr (std::is_arithmetic_v<T>)
+			sensor->AddValue(value, SensorStatus(status), gcnew String(comment.c_str()));
+		else
+			sensor->AddValue(gcnew String(value.c_str()), SensorStatus(status), gcnew String(comment.c_str()));
 	}
 
-	template<>
-	void HSMSensorImpl<const std::string&>::AddValue(const std::string& value)
-	{
-		sensor->AddValue(gcnew String(value.c_str()));
-	}
 
-	template<>
-	void HSMSensorImpl<const std::string&>::AddValue(const std::string& value, const std::string& comment)
-	{
-		sensor->AddValue(gcnew String(value.c_str()), gcnew String(comment.c_str()));
-	}
-
-	template<>
-	void HSMSensorImpl<const std::string&>::AddValue(const std::string& value, HSMSensorStatus status, const std::string& comment)
-	{
-		sensor->AddValue(gcnew String(value.c_str()), SensorStatus(status), gcnew String(comment.c_str()));
-	}
 
 
 	template class HSMSensor<bool>;
@@ -85,6 +101,6 @@ namespace hsm_wrapper
 	template class HSMSensorImpl<int>;
 	template class HSMSensor<double>;
 	template class HSMSensorImpl<double>;
-	template class HSMSensor<const std::string&>;
-	template class HSMSensorImpl<const std::string&>;
+	template class HSMSensor<string>;
+	template class HSMSensorImpl<string>;
 }

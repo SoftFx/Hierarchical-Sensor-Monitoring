@@ -44,15 +44,28 @@ void HSMNoParamsFuncSensorImplWrapper<T>::SetFunc(std::function<T()> function)
 template<class T>
 std::chrono::milliseconds HSMNoParamsFuncSensorImplWrapper<T>::GetInterval()
 {
-	return impl->GetInterval();
+	try
+	{
+		return impl->GetInterval();
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
 }
 
 template<class T>
 void HSMNoParamsFuncSensorImplWrapper<T>::RestartTimer(std::chrono::milliseconds time_interval)
 {
-	impl->RestartTimer(time_interval);
+	try
+	{
+		impl->RestartTimer(time_interval);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
 }
-
 
 template<class T>
 T HSMNoParamsFuncSensorImplWrapper<T>::Func()

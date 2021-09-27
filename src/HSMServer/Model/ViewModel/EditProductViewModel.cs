@@ -1,5 +1,5 @@
-﻿using HSMServer.Authentication;
-using HSMServer.DataLayer.Model;
+﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using System.Collections.Generic;
 using System.Linq;
 

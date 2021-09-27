@@ -1,6 +1,7 @@
-﻿using HSMServer.Authentication;
-using HSMServer.DataLayer.Model;
-using HSMServer.MonitoringServerCore;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.MonitoringServerCore;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 

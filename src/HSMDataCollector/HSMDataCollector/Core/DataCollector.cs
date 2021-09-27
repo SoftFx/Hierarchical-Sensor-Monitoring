@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
+using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
@@ -9,6 +10,7 @@ using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -20,8 +22,6 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
-using HSMDataCollector.CustomFuncSensor;
-using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Core
 {
@@ -51,7 +51,9 @@ namespace HSMDataCollector.Core
             _listSendingAddress = $"{connectionAddress}/listNew";
             _productKey = productKey;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-            _client = new HttpClient();
+            HttpClientHandler handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
+            _client = new HttpClient(handler);
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();

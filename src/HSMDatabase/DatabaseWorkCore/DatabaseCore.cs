@@ -4,7 +4,7 @@ using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -63,6 +63,60 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
             }
         }
+
+        #region Database size
+
+
+        public long GetDatabaseSize()
+        {
+            DirectoryInfo databasesDir = new DirectoryInfo(DatabaseParentFolder);
+            return GetDirectorySize(databasesDir);
+        }
+
+        public long GetMonitoringDataSize()
+        {
+            long size = 0;
+            var databasesList = _environmentDatabase.GetMonitoringDatabases();
+            foreach (var monitoringDB in databasesList)
+            {
+                DirectoryInfo info = new DirectoryInfo($"{DatabaseParentFolder}/{monitoringDB}");
+                size += GetDirectorySize(info);
+            }
+
+            return size;
+        }
+
+        public long GetEnvironmentDatabaseSize()
+        {
+            DirectoryInfo environmentDatabaseDir = 
+                new DirectoryInfo($"{DatabaseParentFolder}/{EnvironmentDatabaseName}");
+            return GetDirectorySize(environmentDatabaseDir);
+        }
+
+        private long GetDirectorySize(DirectoryInfo directory)
+        {
+            long size = 0;
+            FileInfo[] files = directory.GetFiles();
+            foreach (var file in files)
+            {
+                try
+                {
+                    size += file.Length;
+                }
+                catch (Exception e)
+                { }
+            }
+
+            DirectoryInfo[] directories = directory.GetDirectories();
+            foreach (var dir in directories)
+            {
+                size += GetDirectorySize(dir);
+            }
+
+            return size;
+        }
+
+        #endregion
 
         #region Sensors methods
 

@@ -29,9 +29,15 @@ namespace hsm_wrapper
 		std::shared_ptr<HSMParamsFuncSensorImpl<T, U>> impl;
 		std::function<T(std::list<U>)> func;
 	};
+
+	class IHSMParamsFuncSensor
+	{
+	protected:
+		IHSMParamsFuncSensor() = default;
+	};
 	
 	template<class T, class U>
-	class HSMParamsFuncSensor
+	class HSMParamsFuncSensor : IHSMParamsFuncSensor
 	{
 	public:
 		using ResultType = typename std::conditional<std::is_arithmetic_v<T>, T, std::string>::type;

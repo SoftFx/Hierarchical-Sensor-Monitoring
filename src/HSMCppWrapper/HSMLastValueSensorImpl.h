@@ -9,27 +9,18 @@ using namespace HSMDataCollector::PublicInterface;
 namespace hsm_wrapper
 {
 	template<class T>
-	struct DefaultSensorType
-	{
-		using type = ILastValueSensor<T>^;
-	};
-
-	template<>
-	struct DefaultSensorType<const std::string&>
-	{
-		using type = ILastValueSensor<String^>^;
-	};
-
-	template<class T>
 	class HSMLastValueSensorImpl
 	{
 	public:
-		HSMLastValueSensorImpl(typename DefaultSensorType<T>::type sensor);
+		using ElementType = typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type;
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<T>, T, const T&>::type;
 
-		void AddValue(T value);
-		void AddValue(T value, const std::string& comment);
-		void AddValue(T value, HSMSensorStatus status, const std::string& comment);
+		HSMLastValueSensorImpl(ILastValueSensor<ElementType>^ sensor);
+
+		void AddValue(ElementParameterType value);
+		void AddValue(ElementParameterType value, const std::string& comment);
+		void AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment);
 	private:
-		msclr::auto_gcroot<typename DefaultSensorType<T>::type> sensor;
+		msclr::auto_gcroot<ILastValueSensor<ElementType>^> sensor;
 	};
 }

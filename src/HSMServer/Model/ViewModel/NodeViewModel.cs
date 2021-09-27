@@ -1,5 +1,5 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
+using HSMServer.Core.Model.Sensor;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,15 +16,18 @@ namespace HSMServer.Model.ViewModel
 
         //public DateTime LastUpdate {get;set;}
 
+        public NodeViewModel Parent { get; set; }
+
         public List<NodeViewModel> Nodes { get; set; }
 
         public List<SensorViewModel> Sensors { get; set; }
 
-        public NodeViewModel(string name, string path, SensorData sensor)
+        public NodeViewModel(string name, string path, SensorData sensor, NodeViewModel parent)
         {
             Name = name;
-            Path = path;//.Replace('/', '_');
+            Path = path;
             Status = sensor.Status;
+            Parent = parent;
 
             AddSensor(path, sensor);
         }
@@ -37,7 +40,6 @@ namespace HSMServer.Model.ViewModel
             {
                 if (Sensors == null)
                     Sensors = new List<SensorViewModel> { new SensorViewModel(nodes[0], sensor) };
-
 
                 var existingSensor = Sensors.FirstOrDefault(s => s.Name == nodes[0]);
                 if (existingSensor == null)
@@ -57,9 +59,9 @@ namespace HSMServer.Model.ViewModel
                 path += $"/{nodes[0]}";
 
                 if (Nodes == null)
-                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], path, sensor) };
+                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], path, sensor, this) };
                 else if (existingNode == null)
-                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor));
+                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor, this));
                 else
                     existingNode.AddSensor(path, sensor);
             }

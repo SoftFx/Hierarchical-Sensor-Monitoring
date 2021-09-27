@@ -1,5 +1,6 @@
-﻿using System.Text;
+﻿using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
+using System.Text;
 
 namespace HSMServer.HtmlHelpers
 {
@@ -18,6 +19,20 @@ namespace HSMServer.HtmlHelpers
                 }
 
             result.Append("</ul></div></div>");
+
+            return result.ToString();
+        }
+
+        public static string UpdateTree(TreeViewModel model)
+        {
+            if (model == null) return string.Empty;
+
+            StringBuilder result = new StringBuilder();
+            if (model.Nodes != null)
+                foreach (var node in model.Nodes)
+                {
+                    result.Append(Recursion(node));
+                }
 
             return result.ToString();
         }

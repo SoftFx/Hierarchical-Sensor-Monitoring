@@ -1,4 +1,5 @@
-﻿using HSMServer.HtmlHelpers;
+﻿using HSMServer.Helpers;
+using HSMServer.HtmlHelpers;
 using System;
 
 namespace HSMServer.Model.ViewModel

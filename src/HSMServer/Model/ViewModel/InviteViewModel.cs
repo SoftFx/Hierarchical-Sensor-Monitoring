@@ -1,7 +1,4 @@
-﻿using HSMServer.Authentication;
-using System;
-
-namespace HSMServer.Model.ViewModel
+﻿namespace HSMServer.Model.ViewModel
 {
     public class InviteViewModel
     {

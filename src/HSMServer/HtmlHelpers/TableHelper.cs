@@ -1,10 +1,11 @@
-﻿using HSMCommon.Model.SensorsData;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.ApiControllers;
-using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.DataLayer.Model;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -145,6 +146,7 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>#</th>" +
                 "<th scope='col'>Name</th>" +
                 "<th scope='col'>Key</th>" +
+                "<th scope='col colspan='2'></th>" +
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
@@ -160,10 +162,11 @@ namespace HSMServer.HtmlHelpers
                     "<th><input id='createName' type='text' class='form-control'/>" +
                     "<span style='display: none;' id='new_product_name_span'></th>" +
                     "<th>---</th>" +
-                    $"<th>---</th>" +
-                    $"<th>---</th>" +
+                    "<th></th>" +
+                    "<th>---</th>" +
+                    "<th>---</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
-                    $"<i class='fas fa-plus'></i></button></th></tr>");
+                    "<i class='fas fa-plus'></i></button></th></tr>");
 
             if (products == null || products.Count == 0) return result.ToString();
 
@@ -172,9 +175,9 @@ namespace HSMServer.HtmlHelpers
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{product.Name}</td>" +
-                    $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key} " +
-                    $"<button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
-                    $"<i class='far fa-copy'></i></button>" +
+                    $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key}</td> " +
+                    $"<td><button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
+                    "<i class='far fa-copy'></i></button>" +
                     $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
                     $"<td>{product.CreationDate}</td>" +
                     $"<td>{product.ManagerName}</td>");
@@ -183,15 +186,15 @@ namespace HSMServer.HtmlHelpers
                 if (UserRoleHelper.IsProductCRUDAllowed(user) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
-                    $"type='button' class='btn btn-secondary' title='edit'>" +
+                    "type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user))
                     result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
-                        $"type='button' class='btn btn-secondary' title='delete'>" +
-                        $"<i class='fas fa-trash-alt'></i></button>");
+                        "type='button' class='btn btn-secondary' title='delete'>" +
+                        "<i class='fas fa-trash-alt'></i></button>");
 
-                    result.Append("</tr>");
+                result.Append("</tr>");
                 index++;
             }
 
@@ -615,20 +618,20 @@ namespace HSMServer.HtmlHelpers
                 if (!configurationObjects[i].IsDefault)
                 {
                     sb.Append($"<button id='reset_{configurationObjects[i].Name}' style='margin-left: 5px' " +
-                              "type='button' class='btn btn-secondary' title='reset value to default'>" +
-                              "<i class='fas fa-undo-alt'></i></button>");
+                              "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                              " title='reset value to default'><i class='fas fa-undo-alt'></i></button>");
                 }
 
                 sb.Append($"<button disabled style='margin-left: 5px' id='ok_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' title='ok'>" +
-                          "<i class='fas fa-check'></i></button>" +
+                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                          " title='ok'><i class='fas fa-check'></i></button>" +
 
                           $"<button disabled style='margin-left: 5px' id='cancel_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' title='revert changes'>" +
-                          "<i class='fas fa-times'></i></button></td></tr>");
+                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                          " title='revert changes'><i class='fas fa-times'></i></button></td></tr>");
             }
 
-            sb.Append("</tbody");
+            sb.Append("</tbody></table></div>");
             return sb.ToString();
         }
 

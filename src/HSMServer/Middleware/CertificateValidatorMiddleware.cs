@@ -1,11 +1,13 @@
-﻿using System.Threading.Tasks;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
-using HSMServer.Constants;
+﻿using System;
+using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
 using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
+    [Obsolete("15.09.2021. Remove desktop client and certificate auth")]
     internal class CertificateValidatorMiddleware
     {
         private readonly RequestDelegate _next;
