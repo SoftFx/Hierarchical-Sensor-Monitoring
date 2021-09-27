@@ -82,12 +82,23 @@ namespace HSMServer.Controllers
                 var node = model.GetNode(decodedPath);
 
                 var paths = new List<string>();
-                if (node.Sensors != null && node.Sensors.Count > 0)
-                    foreach (var sensor in node.Sensors)
-                        paths.Add($"{path}/{sensor.Name}");
+                GetSensorsPaths(node, paths);
 
                 _monitoringCore.RemoveSensors(product, paths);
             }
+        }
+
+        private void GetSensorsPaths(NodeViewModel node, List<string> paths)
+        {
+            var path = node.Path.Substring(node.Path.IndexOf('/') + 1);
+
+            if (node.Sensors != null && node.Sensors.Count > 0)
+                foreach (var sensor in node.Sensors)
+                    paths.Add($"{path}/{sensor.Name}");
+
+            if (node.Nodes != null && node.Nodes.Count > 0)
+                foreach (var child in node.Nodes)
+                    GetSensorsPaths(child, paths);
         }
 
         #region Update
