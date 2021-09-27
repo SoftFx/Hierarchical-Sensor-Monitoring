@@ -11,17 +11,19 @@ namespace hsm_wrapper
 	template<class T>
 	struct BarSensorType
 	{
-		using type = IBarSensor<T>^;
+		using Type = IBarSensor<T>^;
 	};
 
 	template<class T>
 	class HSMBarSensorImpl
 	{
 	public:
-		HSMBarSensorImpl(typename BarSensorType<T>::type sensor);
+		using ElementParameterType = typename std::conditional<std::is_arithmetic_v<T>, T, const T&>::type;
 
-		void AddValue(T value);
+		HSMBarSensorImpl(typename BarSensorType<T>::Type sensor);
+
+		void AddValue(ElementParameterType value);
 	private:
-		msclr::auto_gcroot<typename BarSensorType<T>::type> sensor;
+		msclr::auto_gcroot<typename BarSensorType<T>::Type> sensor;
 	};
 }

@@ -54,19 +54,40 @@ void HSMParamsFuncSensorImplWrapper<T, U>::SetFunc(std::function<T(std::list<U>)
 template<class T, class U>
 std::chrono::milliseconds HSMParamsFuncSensorImplWrapper<T, U>::GetInterval()
 {
-	return impl->GetInterval();
+	try
+	{
+		return impl->GetInterval();
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
 }
 
 template<class T, class U>
 void HSMParamsFuncSensorImplWrapper<T, U>::RestartTimer(std::chrono::milliseconds time_interval)
 {
-	impl->RestartTimer(time_interval);
+	try
+	{
+		impl->RestartTimer(time_interval);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
 }
 
 template<class T, class U>
 void HSMParamsFuncSensorImplWrapper<T, U>::AddValue(U value)
 {
-	impl->AddValue(value);
+	try
+	{
+		impl->AddValue(value);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
 }
 
 template<class T, class U>
