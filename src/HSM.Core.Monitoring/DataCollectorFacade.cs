@@ -3,7 +3,6 @@ using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using System;
 using System.Linq;
-using NLog.Targets;
 
 namespace HSM.Core.Monitoring
 {
@@ -37,22 +36,25 @@ namespace HSM.Core.Monitoring
             //Request size sensor
             _requestSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>
             (MonitoringConstants.RequestSizeSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 15.0, 2, MidpointRounding.AwayFromZero));
+                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
 
             //Response size sensor
             _responseSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>
             (MonitoringConstants.ResponseSizeSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 15.0, 2, MidpointRounding.AwayFromZero));
+                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
+                45000);
 
             //Received sensors count
             _receivedSensorsSensor = _dataCollector.CreateParamsFuncSensor<double, int>(
                 MonitoringConstants.SensorsCountSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 15.0, 2, MidpointRounding.AwayFromZero));
+                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
+                45000);
 
             //Requests count sensor
             _requestsCountSensor = _dataCollector.CreateParamsFuncSensor<double, int>(
                 MonitoringConstants.RequestsCountSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 15.0, 2, MidpointRounding.AwayFromZero));
+                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
+                45000);
 
             #endregion
 
