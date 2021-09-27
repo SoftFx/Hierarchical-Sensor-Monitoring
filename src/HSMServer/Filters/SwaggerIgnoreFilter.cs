@@ -1,4 +1,4 @@
-﻿using HSMServer.Attributes;
+﻿using HSMCommon.Attributes;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System;
@@ -13,7 +13,7 @@ namespace HSMServer.Filters
             .SelectMany(a => a.GetTypes()).Where(type =>
                 type.GetCustomAttributes(true).OfType<SwaggerIgnoreAttribute>().Any()).ToList();
 
-        private static readonly List<string> _manuallyExcludedTypes = new List<string> {"Claim", "ClaimsIdentity" };
+        private static readonly List<string> _manuallyExcludedTypes = new List<string> { "Claim", "ClaimsIdentity" };
         public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
         {
             foreach (var typeToExclude in _excludedTypes)
@@ -26,7 +26,5 @@ namespace HSMServer.Filters
                 swaggerDoc.Components.Schemas.Remove(typeToExclude);
             }
         }
-
-        
     }
 }

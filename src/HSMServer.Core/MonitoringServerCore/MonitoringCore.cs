@@ -1,0 +1,882 @@
+﻿using HSMCommon;
+using HSMCommon.Certificates;
+using HSMCommon.Model;
+using HSMDatabase.Entity;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.Products;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using RSAParameters = System.Security.Cryptography.RSAParameters;
+
+namespace HSMServer.Core.MonitoringServerCore
+{
+    public class MonitoringCore : IMonitoringCore
+    {
+        //#region IDisposable implementation
+
+        //private bool _disposed;
+
+        //// Implement IDisposable.
+        //public void Dispose()
+        //{
+        //    Dispose(true);
+        //    GC.SuppressFinalize(this);
+        //}
+
+        //protected virtual void Dispose(bool disposingManagedResources)
+        //{
+        //    // The idea here is that Dispose(Boolean) knows whether it is 
+        //    // being called to do explicit cleanup (the Boolean is true) 
+        //    // versus being called due to a garbage collection (the Boolean 
+        //    // is false). This distinction is useful because, when being 
+        //    // disposed explicitly, the Dispose(Boolean) method can safely 
+        //    // execute code using reference type fields that refer to other 
+        //    // objects knowing for sure that these other objects have not been 
+        //    // finalized or disposed of yet. When the Boolean is false, 
+        //    // the Dispose(Boolean) method should not execute code that 
+        //    // refer to reference type fields because those objects may 
+        //    // have already been finalized."
+
+        //    if (!_disposed)
+        //    {
+        //        if (disposingManagedResources)
+        //        {
+
+        //        }
+
+        //        _disposed = true;
+        //    }
+        //}
+
+        //// Use C# destructor syntax for finalization code.
+        //~MonitoringCore()
+        //{
+        //    // Simply call Dispose(false).
+        //    Dispose(false);
+        //}
+
+        //#endregion
+
+        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IBarSensorsStorage _barsStorage;
+        private readonly IMonitoringQueueManager _queueManager;
+        private readonly IUserManager _userManager;
+        private readonly CertificateManager _certificateManager;
+        private readonly IProductManager _productManager;
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly ILogger<MonitoringCore> _logger;
+        private readonly IValuesCache _valuesCache;
+        private readonly IConverter _converter;
+
+        public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
+            IProductManager productManager, IConfigurationProvider configurationProvider, IValuesCache valuesVCache,
+            IConverter converter, ILogger<MonitoringCore> logger)
+        {
+            _logger = logger;
+            _databaseAdapter = databaseAdapter;
+            _barsStorage = barsStorage;
+            _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
+            _certificateManager = new CertificateManager();
+            _userManager = userManager;
+            _queueManager = new MonitoringQueueManager();
+            _productManager = productManager;
+            _configurationProvider = configurationProvider;
+            _valuesCache = valuesVCache;
+            _converter = converter;
+            //MigrateSensorsValuesToNewDatabase();
+            Thread.Sleep(5000);
+            FillValuesCache();
+            _logger.LogInformation("Monitoring core initialized");
+        }
+
+        //private void MigrateSensorsValuesToNewDatabase()
+        //{
+        //    foreach (var product in _productManager.Products)
+        //    {
+        //        var sensors = _productManager.GetProductSensors(product.Name);
+        //        foreach (var sensor in sensors)
+        //        {
+        //            var history = _databaseAdapter.GetAllSensorDataOld(product.Name, sensor.Path);
+        //            foreach (var historyItem in history)
+        //            {
+        //                _databaseAdapter.PutSensorData(historyItem, product.Name);
+        //            }
+        //        }
+        //    }
+        //}
+
+        private void FillValuesCache()
+        {
+            var productsList = _productManager.Products;
+            foreach (var product in productsList)
+            {
+                var sensors = _productManager.GetProductSensors(product.Name);
+                foreach (var sensor in sensors)
+                {
+                    //var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
+                    var lastVal = _databaseAdapter.GetLastSensorValue(product.Name, sensor.Path);
+                    if (lastVal != null)
+                    {
+                        _valuesCache.AddValue(product.Name, _converter.Convert(lastVal, sensor, product.Name));
+                    }
+                }
+            }
+        }
+
+        #region Sensor saving
+        private void BarsStorage_IncompleteBarOutdated(object sender, ExtendedBarSensorData e)
+        {
+            ProcessExtendedBarData(e);
+        }
+
+        private void ProcessExtendedBarData(ExtendedBarSensorData extendedData)
+        {
+            switch (extendedData.ValueType)
+            {
+                case SensorType.IntegerBarSensor:
+                {
+                    var typedValue = extendedData.Value as IntBarSensorValue;
+                    typedValue.EndTime = DateTime.UtcNow;
+                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, extendedData.TimeCollected);
+                    SaveSensorValue(obj, extendedData.ProductName);
+                    break;
+                }
+                case SensorType.DoubleBarSensor:
+                {
+                    var typedValue = extendedData.Value as DoubleBarSensorValue;
+                    typedValue.EndTime = DateTime.UtcNow;
+                    SensorDataEntity obj = _converter.ConvertToDatabase(typedValue, extendedData.TimeCollected);
+                    SaveSensorValue(obj, extendedData.ProductName);
+                    break;
+                }
+            }
+        }
+        /// <summary>
+        /// Simply save the given sensorValue
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
+        private void SaveSensorValue(SensorDataEntity dataObject, string productName)
+        {
+            //_productManager.AddSensorIfNotRegistered(productName, dataObject.Path);
+            //Task.Run(() => _databaseAdapter.PutSensorDataOld(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+        }
+
+        /// <summary>
+        /// Use this method for sensors, for which only last value is stored
+        /// </summary>
+        /// <param name="dataObject"></param>
+        /// <param name="productName"></param>
+        private void SaveOneValueSensorValue(SensorDataEntity dataObject, string productName)
+        {
+            //Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
+            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+        }
+
+        public void AddSensorsValues(List<CommonSensorValue> values)
+        {
+            foreach (var value in values)
+            {
+                if (value == null)
+                {
+                    _logger.LogWarning("Received null value in list!");
+                    continue;
+                }
+                switch (value.SensorType)
+                {
+                    case SensorType.IntegerBarSensor:
+                    {
+                        var typedValue = _converter.GetIntBarSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.DoubleBarSensor:
+                    {
+                        var typedValue = _converter.GetDoubleBarSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.DoubleSensor:
+                    {
+                        var typedValue = _converter.GetDoubleSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.IntSensor:
+                    {
+                        var typedValue = _converter.GetIntSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.BooleanSensor:
+                    {
+                        var typedValue = _converter.GetBoolSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                    case SensorType.StringSensor:
+                    {
+                        var typedValue = _converter.GetStringSensorValue(value.TypedValue);
+                        AddSensorValue(typedValue);
+                        break;
+                    }
+                }
+            }
+        }
+
+        #region Typed Sensors from UnitedSensorValue
+
+        public void AddSensorsValues(List<UnitedSensorValue> values)
+        {
+            foreach (var value in values)
+            {
+                try
+                {
+                    AddUnitedValue(value);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
+                }
+                
+            }
+        }
+        private void AddUnitedValue(UnitedSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                TransactionType type = TransactionType.Unknown;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    _productManager.AddSensor(productName, value);
+                    type = TransactionType.Add;
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected, type);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+                bool isToDB = true;
+                if (value.IsBarSensor())
+                {
+                    isToDB = ProcessBarSensor(value, timeCollected, productName);
+                }
+
+                if (!isToDB)
+                    return;
+
+                SensorDataEntity dataObject = _converter.ConvertUnitedValueToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor {value?.Path}");
+            }
+        }
+
+        private bool ProcessBarSensor(UnitedSensorValue value, DateTime timeCollected, string productName)
+        {
+            try
+            {
+                var bar = _converter.GetBarSensorValue(value);
+
+                if (bar.EndTime != DateTime.MinValue)
+                {
+                    _barsStorage.Remove(productName, value.Path);
+                    return true;
+                }
+
+                if (value.Type == SensorType.IntegerBarSensor)
+                {
+                    var intBar = (IntBarSensorValue) bar;
+                    _barsStorage.Add(intBar, productName, timeCollected);
+                    return false;
+                }
+
+                var doubleBar = (DoubleBarSensorValue) bar;
+                _barsStorage.Add(doubleBar, productName, timeCollected);
+                return false;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to process bar sensor {value.Path}");
+            }
+
+            return true;
+        }
+        #endregion
+
+        public void RemoveSensor(string product, string path)
+        {
+            try
+            {
+                DateTime timeCollected = DateTime.UtcNow;
+
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = product;
+                updateMessage.Path = path;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+                _productManager.RemoveSensor(product, path);
+                _valuesCache.RemoveSensorValue(product, path);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to remove value for sensor '{product}/{product}'");
+            }
+        }
+
+        public void RemoveSensors(string product, IEnumerable<string> paths)
+        {
+            if (paths != null && paths.Any())
+                foreach (var path in paths)
+                    RemoveSensor(product, path);
+        }
+
+        public void AddSensorValue(BoolSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+        public void AddSensorValue(IntSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddSensorValue(DoubleSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddSensorValue(StringSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddSensorValue(FileSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddSensorValue(FileSensorBytesValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+        public void AddSensorValue(IntBarSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                //Skip 
+                if (value.EndTime == DateTime.MinValue)
+                {
+                    _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                    return;
+                }
+                
+                _barsStorage.Remove(productName, value.Path);
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddSensorValue(DoubleBarSensorValue value)
+        {
+            try
+            {
+                string productName = _productManager.GetProductNameByKey(value.Key);
+                bool isNew = false;
+                if (!_productManager.IsSensorRegistered(productName, value.Path))
+                {
+                    isNew = true;
+                    _productManager.AddSensor(productName, value);
+                }
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
+                _queueManager.AddSensorData(updateMessage);
+                _valuesCache.AddValue(productName, updateMessage);
+
+                if (value.EndTime == DateTime.MinValue)
+                {
+                    _barsStorage.Add(value, updateMessage.Product, timeCollected);
+                    return;
+                }
+
+                _barsStorage.Remove(productName, value.Path);
+                SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
+                Task.Run(() => SaveSensorValue(dataObject, productName));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        #endregion
+
+        public List<SensorData> GetSensorUpdates(User user)
+        {
+            return _queueManager.GetUserUpdates(user);
+        }
+
+        public List<SensorData> GetSensorsTree(User user)
+        {
+            if (!_queueManager.IsUserRegistered(user))
+            {
+                _queueManager.AddUserSession(user);
+            }
+
+            List<SensorData> result = new List<SensorData>();
+            var productsList = _productManager.Products;
+            //Show available products only
+            if (!UserRoleHelper.IsAllProductsTreeAllowed(user))
+                productsList = productsList.Where(p => 
+                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
+            
+            result.AddRange(_valuesCache.GetValues(productsList.Select(p => p.Name).ToList()));
+
+            return result;
+        }
+
+        #region Sensors History
+
+        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to)
+        {
+            var historyValues = _databaseAdapter.GetSensorHistory(product, path, 
+                from, to);
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
+            {
+                historyValues.Add(_converter.Convert(lastValue));
+            }
+            return historyValues;
+        }
+
+        public List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path)
+        {
+            var allValues = _databaseAdapter.GetAllSensorHistory(product, path);
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null)
+            {
+                allValues.Add(_converter.Convert(lastValue));
+            }
+            return allValues;
+        }
+
+        public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
+        {
+            //List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
+            ////_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
+            //var lastValue = _barsStorage.GetLastValue(product, path);
+            //if (lastValue != null)
+            //{
+            //    historyList.Add(_converter.Convert(lastValue));
+            //}
+
+            //if (n != -1)
+            //{
+            //    historyList = historyList.TakeLast((int)n).ToList();
+            //}
+
+            //return historyList;
+            return new List<SensorHistoryData>();
+        }
+
+        public string GetFileSensorValue(User user, string product, string path)
+        {
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
+            if (typedData != null)
+            {
+                return typedData.FileContent;
+            }
+
+
+            return string.Empty;
+        }
+
+        public byte[] GetFileSensorValueBytes(User user, string product, string path)
+        {
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+
+            try
+            {
+                var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
+                return typedData2?.FileContent;
+            }
+            catch { }
+
+
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
+            if (typedData != null)
+            {
+                return Encoding.Default.GetBytes(typedData.FileContent);
+            }
+
+            return new byte[1];
+        }
+        public string GetFileSensorValueExtension(User user, string product, string path)
+        {
+            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
+            if (typedData != null)
+            {
+                return typedData.Extension;
+            }
+            var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
+            if (typedData2 != null)
+            {
+                return typedData2.Extension;
+            }
+
+            return string.Empty;
+        }
+
+        #endregion
+
+
+        #region Product
+
+        public Product GetProduct(string productKey)
+        {
+            var product = _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
+            if (product == null)
+                _logger.LogError($"Failed to find the product with key {productKey}");
+            return product == null ? null : new Product(product);
+        }
+
+        public List<Product> GetProducts(User user)
+        {
+            if (user.ProductsRoles == null || !user.ProductsRoles.Any()) return null;
+
+            return _productManager.Products.Where(p =>
+                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
+        }
+
+        public List<Product> GetAllProducts()
+        {
+            return _productManager.Products;
+        }
+
+        public bool AddProduct(User user, string productName, out Product product, out string error)
+        {
+            product = default(Product);
+            error = string.Empty;
+            bool result;
+            try
+            {
+                _productManager.AddProduct(productName);
+                product = _productManager.GetProductByName(productName);
+                result = true;
+            }
+            catch (Exception e)
+            {
+                result = false;
+                error = e.Message;
+                _logger.LogError(e, $"Failed to add new product name = {productName}, user = {user.UserName}");
+            }
+
+            return result;
+        }
+
+        public bool RemoveProduct(User user, string productName, out Product product, out string error)
+        {
+            product = default(Product);
+            error = string.Empty;
+            bool result;
+            try
+            {
+                product = _productManager.GetProductByName(productName);
+                _productManager.RemoveProduct(productName);
+                result = true;
+            }
+            catch (Exception e)
+            {
+                result = false;
+                error = e.Message;
+                _logger.LogError(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
+            }
+
+            return result;
+        }
+
+        public bool RemoveProduct(string productKey, out string error)
+        {
+            bool result = false;
+            error = string.Empty;
+            string productName = string.Empty;
+            try
+            {
+                var product = _productManager.GetProductByKey(productKey);
+                productName = product?.Name;
+                RemoveProductFromUsers(product);
+                _productManager.RemoveProduct(productName);
+                _valuesCache.RemoveProduct(productName);
+
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = productName;
+                updateMessage.Path = string.Empty;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to remove product, name = {productName}");
+            }
+            return result;
+        }
+
+        public bool RemoveProduct(Product product, out string error)
+        {
+            bool result = false;
+            error = string.Empty;
+            try
+            {
+                RemoveProductFromUsers(product);
+                _productManager.RemoveProduct(product.Name);
+                _valuesCache.RemoveProduct(product.Name);
+
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = product.Name;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to remove product, name = {product.Name}");
+            }
+            return result;
+        }
+
+        private void RemoveProductFromUsers(Product product)
+        {
+            var usersToEdit = new List<User>();
+            foreach (var user in _userManager.Users)
+            {
+                var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
+                if (count == 0)
+                    continue;
+
+                usersToEdit.Add(user);
+            }
+
+            foreach (var userToEdt in usersToEdit)
+            {
+                _userManager.UpdateUser(userToEdt);
+            }
+        }
+
+        public void UpdateProduct(User user, Product product)
+        {
+            _productManager.UpdateProduct(product);
+        }
+
+        #endregion
+
+
+        public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
+            RSAParameters rsaParameters)
+        {
+            (X509Certificate2, X509Certificate2) result;
+            var rsa = RSA.Create(rsaParameters);
+
+            X509Certificate2 clientCert =
+                CertificatesProcessor.CreateAndSignCertificate(subject, rsa, CertificatesConfig.CACertificate);
+
+            string fileName = $"{commonName}.crt";
+            _certificateManager.InstallClientCertificate(clientCert);
+            _certificateManager.SaveClientCertificate(clientCert, fileName);
+            _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
+                HashComputer.ComputePasswordHash(commonName), true);
+            result.Item1 = clientCert;
+            result.Item2 = CertificatesConfig.CACertificate;
+            return result;
+        }
+
+        public ClientVersionModel GetLastAvailableClientVersion()
+        {
+            return _configurationProvider.ClientVersion;
+        }
+
+        public void Dispose()
+        {
+            var lastBarsValues = _barsStorage.GetAllLastValues();
+            foreach (var lastBarValue in lastBarsValues)
+            {
+                ProcessExtendedBarData(lastBarValue);
+            }
+            _barsStorage?.Dispose();
+        }
+    }
+}

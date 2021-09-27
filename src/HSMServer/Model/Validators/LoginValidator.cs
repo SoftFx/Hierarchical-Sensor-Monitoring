@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
-using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.Core.Authentication;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.Validators

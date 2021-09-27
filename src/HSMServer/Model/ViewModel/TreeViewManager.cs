@@ -1,4 +1,4 @@
-﻿using HSMServer.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 

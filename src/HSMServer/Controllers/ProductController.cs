@@ -1,25 +1,31 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Configuration;
+﻿using HSMCommon.Constants;
 using HSMServer.Constants;
-using HSMServer.DataLayer.Model;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.Email;
+using HSMServer.Core.Encryption;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Keys;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.Registration;
 using HSMServer.Filters;
-using HSMServer.Keys;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
-using HSMServer.MonitoringServerCore;
-using HSMServer.Registration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : Controller
     {
         private readonly IMonitoringCore _monitoringCore;

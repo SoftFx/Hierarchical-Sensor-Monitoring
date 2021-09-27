@@ -13,12 +13,16 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+    var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
+
+    var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
+    var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -75,6 +79,25 @@
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
 
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
+            </div>
+
+            <div id="modalDeleteBody" class="modal-body">
+                
+            </div>
+
+            <div class="modal-footer">
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div style="margin: 10px">
     <div class="row">
         <div class="col-md-auto">
@@ -120,22 +143,16 @@
             cache: false,
             async: true
         }).done(function (treeData) {
-            var node = $('#jstree').jstree().get_selected(true)[0];
+            //var node = $('#jstree').jstree().get_selected(true)[0];
 
             treeData = treeData.replace('{"value":"', '');
             treeData = treeData.slice(0, treeData.length - 2);
             treeData = treeData.replaceAll("\\", "");
 
-            $('#treeContainer').empty();
-            $('#treeContainer').append(treeData); 
+            $('#jstree').jstree(true).settings.core.data = treeData;
+            $('#jstree').jstree(true).refresh(true);
 
-            //$('#jstree').jstree({"plugins": ["state"]});
-            $('#jstree').jstree();
-            if (node !== undefined && node != undefined) {
-                $('#jstree').jstree('select_node', node.id);
-            }
             initializeClickTree();
-            //initializeDataHistoryRequests();
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
@@ -170,7 +187,7 @@
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateSelectedList + '?Selected=' + listId,
+            url: updateSeleHtmltedList + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,

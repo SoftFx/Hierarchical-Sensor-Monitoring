@@ -1,5 +1,6 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Configuration;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.Model;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace HSMServer.Controllers
 {
     [Authorize]
     [AuthorizeIsAdmin(true)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class AdminController : Controller
     {
         private readonly IConfigurationProvider _configurationProvider;
@@ -33,6 +35,7 @@ namespace HSMServer.Controllers
                 viewModels.Add(new ConfigurationObjectViewModel(value, true));
             }
             viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
+            ViewData["Version"] = _configurationProvider.GetCurrentVersion();
 
             return View(viewModels);
         }

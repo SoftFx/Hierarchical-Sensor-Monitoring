@@ -89,7 +89,8 @@
     $('#createButton').on('click', function () {
         name = $('#createName').val();
 
-        $.ajax({
+        name = encodeURIComponent(name);
+            $.ajax({
             type: 'GET',
             url: createAction + "?Product=" + name,
             cache: false,
