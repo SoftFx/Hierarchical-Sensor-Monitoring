@@ -57,6 +57,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void RemoveSensor([FromQuery(Name = "Selected")]string encodedPath)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            _monitoringCore.RemoveSensor(product, path);
+        }
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
         {
             var decodedPath = SensorPathHelper.Decode(encodedPath);
@@ -74,7 +81,7 @@ namespace HSMServer.Controllers
                 var productEntity = _productManager.GetProductByName(product);
                 if (productEntity == null) return;
 
-                _monitoringCore.RemoveProduct(productEntity, out var error);
+                _monitoringCore.HideProduct(productEntity, out var error);
             }
             else
             {
@@ -176,7 +183,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-
         public HtmlString AddNewSensors([FromQuery(Name = "Selected")] string selectedList,
             [FromBody] List<SensorData> sensors)
         {
@@ -216,6 +222,13 @@ namespace HSMServer.Controllers
 
             return new HtmlString(result.ToString());
         }
+
+        //[HttpPost]
+        //public void RemoveSensors([FromQuery(Name = "Selected")] string selectedList,
+        //    [FromBody] List<SensorData> sensors)
+        //{
+
+        //}
         #endregion
 
         #region SensorsHistory
