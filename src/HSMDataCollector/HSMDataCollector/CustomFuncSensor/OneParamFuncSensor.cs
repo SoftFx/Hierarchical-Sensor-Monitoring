@@ -26,7 +26,7 @@ namespace HSMDataCollector.CustomFuncSensor
             }
         }
 
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
             return GetValueInternal();
         }

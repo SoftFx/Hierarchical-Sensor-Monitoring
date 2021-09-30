@@ -81,19 +81,19 @@ namespace HSMDatabase.SensorsDatabase
         {
             var readKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             var bytesKey = Encoding.UTF8.GetBytes(readKey);
-            var values = GetValuesWithKeyEqualOrGreater(bytesKey);
+            var values = GetValuesWithKeyEqualOrGreater(bytesKey, path);
             if (values == null || !values.Any())
                 return null;
 
             values.Sort((v1, v2) => v2.TimeCollected.CompareTo(v1.TimeCollected));
-            return values.First();
+            return values.First(v => v.Path == path);
         }
 
         public List<SensorDataEntity> GetAllSensorValues(string productName, string path)
         {
             var readKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             var bytesKey = Encoding.UTF8.GetBytes(readKey);
-            return GetValuesWithKeyEqualOrGreater(bytesKey);
+            return GetValuesWithKeyEqualOrGreater(bytesKey, path);
         }
 
         //public List<SensorDataEntity> GetSensorValues(string productName, string path, int count)
@@ -115,7 +115,9 @@ namespace HSMDatabase.SensorsDatabase
                 {
                     try
                     {
-                        result.Add(JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value)));
+                        var currentEl = JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value));
+                        if (currentEl.Path == path && currentEl.TimeCollected > from)
+                            result.Add(currentEl);
                     }
                     catch (Exception e)
                     {
@@ -147,7 +149,9 @@ namespace HSMDatabase.SensorsDatabase
                 {
                     try
                     {
-                        result.Add(JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value)));
+                        var currentEl = JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value));
+                        if (currentEl.Path == path && (currentEl.TimeCollected < to && currentEl.TimeCollected > from))
+                            result.Add(currentEl);
                     }
                     catch (Exception e)
                     {
@@ -161,7 +165,7 @@ namespace HSMDatabase.SensorsDatabase
             return result;
         }
 
-        private List<SensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key)
+        private List<SensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key, string path)
         {
             List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
@@ -171,7 +175,9 @@ namespace HSMDatabase.SensorsDatabase
                 {
                     try
                     {
-                        result.Add(JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value)));
+                        var currentEl = JsonSerializer.Deserialize<SensorDataEntity>(Encoding.UTF8.GetString(value));
+                        if (currentEl.Path == path)
+                            result.Add(currentEl);
                     }
                     catch (Exception e)
                     {

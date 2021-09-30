@@ -240,7 +240,7 @@ function deleteSensor() {
     }
 
     function getOldestDateFromTable(path) {
-        let val = $('#oldest_date_' + path).value;
+        let val = $('#oldest_date_' + path).val();
         return new Date(Date.parse(val));
     }
 
