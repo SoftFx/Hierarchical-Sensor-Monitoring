@@ -85,6 +85,8 @@ function InitializePeriodRequests() {
     $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
 
     $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
+
+    $('[id^="button_delete_sensor_"]').off("click").on("click", deleteSensor);
 }
 
 function requestHistoryHour() {
@@ -151,6 +153,19 @@ function exportCsv() {
 
     const {from, to} = getFromAndTo(path);
     window.location.href = exportHistoryAction + "?Path=" + path + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
+}
+
+function deleteSensor() {
+    let path = this.id.substring("button_delete_sensor_".length);
+
+    $.ajax({
+        type: 'POST',
+        url: removeSensorAction + "?Selected=" + path,
+        contentType: 'application/json',
+        dataType: 'html',
+        cache: false,
+        async: true
+    });
 }
 
 function initializeHistory(path, historyAction, type, body) {
@@ -232,8 +247,7 @@ function getFromAndTo(path) {
 //}
 
 function getTypeForSensor(name) {
-    let element = document.getElementById("sensor_type_" + name);
-    return element.value;
+    return $('#sensor_type_' + name).val();
 }
 
 function getCountForId(id) {

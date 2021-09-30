@@ -223,12 +223,21 @@ namespace HSMServer.Controllers
             return new HtmlString(result.ToString());
         }
 
-        //[HttpPost]
-        //public void RemoveSensors([FromQuery(Name = "Selected")] string selectedList,
-        //    [FromBody] List<SensorData> sensors)
-        //{
+        [HttpPost]
+        public List<string> RemoveSensors([FromBody] List<SensorData> sensors)
+        {
+            var ids = new List<string>();
 
-        //}
+            if (sensors != null && sensors.Count > 0)
+                foreach(var sensor in sensors)
+                {
+                    if (sensor.TransactionType == TransactionType.Delete)
+                        ids.Add(SensorPathHelper.Encode($"{sensor.Product}/{sensor.Path}"));
+                }
+
+            return ids;
+
+        }
         #endregion
 
         #region SensorsHistory

@@ -151,7 +151,8 @@ namespace HSMServer.HtmlHelpers
                           CreateRadioButton(name, "week", "1W") +
                           CreateRadioButton(name, "month", "1M") + 
                           CreateRadioButton(name, "all", "All") + 
-                          CreateCsvButton(name) + "</div>");
+                          //CreateCsvButton(name) +
+                          CreateActionsList(name) + "</div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(GetNoDataDivForSensor(name));
@@ -188,6 +189,17 @@ namespace HSMServer.HtmlHelpers
                 return "< 1 minute ago";
 
             return "no info";
+        }
+
+        private static string CreateActionsList(string name)
+        {
+            return "<div class='btn-group'>" +
+                "<button class='btn btn-secondary btn-sm dropdown-toggle' type='button'" +
+                "data-bs-toggle='dropdown'>Actions</button>" +
+                "<ul class='dropdown-menu'>" +
+                $"<li><a class='dropdown-item' href='#' id='button_delete_sensor_{name}'>Delete sensor</a></li>" +
+                $"<li><a class='dropdown-item' href='#' id='button_export_csv_{name}'>Export to CSV</a></li>" +
+                "</ul></div>";
         }
 
         private static string CreateCsvButton(string name)
