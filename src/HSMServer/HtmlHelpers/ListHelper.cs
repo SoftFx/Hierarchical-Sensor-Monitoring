@@ -231,12 +231,14 @@ namespace HSMServer.HtmlHelpers
             //Graph tab
             string graphElementId = $"graph_{name}";
             string graphParentDivId = $"graph_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
+            sb.Append($"<li class='nav-item'><a id='link_graph_{name}' " +
+                $"class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
             string valuesElementId = $"values_{name}";
             string valuesParentDivId = $"values_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
+            sb.Append($"<li class='nav-item'><a id='link_table_{name}' " +
+                $"class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
             sb.Append($"<div class='tab-pane fade show active' id={graphParentDivId}><div id='{graphElementId}'></div></div>");

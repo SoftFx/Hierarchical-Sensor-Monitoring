@@ -39,9 +39,7 @@ namespace HSMServer.Core.MonitoringServerCore
         List<SensorData> GetSensorUpdates(User user);
         //public SensorsUpdateMessage GetSensorsTree(User user);
         List<SensorData> GetSensorsTree(User user);
-        //public SensorHistoryListMessage GetSensorHistory(User user, string name, string path, string product, long n = -1);
-        [Obsolete("16.09.2021. Use GetSensorHistory(User user, GetSensorHistoryModel model) or pass product, path and dates")]
-        List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1);
+        List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n);
         List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path);
         string GetFileSensorValue(User user, string product, string path);

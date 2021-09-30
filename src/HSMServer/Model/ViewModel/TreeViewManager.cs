@@ -39,8 +39,7 @@ namespace HSMServer.Model.ViewModel
                 }
                 catch (Exception e)
                 {
-                    throw e;
-                    result = null;
+                    throw;                   
                 }
             }
             return result;

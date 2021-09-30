@@ -15,7 +15,6 @@ namespace HSMServer.Services
         private Timer _timer;
         private readonly IHubContext<MonitoringDataHub> _monitoringDataHubContext;
         private readonly IMonitoringCore _monitoringCore;
-        private readonly User _user;
         private readonly ISignalRSessionsManager _sessionsManager;
         public ClientMonitoringService(IHubContext<MonitoringDataHub> hubContext, IMonitoringCore monitoringCore,
             IUserManager userManager, ISignalRSessionsManager sessionsManager)
@@ -23,7 +22,6 @@ namespace HSMServer.Services
             _monitoringDataHubContext = hubContext;
             _monitoringCore = monitoringCore;
             //TODO: REMOVE WHEN MAKE NORMANL AUTH
-            _user = userManager.GetUserByCertificateThumbprint(CommonConstants.DefaultClientCertificateThumbprint);
             _sessionsManager = sessionsManager;
             //StartTimer();
         }

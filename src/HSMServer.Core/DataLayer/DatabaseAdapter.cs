@@ -153,6 +153,18 @@ namespace HSMServer.Core.DataLayer
             return historyDatas;
         }
 
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n)
+        {
+            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>();
+            var history = _database.GetSensorData(productName, path, n);
+            if (history != null && history.Any())
+            {
+                historyDatas.AddRange(history.Select(Convert));
+            }
+
+            return historyDatas;
+        }
+
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
             SensorDataEntity entity = _database.GetLatestSensorValue(productName, path);

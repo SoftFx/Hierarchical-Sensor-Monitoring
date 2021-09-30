@@ -411,7 +411,7 @@ namespace HSMServer.HtmlHelpers
 
         #region Sensor history tables
 
-        public static string CreateHistoryTable(List<SensorHistoryData> sensorHistory)
+        public static string CreateHistoryTable(List<SensorHistoryData> sensorHistory, string encodedPath)
         {
             if (sensorHistory.Count == 0)
                 return string.Empty;
@@ -419,35 +419,47 @@ namespace HSMServer.HtmlHelpers
             sensorHistory.Reverse();
 
             var type = sensorHistory[0].SensorType;
+            StringBuilder sb = new StringBuilder();
+            sb.Append("<div>");
             switch (type)
             {
                 case SensorType.BooleanSensor:
-                    return CreateBooleanTable(sensorHistory.Select(h =>
+                    sb.Append(CreateBooleanTable(sensorHistory.Select(h =>
                     JsonSerializer.Deserialize<BoolSensorData>(h.TypedData)).ToList(), 
-                    sensorHistory.Select(h => h.Time).ToList());
+                    sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 case SensorType.IntSensor:
-                    return CreateIntegerTable(sensorHistory.Select(h =>
+                    sb.Append(CreateIntegerTable(sensorHistory.Select(h =>
                         JsonSerializer.Deserialize<IntSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList());
+                        sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 case SensorType.DoubleSensor:
-                    return CreateDoubleTable(sensorHistory.Select(h =>
+                    sb.Append(CreateDoubleTable(sensorHistory.Select(h =>
                         JsonSerializer.Deserialize<DoubleSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList());
+                        sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 case SensorType.StringSensor:
-                    return CreateStringTable(sensorHistory.Select(h =>
+                    sb.Append(CreateStringTable(sensorHistory.Select(h =>
                         JsonSerializer.Deserialize<StringSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList());
+                        sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 case SensorType.IntegerBarSensor:
-                    return CreateIntBarTable(sensorHistory.Select(h =>
+                    sb.Append(CreateIntBarTable(sensorHistory.Select(h =>
                         JsonSerializer.Deserialize<IntBarSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList());
+                        sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 case SensorType.DoubleBarSensor:
-                    return CreateDoubleBarData(sensorHistory.Select(h =>
+                    sb.Append(CreateDoubleBarData(sensorHistory.Select(h =>
                         JsonSerializer.Deserialize<DoubleBarSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList());
+                        sensorHistory.Select(h => h.Time).ToList()));
+                    break;
                 default:
-                    return string.Empty;
+                    break;
             }
+
+            sb.Append($"<input id='oldest_date_{encodedPath}' type='text' style='display: none'" +
+                      $" value='{sensorHistory.LastOrDefault()?.Time.ToString() ?? ""}' /></div>");
+            return sb.ToString();
         }
 
         private static string CreateBooleanTable(List<BoolSensorData> boolHistory,

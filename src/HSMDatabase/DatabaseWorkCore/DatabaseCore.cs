@@ -5,6 +5,7 @@ using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -130,6 +131,23 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return result;
+        }
+
+        public List<SensorDataEntity> GetSensorData(string productName, string path, int n)
+        {
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
+            var databases = _sensorsDatabases.GetAllDatabases();
+            databases.Reverse();
+            foreach (var database in databases)
+            {
+                result.AddRange(database.GetAllSensorValues(productName, path));
+                if (result.Count >= n)
+                    break;
+            }
+
+            result.Sort((d1, d2) => 
+                d1.TimeCollected.CompareTo(d2.TimeCollected));
+            return result.TakeLast(n).ToList();
         }
 
         public List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from)
@@ -354,8 +372,6 @@ namespace HSMDatabase.DatabaseWorkCore
         #endregion
 
         #region Private methods
-
-        
 
         private void GetDatesFromFolderName(string folder, out DateTime from, out DateTime to)
         {

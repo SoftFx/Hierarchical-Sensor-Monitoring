@@ -9,6 +9,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal class BoolHistoryProcessor : HistoryProcessorBase
     {
+        public BoolHistoryProcessor()
+        {
+
+        }
         public BoolHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
         }
