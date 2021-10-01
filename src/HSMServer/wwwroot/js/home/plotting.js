@@ -1,8 +1,48 @@
 ﻿function displayGraph(graphData, graphType, graphElementId, graphName) {
-  let convertedData = convertToGraphData(graphData, graphType, graphName);
+    let convertedData = convertToGraphData(graphData, graphType, graphName);
 
     //console.log('converted graph data:', convertedData);
-    Plotly.newPlot(graphElementId, convertedData);
+    let zoomData = getPreviousZoomData(graphElementId);
+    if (zoomData === undefined || zoomData === null) {
+        Plotly.newPlot(graphElementId, convertedData);    
+    } else {
+        let layout = createLayoutFromZoomData(zoomData);
+        Plotly.newPlot(graphElementId, convertedData, layout);
+    }
+
+    //removeZoomDataFromSessionStorage();
+    let graphDiv = document.getElementById(graphElementId);
+    graphDiv.on('plotly_relayout',
+        function(eventData) {
+            window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
+        });
+}
+
+function createLayoutFromZoomData(zoomData) {
+    let processedData = Object.values(JSON.parse(zoomData));
+    var layout = {
+        xaxis : {
+            range: [processedData[0], processedData[1]]
+        },
+        yaxis : {
+            range: [processedData[2], processedData[3]]
+        }
+    };
+    return layout;
+}
+
+function getPreviousZoomData(graphElementId) {
+    return window.sessionStorage.getItem(graphElementId);
+}
+
+function removeZoomDataFromSessionStorage() {
+    let n = window.sessionStorage.length;
+    for (var i = 0; i < n; i++) {
+        let key = window.sessionStorage.key(i);
+        if (key.startsWith('graph_')) {
+            window.sessionStorage.removeItem(key);
+        }
+    }
 }
 
 function convertToGraphData(graphData, graphType, graphName) {
