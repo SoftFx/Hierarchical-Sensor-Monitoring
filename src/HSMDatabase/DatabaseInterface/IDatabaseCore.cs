@@ -24,6 +24,7 @@ namespace HSMDatabase.DatabaseInterface
         long GetEnvironmentDatabaseSize();
         #region Sensors
         List<SensorDataEntity> GetAllSensorData(string productName, string path);
+        List<SensorDataEntity> GetSensorData(string productName, string path, int n);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from, DateTime to);
         void AddSensorValue(SensorDataEntity entity, string productName);

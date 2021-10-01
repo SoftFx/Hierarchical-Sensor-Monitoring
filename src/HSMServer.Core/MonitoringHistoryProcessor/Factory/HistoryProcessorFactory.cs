@@ -31,6 +31,28 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Factory
             }
         }
 
+        public IHistoryProcessor CreateProcessor(SensorType sensorType)
+        {
+            switch (sensorType)
+            {
+                case SensorType.DoubleBarSensor:
+                    return new DoubleBarHistoryProcessor();
+                case SensorType.IntegerBarSensor:
+                    return new IntBarHistoryProcessor();
+                case SensorType.DoubleSensor:
+                    return new DoubleHistoryProcessor();
+                case SensorType.IntSensor:
+                    return new IntHistoryProcessor();
+                case SensorType.BooleanSensor:
+                    return new BoolHistoryProcessor();
+                case SensorType.StringSensor:
+                    return new StringHistoryProcessor();
+                //Types that typically won't occur in that case
+                default:
+                    return new EmptyHistoryProcessor();
+            }
+        }
+
 
         private TimeSpan ConvertPeriod(PeriodType periodType)
         {

@@ -25,7 +25,14 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             _format.NumberDecimalSeparator = ".";
         }
 
-        public override List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData)
+        public DoubleBarHistoryProcessor()
+        {
+            _format = new NumberFormatInfo();
+            _format.NumberDecimalSeparator = ".";
+        }
+
+        protected override List<SensorHistoryData> ProcessHistoryInternal(List<SensorHistoryData> uncompressedData, 
+            TimeSpan compressionInterval)
         {
             if (uncompressedData == null || !uncompressedData.Any())
                 return new List<SensorHistoryData>();
@@ -42,21 +49,21 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             bool addingCurrent = false;
             for (int i = 0; i < typedDatas.Count; ++i)
             {
-                if (typedDatas[i].EndTime - typedDatas[i].StartTime > PeriodInterval ||
-                    (processingCount > 0 && startDate + PeriodInterval < typedDatas[i].EndTime
+                if (typedDatas[i].EndTime - typedDatas[i].StartTime > compressionInterval ||
+                    (processingCount > 0 && startDate + compressionInterval < typedDatas[i].EndTime
                                          && i == typedDatas.Count - 1))
                 {
                     needToAddCurrentAsSingle = true;
                 }
 
-                if (typedDatas[i].EndTime < startDate + PeriodInterval && i == typedDatas.Count - 1)
+                if (typedDatas[i].EndTime < startDate + compressionInterval && i == typedDatas.Count - 1)
                 {
                     AddDataToList(typedDatas[i]);
                     ProcessItem(typedDatas[i], currentItem);
                     addingCurrent = true;
                 }
                 //Finish bar if necessary
-                if (i > 0 && (startDate + PeriodInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
+                if (i > 0 && (startDate + compressionInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
                     || i == typedDatas.Count - 1))
                 {
                     if (processingCount > 0)

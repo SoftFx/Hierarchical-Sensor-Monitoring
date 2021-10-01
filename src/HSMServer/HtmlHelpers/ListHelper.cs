@@ -151,7 +151,8 @@ namespace HSMServer.HtmlHelpers
                           CreateRadioButton(name, "week", "1W") +
                           CreateRadioButton(name, "month", "1M") + 
                           CreateRadioButton(name, "all", "All") + 
-                          CreateCsvButton(name) + "</div>");
+                          //CreateCsvButton(name) +
+                          CreateActionsList(name) + "</div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(GetNoDataDivForSensor(name));
@@ -190,6 +191,17 @@ namespace HSMServer.HtmlHelpers
             return "no info";
         }
 
+        private static string CreateActionsList(string name)
+        {
+            return "<div class='btn-group'>" +
+                "<button class='btn btn-secondary btn-sm dropdown-toggle' type='button'" +
+                "data-bs-toggle='dropdown'>Actions</button>" +
+                "<ul class='dropdown-menu'>" +
+                $"<li><a class='dropdown-item' href='#' id='button_delete_sensor_{name}'>Delete sensor</a></li>" +
+                $"<li><a class='dropdown-item' href='#' id='button_export_csv_{name}'>Export to CSV</a></li>" +
+                "</ul></div>";
+        }
+
         private static string CreateCsvButton(string name)
         {
             return "<div class='form-check form-check-inline'><button type='button'" +
@@ -219,12 +231,14 @@ namespace HSMServer.HtmlHelpers
             //Graph tab
             string graphElementId = $"graph_{name}";
             string graphParentDivId = $"graph_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
+            sb.Append($"<li class='nav-item'><a id='link_graph_{name}' " +
+                $"class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
             string valuesElementId = $"values_{name}";
             string valuesParentDivId = $"values_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
+            sb.Append($"<li class='nav-item'><a id='link_table_{name}' " +
+                $"class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
             sb.Append($"<div class='tab-pane fade show active' id={graphParentDivId}><div id='{graphElementId}'></div></div>");

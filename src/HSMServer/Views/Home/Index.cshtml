@@ -14,12 +14,17 @@
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
+    var removeSensorAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorAction, ViewConstants.HomeController))";
+    var removeSensorsAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorsAction, ViewConstants.HomeController))";
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
+
+    var historyLatestAction = "@Html.Raw(Url.Action(ViewConstants.HistoryLatestAction, ViewConstants.HomeController))";
+    var rawHistoryLatestAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryLatestAction, ViewConstants.HomeController))";
 
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
@@ -91,8 +96,9 @@
             </div>
 
             <div class="modal-footer">
-                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
-                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Ok</button>
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Cancel</button>
+
             </div>
         </div>
     </div>
@@ -182,17 +188,18 @@
             initializeDataHistoryRequests();
         });
 
+
         if (listId != "" && listId != undefined)
         //update selected list
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateSeleHtmltedList + '?Selected=' + listId,
+            url: updateSelectedList + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (listsData) {
+        }).done(function(listsData) {
             var array = JSON.parse(listsData);
             for (let i = 0; i < array.length; i++) {
                 var id = array[i].id.substring('list_'.length, array[i].id.length);
@@ -218,30 +225,51 @@
         });
 
         if (listId != "" && listId != undefined)
-        //add new sensors
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(sensors),
-            url: addNewSensors + '?Selected=' + listId,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (sensorsData) {
-            sensorsData = sensorsData.replace('{"value":"', '');
-            sensorsData = sensorsData.slice(0, sensorsData.length - 2);
-            sensorsData = sensorsData.replaceAll("\\", "");
+            //add new sensors
+            $.ajax({
+                type: 'POST',
+                data: JSON.stringify(sensors),
+                url: addNewSensors + '?Selected=' + listId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (sensorsData) {
+                sensorsData = sensorsData.replace('{"value":"', '');
+                sensorsData = sensorsData.slice(0, sensorsData.length - 2);
+                sensorsData = sensorsData.replaceAll("\\", "");
 
-            if ($('#' + listId) == undefined) {
-                $('#listContainer').append("<div class='accordion'" +
-                    "id = '" + listId + "' style = 'display: block;' ></div> ");
-                $('#noData').css('display', 'none');
-            }
+                if ($('#' + listId) == undefined) {
+                    $('#listContainer').append("<div class='accordion'" +
+                        "id = '" + listId + "' style = 'display: block;' ></div> ");
+                    $('#noData').css('display', 'none');
+                }
 
-            $('#' + listId).append(sensorsData);
-            initializeDataHistoryRequests();
-        });
+                $('#' + listId).append(sensorsData);
+                initializeDataHistoryRequests();
+            });
 
+        if (listId != "" && listId != undefined)     
+            //remove sensors
+            $.ajax({
+                type: 'POST',
+                data: JSON.stringify(sensors),
+                url: removeSensorsAction,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (idsData) {
+                var array = JSON.parse(idsData);
+
+                if (array != undefined && array.length > 0)
+                    for (let i = 0; i < array.length; i++)
+                {
+                        $('#' + array[i]).parent().parent().empty();
+                }         
+            });
+        
+        
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
         $("#state").empty();

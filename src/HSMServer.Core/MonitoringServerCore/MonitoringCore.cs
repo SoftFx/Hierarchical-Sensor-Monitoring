@@ -620,23 +620,21 @@ namespace HSMServer.Core.MonitoringServerCore
             return allValues;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
+        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n)
         {
-            //List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
-            ////_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
-            //var lastValue = _barsStorage.GetLastValue(product, path);
-            //if (lastValue != null)
-            //{
-            //    historyList.Add(_converter.Convert(lastValue));
-            //}
+            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistory(product, path, n);
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null)
+            {
+                historyList.Add(_converter.Convert(lastValue));
+            }
 
-            //if (n != -1)
-            //{
-            //    historyList = historyList.TakeLast((int)n).ToList();
-            //}
+            if (n != -1)
+            {
+                historyList = historyList.TakeLast(n).ToList();
+            }
 
-            //return historyList;
-            return new List<SensorHistoryData>();
+            return historyList;
         }
 
         public string GetFileSensorValue(User user, string product, string path)
@@ -815,6 +813,31 @@ namespace HSMServer.Core.MonitoringServerCore
                 result = false;
                 error = ex.Message;
                 _logger.LogError(ex, $"Failed to remove product, name = {product.Name}");
+            }
+            return result;
+        }
+
+        public bool HideProduct(Product product, out string error)
+        {
+            bool result = false;
+            error = string.Empty;
+            try
+            {
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = product.Name;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
             }
             return result;
         }
