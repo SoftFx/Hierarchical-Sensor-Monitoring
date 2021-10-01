@@ -64,29 +64,45 @@ namespace HSMServer.HtmlHelpers
             NodeViewModel node = existingNode;
             if (nodes[0].Length < path.Length)
             {
-                path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
+                //Remove last node name because it is sensor
+                path = path.Substring(nodes[0].Length + 1,
+                    path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
                 node = GetNodeRecursion(path, existingNode);
             }
 
-            StringBuilder result = new StringBuilder();
-            string formattedPath = SensorPathHelper.Encode(fullPath);
+            StringBuilder result = new StringBuilder("<div>");
+            //string formattedPath = SensorPathHelper.Encode(fullPath);
 
-            result.Append($"<div class='accordion' id='list_{formattedPath}' style='display: none;'>");
-            if (node.Sensors != null)
+            //result.Append($"<div class='accordion' id='list_{formattedPath}' style='display: none;'>");
+            //if (node.Sensors != null)
+            //    foreach (var sensor in node.Sensors)
+            //    {
+            //        result.Append(CreateSensor(fullPath, sensor));
+            //    }
+            //result.Append("</div>");
+            string shortedPath = fullPath.Substring(0, fullPath.LastIndexOf('/'));
+            if (node.Sensors != null && node.Sensors.Any())
+            {
                 foreach (var sensor in node.Sensors)
                 {
-                    result.Append(CreateSensor(fullPath, sensor));
+                    string sensorPath = $"{shortedPath}/{sensor.Name}";
+                    string formattedPath = SensorPathHelper.Encode(sensorPath);
+                    result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
+                    result.Append(CreateSensor(formattedPath, sensor));
+                    result.Append("</div>");
                 }
-            result.Append("</div>");
+            }
 
+            result.Append("</div>");
             return result.ToString();
         }
 
-        public static StringBuilder CreateSensor(string path, SensorViewModel sensor)
+        public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
             StringBuilder result = new StringBuilder();
-            string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
-            string formattedPath = SensorPathHelper.Encode(path);
+            //string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
+            //string formattedPath = SensorPathHelper.Encode(path);
+            string name = formattedPath;
 
             result.Append("<div class='accordion-item'>" +
                           $"<h2 class='accordion-header' id='heading_{name}'>");
@@ -106,7 +122,7 @@ namespace HSMServer.HtmlHelpers
                           $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                 //body
                 result.Append($"<div id='collapse_{name}' class='accordion-collapse' " +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
                           "<div class='accordion-body'>");
 
                 result.Append("<div style='width: 100%'>" +
@@ -142,7 +158,7 @@ namespace HSMServer.HtmlHelpers
                           $"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
 
             result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'" +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
                           $"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>" +
                           "<div class='mb-3 row'><div>" +
                           CreateRadioButton(name, "hour", "1H") +
