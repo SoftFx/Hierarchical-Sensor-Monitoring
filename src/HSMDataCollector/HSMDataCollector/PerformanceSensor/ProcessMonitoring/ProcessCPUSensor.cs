@@ -29,9 +29,9 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             
         }
 
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
-            return InternalBar.GetLastValueNew();
+            return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetProcessCPUFunc()
@@ -49,11 +49,6 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             _monitoringTimer?.Dispose();
             InternalCounter?.Dispose();
             InternalBar?.Dispose();
-        }
-
-        public override CommonSensorValue GetLastValue()
-        {
-            return InternalBar.GetLastValue();
         }
     }
 }

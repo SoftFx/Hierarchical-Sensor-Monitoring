@@ -67,17 +67,7 @@ namespace HSMDataCollector.Bar
             EnqueueValue(dataObject);
         }
 
-        public override CommonSensorValue GetLastValue()
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override string GetStringData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
             try
             {
