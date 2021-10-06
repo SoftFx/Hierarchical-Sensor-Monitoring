@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Model.Sensor;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,6 +16,7 @@ namespace HSMServer.Model.ViewModel
         public SensorStatus Status { get; set; }
 
         //public DateTime LastUpdate {get;set;}
+        public DateTime UpdateTime { get; set; }
 
         public NodeViewModel Parent { get; set; }
 
@@ -121,41 +123,72 @@ namespace HSMServer.Model.ViewModel
             return this;
         }
 
-        public void UpdateStatus()
+        public void SortByName()
         {
-            SensorStatus statusFromSensors = SensorStatus.Unknown;
-            SensorStatus statusFromNodes = SensorStatus.Unknown;
-            if (Nodes != null && Nodes.Any())
+            if (Nodes != null && Nodes.Count > 0)
             {
+                Nodes = Nodes.OrderBy(x => x.Name).ToList();
+
                 foreach (var node in Nodes)
-                {
-                    node.UpdateStatus();
-                }
-
-                statusFromNodes = Nodes.Max(n => n.Status);
+                    node.SortByName();
             }
 
-            if (Sensors != null && Sensors.Any())
-            {
-                statusFromSensors = Sensors.Max(s => s.Status);
-            }
-
-            Status = new List<SensorStatus> {statusFromNodes, statusFromSensors}.Max();
+            if (Sensors != null && Sensors.Count > 0)
+                Sensors = Sensors.OrderBy(x => x.Name).ToList();
         }
 
-        public void UpdateSensorsCount()
+        public void SortByTime()
+        {
+            if (Nodes != null && Nodes.Count > 0)
+            {
+                Nodes = Nodes.OrderByDescending(x => x.UpdateTime).ToList();
+
+                foreach (var node in Nodes)
+                    node.SortByTime();
+            }
+
+            if (Sensors != null && Sensors.Count > 0)
+                Sensors = Sensors.OrderByDescending(x => x.Time).ToList();
+        }
+
+        public void Recursion()
         {
             int count = 0;
-            if (Nodes != null && Nodes.Any())
+            if (Nodes != null && Nodes.Count > 0)
             {
                 foreach (var node in Nodes)
                 {
-                    node.UpdateSensorsCount();
+                    node.Recursion();
                     count += node.Count;
                 }
             }
 
             Count = count + (Sensors?.Count ?? 0);
+            ModifyUpdateTime();
+            ModifyStatus();
+        }
+
+        public void ModifyUpdateTime()
+        {
+            var sensorMaxTime = Sensors?.Max(x => x.Time);
+            var nodeMaxTime = Nodes?.Max(x => x.UpdateTime);
+
+            if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
+                UpdateTime = sensorMaxTime.Value > nodeMaxTime.Value
+                    ? sensorMaxTime.Value : nodeMaxTime.Value;
+            else if (sensorMaxTime.HasValue)
+                UpdateTime = sensorMaxTime.Value;
+            else
+                UpdateTime = nodeMaxTime.Value;
+        }
+
+        public void ModifyStatus()
+        {
+            var statusFromSensors = Sensors?.Max(s => s.Status) ?? SensorStatus.Unknown;
+            var statusFromNodes = Nodes?.Max(n => n.Status) ?? SensorStatus.Unknown;
+
+            Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
+
         }
     }
 }
