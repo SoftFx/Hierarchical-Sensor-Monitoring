@@ -110,6 +110,25 @@ namespace HSMServer.Controllers
         }
 
         #region Update
+
+        [HttpPost]
+        public void SortByName()
+        {
+            var user = HttpContext.User as User;
+            var oldModel = _treeManager.GetTreeViewModel(user);
+            var model = oldModel.SortByName();
+            _treeManager.AddOrCreate(user, model);
+        }
+
+        [HttpPost]
+        public void SortByTime()
+        {
+            var user = HttpContext.User as User;
+            var oldModel = _treeManager.GetTreeViewModel(user);
+            var model = oldModel.SortByTime();
+            _treeManager.AddOrCreate(user, model);
+        }
+
         [HttpPost]
 
         public HtmlString UpdateTree([FromBody] List<SensorData> sensors)

@@ -1,9 +1,9 @@
-﻿using System;
-using HSMDataCollector.Bar;
+﻿using HSMDataCollector.Bar;
 using HSMDataCollector.PerformanceSensor.Base;
+using HSMDataCollector.PerformanceSensor.CounterContainer;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using HSMDataCollector.PerformanceSensor.CounterContainer;
 
 namespace HSMDataCollector.PerformanceSensor.StandardSensor
 {

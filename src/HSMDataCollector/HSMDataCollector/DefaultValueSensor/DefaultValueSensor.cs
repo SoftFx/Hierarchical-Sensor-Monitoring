@@ -25,22 +25,13 @@ namespace HSMDataCollector.DefaultValueSensor
         }
 
         public override bool HasLastValue => true;
-        public override CommonSensorValue GetLastValue()
-        {
-            throw new NotImplementedException();
-        }
 
         public override void Dispose()
         {
             
         }
 
-        protected override string GetStringData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
             UnitedSensorValue value = new UnitedSensorValue();
             value.Type = _type;
@@ -75,7 +66,7 @@ namespace HSMDataCollector.DefaultValueSensor
             }
         }
 
-        public void AddValue(T value, SensorStatus status = SensorStatus.Unknown, string comment = "")
+        public void AddValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             lock (_syncRoot)
             {

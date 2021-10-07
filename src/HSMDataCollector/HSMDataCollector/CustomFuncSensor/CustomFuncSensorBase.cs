@@ -43,14 +43,5 @@ namespace HSMDataCollector.CustomFuncSensor
         }
 
         public override bool HasLastValue => true;
-        public override CommonSensorValue GetLastValue()
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override string GetStringData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

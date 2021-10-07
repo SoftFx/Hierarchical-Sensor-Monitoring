@@ -458,7 +458,7 @@ namespace HSMServer.HtmlHelpers
             }
 
             sb.Append($"<input id='oldest_date_{encodedPath}' type='text' style='display: none'" +
-                      $" value='{sensorHistory.LastOrDefault()?.Time.ToString() ?? ""}' /></div>");
+                      $" value='{sensorHistory.LastOrDefault()?.Time.ToUniversalTime().ToString("O") ?? ""}' /></div>");
             return sb.ToString();
         }
 
