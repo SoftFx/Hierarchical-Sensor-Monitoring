@@ -137,7 +137,7 @@ namespace HSMServer.Model.ViewModel
         {
             if (Nodes != null && Nodes.Count > 0)
             {
-                Nodes = Nodes.OrderBy(x => x.UpdateTime).ToList();
+                Nodes = Nodes.OrderByDescending(x => x.UpdateTime).ToList();
 
                 foreach(var node in Nodes)
                 {
