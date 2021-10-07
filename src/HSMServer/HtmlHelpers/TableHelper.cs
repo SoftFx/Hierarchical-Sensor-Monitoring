@@ -152,9 +152,9 @@ namespace HSMServer.HtmlHelpers
 
             if (UserRoleHelper.IsProductCRUDAllowed(user) 
                 || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
-                result.Append("<th scope='col'>Action</th></tr>");
+                result.Append("<th scope='col'>Action</th>");
 
-            result.Append("</thead><tbody>");
+            result.Append("</tr></thead><tbody>");
            
             //create 
             if (UserRoleHelper.IsProductCRUDAllowed(user))
@@ -168,7 +168,11 @@ namespace HSMServer.HtmlHelpers
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
                     "<i class='fas fa-plus'></i></button></th></tr>");
 
-            if (products == null || products.Count == 0) return result.ToString();
+            if (products == null || products.Count == 0)
+            {
+                result.Append("</tbody></table></div>");
+                return result.ToString();
+            }
 
             int index = 1;
             foreach (var product in products)
@@ -182,7 +186,6 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.CreationDate}</td>" +
                     $"<td>{product.ManagerName}</td>");
 
-
                 if (UserRoleHelper.IsProductCRUDAllowed(user) || 
                     ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
@@ -194,11 +197,12 @@ namespace HSMServer.HtmlHelpers
                         "type='button' class='btn btn-secondary' title='delete'>" +
                         "<i class='fas fa-trash-alt'></i></button>");
 
+
                 result.Append("</tr>");
                 index++;
             }
 
-            result.Append("</tbody></table></div></div>");
+            result.Append("</tbody></table></div>");
 
             return result.ToString();
         }
