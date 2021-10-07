@@ -28,6 +28,9 @@
 
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
+
+    var sortByNameAction = "@Html.Raw(Url.Action(ViewConstants.SortByNameAction, ViewConstants.HomeController))";
+    var sortByTimeAction = "@Html.Raw(Url.Action(ViewConstants.SortByTimeAction, ViewConstants.HomeController))";
 </script>
 
 
@@ -92,7 +95,7 @@
             </div>
 
             <div id="modalDeleteBody" class="modal-body">
-                
+
             </div>
 
             <div class="modal-footer">
@@ -114,6 +117,21 @@
         </div>
     </div>
     <hr />
+</div>
+
+<div class="row">
+
+</div>
+
+<div class='btn-group' style="margin-left: 20px; margin-bottom: 10px">
+    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
+        Actions
+    </button>
+    <ul class='dropdown-menu'>       
+        <li><a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a></li>     
+        
+        <li><a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a></li>       
+    </ul>
 </div>
 
 <div class="container">
@@ -190,39 +208,39 @@
 
 
         if (listId != "" && listId != undefined)
-        //update selected list
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(sensors),
-            url: updateSelectedList + '?Selected=' + listId,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function(listsData) {
-            var array = JSON.parse(listsData);
-            for (let i = 0; i < array.length; i++) {
-                var id = array[i].id.substring('list_'.length, array[i].id.length);
+            //update selected list
+            $.ajax({
+                type: 'POST',
+                data: JSON.stringify(sensors),
+                url: updateSelectedList + '?Selected=' + listId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (listsData) {
+                var array = JSON.parse(listsData);
+                for (let i = 0; i < array.length; i++) {
+                    var id = array[i].id.substring('list_'.length, array[i].id.length);
 
-                $('#value_' + id).empty().append(array[i].value);
-                $('#update_' + id).empty().append('updated ' + array[i].updateTime);
-                $('#status_' + id).removeClass('tree-icon-unknown ' +
-                    'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
-                $('#status_' + id).addClass(array[i].status);
+                    $('#value_' + id).empty().append(array[i].value);
+                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                    $('#status_' + id).removeClass('tree-icon-unknown ' +
+                        'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                    $('#status_' + id).addClass(array[i].status);
 
-                initializeDataHistoryRequests();
+                    initializeDataHistoryRequests();
 
-                let selectedRadio = $('input[id$=' + id + ']:checked');
-                if (selectedRadio !== undefined) {
-                    selectedRadio.click();
+                    let selectedRadio = $('input[id$=' + id + ']:checked');
+                    if (selectedRadio !== undefined) {
+                        selectedRadio.click();
+                    }
+                    //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                    //let selectedRadio = $('input[type="radio"]:checked');
+                    //if (selectedRadio !== undefined) {
+                    //    selectedRadio.click();
+                    //}
                 }
-                //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                //let selectedRadio = $('input[type="radio"]:checked');
-                //if (selectedRadio !== undefined) {
-                //    selectedRadio.click();
-                //}
-            }
-        });
+            });
 
         if (listId != "" && listId != undefined)
             //add new sensors
@@ -249,13 +267,13 @@
                 initializeDataHistoryRequests();
             });
 
-        if (listId != "" && listId != undefined)     
+        if (listId != "" && listId != undefined)
             //remove sensors
             $.ajax({
                 type: 'POST',
                 data: JSON.stringify(sensors),
                 url: removeSensorsAction,
-                dataType: 'html',
+                dataType:'html',
                 contentType: 'application/json',
                 cache: false,
                 async: true
@@ -263,18 +281,17 @@
                 var array = JSON.parse(idsData);
 
                 if (array != undefined && array.length > 0)
-                    for (let i = 0; i < array.length; i++)
-                {
+                    for (let i = 0; i < array.length; i++) {
                         $('#' + array[i]).parent().parent().empty();
-                }         
+                    }
             });
-        
-        
+
+
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
         $("#state").empty();
         $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-        
+
     });
 
     hubConnection.onclose(error => {
@@ -340,7 +357,7 @@
                     if (selectedRadio !== undefined) {
                         selectedRadio.click();
                     }
-                    
+
                     //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
                     //$('#reload_' + selectedAccordion.attr('id')).click();
                     //let selectedRadio = $('input[type="radio"]:checked');
@@ -358,4 +375,30 @@
     }
 
     setInterval(update, 30000);
+
+    $('#sortByName').off("click").on("click", function(){
+        $.ajax({
+            type: 'POST',
+            url: sortByNameAction,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        });
+
+        location.reload();
+    });
+
+    $('#sortByTime').off("click").on("click", function () {
+        $.ajax({
+            type: 'POST',
+            url: sortByTimeAction,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        });
+
+        location.reload();
+    });
 </script>

@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Base;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using System;
 using System.Diagnostics;
@@ -20,11 +19,8 @@ namespace HSMDataCollector.PerformanceSensor.Base
         }
 
         protected abstract void OnMonitoringTimerTick(object state);
-        public abstract UnitedSensorValue GetLastValueNew();
-
+        public abstract UnitedSensorValue GetLastValue();
         public abstract void Dispose();
-        public abstract CommonSensorValue GetLastValue();
-
         public string Path => _path;
         public bool HasLastValue => true;
     }

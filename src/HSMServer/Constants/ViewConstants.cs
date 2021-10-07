@@ -21,6 +21,10 @@
         public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
         public const string UpdateSelectedListAction = "UpdateSelectedList";
         public const string AddNewSensorsAction = "AddNewSensors";
+
+        public const string SortByNameAction = "SortByName";
+        public const string SortByTimeAction = "SortByTime";
+
         public const string RemoveProductAction = "RemoveProduct";
         public const string RemoveNodeAction = "RemoveNode";
         public const string RemoveSensorAction = "RemoveSensor";

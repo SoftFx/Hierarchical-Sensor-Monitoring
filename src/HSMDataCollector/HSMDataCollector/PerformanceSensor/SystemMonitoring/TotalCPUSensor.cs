@@ -7,6 +7,9 @@ using System;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
+    /// <summary>
+    /// The sensor monitors the whole CPU usage, currently works for windows only
+    /// </summary>
     internal class TotalCPUSensor : StandardPerformanceSensorBase<int>
     {
         private const string _sensorName = "Total CPU";
@@ -27,9 +30,9 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             
         }
 
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
-            return InternalBar.GetLastValueNew();
+            return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetTotalCPUFunc()
@@ -46,11 +49,6 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             _monitoringTimer?.Dispose();
             InternalCounter?.Dispose();
             InternalBar?.Dispose();
-        }
-
-        public override CommonSensorValue GetLastValue()
-        {
-            return InternalBar.GetLastValue();
         }
     }
 }

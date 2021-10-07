@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.FullDataObject;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -8,14 +7,8 @@ namespace HSMDataCollector.Core
 {
     internal class DataQueue : IDataQueue, IValuesQueue
     {
-        // 07.07.2021: Use new data object
-        [Obsolete]
-        private readonly Queue<CommonSensorValue> _valuesQueue;
-        [Obsolete]
-        private readonly List<CommonSensorValue> _failedList;
-
-        private readonly Queue<UnitedSensorValue> _queue;
-        private readonly List<UnitedSensorValue> _list;
+        private readonly Queue<UnitedSensorValue> _valuesQueue;
+        private readonly List<UnitedSensorValue> _failedList;
         private const int MAX_VALUES_MESSAGE_CAPACITY = 10000;
         private const int MAX_QUEUE_CAPACITY = 100000;
         private int _internalCount = 0;
@@ -27,40 +20,21 @@ namespace HSMDataCollector.Core
 
         public DataQueue()
         {
-            //_valuesQueue = new Queue<CommonSensorValue>();
-            //_failedList = new List<CommonSensorValue>();
-            _queue = new Queue<UnitedSensorValue>();
-            _list = new List<UnitedSensorValue>();
+            _valuesQueue = new Queue<UnitedSensorValue>();
+            _failedList = new List<UnitedSensorValue>();
             _lockObj = new object();
             _listLock = new object();
             Disposed = false;
         }
         
-        public event EventHandler<List<CommonSensorValue>> SendData;
         public event EventHandler<List<UnitedSensorValue>> SendValues;
-        public event EventHandler<DateTime> QueueOverflow; 
-        public void ReturnFailedData(List<CommonSensorValue> values)
-        {
-            lock (_listLock)
-            {
-                _failedList.AddRange(values);
-            }
-
-            _hasFailedData = true;
-        }
-
-        public List<CommonSensorValue> GetAllCollectedData()
-        {
-            List<CommonSensorValue> values = new List<CommonSensorValue>();
-            //values.AddRange(DequeueData());
-            return values;
-        }
+        public event EventHandler<DateTime> QueueOverflow;
 
         public void ReturnData(List<UnitedSensorValue> values)
         {
             lock (_listLock)
             {
-                _list.AddRange(values);
+                _failedList.AddRange(values);
             }
 
             _hasFailedData = true;
@@ -94,7 +68,7 @@ namespace HSMDataCollector.Core
             ClearData();
         }
 
-        private void EnqueueValue(CommonSensorValue value)
+        private void Enqueue(UnitedSensorValue value)
         {
             lock (_lockObj)
             {
@@ -107,34 +81,23 @@ namespace HSMDataCollector.Core
                 OnQueueOverflow();
             }
         }
-
-        private void Enqueue(UnitedSensorValue value)
-        {
-            lock (_lockObj)
-            {
-                _queue.Enqueue(value);
-            }
-
-            ++_internalCount;
-            if (_internalCount == MAX_QUEUE_CAPACITY)
-            {
-                OnQueueOverflow();
-            }
-        }
-        public void Enqueue(CommonSensorValue value)
-        {
-            EnqueueValue(value);
-        }
-
+        
         public void EnqueueData(UnitedSensorValue value)
         {
+            TrimDataIfNecessary(value);
             Enqueue(value);
         }
 
+        private void TrimDataIfNecessary(UnitedSensorValue value)
+        {
+            if (value.Data.Length <= Constants.MaxSensorValueStringLength)
+                return;
+
+            value.Data = value.Data.Substring(0, Constants.MaxSensorValueStringLength);
+        }
         private void OnTimerTick(object state)
         {
             var data = DequeueData();
-            //OnSendData(data);
             OnSendValues(data);
         }
 
@@ -144,46 +107,15 @@ namespace HSMDataCollector.Core
             {
                 lock (_listLock)
                 {
-                    //_failedList.Clear();
-                    _list.Clear();
+                    _failedList.Clear();
                 }
             }
 
             lock (_lockObj)
             {
-                //_valuesQueue.Clear();
-                _queue.Clear();
+                _valuesQueue.Clear();
             }
         }
-        //private List<CommonSensorValue> DequeueData()
-        //{
-        //    List<CommonSensorValue> dataList = new List<CommonSensorValue>();
-        //    if (_hasFailedData)
-        //    {
-        //        lock (_listLock)
-        //        {
-        //            dataList.AddRange(_failedList);
-        //            _failedList.Clear();
-        //        }
-
-        //        _hasFailedData = false;
-        //    
-        //    else
-        //    {
-        //        int count = 0;
-        //        lock (_lockObj)
-        //        {
-        //            while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
-        //            {
-        //                dataList.Add(_valuesQueue.Dequeue());
-        //                ++count;
-        //                --_internalCount;
-        //            }                    
-        //        }
-        //    }
-
-        //    return dataList;
-        //}
         private List<UnitedSensorValue> DequeueData()
         {
             List<UnitedSensorValue> dataList = new List<UnitedSensorValue>();
@@ -191,8 +123,8 @@ namespace HSMDataCollector.Core
             {
                 lock (_listLock)
                 {
-                    dataList.AddRange(_list);
-                    _list.Clear();
+                    dataList.AddRange(_failedList);
+                    _failedList.Clear();
                 }
 
                 _hasFailedData = false;
@@ -203,7 +135,7 @@ namespace HSMDataCollector.Core
             {
                 while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
                 {
-                    dataList.Add(_queue.Dequeue());
+                    dataList.Add(_valuesQueue.Dequeue());
                     ++count;
                     --_internalCount;
                 }
@@ -216,11 +148,7 @@ namespace HSMDataCollector.Core
         {
             QueueOverflow?.Invoke(this, DateTime.Now);
         }
-        private void OnSendData(List<CommonSensorValue> values)
-        {
-            SendData?.Invoke(this, values);
-        }
-
+        
         private void OnSendValues(List<UnitedSensorValue> values)
         {
             SendValues?.Invoke(this, values);
