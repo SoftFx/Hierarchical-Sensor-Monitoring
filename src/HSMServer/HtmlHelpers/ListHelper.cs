@@ -65,9 +65,12 @@ namespace HSMServer.HtmlHelpers
             if (nodes[0].Length < path.Length)
             {
                 //Remove last node name because it is sensor
-                path = path.Substring(nodes[0].Length + 1,
-                    path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
-                node = GetNodeRecursion(path, existingNode);
+                if (nodes.Length > 2)
+                {
+                    path = path.Substring(nodes[0].Length + 1,
+                        path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
+                    node = GetNodeRecursion(path, existingNode);
+                }
             }
 
             StringBuilder result = new StringBuilder("<div>");
