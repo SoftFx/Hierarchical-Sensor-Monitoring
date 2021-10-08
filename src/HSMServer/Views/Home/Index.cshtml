@@ -265,25 +265,25 @@
         //        initializeDataHistoryRequests();
         //    });
 
-        //if (listId != "" && listId != undefined)     
-        //    //remove sensors
-        //    $.ajax({
-        //        type: 'POST',
-        //        data: JSON.stringify(sensors),
-        //        url: removeSensorsAction,
-        //        dataType: 'html',
-        //        contentType: 'application/json',
-        //        cache: false,
-        //        async: true
-        //    }).done(function (idsData) {
-        //        var array = JSON.parse(idsData);
+        if (listId != "" && listId != undefined)     
+            //remove sensors
+            $.ajax({
+                type: 'POST',
+                data: JSON.stringify(sensors),
+                url: removeSensorsAction,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (idsData) {
+                var array = JSON.parse(idsData);
 
-        //        if (array != undefined && array.length > 0)
-        //            for (let i = 0; i < array.length; i++)
-        //        {
-        //                $('#' + array[i]).parent().parent().empty();
-        //        }         
-        //    });
+                if (array != undefined && array.length > 0)
+                    for (let i = 0; i < array.length; i++)
+                {
+                        $('#' + array[i]).parent().parent().empty();
+                }         
+            });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
