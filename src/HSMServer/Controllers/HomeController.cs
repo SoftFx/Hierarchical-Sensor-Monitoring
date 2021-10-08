@@ -3,10 +3,10 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
@@ -30,15 +30,15 @@ namespace HSMServer.Controllers
     public class HomeController : Controller
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
-        private readonly IMonitoringCore _monitoringCore;
+        private readonly ISensorsInterface _sensorsInterface;
         private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-        public HomeController(IMonitoringCore monitoringCore, ITreeViewManager treeManager, IUserManager userManager,
-                IHistoryProcessorFactory factory, IProductManager productManager)
+        public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
+            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
         {
-            _monitoringCore = monitoringCore;
+            _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
             _userManager = userManager;
             _productManager = productManager;
@@ -48,11 +48,10 @@ namespace HSMServer.Controllers
         public IActionResult Index()
         {
             var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-
             var tree = _treeManager.GetTreeViewModel(user);
             if (tree == null)
             {
-                var result = _monitoringCore.GetSensorsTree(user);
+                var result = _sensorsInterface.GetSensorsTree(user);
                 tree = new TreeViewModel(result);
                 _treeManager.AddOrCreate(user, tree);
             }
@@ -64,7 +63,7 @@ namespace HSMServer.Controllers
         public void RemoveSensor([FromQuery(Name = "Selected")]string encodedPath)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            _monitoringCore.RemoveSensor(product, path);
+            _sensorsInterface.RemoveSensor(product, path);
         }
 
         [HttpPost]
@@ -85,7 +84,7 @@ namespace HSMServer.Controllers
                 var productEntity = _productManager.GetProductByName(product);
                 if (productEntity == null) return;
 
-                _monitoringCore.HideProduct(productEntity, out var error);
+                _sensorsInterface.HideProduct(productEntity, out var error);
             }
             else
             {
@@ -95,7 +94,7 @@ namespace HSMServer.Controllers
                 var paths = new List<string>();
                 GetSensorsPaths(node, paths);
 
-                _monitoringCore.RemoveSensors(product, paths);
+                _sensorsInterface.RemoveSensors(product, paths);
             }
         }
 
@@ -191,8 +190,9 @@ namespace HSMServer.Controllers
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
             var formattedPath = SensorPathHelper.Decode(path);
+            var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
 
-            var node = model.GetNode(formattedPath);
+            var node = model.GetNode(nodePath);
             List<SensorDataViewModel> result = new List<SensorDataViewModel>();
             if (node?.Sensors != null)
 
@@ -269,7 +269,7 @@ namespace HSMServer.Controllers
         public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.Path, out string product, out string path);
-            List<SensorHistoryData> unprocessedData = _monitoringCore.GetSensorHistory(HttpContext.User as User,
+            List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(HttpContext.User as User,
                 product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
             var processedData = processor.ProcessHistory(unprocessedData);
@@ -289,7 +289,7 @@ namespace HSMServer.Controllers
         public HtmlString HistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            var result = _monitoringCore.GetAllSensorHistory(HttpContext.User as User, product, path);
+            var result = _sensorsInterface.GetAllSensorHistory(HttpContext.User as User, product, path);
 
             return new HtmlString(TableHelper.CreateHistoryTable(result, encodedPath));
         }
@@ -297,7 +297,7 @@ namespace HSMServer.Controllers
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
             List<SensorHistoryData> unprocessedData =
-                _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
+                _sensorsInterface.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
                     to.ToUniversalTime());
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
@@ -309,7 +309,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.Path, out string product, out string path);
-            List<SensorHistoryData> unprocessedData = _monitoringCore.GetSensorHistory(HttpContext.User as User,
+            List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(HttpContext.User as User,
                 product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
             var processedData = processor.ProcessHistory(unprocessedData);
@@ -328,7 +328,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            var result = _monitoringCore.GetAllSensorHistory(HttpContext.User as User, product, path);
+            var result = _sensorsInterface.GetAllSensorHistory(HttpContext.User as User, product, path);
 
             return new JsonResult(result);
         }
@@ -336,7 +336,7 @@ namespace HSMServer.Controllers
         private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
             List<SensorHistoryData> unprocessedData =
-                _monitoringCore.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
+                _sensorsInterface.GetSensorHistory(User as User, product, path, from.ToUniversalTime(),
                     to.ToUniversalTime());
 
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
@@ -350,7 +350,7 @@ namespace HSMServer.Controllers
             ParseProductAndPath(encodedPath, out string product, out string path);
             DateTime fromUTC = from.ToUniversalTime();
             DateTime toUTC = to.ToUniversalTime();
-            List<SensorHistoryData> historyList = _monitoringCore.GetSensorHistory(User as User, product, path,
+            List<SensorHistoryData> historyList = _sensorsInterface.GetSensorHistory(User as User, product, path,
                 fromUTC, toUTC);
             string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -360,7 +360,7 @@ namespace HSMServer.Controllers
         public FileResult ExportHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            List<SensorHistoryData> historyList = _monitoringCore.GetAllSensorHistory(User as User,
+            List<SensorHistoryData> historyList = _sensorsInterface.GetAllSensorHistory(User as User,
                 product, path);
             string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
             return GetExportHistory(historyList, type, PeriodType.All, fileName);
@@ -385,9 +385,9 @@ namespace HSMServer.Controllers
             var product = path.Substring(0, index);
             path = path.Substring(index + 1, path.Length - index - 1);
 
-            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
+            var fileContents = _sensorsInterface.GetFileSensorValueBytes(HttpContext.User as User, product, path);
 
-            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
+            var extension = _sensorsInterface.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{path.Replace('/', '_')}.{extension}";
 
             return File(fileContents, GetFileTypeByExtension(fileName), fileName);
@@ -402,9 +402,9 @@ namespace HSMServer.Controllers
             var product = path.Substring(0, index);
             path = path.Substring(index + 1, path.Length - index - 1);
 
-            var fileContents = _monitoringCore.GetFileSensorValueBytes(HttpContext.User as User, product, path);
+            var fileContents = _sensorsInterface.GetFileSensorValueBytes(HttpContext.User as User, product, path);
             var fileContentsStream = new MemoryStream(fileContents);
-            var extension = _monitoringCore.GetFileSensorValueExtension(HttpContext.User as User, product, path);
+            var extension = _sensorsInterface.GetFileSensorValueExtension(HttpContext.User as User, product, path);
             var fileName = $"{path.Replace('/', '_')}.{extension}";
 
             return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);

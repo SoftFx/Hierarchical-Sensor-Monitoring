@@ -180,112 +180,110 @@
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var listId = "";
-        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+        var sensorId = "";
+        if (selectedNode != undefined) sensorId = selectedNode.id;
 
         //update invisible lists
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateLists + '?Selected=' + listId,
+            url: updateLists + '?Selected=' + sensorId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
         }).done(function (listsData) {
             //removing invisible lists
-            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+            $('[id^="sensor_"][style*="display: none;"]').each(function (index) {
                 this.remove();
             });
 
-            listsData = listsData.replace('{"value":"', '');
-            listsData = listsData.slice(0, listsData.length - 2);
-            listsData = listsData.replaceAll("\\", "");
+            let parsedData = JSON.parse(listsData);
+            //listsData = listsData.replace('{"value":"', '');
+            //listsData = listsData.slice(0, listsData.length - 2);
+            //listsData = listsData.replaceAll("\\", "");
 
-            $('#listContainer').append(listsData);
+            $('#listContainer').append(parsedData.value);
             initializeDataHistoryRequests();
         });
 
 
-        if (listId != "" && listId != undefined)
-            //update selected list
-            $.ajax({
-                type: 'POST',
-                data: JSON.stringify(sensors),
-                url: updateSelectedList + '?Selected=' + listId,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function (listsData) {
-                var array = JSON.parse(listsData);
-                for (let i = 0; i < array.length; i++) {
-                    var id = array[i].id.substring('list_'.length, array[i].id.length);
-
-                    $('#value_' + id).empty().append(array[i].value);
-                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
-                    $('#status_' + id).removeClass('tree-icon-unknown ' +
-                        'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
-                    $('#status_' + id).addClass(array[i].status);
-
-                    initializeDataHistoryRequests();
-
-                    let selectedRadio = $('input[id$=' + id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
-                    }
-                    //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                    //let selectedRadio = $('input[type="radio"]:checked');
-                    //if (selectedRadio !== undefined) {
-                    //    selectedRadio.click();
-                    //}
-                }
-            });
-
-        if (listId != "" && listId != undefined)
-            //add new sensors
-            $.ajax({
-                type: 'POST',
-                data: JSON.stringify(sensors),
-                url: addNewSensors + '?Selected=' + listId,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function (sensorsData) {
-                sensorsData = sensorsData.replace('{"value":"', '');
-                sensorsData = sensorsData.slice(0, sensorsData.length - 2);
-                sensorsData = sensorsData.replaceAll("\\", "");
-
-                if ($('#' + listId) == undefined) {
-                    $('#listContainer').append("<div class='accordion'" +
-                        "id = '" + listId + "' style = 'display: block;' ></div> ");
-                    $('#noData').css('display', 'none');
-                }
-
-                $('#' + listId).append(sensorsData);
+        if (sensorId != "" && sensorId != undefined)
+        //update selected list
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(sensors),
+            url: updateSelectedList + '?Selected=' + sensorId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function(listsData) {
+            var array = JSON.parse(listsData);
+            for (let i = 0; i < array.length; i++) {
+                var id = array[i].id.substring('sensor_'.length);
+                $('#value_' + id).empty().append(array[i].value);
+                $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                $('#status_' + id).removeClass('tree-icon-unknown ' +
+                    'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                $('#status_' + id).addClass(array[i].status);
                 initializeDataHistoryRequests();
-            });
+                let selectedRadio = $('input[id$=' + id + ']:checked');
+                if (selectedRadio !== undefined) {
+                    selectedRadio.click();
+                }
+                //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                //let selectedRadio = $('input[type="radio"]:checked');
+                //if (selectedRadio !== undefined) {
+                //    selectedRadio.click();
+                //}
+            }
+        });
 
-        if (listId != "" && listId != undefined)
-            //remove sensors
-            $.ajax({
-                type: 'POST',
-                data: JSON.stringify(sensors),
-                url: removeSensorsAction,
-                dataType:'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function (idsData) {
-                var array = JSON.parse(idsData);
+        //if (listId != "" && listId != undefined)
+        //    //add new sensors
+        //    $.ajax({
+        //        type: 'POST',
+        //        data: JSON.stringify(sensors),
+        //        url: addNewSensors + '?Selected=' + listId,
+        //        dataType: 'html',
+        //        contentType: 'application/json',
+        //        cache: false,
+        //        async: true
+        //    }).done(function (sensorsData) {
+        //        sensorsData = sensorsData.replace('{"value":"', '');
+        //        sensorsData = sensorsData.slice(0, sensorsData.length - 2);
+        //        sensorsData = sensorsData.replaceAll("\\", "");
 
-                if (array != undefined && array.length > 0)
-                    for (let i = 0; i < array.length; i++) {
-                        $('#' + array[i]).parent().parent().empty();
-                    }
-            });
+        //        if ($('#' + listId) == undefined) {
+        //            $('#listContainer').append("<div class='accordion'" +
+        //                "id = '" + listId + "' style = 'display: block;' ></div> ");
+        //            $('#noData').css('display', 'none');
+        //        }
 
+        //        $('#' + listId).append(sensorsData);
+        //        initializeDataHistoryRequests();
+        //    });
+
+        //if (listId != "" && listId != undefined)     
+        //    //remove sensors
+        //    $.ajax({
+        //        type: 'POST',
+        //        data: JSON.stringify(sensors),
+        //        url: removeSensorsAction,
+        //        dataType: 'html',
+        //        contentType: 'application/json',
+        //        cache: false,
+        //        async: true
+        //    }).done(function (idsData) {
+        //        var array = JSON.parse(idsData);
+
+        //        if (array != undefined && array.length > 0)
+        //            for (let i = 0; i < array.length; i++)
+        //        {
+        //                $('#' + array[i]).parent().parent().empty();
+        //        }         
+        //    });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
@@ -305,20 +303,20 @@
 
     function update() {
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var listId = "";
-        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+        var sensorId = "";
+        if (selectedNode != undefined) sensorId = selectedNode.id;
 
         //update invisible lists
         $.ajax({
             type: 'POST',
-            url: updateLists + '?Selected=' + listId,
+            url: updateLists + '?Selected=' + sensorId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
         }).done(function (listsData) {
             //removing invisible lists
-            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+            $('[id^="sensor_"][style*="display: none;"]').each(function (index) {
                 this.remove();
             });
 
@@ -331,11 +329,11 @@
             initializeDataHistoryRequests();
         });
 
-        if (listId != "" && listId != undefined)
+        if (sensorId != "" && sensorId != undefined)
             //update selected list
             $.ajax({
                 type: 'POST',
-                url: updateSelectedList + '?Selected=' + listId,
+                url: updateSelectedList + '?Selected=' + sensorId,
                 dataType: 'html',
                 contentType: 'application/json',
                 cache: false,
@@ -343,7 +341,7 @@
             }).done(function (listsData) {
                 var array = JSON.parse(listsData);
                 for (let i = 0; i < array.length; i++) {
-                    var id = array[i].id.substring('list_'.length, array[i].id.length);
+                    var id = array[i].id.substring('sensor_'.length);
 
                     $('#value_' + id).empty().append(array[i].value);
                     $('#update_' + id).empty().append('updated ' + array[i].updateTime);

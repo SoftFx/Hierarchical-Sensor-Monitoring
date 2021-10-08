@@ -1,4 +1,6 @@
-﻿namespace HSMDatabase.Entity
+﻿using System;
+
+namespace HSMDatabase.Entity
 {
     public class SensorEntity
     {
@@ -6,5 +8,6 @@
         public string ProductName { get; set; }
         public string SensorName { get; set; }
         public string Description { get; set; }
+        public TimeSpan ExpectedUpdateInterval { get; set; }
     }
 }

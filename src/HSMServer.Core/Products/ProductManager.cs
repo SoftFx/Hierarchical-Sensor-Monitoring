@@ -181,6 +181,21 @@ namespace HSMServer.Core.Products
                 _databaseAdapter.UpdateProduct(currentProduct);
             });
         }
+
+        public List<SensorInfo> GetAllExistingSensorInfos()
+        {
+            List<SensorInfo> result = new List<SensorInfo>();
+            lock (_dictionaryLock)
+            {
+                foreach (var pair in _productSensorsDictionary)
+                {
+                    result.AddRange(pair.Value);
+                }
+            }
+
+            return result;
+        }
+
         public bool IsSensorRegistered(string productName, string path)
         {
             lock (_dictionaryLock)

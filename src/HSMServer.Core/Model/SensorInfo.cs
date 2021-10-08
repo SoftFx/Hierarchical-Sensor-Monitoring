@@ -1,4 +1,5 @@
-﻿using HSMDatabase.Entity;
+﻿using System;
+using HSMDatabase.Entity;
 
 namespace HSMServer.Core.Model
 {
@@ -8,7 +9,7 @@ namespace HSMServer.Core.Model
         public string ProductName { get; set; }
         public string SensorName { get; set; }
         public string Description { get; set; }
-
+        public TimeSpan ExpectedUpdateInterval { get; set; }
         public SensorInfo() {}
         public SensorInfo(SensorEntity entity)
         {
@@ -18,6 +19,7 @@ namespace HSMServer.Core.Model
             Path = entity.Path;
             SensorName = entity.SensorName;
             Description = entity.Description;
+            ExpectedUpdateInterval = entity.ExpectedUpdateInterval;
         }
     }
 }
