@@ -10,6 +10,7 @@
         $('#sensorData_' + path).css('display', 'block');
         let parent = dataElement.parentNode;
         parent.style.display = 'block';
+        $('#' + path).click();
     } else {
         let path = id;
         let listId = '#list_' + path;
