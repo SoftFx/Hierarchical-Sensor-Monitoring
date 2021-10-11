@@ -65,30 +65,32 @@ namespace HSMServer.HtmlHelpers
             if (nodes[0].Length < path.Length)
             {
                 //Remove last node name because it is sensor
-                if (nodes.Length > 2)
-                {
-                    path = path.Substring(nodes[0].Length + 1,
-                        path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
-                    node = GetNodeRecursion(path, existingNode);
-                }
+                //if (nodes.Length > 2)
+                //{
+                //    path = path.Substring(nodes[0].Length + 1,
+                //        path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
+                //    node = GetNodeRecursion(path, existingNode);
+                //}
+                path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
+                node = GetNodeRecursion(path, existingNode);
             }
 
-            StringBuilder result = new StringBuilder("<div>");
-            //string formattedPath = SensorPathHelper.Encode(fullPath);
+            StringBuilder result = new StringBuilder();
+            string formattedNodePath = SensorPathHelper.Encode(fullPath);
 
-            //result.Append($"<div class='accordion' id='list_{formattedPath}' style='display: none;'>");
+            result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
             //if (node.Sensors != null)
             //    foreach (var sensor in node.Sensors)
             //    {
             //        result.Append(CreateSensor(fullPath, sensor));
             //    }
             //result.Append("</div>");
-            string shortedPath = fullPath.Substring(0, fullPath.LastIndexOf('/'));
+            //string shortedPath = fullPath.Substring(0, fullPath.LastIndexOf('/'));
             if (node.Sensors != null && node.Sensors.Any())
             {
                 foreach (var sensor in node.Sensors)
                 {
-                    string sensorPath = $"{shortedPath}/{sensor.Name}";
+                    string sensorPath = $"{fullPath}/{sensor.Name}";
                     string formattedPath = SensorPathHelper.Encode(sensorPath);
                     result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
                     result.Append(CreateSensor(formattedPath, sensor));

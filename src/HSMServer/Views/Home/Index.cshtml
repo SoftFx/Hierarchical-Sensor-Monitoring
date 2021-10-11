@@ -180,40 +180,38 @@
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var sensorId = "";
-        if (selectedNode != undefined) sensorId = selectedNode.id;
+        var listId = getListIdForSelectedNode(selectedNode);
+        
+        //console.log('listId');
+        //console.log(listId);
 
         //update invisible lists
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateLists + '?Selected=' + sensorId,
+            url: updateLists + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
         }).done(function (listsData) {
             //removing invisible lists
-            $('[id^="sensor_"][style*="display: none;"]').each(function (index) {
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
                 this.remove();
             });
 
             let parsedData = JSON.parse(listsData);
-            //listsData = listsData.replace('{"value":"', '');
-            //listsData = listsData.slice(0, listsData.length - 2);
-            //listsData = listsData.replaceAll("\\", "");
-
             $('#listContainer').append(parsedData.value);
             initializeDataHistoryRequests();
         });
 
 
-        if (sensorId != "" && sensorId != undefined)
+        if (listId != "" && listId != undefined)
         //update selected list
         $.ajax({
             type: 'POST',
             data: JSON.stringify(sensors),
-            url: updateSelectedList + '?Selected=' + sensorId,
+            url: updateSelectedList + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
@@ -240,30 +238,30 @@
             }
         });
 
-        //if (listId != "" && listId != undefined)
-        //    //add new sensors
-        //    $.ajax({
-        //        type: 'POST',
-        //        data: JSON.stringify(sensors),
-        //        url: addNewSensors + '?Selected=' + listId,
-        //        dataType: 'html',
-        //        contentType: 'application/json',
-        //        cache: false,
-        //        async: true
-        //    }).done(function (sensorsData) {
-        //        sensorsData = sensorsData.replace('{"value":"', '');
-        //        sensorsData = sensorsData.slice(0, sensorsData.length - 2);
-        //        sensorsData = sensorsData.replaceAll("\\", "");
+        if (listId != "" && listId != undefined)
+            //add new sensors
+            $.ajax({
+                type: 'POST',
+                data: JSON.stringify(sensors),
+                url: addNewSensors + '?Selected=' + listId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (sensorsData) {
+                sensorsData = sensorsData.replace('{"value":"', '');
+                sensorsData = sensorsData.slice(0, sensorsData.length - 2);
+                sensorsData = sensorsData.replaceAll("\\", "");
 
-        //        if ($('#' + listId) == undefined) {
-        //            $('#listContainer').append("<div class='accordion'" +
-        //                "id = '" + listId + "' style = 'display: block;' ></div> ");
-        //            $('#noData').css('display', 'none');
-        //        }
+                if ($('#' + listId) == undefined) {
+                    $('#listContainer').append("<div class='accordion'" +
+                        "id = '" + listId + "' style = 'display: block;' ></div> ");
+                    $('#noData').css('display', 'none');
+                }
 
-        //        $('#' + listId).append(sensorsData);
-        //        initializeDataHistoryRequests();
-        //    });
+                $('#' + listId).append(sensorsData);
+                initializeDataHistoryRequests();
+            });
 
         if (listId != "" && listId != undefined)     
             //remove sensors
@@ -279,11 +277,11 @@
                 var array = JSON.parse(idsData);
 
                 if (array != undefined && array.length > 0)
-                    for (let i = 0; i < array.length; i++)
-                {
+                    for (let i = 0; i < array.length; i++) {
                         $('#' + array[i]).parent().parent().empty();
-                }         
+                    }
             });
+
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
@@ -303,20 +301,19 @@
 
     function update() {
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var sensorId = "";
-        if (selectedNode != undefined) sensorId = selectedNode.id;
+        var listId = getListIdForSelectedNode(selectedNode);
 
         //update invisible lists
         $.ajax({
             type: 'POST',
-            url: updateLists + '?Selected=' + sensorId,
+            url: updateLists + '?Selected=' + listId,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
             async: true
         }).done(function (listsData) {
             //removing invisible lists
-            $('[id^="sensor_"][style*="display: none;"]').each(function (index) {
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
                 this.remove();
             });
 
@@ -329,11 +326,11 @@
             initializeDataHistoryRequests();
         });
 
-        if (sensorId != "" && sensorId != undefined)
+        if (listId != "" && listId != undefined)
             //update selected list
             $.ajax({
                 type: 'POST',
-                url: updateSelectedList + '?Selected=' + sensorId,
+                url: updateSelectedList + '?Selected=' + listId,
                 dataType: 'html',
                 contentType: 'application/json',
                 cache: false,
@@ -400,4 +397,19 @@
 
         location.reload();
     });
+
+    function getListIdForSelectedNode(selectedNode) {
+        let selectedListId = "";
+        if (selectedNode != undefined) {
+            let nodeId = selectedNode.id;
+            if (nodeId.startsWith("sensor_")) {
+                let path = nodeId.substring("sensor_".length);
+                let sensorDataId = '#sensorData_' + path;
+                selectedListId = $(sensorDataId)[0].parentNode.id;
+            } else {
+                selectedListId = 'list_' + nodeId;
+            }
+        }
+        return selectedListId;
+    }
 </script>
