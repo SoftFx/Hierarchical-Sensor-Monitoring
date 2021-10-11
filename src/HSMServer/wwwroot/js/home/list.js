@@ -9,12 +9,10 @@
         let dataElement = $('#sensorData_' + path)[0];
         $('#sensorData_' + path).css('display', 'block');
         let parent = dataElement.parentNode;
-        console.log(parent);
         parent.style.display = 'block';
     } else {
         let path = id;
         let listId = '#list_' + path;
-        console.log(listId);
         $(listId).css('display', 'block');
         showAllChildrenById(listId);
     }

@@ -142,7 +142,7 @@ namespace HSMServer.Controllers
             {
                 foreach (var sensor in sensors)
                     if (sensor.TransactionType == TransactionType.Add)
-                    sensor.TransactionType = TransactionType.Update;
+                        sensor.TransactionType = TransactionType.Update;
 
                 model = oldModel.Update(sensors);
             }
@@ -190,7 +190,8 @@ namespace HSMServer.Controllers
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
             var formattedPath = SensorPathHelper.Decode(path);
-            var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
+            //var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
+            var nodePath = formattedPath;
 
             var node = model.GetNode(nodePath);
             List<SensorDataViewModel> result = new List<SensorDataViewModel>();
@@ -222,7 +223,7 @@ namespace HSMServer.Controllers
 
             var node = model.GetNode(path);
             StringBuilder result = new StringBuilder();
-            if (node.Sensors != null)
+            if (node?.Sensors != null)
 
                 foreach (var sensor in node.Sensors)
                 {

@@ -109,7 +109,7 @@ namespace HSMServer.HtmlHelpers
             //string formattedPath = SensorPathHelper.Encode(path);
             string name = formattedPath;
 
-            result.Append($"<div class='accordion-item'>" +
+            result.Append("<div class='accordion-item'>" +
                           $"<h2 class='accordion-header' id='heading_{name}'>");
 
             var time = (DateTime.UtcNow - sensor.Time);
