@@ -1,9 +1,9 @@
-﻿using HSMDatabase.SensorsDatabase;
+﻿using HSMDatabase.EnvironmentDatabase;
+using HSMDatabase.SensorsDatabase;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMDatabase.EnvironmentDatabase;
 
 namespace HSMDatabase.DatabaseWorkCore
 {

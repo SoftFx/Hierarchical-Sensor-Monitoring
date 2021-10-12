@@ -207,6 +207,14 @@ function Data(to, from, type, path) {
             cache: false,
             async: true
         }).done(function (data) {
+            if (JSON.parse(data).length === 0) {
+                $('#history_' + path).hide();
+                $('#no_data_' + path).show();
+                return;
+            }
+
+            $('#history_' + path).show();
+            $('#no_data_' + path).hide();
             let graphDivId = "graph_" + path;
             if (needSetRadio) {
                 selectAppropriateRadio(data, path);    
@@ -247,8 +255,8 @@ function deleteSensor() {
     function selectAppropriateRadio(data, path) {
         let parsedData = JSON.parse(data);
         let currentDate = new Date(Date.parse(new Date().toUTCString()));
-        let latestDate = new Date(Date.parse(parsedData[parsedData.length - 1].time));
-        let difference = currentDate - latestDate;
+        let firstDate = new Date(Date.parse(parsedData[0].time));
+        let difference = currentDate - firstDate;
         selectRadioViaDifference(difference, path);
     }
 
