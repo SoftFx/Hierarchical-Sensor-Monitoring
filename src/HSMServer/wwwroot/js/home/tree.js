@@ -2,7 +2,8 @@
     $('#jstree').jstree({
         "core": {
             "themes": {
-                "name": "default"
+                //"name": "proton",
+                //'responsive' : true
             }
         },
         "contextmenu": {
@@ -52,7 +53,7 @@
                 }
             }
         },
-        "plugins": ["state", "contextmenu", "themes"]
+        "plugins": ["state", "contextmenu", "themes", "wholerow"]
     });
     //$('#jstree').jstree();
 
