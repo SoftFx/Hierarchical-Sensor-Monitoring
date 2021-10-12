@@ -21,8 +21,14 @@
         public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
         public const string UpdateSelectedListAction = "UpdateSelectedList";
         public const string AddNewSensorsAction = "AddNewSensors";
+
+        public const string SortByNameAction = "SortByName";
+        public const string SortByTimeAction = "SortByTime";
+
         public const string RemoveProductAction = "RemoveProduct";
         public const string RemoveNodeAction = "RemoveNode";
+        public const string RemoveSensorAction = "RemoveSensor";
+        public const string RemoveSensorsAction = "RemoveSensors";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";
@@ -50,6 +56,9 @@
 
         public const string RawHistoryAction = "RawHistory";
         public const string RawHistoryAllAction = "RawHistoryAll";
+
+        public const string RawHistoryLatestAction = "RawHistoryLatest";
+        public const string HistoryLatestAction = "HistoryLatest";
 
         public const string ExportHistoryAction = "ExportHistory";
         public const string ExportHistoryAllAction = "ExportHistoryAll";

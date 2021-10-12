@@ -46,6 +46,7 @@ namespace HSMDataCollector.Bar
                 startTime = barStart;
                 endTime = DateTime.Now;
                 barStart = DateTime.Now;
+                _valuesList.Clear();
             }
 
             UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime, endTime);
@@ -66,17 +67,7 @@ namespace HSMDataCollector.Bar
             EnqueueValue(dataObject);
         }
 
-        public override CommonSensorValue GetLastValue()
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override string GetStringData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
             try
             {

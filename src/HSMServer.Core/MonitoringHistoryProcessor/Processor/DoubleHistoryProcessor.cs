@@ -11,6 +11,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
     internal class DoubleHistoryProcessor : HistoryProcessorBase
     {
         private readonly NumberFormatInfo _format;
+
+        public DoubleHistoryProcessor()
+        {
+            _format = new NumberFormatInfo();
+            _format.NumberDecimalSeparator = ".";
+        }
         public DoubleHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
             _format = new NumberFormatInfo();

@@ -118,14 +118,41 @@ namespace HSMServer.Model.ViewModel
             return this;
         }
 
-        
+        public TreeViewModel SortByName()
+        {
+            if (Nodes != null && Nodes.Count > 0)
+            {
+                Nodes = Nodes.OrderBy(x => x.Name).ToList();
+
+                foreach(var node in Nodes)
+                {
+                    node.SortByName();
+                }
+            }
+
+            return this;
+        }
+
+        public TreeViewModel SortByTime()
+        {
+            if (Nodes != null && Nodes.Count > 0)
+            {
+                Nodes = Nodes.OrderByDescending(x => x.UpdateTime).ToList();
+
+                foreach(var node in Nodes)
+                {
+                    node.SortByTime();
+                }
+            }
+
+            return this;
+        }
 
         public void UpdateNodeCharacteristics()
         {
             foreach (var node in Nodes)
             {
-                node.UpdateStatus();
-                node.UpdateSensorsCount();
+                node.Recursion();
             }
         }
     }

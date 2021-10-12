@@ -19,12 +19,7 @@ namespace HSMDataCollector.InstantValue
         }
 
         public override bool HasLastValue => false;
-        public override CommonSensorValue GetLastValue()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
             throw new NotImplementedException();
         }
@@ -32,11 +27,6 @@ namespace HSMDataCollector.InstantValue
         public override void Dispose()
         {
             
-        }
-
-        protected override string GetStringData(SensorValueBase data)
-        {
-            throw new NotImplementedException();
         }
 
         public void AddValue(T value)

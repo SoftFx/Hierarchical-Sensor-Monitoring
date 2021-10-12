@@ -146,7 +146,18 @@ namespace HSMServer.Core.DataLayer
             var history = _database.GetSensorData(productName, path, from, to);
             if (history != null && history.Any())
             {
-                history.RemoveAll(e => e.TimeCollected <= from || e.TimeCollected >= to);
+                historyDatas.AddRange(history.Select(Convert));
+            }
+
+            return historyDatas;
+        }
+
+        public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n)
+        {
+            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>();
+            var history = _database.GetSensorData(productName, path, n);
+            if (history != null && history.Any())
+            {
                 historyDatas.AddRange(history.Select(Convert));
             }
 

@@ -1,6 +1,7 @@
-﻿using HSMSensorDataObjects;
+﻿using HSM.Core.Monitoring;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.MonitoringCoreInterface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
-using HSM.Core.Monitoring;
 
 namespace HSMServer.Controllers
 {
@@ -25,16 +25,12 @@ namespace HSMServer.Controllers
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;
-        private readonly IMonitoringCore _monitoringCore;
+        private readonly IMonitoringDataReceiver _dataReceiver;
         private readonly IDataCollectorFacade _dataCollector;
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="monitoringCore"></param>
-        public SensorsController(IMonitoringCore monitoringCore, IDataCollectorFacade dataCollector,
+        public SensorsController(IMonitoringDataReceiver dataReceiver, IDataCollectorFacade dataCollector,
             ILogger<SensorsController> logger)
         {
-            _monitoringCore = monitoringCore;
+            _dataReceiver = dataReceiver;
             _dataCollector = dataCollector;
             _logger = logger;
         }
@@ -52,7 +48,7 @@ namespace HSMServer.Controllers
         //{
         //    try
         //    {
-        //        await _monitoringCore.AddSensorValueAsync(sensorValue);
+        //        await _dataReceiver.AddSensorValueAsync(sensorValue);
         //        return Ok(sensorValue);
         //    }
         //    catch (Exception e)
@@ -71,7 +67,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -95,7 +91,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -119,7 +115,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -143,7 +139,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -167,7 +163,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -191,7 +187,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -216,7 +212,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -242,7 +238,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _monitoringCore.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -268,7 +264,7 @@ namespace HSMServer.Controllers
                 {
                     var valuesList = values.ToList();
                     _dataCollector.ReportSensorsCount(valuesList.Count);
-                    _monitoringCore.AddSensorsValues(valuesList);
+                    _dataReceiver.AddSensorsValues(valuesList);
                     return Ok(values);
                 }
                 catch (Exception e)
@@ -295,7 +291,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
-                _monitoringCore.AddSensorsValues(values);
+                _dataReceiver.AddSensorsValues(values);
                 return Ok(values);
             }
             catch (Exception e)

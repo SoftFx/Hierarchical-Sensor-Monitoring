@@ -7,6 +7,9 @@ using System;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 {
+    /// <summary>
+    /// Sensor that monitors free RAM, currently supported on windows only
+    /// </summary>
     internal class FreeMemorySensor : StandardPerformanceSensorBase<int>
     {
         private const string _sensorName = "Free memory MB";
@@ -28,19 +31,15 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             
         }
 
-        public override UnitedSensorValue GetLastValueNew()
+        public override UnitedSensorValue GetLastValue()
         {
-            return InternalBar.GetLastValueNew();
+            return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetFreeMemoryFunc()
         {
             Func<double> func = () => Environment.WorkingSet;
             return func;
-        }
-        public override CommonSensorValue GetLastValue()
-        {
-            return InternalBar.GetLastValue();
         }
         public override void Dispose()
         {

@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
-using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Model.ViewModel;
 using System.Linq;
 
@@ -8,10 +8,10 @@ namespace HSMServer.Model.Validators
 {
     public class ExtraKeyValidator : AbstractValidator<ExtraKeyViewModel>
     {
-        public readonly IMonitoringCore _monitoringCore;
-        public ExtraKeyValidator(IMonitoringCore monitoringCore)
+        private readonly IProductsInterface _productsInterface;
+        public ExtraKeyValidator(IProductsInterface productsInterface)
         {
-            _monitoringCore = monitoringCore;
+            _productsInterface = productsInterface;
 
             RuleFor(x => x.ExtraKeyName)
                 .NotNull()
@@ -28,7 +28,7 @@ namespace HSMServer.Model.Validators
 
         private bool IsUniqueName(string extraKeyName, string productKey)
         {
-            var product = _monitoringCore.GetProduct(productKey);
+            var product = _productsInterface.GetProduct(productKey);
 
             return product?.ExtraKeys?.FirstOrDefault(x
                 => x.Name.Equals(extraKeyName,

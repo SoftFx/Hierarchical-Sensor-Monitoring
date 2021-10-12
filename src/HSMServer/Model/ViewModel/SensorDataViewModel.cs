@@ -21,7 +21,7 @@ namespace HSMServer.Model.ViewModel
             var encodedPath = path.Substring(index + 1, path.Length - index - 1);
             var decodedPath = SensorPathHelper.Decode(encodedPath);
 
-            Id = "list_" + SensorPathHelper.Encode($"{decodedPath}/{sensor.Name}");
+            Id = "sensor_" + SensorPathHelper.Encode($"{decodedPath}/{sensor.Name}");
             
             Value = sensor.ShortStringValue;
         }

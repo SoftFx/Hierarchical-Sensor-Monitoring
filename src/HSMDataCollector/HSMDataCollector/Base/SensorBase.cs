@@ -1,6 +1,4 @@
-﻿using System;
-using HSMDataCollector.Core;
-using HSMSensorDataObjects;
+﻿using HSMDataCollector.Core;
 using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.Base
@@ -19,15 +17,8 @@ namespace HSMDataCollector.Base
             Description = description;
         }
         public abstract bool HasLastValue { get; }
-        public abstract CommonSensorValue GetLastValue();
-        public abstract UnitedSensorValue GetLastValueNew();
+        public abstract UnitedSensorValue GetLastValue();
         public abstract void Dispose();
-        protected abstract string GetStringData(SensorValueBase data);
-        [Obsolete("07.07.2021. Use another data object.")]
-        protected void EnqueueData(CommonSensorValue value)
-        {
-            _queue.Enqueue(value);
-        }
 
         protected void EnqueueValue(UnitedSensorValue value)
         {

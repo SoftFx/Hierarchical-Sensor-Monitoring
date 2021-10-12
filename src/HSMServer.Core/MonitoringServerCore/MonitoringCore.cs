@@ -13,6 +13,7 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
 using Microsoft.Extensions.Logging;
 using System;
@@ -28,53 +29,9 @@ using RSAParameters = System.Security.Cryptography.RSAParameters;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore
+    public class MonitoringCore : IMonitoringCore, IMonitoringDataReceiver, IProductsInterface,
+        ISensorsInterface
     {
-        //#region IDisposable implementation
-
-        //private bool _disposed;
-
-        //// Implement IDisposable.
-        //public void Dispose()
-        //{
-        //    Dispose(true);
-        //    GC.SuppressFinalize(this);
-        //}
-
-        //protected virtual void Dispose(bool disposingManagedResources)
-        //{
-        //    // The idea here is that Dispose(Boolean) knows whether it is 
-        //    // being called to do explicit cleanup (the Boolean is true) 
-        //    // versus being called due to a garbage collection (the Boolean 
-        //    // is false). This distinction is useful because, when being 
-        //    // disposed explicitly, the Dispose(Boolean) method can safely 
-        //    // execute code using reference type fields that refer to other 
-        //    // objects knowing for sure that these other objects have not been 
-        //    // finalized or disposed of yet. When the Boolean is false, 
-        //    // the Dispose(Boolean) method should not execute code that 
-        //    // refer to reference type fields because those objects may 
-        //    // have already been finalized."
-
-        //    if (!_disposed)
-        //    {
-        //        if (disposingManagedResources)
-        //        {
-
-        //        }
-
-        //        _disposed = true;
-        //    }
-        //}
-
-        //// Use C# destructor syntax for finalization code.
-        //~MonitoringCore()
-        //{
-        //    // Simply call Dispose(false).
-        //    Dispose(false);
-        //}
-
-        //#endregion
-
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
@@ -571,6 +528,35 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
+        public List<SensorInfo> GetAllAvailableSensorInfos(User user)
+        {
+            if (user.IsAdmin)
+            {
+                return GetAllExistingSensorInfos();
+            }
+
+            return GetAvailableSensorInfos(user);
+        }
+
+        private List<SensorInfo> GetAllExistingSensorInfos()
+        {
+            return _productManager.GetAllExistingSensorInfos();
+        }
+
+        private List<SensorInfo> GetAvailableSensorInfos(User user)
+        {
+            List<SensorInfo> result = new List<SensorInfo>();
+            foreach (var productRole in user.ProductsRoles)
+            {
+                if (productRole.Value == ProductRoleEnum.ProductManager)
+                {
+                    var product = _productManager.GetProductByKey(productRole.Key);
+                    result.AddRange(_productManager.GetProductSensors(product.Name));
+                }
+            }
+
+            return result;
+        }
         public List<SensorData> GetSensorUpdates(User user)
         {
             return _queueManager.GetUserUpdates(user);
@@ -620,23 +606,21 @@ namespace HSMServer.Core.MonitoringServerCore
             return allValues;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(User user, string path, string product, long n = -1)
+        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n)
         {
-            //List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistoryOld(product, path, n);
-            ////_logger.Info($"GetSensorHistory: {dataList.Count} history items found for sensor {getMessage.Path} at {DateTime.Now:F}");
-            //var lastValue = _barsStorage.GetLastValue(product, path);
-            //if (lastValue != null)
-            //{
-            //    historyList.Add(_converter.Convert(lastValue));
-            //}
+            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistory(product, path, n);
+            var lastValue = _barsStorage.GetLastValue(product, path);
+            if (lastValue != null)
+            {
+                historyList.Add(_converter.Convert(lastValue));
+            }
 
-            //if (n != -1)
-            //{
-            //    historyList = historyList.TakeLast((int)n).ToList();
-            //}
+            if (n != -1)
+            {
+                historyList = historyList.TakeLast(n).ToList();
+            }
 
-            //return historyList;
-            return new List<SensorHistoryData>();
+            return historyList;
         }
 
         public string GetFileSensorValue(User user, string product, string path)
@@ -815,6 +799,31 @@ namespace HSMServer.Core.MonitoringServerCore
                 result = false;
                 error = ex.Message;
                 _logger.LogError(ex, $"Failed to remove product, name = {product.Name}");
+            }
+            return result;
+        }
+
+        public bool HideProduct(Product product, out string error)
+        {
+            bool result = false;
+            error = string.Empty;
+            try
+            {
+                DateTime timeCollected = DateTime.UtcNow;
+                SensorData updateMessage = new SensorData();
+                updateMessage.Product = product.Name;
+                updateMessage.TransactionType = TransactionType.Delete;
+                updateMessage.Time = timeCollected;
+
+                _queueManager.AddSensorData(updateMessage);
+
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                result = false;
+                error = ex.Message;
+                _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
             }
             return result;
         }

@@ -64,29 +64,50 @@ namespace HSMServer.HtmlHelpers
             NodeViewModel node = existingNode;
             if (nodes[0].Length < path.Length)
             {
+                //Remove last node name because it is sensor
+                //if (nodes.Length > 2)
+                //{
+                //    path = path.Substring(nodes[0].Length + 1,
+                //        path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
+                //    node = GetNodeRecursion(path, existingNode);
+                //}
                 path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
                 node = GetNodeRecursion(path, existingNode);
             }
 
             StringBuilder result = new StringBuilder();
-            string formattedPath = SensorPathHelper.Encode(fullPath);
+            string formattedNodePath = SensorPathHelper.Encode(fullPath);
 
-            result.Append($"<div class='accordion' id='list_{formattedPath}' style='display: none;'>");
-            if (node.Sensors != null)
+            result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
+            //if (node.Sensors != null)
+            //    foreach (var sensor in node.Sensors)
+            //    {
+            //        result.Append(CreateSensor(fullPath, sensor));
+            //    }
+            //result.Append("</div>");
+            //string shortedPath = fullPath.Substring(0, fullPath.LastIndexOf('/'));
+            if (node.Sensors != null && node.Sensors.Any())
+            {
                 foreach (var sensor in node.Sensors)
                 {
-                    result.Append(CreateSensor(fullPath, sensor));
+                    string sensorPath = $"{fullPath}/{sensor.Name}";
+                    string formattedPath = SensorPathHelper.Encode(sensorPath);
+                    result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
+                    result.Append(CreateSensor(formattedPath, sensor));
+                    result.Append("</div>");
                 }
-            result.Append("</div>");
+            }
 
+            result.Append("</div>");
             return result.ToString();
         }
 
-        public static StringBuilder CreateSensor(string path, SensorViewModel sensor)
+        public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
             StringBuilder result = new StringBuilder();
-            string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
-            string formattedPath = SensorPathHelper.Encode(path);
+            //string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
+            //string formattedPath = SensorPathHelper.Encode(path);
+            string name = formattedPath;
 
             result.Append("<div class='accordion-item'>" +
                           $"<h2 class='accordion-header' id='heading_{name}'>");
@@ -106,7 +127,7 @@ namespace HSMServer.HtmlHelpers
                           $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                 //body
                 result.Append($"<div id='collapse_{name}' class='accordion-collapse' " +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
                           "<div class='accordion-body'>");
 
                 result.Append("<div style='width: 100%'>" +
@@ -142,7 +163,7 @@ namespace HSMServer.HtmlHelpers
                           $"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
 
             result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'" +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#list_{formattedPath}'>" +
+                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
                           $"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>" +
                           "<div class='mb-3 row'><div>" +
                           CreateRadioButton(name, "hour", "1H") +
@@ -151,7 +172,8 @@ namespace HSMServer.HtmlHelpers
                           CreateRadioButton(name, "week", "1W") +
                           CreateRadioButton(name, "month", "1M") + 
                           CreateRadioButton(name, "all", "All") + 
-                          CreateCsvButton(name) + "</div>");
+                          //CreateCsvButton(name) +
+                          CreateActionsList(name) + "</div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(GetNoDataDivForSensor(name));
@@ -190,6 +212,17 @@ namespace HSMServer.HtmlHelpers
             return "no info";
         }
 
+        private static string CreateActionsList(string name)
+        {
+            return "<div class='btn-group'>" +
+                "<button class='btn btn-secondary btn-sm dropdown-toggle' type='button'" +
+                "data-bs-toggle='dropdown'>Actions</button>" +
+                "<ul class='dropdown-menu'>" +
+                $"<li><a class='dropdown-item' href='#' id='button_delete_sensor_{name}'>Delete sensor</a></li>" +
+                $"<li><a class='dropdown-item' href='#' id='button_export_csv_{name}'>Export to CSV</a></li>" +
+                "</ul></div>";
+        }
+
         private static string CreateCsvButton(string name)
         {
             return "<div class='form-check form-check-inline'><button type='button'" +
@@ -219,12 +252,14 @@ namespace HSMServer.HtmlHelpers
             //Graph tab
             string graphElementId = $"graph_{name}";
             string graphParentDivId = $"graph_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
+            sb.Append($"<li class='nav-item'><a id='link_graph_{name}' " +
+                $"class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
             string valuesElementId = $"values_{name}";
             string valuesParentDivId = $"values_parent_{name}";
-            sb.Append($"<li class='nav-item'><a class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
+            sb.Append($"<li class='nav-item'><a id='link_table_{name}' " +
+                $"class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
             sb.Append($"<div class='tab-pane fade show active' id={graphParentDivId}><div id='{graphElementId}'></div></div>");

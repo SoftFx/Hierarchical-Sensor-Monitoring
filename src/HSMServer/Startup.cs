@@ -25,6 +25,7 @@ using System;
 using System.IO;
 using System.Linq;
 using HSM.Core.Monitoring;
+using HSMServer.Core.MonitoringCoreInterface;
 
 namespace HSMServer
 {
@@ -79,7 +80,13 @@ namespace HSMServer
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
-            services.AddSingleton<IMonitoringCore, MonitoringCore>();
+            services.AddSingleton<MonitoringCore>();
+            services.AddSingleton<IMonitoringCore>(x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<IMonitoringDataReceiver>
+                (x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<ISensorsInterface>
+                (x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
 

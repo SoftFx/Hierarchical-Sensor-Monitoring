@@ -9,6 +9,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal class IntHistoryProcessor : HistoryProcessorBase
     {
+        public IntHistoryProcessor()
+        {
+
+        }
         public IntHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
         }
