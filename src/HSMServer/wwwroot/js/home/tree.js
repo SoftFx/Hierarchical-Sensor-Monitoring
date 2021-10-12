@@ -1,5 +1,10 @@
 ﻿function initializeTree() {
     $('#jstree').jstree({
+        "core": {
+            "themes": {
+                "name": "default"
+            }
+        },
         "contextmenu": {
             "items": function ($node) {
                 var tree = $("#jstree").jstree(true);
@@ -47,7 +52,7 @@
                 }
             }
         },
-        "plugins": ["state", "contextmenu"]
+        "plugins": ["state", "contextmenu", "themes"]
     });
     //$('#jstree').jstree();
 

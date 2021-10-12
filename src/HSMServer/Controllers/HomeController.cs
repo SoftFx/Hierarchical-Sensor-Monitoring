@@ -69,32 +69,52 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
         {
+            if (encodedPath.Contains("sensor_"))
+            {
+                encodedPath = encodedPath.Substring("sensor_".Length);
+            }
+
             var decodedPath = SensorPathHelper.Decode(encodedPath);
             var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
 
             string path = string.Empty;
             string product = string.Empty;
+            string sensor = string.Empty;
             if (decodedPath.Contains('/'))
+            {
+                //remove node
                 ParseProductAndPath(encodedPath, out product, out path);
-            else
-                product = decodedPath;
-
-            if (string.IsNullOrEmpty(path))
-            {
-                var productEntity = _productManager.GetProductByName(product);
-                if (productEntity == null) return;
-
-                _sensorsInterface.HideProduct(productEntity, out var error);
-            }
-            else
-            {
                 var model = _treeManager.GetTreeViewModel(user);
                 var node = model.GetNode(decodedPath);
 
                 var paths = new List<string>();
-                GetSensorsPaths(node, paths);
+                if (node == null) //remove single sensor
+                {
+                    ParseProductPathAndSensor(encodedPath, out product, out path, out sensor);
+                    node = string.IsNullOrEmpty(path) ?
+                        model.GetNode(product) : model.GetNode($"{product}/{path}");
+
+                    if (node != null)
+                    {
+                        if (string.IsNullOrEmpty(path))
+                            paths.Add(sensor);
+                        else 
+                            paths.Add($"{path}/{sensor}");
+                    }
+                }
+                else //remove sensors
+                    GetSensorsPaths(node, paths);
 
                 _sensorsInterface.RemoveSensors(product, paths);
+            }
+
+            else
+            {
+                //remove product
+                var productEntity = _productManager.GetProductByName(decodedPath);
+                if (productEntity == null) return;
+
+                _sensorsInterface.HideProduct(productEntity, out var error);
             }
         }
 
@@ -428,6 +448,22 @@ namespace HSMServer.Controllers
             int index = decodedPath.IndexOf('/');
             product = decodedPath.Substring(0, index);
             path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
+        }
+
+        private void ParseProductPathAndSensor(string encodedPath, out string product,
+            out string path, out string sensor)
+        {
+            var decodedPath = SensorPathHelper.Decode(encodedPath);
+            int index = decodedPath.IndexOf('/');
+            product = decodedPath.Substring(0, index);
+
+            var withoutProduct = decodedPath.Substring(product.Length + 1);
+            sensor = withoutProduct.Substring(withoutProduct.LastIndexOf('/') + 1);
+
+            if (withoutProduct.Contains('/'))
+                path = withoutProduct.Substring(0, withoutProduct.Length - sensor.Length - 1);
+            else
+                path = string.Empty;
         }
 
         private PeriodType GetPeriodType(DateTime from, DateTime to)
