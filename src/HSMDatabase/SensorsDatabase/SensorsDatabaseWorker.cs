@@ -28,7 +28,7 @@ namespace HSMDatabase.SensorsDatabase
             _databaseMaxTime = maxTime;
             _name = name;
             _database = new Database(_name);
-            _logger = LogManager.GetCurrentClassLogger(typeof(SensorsDatabaseWorker));
+            _logger = LogManager.GetCurrentClassLogger();
         }
 
         public long GetSensorSize(string productName, string path)

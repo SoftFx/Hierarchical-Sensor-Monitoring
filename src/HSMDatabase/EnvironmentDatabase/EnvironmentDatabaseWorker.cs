@@ -16,7 +16,7 @@ namespace HSMDatabase.EnvironmentDatabase
         public EnvironmentDatabaseWorker(string name)
         {
             _database = new Database(name);
-            _logger = LogManager.GetCurrentClassLogger(typeof(EnvironmentDatabaseWorker));
+            _logger = LogManager.GetCurrentClassLogger();
         }
 
         #region Products
