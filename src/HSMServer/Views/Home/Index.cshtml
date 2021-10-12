@@ -125,7 +125,7 @@
 
 <div class='btn-group' style="margin-left: 20px; margin-bottom: 10px">
     <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
-        Actions
+        Views
     </button>
     <ul class='dropdown-menu'>       
         <li><a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a></li>     
@@ -180,8 +180,10 @@
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var listId = "";
-        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+        var listId = getListIdForSelectedNode(selectedNode);
+        
+        //console.log('listId');
+        //console.log(listId);
 
         //update invisible lists
         $.ajax({
@@ -198,49 +200,43 @@
                 this.remove();
             });
 
-            listsData = listsData.replace('{"value":"', '');
-            listsData = listsData.slice(0, listsData.length - 2);
-            listsData = listsData.replaceAll("\\", "");
-
-            $('#listContainer').append(listsData);
+            let parsedData = JSON.parse(listsData);
+            $('#listContainer').append(parsedData.value);
             initializeDataHistoryRequests();
         });
 
 
         if (listId != "" && listId != undefined)
-            //update selected list
-            $.ajax({
-                type: 'POST',
-                data: JSON.stringify(sensors),
-                url: updateSelectedList + '?Selected=' + listId,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function (listsData) {
-                var array = JSON.parse(listsData);
-                for (let i = 0; i < array.length; i++) {
-                    var id = array[i].id.substring('list_'.length, array[i].id.length);
-
-                    $('#value_' + id).empty().append(array[i].value);
-                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
-                    $('#status_' + id).removeClass('tree-icon-unknown ' +
-                        'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
-                    $('#status_' + id).addClass(array[i].status);
-
-                    initializeDataHistoryRequests();
-
-                    let selectedRadio = $('input[id$=' + id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
-                    }
-                    //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                    //let selectedRadio = $('input[type="radio"]:checked');
-                    //if (selectedRadio !== undefined) {
-                    //    selectedRadio.click();
-                    //}
+        //update selected list
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(sensors),
+            url: updateSelectedList + '?Selected=' + listId,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function(listsData) {
+            var array = JSON.parse(listsData);
+            for (let i = 0; i < array.length; i++) {
+                var id = array[i].id.substring('sensor_'.length);
+                $('#value_' + id).empty().append(array[i].value);
+                $('#update_' + id).empty().append('updated ' + array[i].updateTime);
+                $('#status_' + id).removeClass('tree-icon-unknown ' +
+                    'tree-icon-ok ' + 'tree-icon-warning ' + 'tree-icon-error ' + 'tree-icon-unknown');
+                $('#status_' + id).addClass(array[i].status);
+                initializeDataHistoryRequests();
+                let selectedRadio = $('input[id$=' + id + ']:checked');
+                if (selectedRadio !== undefined) {
+                    selectedRadio.click();
                 }
-            });
+                //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
+                //let selectedRadio = $('input[type="radio"]:checked');
+                //if (selectedRadio !== undefined) {
+                //    selectedRadio.click();
+                //}
+            }
+        });
 
         if (listId != "" && listId != undefined)
             //add new sensors
@@ -267,13 +263,13 @@
                 initializeDataHistoryRequests();
             });
 
-        if (listId != "" && listId != undefined)
+        if (listId != "" && listId != undefined)     
             //remove sensors
             $.ajax({
                 type: 'POST',
                 data: JSON.stringify(sensors),
                 url: removeSensorsAction,
-                dataType:'html',
+                dataType: 'html',
                 contentType: 'application/json',
                 cache: false,
                 async: true
@@ -305,8 +301,7 @@
 
     function update() {
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var listId = "";
-        if (selectedNode != undefined) listId = 'list_' + selectedNode.id;
+        var listId = getListIdForSelectedNode(selectedNode);
 
         //update invisible lists
         $.ajax({
@@ -343,7 +338,7 @@
             }).done(function (listsData) {
                 var array = JSON.parse(listsData);
                 for (let i = 0; i < array.length; i++) {
-                    var id = array[i].id.substring('list_'.length, array[i].id.length);
+                    var id = array[i].id.substring('sensor_'.length);
 
                     $('#value_' + id).empty().append(array[i].value);
                     $('#update_' + id).empty().append('updated ' + array[i].updateTime);
@@ -402,4 +397,20 @@
 
         location.reload();
     });
+
+    function getListIdForSelectedNode(selectedNode) {
+        let selectedListId = "";
+        if (selectedNode != undefined) {
+            let nodeId = selectedNode.id;
+            if (nodeId.startsWith("sensor_")) {
+                let path = nodeId.substring("sensor_".length);
+                let sensorDataId = '#sensorData_' + path;
+                selectedListId = $(sensorDataId)[0].parentNode.id;
+            } else {
+                selectedListId = 'list_' + nodeId;
+            }
+        }
+        return selectedListId;
+
+    }
 </script>

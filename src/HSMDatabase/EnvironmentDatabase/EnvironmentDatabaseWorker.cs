@@ -16,7 +16,7 @@ namespace HSMDatabase.EnvironmentDatabase
         public EnvironmentDatabaseWorker(string name)
         {
             _database = new Database(name);
-            _logger = LogManager.GetCurrentClassLogger(typeof(EnvironmentDatabaseWorker));
+            _logger = LogManager.GetCurrentClassLogger();
         }
 
         #region Products
@@ -287,7 +287,7 @@ namespace HSMDatabase.EnvironmentDatabase
                 bool isRead = _database.TryRead(bytesKey, out byte[] value);
                 if (!isRead)
                 {
-                    throw new ServerDatabaseException("Failed to read sensor info");
+                    throw new ServerDatabaseException($"Failed to read sensor info for {productName}/{path}");
                 }
 
                 return JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value));

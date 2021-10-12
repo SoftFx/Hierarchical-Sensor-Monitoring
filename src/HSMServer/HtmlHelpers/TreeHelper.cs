@@ -53,6 +53,21 @@ namespace HSMServer.HtmlHelpers
                     result.Append("<ul>" + Recursion(subnode) + "</ul>");
                 }
 
+            if (node.Sensors != null && node.Sensors.Count > 0)
+            {
+                result.Append("<ul>");
+                foreach (var sensor in node.Sensors)
+                {
+                    var encodedPath = SensorPathHelper.Encode($"{node.Path}/{sensor.Name}");
+                    result.Append($"<li id='sensor_{encodedPath}' " +
+                                  "data-jstree='{\"icon\" : \"fas fa-circle " +
+                                  ViewHelper.GetStatusHeaderColorClass(sensor.Status) +
+                                  "\"}'>" + sensor.Name + "</li>");
+                }
+
+                result.Append("</ul>");
+            }
+
             result.Append("</li>");
 
             return result.ToString();
