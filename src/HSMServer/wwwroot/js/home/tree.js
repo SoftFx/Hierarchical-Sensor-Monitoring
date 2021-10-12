@@ -2,8 +2,8 @@
     $('#jstree').jstree({
         "core": {
             "themes": {
-                //"name": "proton",
-                //'responsive' : true
+                "name": "proton",
+                'responsive' : true
             }
         },
         "contextmenu": {
