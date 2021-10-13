@@ -59,13 +59,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveSensor([FromQuery(Name = "Selected")]string encodedPath)
-        {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            _sensorsInterface.RemoveSensor(product, path);
-        }
-
-        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
         {
             if (encodedPath.Contains("sensor_"))

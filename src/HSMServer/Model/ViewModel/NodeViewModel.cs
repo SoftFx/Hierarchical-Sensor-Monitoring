@@ -166,7 +166,8 @@ namespace HSMServer.Model.ViewModel
             }
 
             Count = count + (Sensors?.Count ?? 0);
-            ModifyUpdateTime();
+            if (Sensors != null && Sensors.Count > 0)
+                ModifyUpdateTime();
             ModifyStatus();
         }
 
