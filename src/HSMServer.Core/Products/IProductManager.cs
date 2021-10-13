@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Sensor;
 
 namespace HSMServer.Core.Products
 {
@@ -14,6 +15,8 @@ namespace HSMServer.Core.Products
         Product GetProductByKey(string key);
         List<SensorInfo> GetProductSensors(string productName);
         List<SensorInfo> GetAllExistingSensorInfos();
+        SensorInfo GetSensorInfo(string productName, string path);
+        void UpdateSensorInfo(SensorInfo newInfo);
         bool IsSensorRegistered(string productName, string path);
         void AddSensor(string productName, SensorValueBase sensorValue);
         void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue);

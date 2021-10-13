@@ -40,7 +40,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             Func<double> func = delegate()
             {
                 Process currentProcess = Process.GetCurrentProcess();
-                return currentProcess.PrivateMemorySize64;
+                return currentProcess.WorkingSet64;
             };
             return func;
         }

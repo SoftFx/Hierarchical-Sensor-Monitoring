@@ -1,5 +1,4 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using System;
 

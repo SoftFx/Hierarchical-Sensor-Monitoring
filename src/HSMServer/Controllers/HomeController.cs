@@ -1,6 +1,5 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
@@ -442,6 +441,32 @@ namespace HSMServer.Controllers
         }
         #endregion
 
+        #region Sensor info
+
+        [HttpGet]
+        public HtmlString GetSensorInfo([FromQuery(Name = "Path")] string encodedPath)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            var info = _productManager.GetSensorInfo(product, path);
+            if (info == null)
+                return new HtmlString(string.Empty);
+
+            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            return ViewHelper.CreateSensorInfoTable(viewModel);
+        }
+
+        [HttpPost]
+        public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
+        {
+            ParseProductAndPath(updateModel.EncodedPath, out var product, out var path);
+            var info = _productManager.GetSensorInfo(product, path);
+            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            viewModel.Update(updateModel);
+            var infoFromViewModel = CreateModelFromViewModel(viewModel);
+            _productManager.UpdateSensorInfo(infoFromViewModel);
+        }
+
+        #endregion
         private void ParseProductAndPath(string encodedPath, out string product, out string path)
         {
             var decodedPath = SensorPathHelper.Decode(encodedPath);
@@ -481,6 +506,17 @@ namespace HSMServer.Controllers
             if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
+        }
+
+        private SensorInfo CreateModelFromViewModel(SensorInfoViewModel viewModel)
+        {
+            SensorInfo result = new SensorInfo();
+            result.ProductName = viewModel.ProductName;
+            result.ExpectedUpdateInterval = TimeSpan.Parse(viewModel.ExpectedUpdateInterval);
+            result.Unit = viewModel.Unit;
+            result.Path = viewModel.Path;
+            result.Description = viewModel.Description;
+            return result;
         }
     }
 }

@@ -8,6 +8,8 @@ using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
+using HSMServer.Core.SensorsDataProcessor;
+using HSMServer.Core.SensorsDataValidator;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;
@@ -48,13 +50,6 @@ namespace HSMServer
             });
 
             services.AddMvc().AddFluentValidation();
-
-            //services.AddGrpc().AddServiceOptions<Services.HSMService>(options =>
-            //{
-            //    options.MaxSendMessageSize = 40 * 1024 * 1024;
-            //    options.MaxReceiveMessageSize = 40 * 1024 * 1024;
-            //    options.EnableDetailedErrors = true;
-            //});
             services.AddControllers();
             services.AddControllersWithViews();
 
@@ -63,8 +58,6 @@ namespace HSMServer
                 hubOptions.EnableDetailedErrors = true;
             });
 
-            //services.AddSingleton<IDatabaseWorker, LevelDBDatabaseWorker>();
-            //services.AddTransient<IPublicAdapter, PublicAdapter>();
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
             //Use singleton, created in DatabaseCore
             //services.AddSingleton<IDatabaseCore, DatabaseCore>();
@@ -77,6 +70,8 @@ namespace HSMServer
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+            services.AddSingleton<ISensorsDataValidator, SensorsDataValidator>();
+            services.AddSingleton<ISensorsProcessor, SensorsProcessor>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
@@ -87,11 +82,13 @@ namespace HSMServer
             services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>
                 (x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
+            services.AddHostedService<SensorsExpirationService>();
 
             services.AddHttpsRedirection(configureOptions =>
             {
@@ -125,14 +122,10 @@ namespace HSMServer
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
             lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
 
-            //app.UseCertificateValidator();
-
-
             app.UseAuthentication();
             app.CountRequestStatistics();
             app.UseSwagger(c =>
             {
-                //c.RouteTemplate = "api/swagger/swagger/{documentName}/swagger.json";
                 c.SerializeAsV2 = true;
             });
 
@@ -153,9 +146,6 @@ namespace HSMServer
             app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
-                //endpoints.MapGrpcService<Services.HSMService>();
-                //endpoints.MapGrpcService<Services.AdminService>();
-
                 endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
                     {
                         options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages

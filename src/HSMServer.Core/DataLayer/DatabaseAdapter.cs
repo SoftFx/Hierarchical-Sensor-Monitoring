@@ -298,9 +298,24 @@ namespace HSMServer.Core.DataLayer
             result.Path = info.Path;
             result.ProductName = info.ProductName;
             result.SensorName = info.SensorName;
+            result.SensorType = (int)info.SensorType;
+            result.Unit = info.Unit;
+            result.ExpectedUpdateInterval = info.ExpectedUpdateInterval;
+            if (info.ValidationParameters != null && info.ValidationParameters.Any())
+            {
+                result.ValidationParameters = new List<ValidationParameterEntity>();
+                result.ValidationParameters.AddRange(info.ValidationParameters.Select(Convert));
+            }
             return result;
         }
 
+        private ValidationParameterEntity Convert(SensorValidationParameter validationParameter)
+        {
+            ValidationParameterEntity entity = new ValidationParameterEntity();
+            entity.ValidationValue = validationParameter.ValidationValue;
+            entity.ParameterType = (int) validationParameter.ValidationType;
+            return entity;
+        }
         private UserEntity Convert(User user)
         {
             UserEntity result = new UserEntity();
