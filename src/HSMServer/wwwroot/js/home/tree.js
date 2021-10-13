@@ -1,9 +1,10 @@
 ﻿function initializeTree() {
     $('#jstree').jstree({
         "core": {
+            "check_callback": true,
             "themes": {
                 "name": "proton",
-                'responsive' : true
+                'responsive': true
             }
         },
         "contextmenu": {
@@ -38,7 +39,12 @@
                                     cache: false,
                                     async: true
                                 }).done(function () {
-                                    //tree.delete_node($node);
+                                    tree.delete_node($node.id);
+                                    //tree.disable_node($node.id);
+
+                                    //$node.children.forEach(function (child_id) {
+                                        //tree.disable_node(child_id.id);
+                                    //});
 
                                     $('#list_' + $node.id).remove();
                                     $('#noData').css('display', 'block');

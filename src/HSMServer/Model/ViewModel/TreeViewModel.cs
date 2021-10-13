@@ -1,3 +1,4 @@
+using System;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using System.Collections.Generic;
@@ -107,8 +108,9 @@ namespace HSMServer.Model.ViewModel
                     || sensor.TransactionType == TransactionType.Update)
                     AddSensor(sensor);
 
+
                 if (sensor.TransactionType == TransactionType.Delete
-                    && string.IsNullOrEmpty(sensor.Path))
+                        && string.IsNullOrEmpty(sensor.Path))
                     RemoveProduct(sensor.Product);
 
                 else if (sensor.TransactionType == TransactionType.Delete)
