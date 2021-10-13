@@ -19,7 +19,6 @@ using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 
@@ -161,9 +160,13 @@ namespace HSMServer.Controllers
             if (sensors != null && sensors.Count > 0)
             {
                 foreach (var sensor in sensors)
+                {
                     if (sensor.TransactionType == TransactionType.Add)
                         sensor.TransactionType = TransactionType.Update;
+                }
+                    
 
+                
                 model = oldModel.Update(sensors);
             }
 
@@ -177,12 +180,15 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
 
-            var model = oldModel;
+            var model = oldModel; 
             if (sensors != null && sensors.Count > 0)
             {
                 foreach (var sensor in sensors)
+                {
                     if (sensor.TransactionType == TransactionType.Add)
                         sensor.TransactionType = TransactionType.Update;
+                }
+                    
 
                 model = oldModel.Update(sensors);
             }
@@ -201,8 +207,11 @@ namespace HSMServer.Controllers
             if (sensors != null && sensors.Count > 0)
             {
                 foreach (var sensor in sensors)
+                {
                     if (sensor.TransactionType == TransactionType.Add)
                         sensor.TransactionType = TransactionType.Update;
+                }
+                    
 
                 model = oldModel.Update(sensors);
             }
@@ -254,15 +263,18 @@ namespace HSMServer.Controllers
                     }
                 }
 
-            if (sensors != null && sensors.Count > 0)
-            {
-                var addedSensors = sensors.Where(s => s.TransactionType == TransactionType.Add).ToList();
+            //if (sensors != null && sensors.Count > 0)
+            //{
+            //    var addedSensors = sensors.Where(s => s.TransactionType == TransactionType.Add).ToList();
 
-                foreach (var sensor in addedSensors)
-                    sensor.TransactionType = TransactionType.Update;
+            //    foreach (var sensor in addedSensors)
+            //    {
+            //        sensor.TransactionType = TransactionType.Update;
+            //    }
+                    
 
-                model = model.Update(addedSensors);
-            }
+            //    model = model.Update(addedSensors);
+            //}
 
             return new HtmlString(result.ToString());
         }
