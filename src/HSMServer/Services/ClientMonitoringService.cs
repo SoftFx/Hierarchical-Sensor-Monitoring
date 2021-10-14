@@ -40,8 +40,11 @@ namespace HSMServer.Services
                 if (updates.Count < 1)
                     continue;
 
-                _monitoringDataHubContext.Clients.Client(pair.Value)
-                    .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
+                foreach (var connection in pair.Value)
+                {
+                    _monitoringDataHubContext.Clients.Client(connection)
+                        .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
+                }
             }
         }
     }
