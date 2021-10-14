@@ -14,20 +14,6 @@ namespace HSMServer.Model.ViewModel
             _treeModels = new Dictionary<string, TreeViewModel>();
         }
 
-        public Dictionary<string, TreeViewModel> UserTreeViewDictionary
-        {
-            get
-            {
-                Dictionary<string, TreeViewModel> dictionary;
-                lock (_lockObj)
-                {
-                    dictionary = new Dictionary<string, TreeViewModel>(_treeModels);
-                }
-
-                return dictionary;
-            }
-        }
-
         public TreeViewModel GetTreeViewModel(User user)
         {
             TreeViewModel result;
@@ -45,12 +31,20 @@ namespace HSMServer.Model.ViewModel
             return result;
         }
 
+        public void RemoveViewModel(User user)
+        {
+            lock (_lockObj)
+            {
+                _treeModels.Remove(user.UserName);
+            }   
+        }
+
         public void AddOrCreate(User user, TreeViewModel model)
         {
-            if (_treeModels.ContainsKey(user.UserName))
+            lock (_lockObj)
+            {
                 _treeModels[user.UserName] = model;
-            else
-                _treeModels.Add(user.UserName, model);
+            }
         }
     }
 }

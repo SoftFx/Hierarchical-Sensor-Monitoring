@@ -8,6 +8,9 @@ namespace HSMServer.Model.ViewModel
 {
     public class TreeViewModel
     {
+        public bool IsSortByName { get; set; }
+        public bool IsSortByLastUpdate { get; set; }
+
         public List<string> Paths { get; set; }
         public List<NodeViewModel> Nodes { get; set; }
         public TreeViewModel(List<SensorData> sensors)
@@ -116,6 +119,9 @@ namespace HSMServer.Model.ViewModel
                 else if (sensor.TransactionType == TransactionType.Delete)
                     RemoveSensor(sensor);
             }
+            if (IsSortByName) SortByName();
+            else if (IsSortByLastUpdate) SortByTime();
+
             UpdateNodeCharacteristics();
             return this;
         }

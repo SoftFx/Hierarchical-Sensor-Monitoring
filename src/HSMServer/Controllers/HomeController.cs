@@ -131,6 +131,9 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
             var model = oldModel.SortByName();
+            model.IsSortByName = true;
+            model.IsSortByLastUpdate = false;
+
             _treeManager.AddOrCreate(user, model);
         }
 
@@ -140,6 +143,9 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
             var model = oldModel.SortByTime();
+            model.IsSortByLastUpdate = true;
+            model.IsSortByName = false;
+
             _treeManager.AddOrCreate(user, model);
         }
 
@@ -149,6 +155,9 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
+            if (oldModel == null)
+                return new HtmlString("");
+
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
             {
@@ -172,6 +181,8 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
+            if (oldModel == null)
+                return new HtmlString("");
 
             var model = oldModel; 
             if (sensors != null && sensors.Count > 0)
@@ -195,6 +206,8 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
+            if (oldModel == null)
+                return Json("");
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
@@ -234,6 +247,9 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
+            if (oldModel == null)
+                return new HtmlString("");
+
 
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
