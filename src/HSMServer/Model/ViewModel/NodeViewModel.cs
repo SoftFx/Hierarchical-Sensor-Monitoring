@@ -34,6 +34,7 @@ namespace HSMServer.Model.ViewModel
             Parent = parent;
 
             AddSensor(path, sensor);
+            ModifyUpdateTime();
         }
 
         public void AddSensor(string path, SensorData sensor)
