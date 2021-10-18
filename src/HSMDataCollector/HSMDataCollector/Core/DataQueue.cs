@@ -90,10 +90,14 @@ namespace HSMDataCollector.Core
 
         private void TrimDataIfNecessary(UnitedSensorValue value)
         {
-            if (value.Data.Length <= Constants.MaxSensorValueStringLength)
+            if (value?.Data == null || value.Data.Length <= Constants.MaxSensorValueStringLength)
                 return;
 
             value.Data = value.Data.Substring(0, Constants.MaxSensorValueStringLength);
+            if (!string.IsNullOrEmpty(value.Comment))
+            {
+                value.Comment = value.Comment.Substring(0, Constants.MaxSensorValueStringLength);
+            }
         }
         private void OnTimerTick(object state)
         {

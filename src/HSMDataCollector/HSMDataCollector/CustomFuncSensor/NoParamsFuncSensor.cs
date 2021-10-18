@@ -40,7 +40,7 @@ namespace HSMDataCollector.CustomFuncSensor
             catch (Exception e)
             {
                 _logger?.Error(e);
-                throw;
+                return CreateErrorDataObject(e);
             }
         }
         private UnitedSensorValue CreateDataObject(T value)
