@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Model.Authentication;
 using System.Collections.Generic;
 
 namespace HSMServer.SignalR
@@ -9,7 +10,7 @@ namespace HSMServer.SignalR
         private readonly object _lockObj = new object();
         public SignalRSessionsManager()
         {
-            _userConnectionIdCross = new Dictionary<User, List<string>>();
+            _userConnectionIdCross = new Dictionary<User, List<string>>(new UsersComparer());
         }
 
         #region Interface implementation

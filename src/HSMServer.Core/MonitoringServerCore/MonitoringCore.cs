@@ -6,6 +6,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
@@ -53,7 +54,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
             _certificateManager = new CertificateManager();
             _userManager = userManager;
-            _queueManager = new MonitoringQueueManager();
+            _queueManager = new MonitoringQueueManager(userManager);
             _productManager = productManager;
             _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
@@ -852,7 +853,6 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         #endregion
-
 
         public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
             RSAParameters rsaParameters)
