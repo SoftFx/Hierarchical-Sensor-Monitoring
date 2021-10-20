@@ -208,7 +208,8 @@ namespace HSMDataCollector.Bar
 
         private int CountMean(List<int> values)
         {
-            long sum = values.Sum();
+            //long sum = values.Sum();
+            decimal sum = CountSum(values);
             int mean = 0;
             try
             {
@@ -218,6 +219,16 @@ namespace HSMDataCollector.Bar
             { }
 
             return mean;
+        }
+
+        private decimal CountSum(List<int> values)
+        {
+            decimal result = decimal.Zero;
+            foreach (var number in values)
+            {
+                result += number;
+            }
+            return result;
         }
         #endregion
     }

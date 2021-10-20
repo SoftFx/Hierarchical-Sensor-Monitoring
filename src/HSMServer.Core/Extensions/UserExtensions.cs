@@ -33,7 +33,7 @@ namespace HSMServer.Core.Extensions
             }
 
             
-            return user.UserName.Equals(comparedUser.UserName);
+            return user.Id == comparedUser.Id;
         }
 
         public static User WithoutPassword(this User user)

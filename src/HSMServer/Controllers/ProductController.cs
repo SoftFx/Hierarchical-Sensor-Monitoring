@@ -8,7 +8,7 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
@@ -21,7 +21,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using HSMServer.Core.MonitoringCoreInterface;
 
 namespace HSMServer.Controllers
 {

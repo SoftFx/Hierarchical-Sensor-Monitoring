@@ -119,10 +119,11 @@ namespace HSMServer.Model.ViewModel
                 else if (sensor.TransactionType == TransactionType.Delete)
                     RemoveSensor(sensor);
             }
-            if (IsSortByName) SortByName();
-            else if (IsSortByLastUpdate) SortByTime();
 
             UpdateNodeCharacteristics();
+
+            if (IsSortByName) SortByName();
+            else if (IsSortByLastUpdate) SortByTime();
             return this;
         }
 

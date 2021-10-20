@@ -1,10 +1,11 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Authentication.UserObserver;
+using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Authentication
 {
-    public interface IUserManager
+    public interface IUserManager : IUserObservable
     {
         User GetUserByCertificateThumbprint(string thumbprint);
         /// <summary>

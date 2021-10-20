@@ -25,6 +25,7 @@ using System;
 using System.IO;
 using System.Linq;
 using HSM.Core.Monitoring;
+using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.MonitoringCoreInterface;
 
 namespace HSMServer
@@ -73,9 +74,9 @@ namespace HSMServer
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
+            services.AddSingleton<IUserObservable>(x => x.GetRequiredService<IUserManager>());
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
-            services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
@@ -87,6 +88,7 @@ namespace HSMServer
             services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>
                 (x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
 

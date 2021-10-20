@@ -66,6 +66,10 @@ namespace HSMServer.Core.Model.Authentication
             }
         }
 
+        /// <summary>
+        /// Update works as HTTP PUT: all the fields will be updated
+        /// </summary>
+        /// <param name="user"></param>
         public void Update(User user)
         {
             //CertificateFileName = user.CertificateFileName;
