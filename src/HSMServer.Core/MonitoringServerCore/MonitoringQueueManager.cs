@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Extensions;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Authentication.UserObserver;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -6,11 +8,10 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    internal class MonitoringQueueManager : IMonitoringQueueManager, IDisposable
+    internal class MonitoringQueueManager : IMonitoringQueueManager, IUserObserver,  IDisposable
     {
         #region IDisposable implementation
 
@@ -68,14 +69,15 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        public MonitoringQueueManager()
+        public MonitoringQueueManager(IUserObservable userObservable)
         {
             _logger = LogManager.GetCurrentClassLogger();
             lock (_accessLock)
             {
-                _currentSessions = new Dictionary<User, ClientMonitoringQueue>();
+                _currentSessions = new Dictionary<User, ClientMonitoringQueue>(new UsersComparer());
             }
-            
+
+            userObservable.AddObserver(this);
             _logger.Info("Monitoring queue manager initialized");
         }
 
@@ -86,18 +88,12 @@ namespace HSMServer.Core.MonitoringServerCore
             bool isRegistered;
             lock (_accessLock)
             {
-                var correspondingUser = _currentSessions.Keys.FirstOrDefault(u =>
-                    u.IsSame(user));
-                isRegistered = correspondingUser != null;
+                isRegistered = _currentSessions.ContainsKey(user);
             }
 
             return isRegistered;
         }
 
-        public void AddUserSession(User user, IPAddress address, int port)
-        {
-            AddUserSession(user);
-        }
         public void AddUserSession(User user)
         {
             lock (_accessLock)
@@ -186,20 +182,33 @@ namespace HSMServer.Core.MonitoringServerCore
                 }
             }
         }
+        
+        #endregion
 
-        public void AddHistoryItem(string productName, string path)
+        #region User observable implementation
+
+        public void UserUpdated(User user)
         {
-            throw new NotImplementedException();
+            lock (_accessLock)
+            {
+                var correspondingPair = _currentSessions
+                    .FirstOrDefault(p => p.Key.IsSame(user));
+
+                if (correspondingPair.Value != null)
+                {
+                    correspondingPair.Key?.Update(user);
+                }
+            }
         }
 
         #endregion
-        
+
         private ClientMonitoringQueue GetUserQueue(User user)
         {
             lock (_accessLock)
             {
-                var corresponding =  _currentSessions.FirstOrDefault(p => p.Key.IsSame(user));
-                return corresponding.Value ?? null;
+                bool contains = _currentSessions.ContainsKey(user);
+                return contains ? _currentSessions[user] : null;
             }
         }
     }

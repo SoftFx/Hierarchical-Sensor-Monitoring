@@ -34,6 +34,13 @@ namespace HSMServer.Core.MonitoringServerCore
             //_timer.Enabled = true;
         }
 
+        public void AddUpdates(List<SensorData> messages)
+        {
+            foreach (var message in messages)
+            {
+                AddUpdate(message);
+            }
+        }
         public void AddUpdate(SensorData message)
         {
             lock (_lockObj)

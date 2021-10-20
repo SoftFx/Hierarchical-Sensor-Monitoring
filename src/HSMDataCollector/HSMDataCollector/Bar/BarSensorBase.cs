@@ -116,6 +116,11 @@ namespace HSMDataCollector.Bar
             if (!values.Any())
                 return 0.0;
 
+            if (values.Count == 1)
+            {
+                return values[0];
+            }
+
             double position = (values.Count + 1) * percent / 100;
             double leftNumber = 0.0d;
             double rightNumber = 0.0d;
@@ -143,6 +148,11 @@ namespace HSMDataCollector.Bar
         {
             if (!values.Any())
                 return 0;
+
+            if (values.Count == 1)
+            {
+                return values[0];
+            }
 
             var count = values.Count;
             int index = (int)Math.Floor(count * percent);

@@ -1,5 +1,6 @@
 ﻿using HSMCommon;
 using HSMCommon.Constants;
+using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
@@ -17,7 +18,7 @@ using System.Xml;
 
 namespace HSMServer.Core.Authentication
 {
-    public class UserManager : IUserManager
+    public class UserManager : UserObservableImpl, IUserManager
     {
         #region Private fields
 
@@ -98,11 +99,10 @@ namespace HSMServer.Core.Authentication
         {
             lock (_accessLock)
             {
-                var existingUser = _users.First(x => x.UserName.Equals(user.UserName,
-                    StringComparison.InvariantCultureIgnoreCase));
+                var existingUser = _users.First(x => x.Id == user.Id);
                 _users.Remove(existingUser);
 
-                _databaseAdapter.RemoveUser(existingUser);
+                Task.Run(() => _databaseAdapter.RemoveUser(existingUser));
             }
         }
 
@@ -491,22 +491,37 @@ namespace HSMServer.Core.Authentication
 
         public void UpdateUser(User user)
         {
-            User existingUser = GetUserByUserName(user.UserName);
+            //User existingUser = GetUserByUserName(user.UserName);
 
-            if (existingUser != null)
+            //if (existingUser != null)
+            //{
+            //    existingUser.Update(user);
+            //    lock (_accessLock)
+            //    {
+            //        var correspondingUser = _users.First(u => u.Id == existingUser.Id);
+            //        _users.Remove(correspondingUser);
+            //        _users.Add(existingUser);
+            //    }
+            //    Task.Run(() =>
+            //    {
+            //        _databaseAdapter.UpdateUser(existingUser);
+            //    });
+            //}
+            User existingUser;
+            lock (_accessLock)
             {
-                existingUser.Update(user);
-                lock (_accessLock)
-                {
-                    var correspondingUser = _users.First(u => u.Id == existingUser.Id);
-                    _users.Remove(correspondingUser);
-                    _users.Add(existingUser);
-                }
-                Task.Run(() =>
-                {
-                    _databaseAdapter.UpdateUser(existingUser);
-                });
+                existingUser = _users.FirstOrDefault(u => u.Id == user.Id);
             }
+
+            if (existingUser == null)
+            {
+                AddUser(user);
+                return;
+            }
+
+            existingUser.Update(user);
+            FireUserChanged(existingUser);
+            Task.Run(() => _databaseAdapter.UpdateUser(existingUser));
         }
     }
 }
