@@ -18,7 +18,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         //private readonly List<double> _Q3List = new List<double>();
         //private readonly List<double> _MedianList = new List<double>();
         private readonly List<double> _percentilesList = new List<double>();
-        private readonly List<double> _MeanList = new List<double>();
+        private readonly List<KeyValuePair<double, int>> _MeanList = new List<KeyValuePair<double, int>>();
         public DoubleBarHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
         {
             _format = new NumberFormatInfo();
@@ -167,7 +167,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         {
             try
             {
-                _MeanList.Add(data.Mean);
+                _MeanList.Add(new KeyValuePair<double, int>(data.Mean, data.Count));
                 if(data.Percentiles != null && data.Percentiles.Any())
                     _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
             }
@@ -179,7 +179,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         private void AddDataFromLists(DoubleBarSensorData currentItem)
         {
-            currentItem.Mean = _MeanList.Sum() / _MeanList.Count == 0 ? 1 : _MeanList.Count;
+            currentItem.Mean = CountMean(_MeanList);
             currentItem.Percentiles = new List<PercentileValueDouble>();
             //var median = _MedianList[(int) (_MedianList.Count / 2)];
             if (_percentilesList.Count < 3)
@@ -201,6 +201,25 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = CountMedian() });
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = CountQ1() });
             currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = CountQ3() });
+        }
+
+        private double CountMean(List<KeyValuePair<double, int>> means)
+        {
+            if (means.Count < 1)
+                return 0.0;
+
+            double sum = 0.0;
+            int commonCount = 0;
+            foreach (var meanPair in means)
+            {
+                sum += meanPair.Key * meanPair.Value;
+                commonCount += meanPair.Value;
+            }
+
+            if (commonCount < 1)
+                return 0.0;
+
+            return sum / commonCount;
         }
         private double CountMedian()
         {
