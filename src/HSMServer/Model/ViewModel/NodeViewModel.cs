@@ -162,7 +162,7 @@ namespace HSMServer.Model.ViewModel
                 foreach (var node in oldNode.Nodes)
                 {
                     var newNode = new NodeViewModel(node);
-                    Nodes.Add(new NodeViewModel(newNode));
+                    Nodes.Add(newNode);
                     newNode.ChangeComparer(node, nodeComparer, sensorComparer);
                 }
             }
@@ -174,7 +174,6 @@ namespace HSMServer.Model.ViewModel
                 foreach (var sensor in oldNode.Sensors)
                     Sensors.Add(new SensorViewModel(sensor));
             }
-
         }
 
         public void Recursion()
