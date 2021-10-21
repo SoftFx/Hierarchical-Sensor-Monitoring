@@ -166,9 +166,7 @@ namespace HSMServer.Controllers
                     if (sensor.TransactionType == TransactionType.Add)
                         sensor.TransactionType = TransactionType.Update;
                 }
-                    
 
-                
                 model = oldModel.Update(sensors);
             }
 

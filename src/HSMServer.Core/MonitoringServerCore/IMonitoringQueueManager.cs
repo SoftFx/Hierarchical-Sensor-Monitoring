@@ -13,6 +13,7 @@ namespace HSMServer.Core.MonitoringServerCore
         public void RemoveUserSession(User user);
         public List<SensorData> GetUserUpdates(User user);
         public void AddSensorData(SensorData message);
+        public void AddSensorDataForUser(User user, SensorData message);
 
         #endregion
     }
