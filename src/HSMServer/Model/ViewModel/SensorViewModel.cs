@@ -7,7 +7,6 @@ namespace HSMServer.Model.ViewModel
 {
     public class SensorViewModel
     {
-        //ToDo: add path
         public string Name { get; set; }
         public string StringValue { get; set; }
         public SensorType SensorType { get; set; }
@@ -28,6 +27,20 @@ namespace HSMServer.Model.ViewModel
             TransactionType = sensor.TransactionType;
         }
 
+        public SensorViewModel(SensorViewModel model)
+        {
+            Name = model.Name;
+            SensorType = model.SensorType;
+            Status = model.Status;
+            StringValue = model.StringValue;
+            ShortStringValue = model.ShortStringValue;
+            Description = model.Description;
+            Time = model.Time;
+            TransactionType = model.TransactionType;
+        }
+
+        public SensorViewModel() { }
+
         public void Update(SensorData sensorData)
         {
             Status = sensorData.Status;
@@ -46,6 +59,22 @@ namespace HSMServer.Model.ViewModel
             Description = viewModel.Description;
             Time = viewModel.Time;
             TransactionType = viewModel.TransactionType;
+        }
+
+        public SensorViewModel Clone()
+        {
+            var sensor = new SensorViewModel();
+            sensor.Name = Name;
+            sensor.SensorType = SensorType;
+            sensor.Status = Status;
+            sensor.StringValue = StringValue;
+            sensor.ShortStringValue = ShortStringValue;
+            sensor.Description = Description;
+            sensor.Time = Time;
+            sensor.TransactionType = TransactionType;
+
+            return sensor;
+
         }
     }
 }

@@ -1,15 +1,15 @@
 ﻿using System;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model.Sensor;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace HSMServer.Model.ViewModel
 {
     public class NodeViewModel
     {
+        public IComparer<NodeViewModel> NodeComparer { get; set; }
+        public IComparer<SensorViewModel> SensorComparer { get; set; }
         public int Count { get; set; }
         public string Name { get; set; }
 
@@ -17,24 +17,78 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
-        //public DateTime LastUpdate {get;set;}
         public DateTime UpdateTime { get; set; }
 
         public NodeViewModel Parent { get; set; }
 
-        public List<NodeViewModel> Nodes { get; set; }
+        public SortedSet<NodeViewModel> Nodes { get; set; }
 
-        public List<SensorViewModel> Sensors { get; set; }
+        public SortedSet<SensorViewModel> Sensors { get; set; }
 
-        public NodeViewModel(string name, string path, SensorData sensor, NodeViewModel parent)
+        public NodeViewModel(string name, string path, SensorData sensor, NodeViewModel parent,
+            IComparer<NodeViewModel> nodeComparer, IComparer<SensorViewModel> sensorComparer)
         {
             Name = name;
             Path = path;
             Status = sensor.Status;
             Parent = parent;
+            NodeComparer = nodeComparer;
+            SensorComparer = sensorComparer;
 
             AddSensor(path, sensor);
             ModifyUpdateTime();
+        }
+
+        public NodeViewModel(NodeViewModel model)
+        {
+            Name = model.Name;
+            Path = model.Path;
+            Status = model.Status;
+            Parent = model.Parent;
+            UpdateTime = model.UpdateTime;
+        }
+
+        public NodeViewModel() { }
+
+        public NodeViewModel Clone()
+        {
+            var node = new NodeViewModel();
+            node.Name = Name;
+            node.Path = Path;
+            node.Status = Status;
+            node.Parent = Parent;
+            node.UpdateTime = UpdateTime;
+
+            node.NodeComparer = NodeComparer is NameNodeComparer 
+                ? new NameNodeComparer()
+                : new LastTimeUpdateNodeComparer();
+
+            node.SensorComparer = SensorComparer is NameSensorComparer
+                ? new NameSensorComparer()
+                : new LastTimeUpdateSensorComparer();
+
+            if (Nodes != null && Nodes.Count > 0)
+            {
+                node.Nodes = new SortedSet<NodeViewModel>(node.NodeComparer);
+
+                foreach(var child in Nodes)
+                {
+                    node.Nodes.Add(child.Clone());
+                }
+            }
+
+            if (Sensors != null && Sensors.Count > 0)
+            {
+
+                node.Sensors = new SortedSet<SensorViewModel>(node.SensorComparer);
+
+                foreach(var sensor in Sensors)
+                {
+                    node.Sensors.Add(sensor.Clone());
+                }
+            }
+
+            return node;
         }
 
         public void AddSensor(string path, SensorData sensor)
@@ -44,7 +98,11 @@ namespace HSMServer.Model.ViewModel
             if (nodes.Length == 1)
             {
                 if (Sensors == null)
-                    Sensors = new List<SensorViewModel> { new SensorViewModel(nodes[0], sensor) };
+                {
+                    Sensors = new SortedSet<SensorViewModel>(SensorComparer);
+                    Sensors.Add(new SensorViewModel(nodes[0], sensor));
+                }
+
 
                 var existingSensor = Sensors.FirstOrDefault(s => s.Name == nodes[0]);
                 if (existingSensor == null)
@@ -64,9 +122,17 @@ namespace HSMServer.Model.ViewModel
                 path += $"/{nodes[0]}";
 
                 if (Nodes == null)
-                    Nodes = new List<NodeViewModel> { new NodeViewModel(nodes[0], path, sensor, this) };
+                {
+                    Nodes = new SortedSet<NodeViewModel>(NodeComparer);
+                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor, this, 
+                        NodeComparer, SensorComparer));
+                }
+
                 else if (existingNode == null)
-                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor, this));
+                {
+                    Nodes.Add(new NodeViewModel(nodes[0], path, sensor, this, 
+                        NodeComparer, SensorComparer));
+                }
                 else
                     existingNode.AddSensor(path, sensor);
             }
@@ -85,73 +151,30 @@ namespace HSMServer.Model.ViewModel
 
             return null;
         }
-
-        public NodeViewModel Update(NodeViewModel newModel)
+      
+        public void ChangeComparer(NodeViewModel oldNode, IComparer<NodeViewModel> nodeComparer,
+            IComparer<SensorViewModel> sensorComparer)
         {
-            Status = newModel.Status;
-            if (newModel.Nodes != null)
-                foreach (var node in newModel.Nodes)
-                {
-                    var existingNode = Nodes?.FirstOrDefault(x => x.Name.Equals(node.Name));
-                    if (Nodes == null)
-                        Nodes = new List<NodeViewModel> { node };
-
-                    else if (existingNode == null)
-                        Nodes.Add(node);
-
-                    else
-                        existingNode = existingNode.Update(node);
-                }
-
-            if (newModel.Sensors != null)
-                foreach (var sensor in newModel.Sensors)
-                {
-                    if (Sensors == null)
-                    {
-                        Sensors = new List<SensorViewModel>() { sensor };
-                        continue;
-                    }
-
-                    var existingSensor = Sensors?.FirstOrDefault(x => x.Name.Equals(sensor.Name));
-                    if (existingSensor == null)
-                    {
-                        Sensors.Add(sensor);
-                    }
-                    else
-                    {
-                        existingSensor.Update(sensor);
-                    }
-                }
-
-            return this;
-        }
-
-        public void SortByName()
-        {
-            if (Nodes != null && Nodes.Count > 0)
+            if (oldNode.Nodes != null && oldNode.Nodes.Count > 0)
             {
-                Nodes = Nodes.OrderBy(x => x.Name).ToList();
+                Nodes = new SortedSet<NodeViewModel>(nodeComparer);
 
-                foreach (var node in Nodes)
-                    node.SortByName();
+                foreach (var node in oldNode.Nodes)
+                {
+                    var newNode = new NodeViewModel(node);
+                    Nodes.Add(new NodeViewModel(newNode));
+                    newNode.ChangeComparer(node, nodeComparer, sensorComparer);
+                }
             }
 
-            if (Sensors != null && Sensors.Count > 0)
-                Sensors = Sensors.OrderBy(x => x.Name).ToList();
-        }
-
-        public void SortByTime()
-        {
-            if (Nodes != null && Nodes.Count > 0)
+            if (oldNode.Sensors != null && oldNode.Sensors.Count > 0)
             {
-                Nodes = Nodes.OrderByDescending(x => x.UpdateTime).ToList();
+                Sensors = new SortedSet<SensorViewModel>(sensorComparer);
 
-                foreach (var node in Nodes)
-                    node.SortByTime();
+                foreach (var sensor in oldNode.Sensors)
+                    Sensors.Add(new SensorViewModel(sensor));
             }
 
-            if (Sensors != null && Sensors.Count > 0)
-                Sensors = Sensors.OrderByDescending(x => x.Time).ToList();
         }
 
         public void Recursion()
