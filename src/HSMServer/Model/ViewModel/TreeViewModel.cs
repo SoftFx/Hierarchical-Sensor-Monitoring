@@ -131,6 +131,7 @@ namespace HSMServer.Model.ViewModel
 
             UpdateNodeCharacteristics();
             var oldTree = Clone();
+            Nodes = new SortedSet<NodeViewModel>(NodeComparer);
 
             ChangeComparer(oldTree);
 
@@ -177,7 +178,7 @@ namespace HSMServer.Model.ViewModel
             {
                 foreach (var node in oldTree.Nodes)
                 {
-                    var newNode = new NodeViewModel(node, null);
+                    var newNode = new NodeViewModel(node, null, NodeComparer, SensorComparer);
                     Nodes.Add(newNode);
 
                     newNode.ChangeComparer(node, NodeComparer, SensorComparer);

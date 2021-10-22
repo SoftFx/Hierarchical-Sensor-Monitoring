@@ -39,7 +39,8 @@ namespace HSMServer.Model.ViewModel
             ModifyUpdateTime();
         }
 
-        public NodeViewModel(NodeViewModel model, NodeViewModel parent)
+        public NodeViewModel(NodeViewModel model, NodeViewModel parent,
+            IComparer<NodeViewModel> nodeComparer, IComparer<SensorViewModel> sensorComparer)
         {
             Name = model.Name;
             Path = model.Path;
@@ -47,6 +48,8 @@ namespace HSMServer.Model.ViewModel
             Parent = parent;
             UpdateTime = model.UpdateTime;
             Count = model.Count;
+            NodeComparer = nodeComparer;
+            SensorComparer = sensorComparer;
         }
 
         public NodeViewModel() { }
@@ -163,7 +166,7 @@ namespace HSMServer.Model.ViewModel
 
                 foreach (var node in oldNode.Nodes)
                 {
-                    var newNode = new NodeViewModel(node, this);
+                    var newNode = new NodeViewModel(node, this, nodeComparer, sensorComparer);
                     Nodes.Add(newNode);
                     newNode.ChangeComparer(node, nodeComparer, sensorComparer);
                 }
