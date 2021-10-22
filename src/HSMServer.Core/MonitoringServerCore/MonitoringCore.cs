@@ -31,7 +31,7 @@ using RSAParameters = System.Security.Cryptography.RSAParameters;
 namespace HSMServer.Core.MonitoringServerCore
 {
     public class MonitoringCore : IMonitoringCore, IMonitoringDataReceiver, IProductsInterface,
-        ISensorsInterface
+        ISensorsInterface, IUserObserver
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
@@ -54,6 +54,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
             _certificateManager = new CertificateManager();
             _userManager = userManager;
+            userManager.AddObserver(this);
             _queueManager = new MonitoringQueueManager(userManager);
             _productManager = productManager;
             _configurationProvider = configurationProvider;
@@ -853,6 +854,13 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         #endregion
+
+        public void UserUpdated(User user)
+        {
+            SensorData message = new SensorData();
+            message.TransactionType = TransactionType.UpdateTree;
+            _queueManager.AddSensorDataForUser(user, message);
+        }
 
         public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
             RSAParameters rsaParameters)
