@@ -39,25 +39,27 @@ namespace HSMServer.Model.ViewModel
             ModifyUpdateTime();
         }
 
-        public NodeViewModel(NodeViewModel model)
+        public NodeViewModel(NodeViewModel model, NodeViewModel parent)
         {
             Name = model.Name;
             Path = model.Path;
             Status = model.Status;
-            Parent = model.Parent;
+            Parent = parent;
             UpdateTime = model.UpdateTime;
+            Count = model.Count;
         }
 
         public NodeViewModel() { }
 
-        public NodeViewModel Clone()
+        public NodeViewModel Clone(NodeViewModel parent)
         {
             var node = new NodeViewModel();
             node.Name = Name;
             node.Path = Path;
             node.Status = Status;
-            node.Parent = Parent;
+            node.Parent = parent;
             node.UpdateTime = UpdateTime;
+            node.Count = Count;
 
             node.NodeComparer = NodeComparer is NameNodeComparer 
                 ? new NameNodeComparer()
@@ -73,7 +75,7 @@ namespace HSMServer.Model.ViewModel
 
                 foreach(var child in Nodes)
                 {
-                    node.Nodes.Add(child.Clone());
+                    node.Nodes.Add(child.Clone(node));
                 }
             }
 
@@ -161,7 +163,7 @@ namespace HSMServer.Model.ViewModel
 
                 foreach (var node in oldNode.Nodes)
                 {
-                    var newNode = new NodeViewModel(node);
+                    var newNode = new NodeViewModel(node, this);
                     Nodes.Add(newNode);
                     newNode.ChangeComparer(node, nodeComparer, sensorComparer);
                 }
@@ -189,8 +191,8 @@ namespace HSMServer.Model.ViewModel
             }
 
             Count = count + (Sensors?.Count ?? 0);
-            if (Sensors != null && Sensors.Count > 0)
-                ModifyUpdateTime();
+            //if (Sensors != null && Sensors.Count > 0)
+            ModifyUpdateTime();
             ModifyStatus();
         }
 

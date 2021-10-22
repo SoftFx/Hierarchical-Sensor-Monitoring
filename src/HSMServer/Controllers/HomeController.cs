@@ -165,6 +165,8 @@ namespace HSMServer.Controllers
 
                 model = oldModel.Update(sensors);
             }
+            else 
+                oldModel.UpdateNodeCharacteristics();
 
             return ViewHelper.UpdateTree(model);
         }

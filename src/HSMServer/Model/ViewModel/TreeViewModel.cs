@@ -130,7 +130,6 @@ namespace HSMServer.Model.ViewModel
             }
 
             UpdateNodeCharacteristics();
-
             var oldTree = Clone();
 
             ChangeComparer(oldTree);
@@ -143,6 +142,7 @@ namespace HSMServer.Model.ViewModel
             if (NodeComparer is IComparer<NameNodeComparer>
                 && SensorComparer is IComparer<NameSensorComparer>) return this;
 
+            UpdateNodeCharacteristics();
             var oldTree = Clone();
 
             NodeComparer = new NameNodeComparer();
@@ -159,6 +159,7 @@ namespace HSMServer.Model.ViewModel
             if (NodeComparer is IComparer<LastTimeUpdateNodeComparer>
                 && SensorComparer is IComparer<LastTimeUpdateSensorComparer>) return this;
 
+            UpdateNodeCharacteristics();
             var oldTree = Clone();
 
             NodeComparer = new LastTimeUpdateNodeComparer();
@@ -176,7 +177,7 @@ namespace HSMServer.Model.ViewModel
             {
                 foreach (var node in oldTree.Nodes)
                 {
-                    var newNode = new NodeViewModel(node);
+                    var newNode = new NodeViewModel(node, null);
                     Nodes.Add(newNode);
 
                     newNode.ChangeComparer(node, NodeComparer, SensorComparer);
@@ -213,7 +214,7 @@ namespace HSMServer.Model.ViewModel
 
                 foreach(var node in Nodes)
                 {
-                    tree.Nodes.Add(node.Clone());
+                    tree.Nodes.Add(node.Clone(null));
                 }
             }
 

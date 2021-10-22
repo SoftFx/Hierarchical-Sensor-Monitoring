@@ -306,6 +306,28 @@
     });
 
     function update() {
+
+        //update tree
+        $.ajax({
+            type: 'POST',
+            url: updateTree,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (treeData) {
+            //var node = $('#jstree').jstree().get_selected(true)[0];
+
+            treeData = treeData.replace('{"value":"', '');
+            treeData = treeData.slice(0, treeData.length - 2);
+            treeData = treeData.replaceAll("\\", "");
+
+            $('#jstree').jstree(true).settings.core.data = treeData;
+            $('#jstree').jstree(true).refresh(true);
+
+            initializeClickTree();
+        });
+
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var listId = getListIdForSelectedNode(selectedNode);
 
