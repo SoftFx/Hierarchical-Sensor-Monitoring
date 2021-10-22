@@ -131,8 +131,6 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
             var model = oldModel.SortByName();
-            model.IsSortByName = true;
-            model.IsSortByLastUpdate = false;
 
             _treeManager.AddOrCreate(user, model);
         }
@@ -143,8 +141,6 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
             var model = oldModel.SortByTime();
-            model.IsSortByLastUpdate = true;
-            model.IsSortByName = false;
 
             _treeManager.AddOrCreate(user, model);
         }
@@ -166,11 +162,11 @@ namespace HSMServer.Controllers
                     if (sensor.TransactionType == TransactionType.Add)
                         sensor.TransactionType = TransactionType.Update;
                 }
-                    
 
-                
                 model = oldModel.Update(sensors);
             }
+            else 
+                oldModel.UpdateNodeCharacteristics();
 
             return ViewHelper.UpdateTree(model);
         }

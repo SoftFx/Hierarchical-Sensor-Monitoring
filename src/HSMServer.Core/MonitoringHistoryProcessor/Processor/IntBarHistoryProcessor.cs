@@ -16,7 +16,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         //private readonly List<int> _Q3List = new List<int>();
         //private readonly List<int> _MedianList = new List<int>();
         private readonly List<int> _percentilesList = new List<int>();
-        private readonly List<int> _MeanList = new List<int>();
+        private readonly List<KeyValuePair<int, int>> _MeanList = new List<KeyValuePair<int, int>>();
 
         public IntBarHistoryProcessor()
         {
@@ -161,7 +161,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         {
             try
             {
-                _MeanList.Add(data.Mean);
+                _MeanList.Add(new KeyValuePair<int, int>(data.Mean, data.Count));
                 if (data.Percentiles != null && data.Percentiles.Any())
                     _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
             }
@@ -173,7 +173,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         private void AddDataFromLists(IntBarSensorData currentItem)
         {
-            currentItem.Mean = (int)(_MeanList.Sum() / _MeanList.Count == 0 ? 1 : _MeanList.Count);
+            currentItem.Mean = CountMean(_MeanList);
             currentItem.Percentiles = new List<PercentileValueInt>();
             if (_percentilesList.Count < 3)
             {
@@ -196,6 +196,24 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = CountQ3() });
         }
 
+        private int CountMean(List<KeyValuePair<int, int>> means)
+        {
+            if (means.Count < 1)
+                return 0;
+
+            decimal sum = 0;
+            int commonCount = 0;
+            foreach (var meanPair in means)
+            {
+                sum += meanPair.Key * meanPair.Value;
+                commonCount += meanPair.Value;
+            }
+
+            if (commonCount < 1)
+                return 0;
+
+            return (int)(sum / commonCount);
+        }
         private int CountMedian()
         {
             if (_percentilesList.Count % 2 == 1)

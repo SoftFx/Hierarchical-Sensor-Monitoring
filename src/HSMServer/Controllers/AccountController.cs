@@ -180,6 +180,7 @@ namespace HSMServer.Controllers
         {
             var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
             userViewModel.Password = currentUser.Password;
+            userViewModel.UserId = currentUser.Id.ToString();
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
@@ -223,6 +224,7 @@ namespace HSMServer.Controllers
                 Password = userViewModel.Password,
                 IsAdmin = userViewModel.IsAdmin
             };
+            user.Id = Guid.Parse(userViewModel.UserId);
             return user;
         }
     }

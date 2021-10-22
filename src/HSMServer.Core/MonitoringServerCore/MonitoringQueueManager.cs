@@ -182,7 +182,18 @@ namespace HSMServer.Core.MonitoringServerCore
                 }
             }
         }
-        
+
+        public void AddSensorDataForUser(User user, SensorData message)
+        {
+            lock (_accessLock)
+            {
+                if (_currentSessions.ContainsKey(user))
+                {
+                    _currentSessions[user].AddUpdate(message);
+                }
+            }
+        }
+
         #endregion
 
         #region User observable implementation
