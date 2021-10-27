@@ -5,6 +5,7 @@
 @{
     ViewData["Title"] = "Tree";
 }
+
 <script>
     var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
     var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
@@ -16,28 +17,22 @@
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
     var removeSensorAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorAction, ViewConstants.HomeController))";
     var removeSensorsAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorsAction, ViewConstants.HomeController))";
-
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
-
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
-
     var historyLatestAction = "@Html.Raw(Url.Action(ViewConstants.HistoryLatestAction, ViewConstants.HomeController))";
     var rawHistoryLatestAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryLatestAction, ViewConstants.HomeController))";
-
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
-
     var sortByNameAction = "@Html.Raw(Url.Action(ViewConstants.SortByNameAction, ViewConstants.HomeController))";
     var sortByTimeAction = "@Html.Raw(Url.Action(ViewConstants.SortByTimeAction, ViewConstants.HomeController))";
 </script>
 
 
 <style>
-    .file-sensor-shortvalue-div {
-        margin: 10px;
-    }
+
+    .file-sensor-shortvalue-div { margin: 10px; }
 
     .button-view-file-sensor {
         margin-left: 0px;
@@ -49,32 +44,20 @@
         margin-left: -20px;
     }
 
-    .tree-icon-unknown {
-        color: gray;
-    }
+    .tree-icon-unknown { color: gray; }
 
-    .tree-icon-ok {
-        color: green;
-    }
+    .tree-icon-ok { color: green; }
 
-    .tree-icon-warning {
-        color: yellow;
-    }
+    .tree-icon-warning { color: yellow; }
 
-    .tree-icon-error {
-        color: red;
-    }
+    .tree-icon-error { color: red; }
 
-    .sensor-icon-with-margin {
-        margin-right: 5px;
-    }
+    .sensor-icon-with-margin { margin-right: 5px; }
 
-    .time-ago-div {
-        color: grey;
-    }
+    .time-ago-div { color: grey; }
 </style>
 
-<link rel="stylesheet" href="~/js/jstree/themes/default/style.min.css" />
+<link rel="stylesheet" href="~/js/jstree/themes/default/style.min.css"/>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
 
@@ -116,7 +99,7 @@
             <div id="updateTime"></div>
         </div>
     </div>
-    <hr />
+    <hr/>
 </div>
 
 <div class="row">
@@ -127,10 +110,14 @@
     <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
         Views
     </button>
-    <ul class='dropdown-menu'>       
-        <li><a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a></li>     
-        
-        <li><a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a></li>       
+    <ul class='dropdown-menu'>
+        <li>
+            <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
+        </li>
+
+        <li>
+            <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
+        </li>
     </ul>
 </div>
 
@@ -140,13 +127,15 @@
 
         <div id="listContainer" class="col">@ViewHelper.CreateFullLists(Model)</div>
     </div>
-    <hr />
+    <hr/>
 </div>
 
 <script>
+
     initializeTree();
     initializeDataHistoryRequests();
     InitializePeriodRequests();
+
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
         .build();
@@ -169,14 +158,11 @@
                 async: true
             }).done(function(treeData) {
                 //var node = $('#jstree').jstree().get_selected(true)[0];
-
                 treeData = treeData.replace('{"value":"', '');
                 treeData = treeData.slice(0, treeData.length - 2);
                 treeData = treeData.replaceAll("\\", "");
-
                 $('#jstree').jstree(true).settings.core.data = treeData;
                 $('#jstree').jstree(true).refresh(true);
-
                 initializeClickTree();
             });
 
@@ -185,7 +171,6 @@
 
             //console.log('listId');
             //console.log(listId);
-
             //update invisible lists
             $.ajax({
                 type: 'POST',
@@ -200,12 +185,10 @@
                 $('[id^="list_"][style*="display: none;"]').each(function(index) {
                     this.remove();
                 });
-
                 let parsedData = JSON.parse(listsData);
                 $('#listContainer').append(parsedData.value);
                 initializeDataHistoryRequests();
             });
-
 
             if (listId != "" && listId != undefined)
             //update selected list
@@ -256,7 +239,6 @@
                     sensorsData = sensorsData.replace('{"value":"', '');
                     sensorsData = sensorsData.slice(0, sensorsData.length - 2);
                     sensorsData = sensorsData.replaceAll("\\", "");
-
                     if ($('#' + listId) == undefined) {
                         $('#listContainer').append("<div class='accordion'" +
                             "id = '" +
@@ -264,11 +246,9 @@
                             "' style = 'display: block;' ></div> ");
                         $('#noData').css('display', 'none');
                     }
-
                     $('#' + listId).append(sensorsData);
                     initializeDataHistoryRequests();
                 });
-
             if (listId != "" && listId != undefined)
             //remove sensors
                 $.ajax({
@@ -281,26 +261,20 @@
                     async: true
                 }).done(function(idsData) {
                     var array = JSON.parse(idsData);
-
                     if (array != undefined && array.length > 0)
                         for (let i = 0; i < array.length; i++) {
                             $('#' + array[i]).parent().parent().empty();
                         }
                 });
-
-
             $('#updateTime').empty();
             $('#updateTime').append('Update Time: ' + new Date().toUTCString());
             $("#state").empty();
             $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-
         });
-
     hubConnection.onclose(error => {
         $("#state").empty();
         $("#state").append("<span style='color: Tomato' value='Connection lost'><i class='fas fa-wifi'></i></span>");
     });
-
     hubConnection.start().then(() => {
         //console.log(hubConnection.connectionId);
     });
@@ -330,7 +304,6 @@
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var listId = getListIdForSelectedNode(selectedNode);
-
         //update invisible lists
         $.ajax({
             type: 'POST',
@@ -344,16 +317,12 @@
             $('[id^="list_"][style*="display: none;"]').each(function(index) {
                 this.remove();
             });
-
             listsData = listsData.replace('{"value":"', '');
             listsData = listsData.slice(0, listsData.length - 2);
             listsData = listsData.replaceAll("\\", "");
-
             $('#listContainer').append(listsData);
-
             initializeDataHistoryRequests();
         });
-
         if (listId != "" && listId != undefined)
         //update selected list
             $.ajax({
@@ -367,7 +336,6 @@
                 var array = JSON.parse(listsData);
                 for (let i = 0; i < array.length; i++) {
                     var id = array[i].id.substring('sensor_'.length);
-
                     $('#value_' + id).empty().append(array[i].value);
                     $('#update_' + id).empty().append('updated ' + array[i].updateTime);
                     $('#status_' + id).removeClass('tree-icon-unknown ' +
@@ -376,14 +344,11 @@
                         'tree-icon-error ' +
                         'tree-icon-unknown');
                     $('#status_' + id).addClass(array[i].status);
-
                     initializeDataHistoryRequests();
-
                     let selectedRadio = $('input[id$=' + id + ']:checked');
                     if (selectedRadio !== undefined) {
                         selectedRadio.click();
                     }
-
                     //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
                     //$('#reload_' + selectedAccordion.attr('id')).click();
                     //let selectedRadio = $('input[type="radio"]:checked');
@@ -392,16 +357,13 @@
                     //}
                 }
             });
-
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
         $("#state").empty();
         $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-
     }
 
     setInterval(update, 30000);
-
     $('#sortByName').off("click").on("click",
         function() {
             $.ajax({
@@ -426,7 +388,6 @@
                 cache: false,
                 async: true
             });
-
             location.reload();
         });
 
@@ -443,6 +404,5 @@
             }
         }
         return selectedListId;
-
     }
 </script>
