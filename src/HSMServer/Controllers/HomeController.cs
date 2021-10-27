@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -34,6 +35,9 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
+
+        private readonly Logger _logger;
+
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
             IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
         {
@@ -42,6 +46,8 @@ namespace HSMServer.Controllers
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
+
+            _logger = LogManager.GetCurrentClassLogger();
         }
 
         public IActionResult Index()
@@ -154,7 +160,27 @@ namespace HSMServer.Controllers
             if (oldModel == null)
                 return new HtmlString("");
 
+            if (sensors != null && sensors.Count > 0)
+            foreach(var sensor in sensors)
+            {
+                _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
+                    $"Type={sensor.TransactionType}");
+            }
+
             var model = oldModel;
+
+            StringBuilder str = new StringBuilder();
+            str.Append("Old Tree\n");
+            int i = 0;
+            foreach (var node in model.Nodes)
+            {
+                PrintTree(node, str, "", i == model.Nodes.Count - 1);
+                str.Append("-----------\n");
+                i++;
+            }
+
+            _logger.Info(str.ToString());
+
             if (sensors != null && sensors.Count > 0)
             {
                 foreach (var sensor in sensors)
@@ -168,7 +194,50 @@ namespace HSMServer.Controllers
             else 
                 oldModel.UpdateNodeCharacteristics();
 
-            return ViewHelper.UpdateTree(model);
+            str = new StringBuilder();
+            str.Append("Updated Tree\n");
+            i = 0;
+            foreach (var node in model.Nodes)
+            {
+                PrintTree(node, str, "", i == model.Nodes.Count - 1);
+                str.Append("-----------\n");
+                i++;
+            }
+
+            _logger.Info(str.ToString());
+
+            try
+            {
+                return ViewHelper.UpdateTree(model);
+            }
+            catch(Exception ex)
+            {
+                _logger.Error(ex);
+                _logger.Error(ex.Message);
+                _logger.Error(ex.StackTrace);
+
+                return HtmlString.Empty;
+            }
+        }
+
+        private static void PrintTree(NodeViewModel node, StringBuilder str,
+            string indent, bool isLast)
+        {
+            str.Append(indent + "+- " + $"node: {node.Name} path: {node.Path}\n");
+            indent += isLast ? "\t" : "|\t";
+
+            int i = 0;
+            if (node.Nodes != null && node.Nodes.Count > 0)
+                foreach (var child in node.Nodes)
+                {
+                    PrintTree(child, str, indent, i == node.Nodes.Count - 1);
+                    i++;
+                }
+
+
+            if (node.Sensors != null && node.Sensors.Count > 0)
+                foreach (var sensor in node.Sensors)
+                    str.Append(indent + "--" + $"sensor: {sensor.Name}\n");
         }
 
         [HttpPost]
