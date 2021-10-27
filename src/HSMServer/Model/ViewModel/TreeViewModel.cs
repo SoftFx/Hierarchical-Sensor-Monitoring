@@ -20,7 +20,6 @@ namespace HSMServer.Model.ViewModel
 
             Nodes = new SortedSet<NodeViewModel>(NodeComparer);
             Paths = new List<string>();
-            Nodes = new SortedSet<NodeViewModel>(NodeComparer);
 
             foreach (var sensor in sensors)
             {
