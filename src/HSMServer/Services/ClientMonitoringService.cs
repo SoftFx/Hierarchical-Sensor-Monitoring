@@ -1,7 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Authentication;
-using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.MonitoringServerCore;
+﻿using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.SignalR;
 using Microsoft.AspNetCore.SignalR;
 using System;
@@ -14,15 +11,14 @@ namespace HSMServer.Services
         private readonly TimeSpan _updateInterval = TimeSpan.FromSeconds(3);
         private Timer _timer;
         private readonly IHubContext<MonitoringDataHub> _monitoringDataHubContext;
-        private readonly IMonitoringCore _monitoringCore;
+        private readonly ISensorsInterface _sensorsInterface;
         private readonly ISignalRSessionsManager _sessionsManager;
-        public ClientMonitoringService(IHubContext<MonitoringDataHub> hubContext, IMonitoringCore monitoringCore,
-            IUserManager userManager, ISignalRSessionsManager sessionsManager)
+        public ClientMonitoringService(IHubContext<MonitoringDataHub> hubContext,
+            ISensorsInterface sensorsInterface, ISignalRSessionsManager sessionsManager)
         {
             _monitoringDataHubContext = hubContext;
-            _monitoringCore = monitoringCore;
-            //TODO: REMOVE WHEN MAKE NORMANL AUTH
             _sessionsManager = sessionsManager;
+            _sensorsInterface = sensorsInterface;
             //StartTimer();
         }
         public void Initialize()
@@ -39,13 +35,16 @@ namespace HSMServer.Services
             var dictionary = _sessionsManager.UserConnectionDictionary;
             foreach (var pair in dictionary)
             {
-                var updates = _monitoringCore.GetSensorUpdates(pair.Key);
+                var updates = _sensorsInterface.GetSensorUpdates(pair.Key);
 
                 if (updates.Count < 1)
                     continue;
 
-                _monitoringDataHubContext.Clients.Client(pair.Value)
-                    .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
+                foreach (var connection in pair.Value)
+                {
+                    _monitoringDataHubContext.Clients.Client(connection)
+                        .SendAsync(nameof(IMonitoringDataHub.SendSensorUpdates), updates);
+                }
             }
         }
     }

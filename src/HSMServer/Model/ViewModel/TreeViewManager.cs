@@ -1,31 +1,22 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Authentication.UserObserver;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.MonitoringCoreInterface;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class TreeViewManager : ITreeViewManager
+    public class TreeViewManager : ITreeViewManager, IUserObserver
     {
         private readonly Dictionary<string, TreeViewModel> _treeModels;
         private readonly object _lockObj = new object();
+        private readonly ISensorsInterface _sensorsInterface;
 
-        public TreeViewManager()
+        public TreeViewManager(IUserObservable userObservable, ISensorsInterface sensorsInterface)
         {
             _treeModels = new Dictionary<string, TreeViewModel>();
-        }
-
-        public Dictionary<string, TreeViewModel> UserTreeViewDictionary
-        {
-            get
-            {
-                Dictionary<string, TreeViewModel> dictionary;
-                lock (_lockObj)
-                {
-                    dictionary = new Dictionary<string, TreeViewModel>(_treeModels);
-                }
-
-                return dictionary;
-            }
+            _sensorsInterface = sensorsInterface;
+            userObservable.AddObserver(this);
         }
 
         public TreeViewModel GetTreeViewModel(User user)
@@ -45,12 +36,28 @@ namespace HSMServer.Model.ViewModel
             return result;
         }
 
+        public void RemoveViewModel(User user)
+        {
+            lock (_lockObj)
+            {
+                _treeModels.Remove(user.UserName);
+            }   
+        }
+
         public void AddOrCreate(User user, TreeViewModel model)
         {
-            if (_treeModels.ContainsKey(user.UserName))
+            lock (_lockObj)
+            {
                 _treeModels[user.UserName] = model;
-            else
-                _treeModels.Add(user.UserName, model);
+            }
+        }
+
+        public void UserUpdated(User user)
+        {
+            lock (_lockObj)
+            {
+                _treeModels[user.UserName] = new TreeViewModel(_sensorsInterface.GetSensorsTree(user));
+            }
         }
     }
 }

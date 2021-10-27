@@ -10,6 +10,7 @@ using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.SignalR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -29,13 +30,17 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly ISignalRSessionsManager _sessionsManager;
+        private readonly ITreeViewManager _treeManager;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager)
+            IRegistrationTicketManager ticketManager, ISignalRSessionsManager sessionsManager, ITreeViewManager treeManager)
         {
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
+            _sessionsManager = sessionsManager;
+            _treeManager = treeManager;
         }
 
         #region Login
@@ -175,6 +180,7 @@ namespace HSMServer.Controllers
         {
             var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
             userViewModel.Password = currentUser.Password;
+            userViewModel.UserId = currentUser.Id.ToString();
 
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
@@ -187,21 +193,17 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> Logout()
         {
             TempData.Remove(TextConstants.TempDataErrorText);
+            var user = HttpContext.User as User;
+            //Remove tree for a disconnected user to save memory/process & keep the data fresh
+            int connectionsCount = _sessionsManager.GetConnectionsCount(user);
+            if (connectionsCount < 1)
+            {
+                _treeManager.RemoveViewModel(user);
+            }
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Index", "Home");
         }
-
-        //public IActionResult GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        //{
-        //    var pagedUsers = _userManager.GetUsersPage(page, pageSize);
-
-        //    ViewData[TextConstants.ViewDataPageNumber] = page;
-        //    ViewData[TextConstants.ViewDataPageSize] = pageSize;
-
-        //    return View(pagedUsers.Select(u => new UserViewModel(u)).ToList());
-        //}
-
-
+        
         private async Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
@@ -222,6 +224,7 @@ namespace HSMServer.Controllers
                 Password = userViewModel.Password,
                 IsAdmin = userViewModel.IsAdmin
             };
+            user.Id = Guid.Parse(userViewModel.UserId);
             return user;
         }
     }

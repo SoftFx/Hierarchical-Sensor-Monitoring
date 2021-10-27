@@ -24,7 +24,18 @@ namespace HSMDataCollector.CustomFuncSensor
             UnitedSensorValue value = GetInvokeResult();
             EnqueueValue(value);
         }
-
+        protected UnitedSensorValue CreateErrorDataObject(Exception ex)
+        {
+            UnitedSensorValue result = new UnitedSensorValue();
+            result.Key = ProductKey;
+            result.Path = Path;
+            result.Status = SensorStatus.Error;
+            result.Time = DateTime.Now;
+            result.Comment = $"Error occurred! {ex.ToString()}";
+            result.Type = Type;
+            result.Data = ex.Message;
+            return result;
+        }
         protected abstract UnitedSensorValue GetInvokeResult();
 
         protected void RestartTimerInternal(TimeSpan timerSpan)

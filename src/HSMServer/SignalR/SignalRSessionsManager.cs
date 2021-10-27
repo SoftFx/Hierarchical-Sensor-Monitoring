@@ -1,19 +1,16 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Model.Authentication;
-using System;
 using System.Collections.Generic;
 
 namespace HSMServer.SignalR
 {
     internal class SignalRSessionsManager : ISignalRSessionsManager
     {
-        private readonly IUserManager _userManager;
-        private readonly Dictionary<User, string> _userConnectionIdCross;
+        private readonly Dictionary<User, List<string>> _userConnectionIdCross;
         private readonly object _lockObj = new object();
-        public SignalRSessionsManager(IUserManager userManager)
+        public SignalRSessionsManager()
         {
-            _userManager = userManager;
-            _userConnectionIdCross = new Dictionary<User, string>();
+            _userConnectionIdCross = new Dictionary<User, List<string>>(new UsersComparer());
         }
 
         #region Interface implementation
@@ -23,38 +20,28 @@ namespace HSMServer.SignalR
             AddConnectionInternal(user, id);
         }
 
-        public string GetConnectionId(User user)
+        public void RemoveConnection(User user, string id)
         {
-            return GetConnectionIdInternal(user);
+            RemoveConnectionInternal(user, id);
         }
 
-        public List<User> GetCurrentUsers()
-        {
-            return GetUsersInternal();
-        }
-
-        public List<string> GetCurrentConnectionIds()
-        {
-            return GetConnectionIdsInternal();
-        }
-
-        public void RemoveConnection(User user)
-        {
-            RemoveConnectionInternal(user);
-        }
-
-        public Dictionary<User, string> UserConnectionDictionary
+        public Dictionary<User, List<string>> UserConnectionDictionary
         {
             get
             {
-                Dictionary<User, string> dictionary;
+                Dictionary<User, List<string>> dictionary;
                 lock (_lockObj)
                 {
-                    dictionary = new Dictionary<User, string>(_userConnectionIdCross);
+                    dictionary = new Dictionary<User, List<string>>(_userConnectionIdCross);
                 }
 
                 return dictionary;
             }
+        }
+
+        public int GetConnectionsCount(User user)
+        {
+            return GetSessionsCountInternal(user);
         }
 
         #endregion
@@ -65,56 +52,40 @@ namespace HSMServer.SignalR
         {
             lock (_lockObj)
             {
-                _userConnectionIdCross[user] = connectionId;
-            }
-        }
-
-        private string GetConnectionIdInternal(User user)
-        {
-            string result = string.Empty;
-            lock (_lockObj)
-            {
-                try
+                if (!_userConnectionIdCross.ContainsKey(user))
                 {
-                    result = _userConnectionIdCross[user];
+                    _userConnectionIdCross[user] = new List<string>();
                 }
-                catch (Exception e)
+                _userConnectionIdCross[user].Add(connectionId);
+            }
+        }
+
+        private void RemoveConnectionInternal(User user, string id)
+        {
+            lock (_lockObj)
+            {
+                if (_userConnectionIdCross.ContainsKey(user))
                 {
-                    result = string.Empty;
+                    _userConnectionIdCross[user].Remove(id);
+                    if (_userConnectionIdCross[user].Count == 0)
+                    {
+                        _userConnectionIdCross.Remove(user);
+                    }
+                }
+            }
+        }
+
+        private int GetSessionsCountInternal(User user)
+        {
+            lock (_lockObj)
+            {
+                if (_userConnectionIdCross.ContainsKey(user))
+                {
+                    return _userConnectionIdCross[user].Count;
                 }
             }
 
-            return result;
-        }
-
-        private List<User> GetUsersInternal()
-        {
-            List<User> list = new List<User>();
-            lock (_lockObj)
-            {
-                list.AddRange(_userConnectionIdCross.Keys);
-            }
-
-            return list;
-        }
-
-        private List<string> GetConnectionIdsInternal()
-        {
-            List<string> result = new List<string>();
-            lock (_lockObj)
-            {
-                result.AddRange(_userConnectionIdCross.Values);
-            }
-
-            return result;
-        }
-
-        private void RemoveConnectionInternal(User user)
-        {
-            lock (_lockObj)
-            {
-                _userConnectionIdCross.Remove(user);
-            }
+            return 0;
         }
         #endregion
 
