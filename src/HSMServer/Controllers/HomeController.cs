@@ -86,7 +86,7 @@ namespace HSMServer.Controllers
             {
                 //remove node
                 ParseProductAndPath(encodedPath, out product, out path);
-                var model = _treeManager.GetTreeViewModel(user);
+                var model = _treeManager.GetTreeViewModel(user).Clone();
                 var node = model.GetNode(decodedPath);
 
                 var paths = new List<string>();
@@ -164,26 +164,26 @@ namespace HSMServer.Controllers
             if (oldModel == null)
                 return new HtmlString("");
 
-            if (sensors != null && sensors.Count > 0)
-            foreach(var sensor in sensors)
-            {
-                _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
-                    $"Type={sensor.TransactionType}");
-            }
+            //if (sensors != null && sensors.Count > 0)
+            //foreach(var sensor in sensors)
+            //{
+            //    _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
+            //        $"Type={sensor.TransactionType}");
+            //}
 
             var model = oldModel;
 
-            StringBuilder str = new StringBuilder();
-            str.Append("Old Tree\n");
-            int i = 0;
-            foreach (var node in model.Nodes)
-            {
-                PrintTree(node, str, "", i == model.Nodes.Count - 1);
-                str.Append("-----------\n");
-                i++;
-            }
+            //StringBuilder str = new StringBuilder();
+            //str.Append("Old Tree\n");
+            //int i = 0;
+            //foreach (var node in model.Nodes)
+            //{
+            //    PrintTree(node, str, "", i == model.Nodes.Count - 1);
+            //    str.Append("-----------\n");
+            //    i++;
+            //}
 
-            _logger.Info(str.ToString());
+             //_logger.Info(str.ToString());
 
             if (sensors != null && sensors.Count > 0)
             {
@@ -198,29 +198,19 @@ namespace HSMServer.Controllers
             else 
                 oldModel.UpdateNodeCharacteristics();
 
-            str = new StringBuilder();
-            str.Append("Updated Tree\n");
-            i = 0;
-            foreach (var node in model.Nodes)
-            {
-                PrintTree(node, str, "", i == model.Nodes.Count - 1);
-                str.Append("-----------\n");
-                i++;
-            }
+            //str = new StringBuilder();
+            //str.Append("Updated Tree\n");
+            //i = 0;
+            //foreach (var node in model.Nodes)
+            //{
+            //    PrintTree(node, str, "", i == model.Nodes.Count - 1);
+            //    str.Append("-----------\n");
+            //    i++;
+            //}
 
-            _logger.Info(str.ToString());
+            //_logger.Info(str.ToString());
 
-            try
-            {
-                return ViewHelper.UpdateTree(model.Clone());
-            }
-            catch(Exception ex)
-            {
-                _logger.Error(ex.Message);
-                _logger.Error(ex.StackTrace);
-
-                return HtmlString.Empty;
-            }
+            return ViewHelper.UpdateTree(model.Clone());
         }
 
         private static void PrintTree(NodeViewModel node, StringBuilder str,
