@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                return ViewHelper.UpdateTree(model);
+                return ViewHelper.UpdateTree(model.Clone());
             }
             catch(Exception ex)
             {
@@ -265,7 +265,7 @@ namespace HSMServer.Controllers
                 model = oldModel.Update(sensors);
             }
                
-            return ViewHelper.CreateNotSelectedLists(selectedList, model);
+            return ViewHelper.CreateNotSelectedLists(selectedList, model.Clone());
         }
 
         [HttpPost]
@@ -296,7 +296,7 @@ namespace HSMServer.Controllers
             //var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
             var nodePath = formattedPath;
 
-            var node = model.GetNode(nodePath);
+            var node = model.Clone().GetNode(nodePath);
             List<SensorDataViewModel> result = new List<SensorDataViewModel>();
             if (node?.Sensors != null)
 
@@ -327,7 +327,7 @@ namespace HSMServer.Controllers
             var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
             var path = SensorPathHelper.Decode(formattedPath);
 
-            var node = model.GetNode(path);
+            var node = model.Clone().GetNode(path);
             StringBuilder result = new StringBuilder();
             if (node?.Sensors != null)
 
