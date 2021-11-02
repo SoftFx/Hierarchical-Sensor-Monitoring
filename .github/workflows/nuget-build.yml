@@ -20,8 +20,7 @@ jobs:
       - name: print tag
         run: echo ${{ steps.split.outputs._1 }}
       - id: get-tag
-        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"      
-        
+        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"
         
    build_NuGet:
     needs: [version]
