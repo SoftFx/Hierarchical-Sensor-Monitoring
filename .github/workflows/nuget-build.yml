@@ -1,0 +1,83 @@
+name: DataCollector Nuget package build
+
+on:
+  push:
+    tags:
+      - collector-v[0-9].[0-9]+.[0-9]+
+      
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version-tag: ${{ steps.get-tag.outputs.parsedTag }}
+    steps:            
+      - name: split-by
+        id: split
+        uses: rishabhgupta/split-by@v1.0.1        
+        with:
+          string: '${{ env.RAW_TAG }}'
+          split-by: '-'
+      - name: print tag
+        run: echo ${{ steps.split.outputs._1 }}
+      - id: get-tag
+        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"      
+        
+        
+   build_NuGet:
+    needs: [version]
+    runs-on: ubuntu-latest
+    environment: Nuget  
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 3.1.101        
+      
+      - name: Intall nuget
+        uses: nuget/setup-nuget@v1
+        with: 
+          nuget-api-key: ${{ secrets.NUGETKEY }}        
+      - name: Set env
+        run: echo "RELEASE_VERSION=${{ needs.version.outputs.version-tag }}" >> $GITHUB_ENV      
+      
+      - name: Restore nuget
+        run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
+      - name: Install nuget package dependencies
+        run: dotnet restore src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj
+      - name: Build DataCollector
+        run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj --configuration Release -o ${{ github.workspace }}/DataCollectorBuild        
+      - name: install xml editor
+        run: sudo apt install  xmlstarlet
+        
+      - name: Create nuspec file
+        run: nuget spec
+      - name: Edit data objects spec file
+        env:
+          version: ${GITHUB_REF#refs/*/}
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMSensorDataObjects' -u "//package/metadata/version" -v $RELEASE_VERSION -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Data objects for HSMDataCollector.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" -d "//package/files" Package.nuspec
+      - name: Add package to nuspec file
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMSensorDataObjects.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" Package.nuspec
+      - name: Show nuspec file contents
+        run: cat Package.nuspec
+      - name: build nuspec file 
+        run: nuget pack Package.nuspec
+      - name: Push SensorDataObjects
+        run: nuget push HSMDataCollector.HSMSensorDataObjects*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
+      - name: Remove existing nuspec file 
+        run: rm Package.nuspec
+              
+      - name: Create nuspec file
+        run: nuget spec
+      - name: edit nuspec config
+        env:
+          version: ${GITHUB_REF#refs/*/}
+        run: xmlstarlet ed -L -u "//package/metadata/id" -v 'HSMDataCollector.HSMDataCollector' -u "//package/metadata/version" -v $RELEASE_VERSION -u "//package/metadata/authors" -v 'vitali.vasilevich' -u "//package/metadata/copyright" -v 'Copyright © 2021' -u "//package/metadata/owners" -v 'SoftFX' -u "//package/metadata/description" -v 'Interface for collecting data and sending it to HSM server.'	-d "//package/metadata/tags" -d "//package/metadata/licenseUrl" -d "//package/metadata/projectUrl" -d "//package/metadata/iconUrl" -d "//package/metadata/title" -d "//package/metadata/dependencies" -d "//package/metadata/releaseNotes" Package.nuspec
+      - name: Add package dependency to nuspec file
+        run: xmlstarlet ed -L -s "//package" -t elem -n files -s "//package/files" -t elem -n file -i "//package/files/file" -t attr -n src -v "${{ github.workspace }}\DataCollectorBuild\HSMDataCollector.dll" -i "//package/files/file" -t attr -n target -v "lib\net461" -s "//package/metadata" -t elem -n dependencies -s "//package/metadata/dependencies" -t elem -n dependency -i "//package/metadata/dependencies/dependency" -t attr -n id -v "Newtonsoft.Json" -i "//package/metadata/dependencies/dependency" -t attr -n version -v "10.0.0" -s "//package/metadata/dependencies" -t elem -n dependency -i "//package/metadata/dependencies/dependency[not(@id)]" -t attr -n id -v "NLog" -i "//package/metadata/dependencies/dependency[not(@version)]" -t attr -n version -v "4.7.9" -s "//package/metadata/dependencies" -t elem -n dependency -i "//package/metadata/dependencies/dependency[not(@id)]" -t attr -n id -v "System.Diagnostics.PerformanceCounter" -i "//package/metadata/dependencies/dependency[not(@version)]" -t attr -n version -v "5.0.0" -s "//package/metadata/dependencies" -t elem -n dependency -i "//package/metadata/dependencies/dependency[not(@id)]" -t attr -n id -v "HSMDataCollector.HSMSensorDataObjects" -i "//package/metadata/dependencies/dependency[not(@version)]" -t attr -n version -v $RELEASE_VERSION Package.nuspec
+      - name: show nuspec file contents
+        run: cat Package.nuspec
+      - name: build nuspec file 2
+        run: nuget pack Package.nuspec                            
+      - name: Push DataCollector
+        run: nuget push HSMDataCollector.HSMDataCollector*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json          
