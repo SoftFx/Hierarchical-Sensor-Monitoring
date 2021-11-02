@@ -27,7 +27,7 @@ jobs:
       - id: get-tag
         run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"      
         
-   build_NuGet:
+  build_NuGet:
     needs: [version]
     runs-on: ubuntu-latest
     environment: Nuget  
