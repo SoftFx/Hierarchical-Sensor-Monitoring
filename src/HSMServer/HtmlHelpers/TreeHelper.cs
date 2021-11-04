@@ -42,7 +42,7 @@ namespace HSMServer.HtmlHelpers
             StringBuilder result = new StringBuilder();
             var name = SensorPathHelper.Encode(node.Path);
 
-            result.Append($"<li id='{name}' " +
+            result.Append($"<li id='{name}' title='{node.Name}\n{node.UpdateTime}'" +
                           "data-jstree='{\"icon\" : \"fas fa-circle " +
                           ViewHelper.GetStatusHeaderColorClass(node.Status) + 
                           "\"}'>" + $"{node.Name} ({node.Count} sensors)");
@@ -59,7 +59,7 @@ namespace HSMServer.HtmlHelpers
                 foreach (var sensor in node.Sensors)
                 {
                     var encodedPath = SensorPathHelper.Encode($"{node.Path}/{sensor.Name}");
-                    result.Append($"<li id='sensor_{encodedPath}' " +
+                    result.Append($"<li id='sensor_{encodedPath}' title='{sensor.Name}\n{sensor.Time}'" +
                                   "data-jstree='{\"icon\" : \"fas fa-circle " +
                                   ViewHelper.GetStatusHeaderColorClass(sensor.Status) +
                                   "\"}'>" + sensor.Name + "</li>");
