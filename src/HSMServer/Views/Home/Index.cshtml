@@ -55,6 +55,12 @@
     .sensor-icon-with-margin { margin-right: 5px; }
 
     .time-ago-div { color: grey; }
+
+    .scrollableBlock {
+        display: block;
+        width: 300px;
+        overflow: auto;
+    }
 </style>
 
 <link rel="stylesheet" href="~/js/jstree/themes/default/style.min.css"/>
@@ -121,11 +127,14 @@
     </ul>
 </div>
 
-<div class="container">
+<div class="">
     <div id="mainContainer" class="row">
-        <div id="treeContainer" class="col-md-auto">@ViewHelper.CreateTree(Model)</div>
+        <div class="scrollableBlock">
+            <div id="treeContainer" class="col-md-4">@ViewHelper.CreateTree(Model)</div>
+        </div>
 
-        <div id="listContainer" class="col">@ViewHelper.CreateFullLists(Model)</div>
+
+        <div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>
     </div>
     <hr/>
 </div>
