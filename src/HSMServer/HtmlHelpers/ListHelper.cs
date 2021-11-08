@@ -92,6 +92,9 @@ namespace HSMServer.HtmlHelpers
                 {
                     string sensorPath = $"{fullPath}/{sensor.Name}";
                     string formattedPath = SensorPathHelper.Encode(sensorPath);
+                    result.Append($"<div id='sensorInfo_parent_{formattedPath}' style='display: none'>");
+                    result.Append(CreateSensorInfoLink(formattedPath));
+                    result.Append($"<div id=sensor_info_{formattedPath}></div></div>");
                     result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
                     result.Append(CreateSensor(formattedPath, sensor));
                     result.Append("</div>");
@@ -102,6 +105,10 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        public static string CreateSensorInfoLink(string formattedPath)
+        {
+            return $"<a href='#' class='link-primary' id='sensorInfo_link_{formattedPath}'>Show meta info</a>";
+        }
         public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
             StringBuilder result = new StringBuilder();

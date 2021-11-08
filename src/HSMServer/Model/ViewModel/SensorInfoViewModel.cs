@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model.Sensor;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -8,12 +8,20 @@ namespace HSMServer.Model.ViewModel
         public string ProductName { get; set; }
         public string Description { get; set; }
         public string ExpectedUpdateInterval { get; set; }
+        public string Unit { get; set; }
         public SensorInfoViewModel(SensorInfo info)
         {
             Path = info.Path;
             ProductName = info.ProductName;
             Description = info.Description;
             ExpectedUpdateInterval = info.ExpectedUpdateInterval.ToString();
+            Unit = info.Unit;
+        }
+
+        public void Update(UpdateSensorInfoViewModel updateModel)
+        {
+            Description = updateModel.Description;
+            ExpectedUpdateInterval = updateModel.ExpectedUpdateInterval;
         }
     }
 }
