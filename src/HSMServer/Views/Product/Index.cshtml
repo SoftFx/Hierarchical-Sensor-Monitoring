@@ -13,10 +13,11 @@
     var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
-<div class="container row justify-content-center">
-    @ViewHelper.CreateProductList(Context.User, Model)
-    
-    <script>
+<div class="container">
+    <div class="row justify-content-center">
+        @ViewHelper.CreateProductList(Context.User, Model)
+
+        <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
         if (errorText !== undefined) {
             let errorSpan = document.getElementById('new_product_name_span');
@@ -26,8 +27,10 @@
 
             }
         }
-    </script>
+        </script>
+    </div>
 </div>
+
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
