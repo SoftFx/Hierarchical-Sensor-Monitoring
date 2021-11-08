@@ -35,3 +35,9 @@
 .time-ago-div {
     color: grey;
 }
+
+.scrollableBlock {
+    display: block;
+    width: 400px;
+    overflow: auto;
+}
