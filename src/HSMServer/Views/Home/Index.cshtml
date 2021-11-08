@@ -111,7 +111,7 @@
 </div>
 
 <script>
-     initializeTree();
+    initializeTree();
     initializeDataHistoryRequests();
     InitializePeriodRequests();
     initializeInfoLinks();
@@ -169,14 +169,14 @@
                 async: true
             }).done(function (listsData) {
                 //removing invisible lists
-                $('[id^="list_"][style*="display: none;"]').each(function (index) {
+                $('[id^="list_"][style*="display: none;"]').each(function(index) {
                     this.remove();
-
-                    let parsedData = JSON.parse(listsData);
-                    $('#listContainer').append(parsedData.value);
-                    initializeDataHistoryRequests();
-                    initializeInfoLinks();
-                });
+                });    
+                let parsedData = JSON.parse(listsData);
+                $('#listContainer').append(parsedData.value);
+                initializeDataHistoryRequests();
+                initializeInfoLinks();
+            });
 
             if (listId != "" && listId != undefined)
                 //update selected list
