@@ -26,7 +26,6 @@ function showAllChildAccordionsById(id) {
     let element = $(id)[0];
     if (element != undefined) {
         let children = element.childNodes;
-        console.log(children);
         children.forEach(ch => {
             if (ch.classList.contains('accordion')) {
                 ch.style.display = 'block';
