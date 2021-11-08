@@ -29,7 +29,10 @@ jobs:
       run: dotnet restore src/HSMServer/HSMServer.sln
       
     - name: Build
-      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'          
+      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+      
+    - name: Test
+      run: dotnet test --no-restore --verbosity normal src/HSMServer/HSMServer.sln
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2
