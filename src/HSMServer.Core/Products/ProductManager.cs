@@ -359,7 +359,7 @@ namespace HSMServer.Core.Products
             lock (_dictionaryLock)
             {
                 var dict = _productSensorsDictionary[productName];
-                result = dict[path];
+                dict.TryGetValue(path, out result);
             }
             return result;
         }

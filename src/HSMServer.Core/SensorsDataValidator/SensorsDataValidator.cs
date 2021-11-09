@@ -5,6 +5,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Products;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Linq;
 using HSMServer.Core.Model;
 
 namespace HSMServer.Core.SensorsDataValidator
@@ -43,6 +44,11 @@ namespace HSMServer.Core.SensorsDataValidator
         public ValidationResult ValidateBoolean(bool value, string path, string productName, out string validationError)
         {
             var sensorInfo = _productManager.GetSensorInfo(productName, path);
+            if (sensorInfo?.ValidationParameters == null || !sensorInfo.ValidationParameters.Any())
+            {
+                validationError = string.Empty;
+                return ValidationResult.Ok;
+            }
             foreach (var parameter in sensorInfo.ValidationParameters)
             {
                 bool validateValue = bool.Parse(parameter.ValidationValue);
