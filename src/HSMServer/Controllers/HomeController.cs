@@ -40,8 +40,7 @@ namespace HSMServer.Controllers
         private readonly Logger _logger;
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
-            ILogger<HomeController> logger)
+            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
         {
             _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
@@ -49,7 +48,7 @@ namespace HSMServer.Controllers
             _productManager = productManager;
             _historyProcessorFactory = factory;
 
-            _logger = NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger(); ;
+            _logger = LogManager.GetCurrentClassLogger();//NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger(); ;
 
         }
 
@@ -106,7 +105,9 @@ namespace HSMServer.Controllers
                 else //remove sensors
                     GetSensorsPaths(node, paths);
 
-                _sensorsInterface.RemoveSensors(product, paths);
+                var productEntity = _productManager.GetProductByName(product);
+
+                _sensorsInterface.RemoveSensors(product, productEntity.Key, paths);
             }
 
             else
@@ -164,11 +165,11 @@ namespace HSMServer.Controllers
                 return new HtmlString("");
 
             //if (sensors != null && sensors.Count > 0)
-            //foreach(var sensor in sensors)
-            //{
-            //    _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
-            //        $"Type={sensor.TransactionType}");
-            //}
+            //    foreach (var sensor in sensors)
+            //    {
+            //        _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
+            //            $"Type={sensor.TransactionType}");
+            //    }
 
             var model = oldModel;
 
@@ -182,7 +183,7 @@ namespace HSMServer.Controllers
             //    i++;
             //}
 
-             //_logger.Info(str.ToString());
+            //_logger.Info(str.ToString());
 
             if (sensors != null && sensors.Count > 0)
             {

@@ -301,7 +301,7 @@ namespace HSMServer.Core.MonitoringServerCore
         }
         #endregion
 
-        public void RemoveSensor(string product, string path)
+        public void RemoveSensor(string product, string key, string path)
         {
             try
             {
@@ -309,6 +309,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 SensorData updateMessage = new SensorData();
                 updateMessage.Product = product;
+                updateMessage.Key = key;
                 updateMessage.Path = path;
                 updateMessage.TransactionType = TransactionType.Delete;
                 updateMessage.Time = timeCollected;
@@ -323,11 +324,11 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        public void RemoveSensors(string product, IEnumerable<string> paths)
+        public void RemoveSensors(string product, string key, IEnumerable<string> paths)
         {
             if (paths != null && paths.Any())
                 foreach (var path in paths)
-                    RemoveSensor(product, path);
+                    RemoveSensor(product, key, path);
         }
 
         public void AddSensorValue(BoolSensorValue value)
