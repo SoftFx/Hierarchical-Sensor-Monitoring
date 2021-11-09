@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
+using NLog;
 
 namespace HSMServer.Controllers
 {
@@ -33,6 +34,8 @@ namespace HSMServer.Controllers
             _dataReceiver = dataReceiver;
             _dataCollector = dataCollector;
             _logger = logger;
+            _logger.LogInformation($"Created logger for SensorsController {DateTime.Now:u}!!!!!!!!!!! ");
+            var config = LogManager.Configuration;
         }
 
         /// <summary>

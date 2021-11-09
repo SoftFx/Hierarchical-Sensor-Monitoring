@@ -16,8 +16,6 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Logging;
-using NLog;
-using NLog.Web;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -37,7 +35,7 @@ namespace HSMServer.Controllers
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
 
-        private readonly Logger _logger;
+        private readonly ILogger<HomeController> _logger;
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
             IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
@@ -49,8 +47,9 @@ namespace HSMServer.Controllers
             _productManager = productManager;
             _historyProcessorFactory = factory;
 
-            _logger = NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger(); ;
-
+            _logger = logger; 
+            _logger.LogInformation($"Instance of HomeController created {DateTime.Now:G}");
+            _logger.LogError($"Test error when create HomeController {DateTime.Now:G}");
         }
 
         public IActionResult Index()

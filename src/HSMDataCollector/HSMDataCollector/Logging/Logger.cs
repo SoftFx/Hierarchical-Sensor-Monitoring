@@ -25,16 +25,16 @@ namespace HSMDataCollector.Logging
 
         public static void GenerateConfigFile(LogLevel minLevel, LogLevel maxLevel)
         {
-            var config = new NLog.Config.LoggingConfiguration();
+            //var config = new NLog.Config.LoggingConfiguration();
             var file = new FileTarget(TextConstants.LogTargetFile)
             {
                 FileName = "${basedir}/logs/DataCollector_${shortdate}.log",
                 Layout = "${longdate} [${uppercase:${level}}] ${logger}: ${message}"
             };
 
-            config.AddRule(minLevel, maxLevel, file);
-          
-            LogManager.Configuration = config;
+            //config.AddRule(minLevel, maxLevel, file);
+
+            LogManager.Configuration.AddRule(minLevel, maxLevel, file);
         }
     }
 }
