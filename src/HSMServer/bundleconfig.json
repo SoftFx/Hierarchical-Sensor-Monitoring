@@ -1,6 +1,16 @@
-﻿[
+[
+  //{
+  //  "outputFileName": "wwwroot/js/bundles/historyBundle.js",
+  //  "inputFiles": [
+  //    "wwwroot/js/home/history.js"
+  //  ],
+  //  "minify": {
+  //    "enabled": true,
+  //    "renameLocals": false
+  //  }
+  //},
   {
-    "outputFileName": "wwwroot/js/bundles/homeBundle.js",
+    "outputFileName": "wwwroot/js/bundles/homeBundle.min.js",
     "inputFiles": [
       "wwwroot/js/home/file.js",
       "wwwroot/js/home/history.js",
@@ -11,16 +21,16 @@
     ],
     "minify": {
       "enabled": true,
-      "renameLocals": true
+      "renameLocals": false
     }
   },
   {
-    "outputFileName": "wwwroot/css/bundles/homeBundle.css",
+    "outputFileName": "wwwroot/css/bundles/homeBundle.min.css",
     "inputFiles": [
       "wwwroot/css/home/home.css"
     ],
     "minify": {
-      "enabled": true
+      "enabled":  true 
     }
   }
 ]

@@ -55,6 +55,7 @@
 
   <ItemGroup>
     <Folder Include="Images\" />
+    <Folder Include="wwwroot\js\bundles\" />
   </ItemGroup>
 
   <ItemGroup>

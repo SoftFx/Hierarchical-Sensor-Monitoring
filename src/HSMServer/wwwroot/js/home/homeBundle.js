@@ -70,38 +70,39 @@ function Data(to, from, type, path) {
 
 //Initialization
 {
-    //Add event listeners to buttons
     function initializeDataHistoryRequests() {
-        $('[id^="collapse"]').off('show.bs.collapse').on('show.bs.collapse', function() {
-            let path = this.id.substring("collapse_".length);
-            let type = getTypeForSensor(path);
-            let from = new Date();
-            if (isGraphAvailable(type)) {
-                initializeGraph(path, rawHistoryLatestAction, type, Data(from, from, type, path), true);
-            } else {
-                initializeTable(path, historyLatestAction, type, Data(from, from, type, path), true);
-            }
-        });
+        $('[id^="collapse"]').off('show.bs.collapse').on('show.bs.collapse', accordionClicked);
 
         InitializePeriodRequests();
         initializeTabLinksRequests();
 
-        $('[id^="button_view"]').on("click",
-            function () {
-                id = this.id.substring("button_view_".length, this.id.length);
-                fileType = document.getElementById('fileType_' + id).value;
+        $('[id^="button_view"]').on("click", viewFile);
 
-                viewFile(id, fileType, viewFileAction);
-            }
-        );
+        $('[id^="button_download"]').on("click", downloadFile);
+    }
 
-        $('[id^="button_download"]').on("click",
-            function () {
-                id = this.id.substring("button_download_".length, this.id.length);
+    function downloadFile() {
+        let id = this.id.substring("button_download_".length, this.id.length);
 
-                window.location.href = getFileAction + "?Selected=" + id;
-            }
-        );
+        window.location.href = getFileAction + "?Selected=" + id;
+    }
+
+    function viewFile() {
+        let id = this.id.substring("button_view_".length, this.id.length);
+        let fileType = document.getElementById('fileType_' + id).value;
+
+        viewFile(id, fileType, viewFileAction);
+    }
+
+    function accordionClicked() {
+        let path = this.id.substring("collapse_".length);
+        let type = getTypeForSensor(path);
+        let from = new Date();
+        if (isGraphAvailable(type)) {
+            initializeGraph(path, rawHistoryLatestAction, type, Data(from, from, type, path), true);
+        } else {
+            initializeTable(path, historyLatestAction, type, Data(from, from, type, path), true);
+        }
     }
 
     function initializeTabLinksRequests() {
