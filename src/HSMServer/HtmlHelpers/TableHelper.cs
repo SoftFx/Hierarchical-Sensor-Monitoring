@@ -668,15 +668,16 @@ namespace HSMServer.HtmlHelpers
             result.Append("<table class='table table-bordered'><tbody>");
             result.Append($"<tr><td>Product</td><td>{sensorInfo.ProductName}</td></tr>");
             result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
-            result.Append($"<tr><td>Expected update interval</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
-                          $" id='interval_{encodedPath}' value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
+            result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
+            result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
+                          "title='Time format: dd.hh:mm:ss'></i></td><td><input disabled type='text' " +
+                          $"class='form-control' style='max-width:300px' id='interval_{encodedPath}' " +
+                          $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
             result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
                           $" id='description_{encodedPath}' value='{sensorInfo.Description}'></td></tr>");
-            if (!string.IsNullOrEmpty(sensorInfo.Unit))
-            {
-                result.Append($"<tr><td>Unit</td><td>{sensorInfo.Unit}</td></tr>");
-            }
-            
+            result.Append("<tr><td>Unit</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
+                          $" id='unit_{encodedPath}' value='{sensorInfo.Unit}'></td></tr>");
+
             result.Append("</div>");
             return result.ToString();
         }

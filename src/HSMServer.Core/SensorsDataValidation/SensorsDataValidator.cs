@@ -8,7 +8,7 @@ using System;
 using System.Linq;
 using HSMServer.Core.Model;
 
-namespace HSMServer.Core.SensorsDataValidator
+namespace HSMServer.Core.SensorsDataValidation
 {
     public class SensorsDataValidator : ISensorsDataValidator
     {
