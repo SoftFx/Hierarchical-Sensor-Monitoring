@@ -47,9 +47,7 @@ namespace HSMServer.Controllers
             _productManager = productManager;
             _historyProcessorFactory = factory;
 
-            _logger = logger; 
-            _logger.LogInformation($"Instance of HomeController created {DateTime.Now:G}");
-            _logger.LogError($"Test error when create HomeController {DateTime.Now:G}");
+            _logger = logger;
         }
 
         public IActionResult Index()

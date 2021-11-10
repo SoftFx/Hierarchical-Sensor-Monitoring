@@ -24,7 +24,6 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             CertificatesConfig.InitializeConfig();
-            var config = LogManager.Configuration;
             try
             {
                 logger.Debug("init main");
