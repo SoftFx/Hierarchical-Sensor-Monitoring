@@ -46,7 +46,6 @@ namespace HSMServer.Controllers
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
-
             _logger = logger;
         }
 
@@ -103,7 +102,9 @@ namespace HSMServer.Controllers
                 else //remove sensors
                     GetSensorsPaths(node, paths);
 
-                _sensorsInterface.RemoveSensors(product, paths);
+                var productEntity = _productManager.GetProductByName(product);
+
+                _sensorsInterface.RemoveSensors(product, productEntity.Key, paths);
             }
 
             else
@@ -161,11 +162,11 @@ namespace HSMServer.Controllers
                 return new HtmlString("");
 
             //if (sensors != null && sensors.Count > 0)
-            //foreach(var sensor in sensors)
-            //{
-            //    _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
-            //        $"Type={sensor.TransactionType}");
-            //}
+            //    foreach (var sensor in sensors)
+            //    {
+            //        _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
+            //            $"Type={sensor.TransactionType}");
+            //    }
 
             var model = oldModel;
 
@@ -179,7 +180,7 @@ namespace HSMServer.Controllers
             //    i++;
             //}
 
-             //_logger.Info(str.ToString());
+            //_logger.Info(str.ToString());
 
             if (sensors != null && sensors.Count > 0)
             {
