@@ -1,0 +1,36 @@
+[
+  //{
+  //  "outputFileName": "wwwroot/js/bundles/historyBundle.js",
+  //  "inputFiles": [
+  //    "wwwroot/js/home/history.js"
+  //  ],
+  //  "minify": {
+  //    "enabled": true,
+  //    "renameLocals": false
+  //  }
+  //},
+  {
+    "outputFileName": "wwwroot/js/bundles/homeBundle.min.js",
+    "inputFiles": [
+      "wwwroot/js/home/file.js",
+      "wwwroot/js/home/history.js",
+      "wwwroot/js/home/list.js",
+      "wwwroot/js/home/plotting.js",
+      "wwwroot/js/home/sensorInfo.js",
+      "wwwroot/js/home/tree.js"
+    ],
+    "minify": {
+      "enabled": true,
+      "renameLocals": false
+    }
+  },
+  {
+    "outputFileName": "wwwroot/css/bundles/homeBundle.min.css",
+    "inputFiles": [
+      "wwwroot/css/home/home.css"
+    ],
+    "minify": {
+      "enabled":  true 
+    }
+  }
+]

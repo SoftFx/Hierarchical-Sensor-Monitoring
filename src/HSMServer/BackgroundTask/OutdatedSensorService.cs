@@ -12,6 +12,10 @@ using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundTask
 {
+    /// <summary>
+    /// This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
+    /// than a specified parameter value are deleted
+    /// </summary>
     public class OutdatedSensorService : WorkerServiceBase
     {
         private DateTime _lastChecked;

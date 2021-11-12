@@ -92,6 +92,9 @@ namespace HSMServer.HtmlHelpers
                 {
                     string sensorPath = $"{fullPath}/{sensor.Name}";
                     string formattedPath = SensorPathHelper.Encode(sensorPath);
+                    result.Append($"<div id='sensorInfo_parent_{formattedPath}' style='display: none'>");
+                    result.Append(CreateSensorInfoLink(formattedPath));
+                    result.Append($"<div id=sensor_info_{formattedPath}></div></div>");
                     result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
                     result.Append(CreateSensor(formattedPath, sensor));
                     result.Append("</div>");
@@ -102,6 +105,10 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
+        public static string CreateSensorInfoLink(string formattedPath)
+        {
+            return $"<a tabindex='0' class='link-primary info-link' id='sensorInfo_link_{formattedPath}'>Show meta info</a>";
+        }
         public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
             StringBuilder result = new StringBuilder();
@@ -131,17 +138,24 @@ namespace HSMServer.HtmlHelpers
                           "<div class='accordion-body'>");
 
                 result.Append("<div style='width: 100%'>" +
-                          "<div class='row justify-content-between'><div class='col-md-auto'>" +
-                          $"<li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
-                          $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>{sensor.Name}</div>" +
-                          $"<div class='col-md-auto time-ago-div' id='update_{name}' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>" +
-                          $"{sensor.ShortStringValue}</div>" +
-                              "<div class='row'><div class='col-md-auto'>" +
-                              $"<button id='button_view_{name}' " +
+                              "<div class='row justify-content-between'><div class='col-md-auto'>" +
+                              $"<li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                              $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
+
+                result.Append($"<span id='validation_{name}'>");
+                if (!string.IsNullOrEmpty(sensor.ValidationError))
+                {
+                    result.Append(CreateValidationErrorIcon(sensor.ValidationError, name));
+                }
+
+                result.Append("</span>");
+                result.Append($"{sensor.Name}</div><input id='sensor_type_{name}' value='{(int)sensor.SensorType}' " +
+                              $"style='display: none' /><div class='col-md-auto time-ago-div' id='update_{name}' " +
+                              $"style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>{sensor.ShortStringValue}</div>" +
+                              $"<div class='row'><div class='col-md-auto'><button id='button_view_{name}' " +
                               "class='button-view-file-sensor btn btn-secondary' title='View'>" +
-                              "<i class='fas fa-eye'></i></button></div>" +
-                              $"<div class='col'><input style='display: none;' id='fileType_{name}' value='{fileName}'>" +
-                              $"<button id='button_download_{name}'" +
+                              $"<i class='fas fa-eye'></i></button></div><div class='col'><input style='display: none;'" +
+                              $" id='fileType_{name}' value='{fileName}'><button id='button_download_{name}'" +
                               " class='button-download-file-sensor-value btn btn-secondary'" +
                               " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
 
@@ -151,13 +165,22 @@ namespace HSMServer.HtmlHelpers
                 return result;
             }
 
-            result.Append($"<button id='{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
-                          $"data-bs-target='#collapse_{name}' aria-expanded='false' aria-controls='collapse_{name}'>" +
-                          "<div style='width: 100%'>" +
-                          "<div class='row justify-content-between'>" +
-                          $"<div class='col-md-auto'><li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
-                          $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>" +
-                          $"{sensor.Name}</div><div class='col-md-auto'>" +
+            result.Append(
+                $"<button id='{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
+                $"data-bs-target='#collapse_{name}' aria-expanded='false' aria-controls='collapse_{name}'>" +
+                "<div style='width: 100%'>" +
+                "<div class='row justify-content-between'>" +
+                $"<div class='col-md-auto'><li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
+                $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
+
+            result.Append($"<span id='validation_{name}'>");
+            if (!string.IsNullOrEmpty(sensor.ValidationError))
+            {
+                result.Append(CreateValidationErrorIcon(sensor.ValidationError, name));
+            }
+
+            result.Append("</span>");
+            result.Append($"{sensor.Name}</div><div class='col-md-auto'>" +
                           $"<input id='sensor_type_{name}' value='{(int)sensor.SensorType}' style='display: none' />" +
                           $"<div id='update_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
                           $"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
@@ -187,6 +210,11 @@ namespace HSMServer.HtmlHelpers
             return result;
         }
 
+        private static string CreateValidationErrorIcon(string validationError, string name)
+        {
+            return $"<li id='errorIcon_{name}' class='fas fa-exclamation-triangle' style='margin-right:5px'" +
+                          $" title='{validationError}'></li>";
+        }
         public static string GetTimeAgo(TimeSpan time)
         {
             if (time.TotalDays > 30)

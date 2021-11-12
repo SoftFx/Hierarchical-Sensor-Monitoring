@@ -1,5 +1,4 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using System;
 
@@ -15,6 +14,7 @@ namespace HSMServer.Model.ViewModel
         public DateTime Time { get; set; }
         public string ShortStringValue { get; set; }
         public TransactionType TransactionType { get; set; }
+        public string ValidationError { get; set; }
         public SensorViewModel(string name, SensorData sensor)
         {
             Name = name;
@@ -25,6 +25,7 @@ namespace HSMServer.Model.ViewModel
             Description = sensor.Description;
             Time = sensor.Time;
             TransactionType = sensor.TransactionType;
+            ValidationError = sensor.ValidationError;
         }
 
         public SensorViewModel(SensorViewModel model)
@@ -37,6 +38,7 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
             Time = model.Time;
             TransactionType = model.TransactionType;
+            ValidationError = model.ValidationError;
         }
 
         public SensorViewModel() { }
@@ -49,6 +51,7 @@ namespace HSMServer.Model.ViewModel
             Description = sensorData.Description;
             Time = sensorData.Time;
             TransactionType = sensorData.TransactionType;
+            ValidationError = sensorData.ValidationError;
         }
 
         public void Update(SensorViewModel viewModel)
@@ -59,6 +62,7 @@ namespace HSMServer.Model.ViewModel
             Description = viewModel.Description;
             Time = viewModel.Time;
             TransactionType = viewModel.TransactionType;
+            ValidationError = viewModel.ValidationError;
         }
 
         public SensorViewModel Clone()
@@ -72,6 +76,7 @@ namespace HSMServer.Model.ViewModel
             sensor.Description = Description;
             sensor.Time = Time;
             sensor.TransactionType = TransactionType;
+            sensor.ValidationError = ValidationError;
 
             return sensor;
 

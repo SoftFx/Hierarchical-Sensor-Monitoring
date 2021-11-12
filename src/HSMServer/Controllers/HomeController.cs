@@ -1,6 +1,5 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
@@ -17,8 +16,6 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Logging;
-using NLog;
-using NLog.Web;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,7 +35,7 @@ namespace HSMServer.Controllers
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
 
-        private readonly Logger _logger;
+        private readonly ILogger<HomeController> _logger;
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
             IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
@@ -49,9 +46,7 @@ namespace HSMServer.Controllers
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
-
-            _logger = NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger(); ;
-
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -107,7 +102,9 @@ namespace HSMServer.Controllers
                 else //remove sensors
                     GetSensorsPaths(node, paths);
 
-                _sensorsInterface.RemoveSensors(product, paths);
+                var productEntity = _productManager.GetProductByName(product);
+
+                _sensorsInterface.RemoveSensors(product, productEntity.Key, paths);
             }
 
             else
@@ -165,11 +162,11 @@ namespace HSMServer.Controllers
                 return new HtmlString("");
 
             //if (sensors != null && sensors.Count > 0)
-            //foreach(var sensor in sensors)
-            //{
-            //    _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
-            //        $"Type={sensor.TransactionType}");
-            //}
+            //    foreach (var sensor in sensors)
+            //    {
+            //        _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
+            //            $"Type={sensor.TransactionType}");
+            //    }
 
             var model = oldModel;
 
@@ -183,7 +180,7 @@ namespace HSMServer.Controllers
             //    i++;
             //}
 
-             //_logger.Info(str.ToString());
+            //_logger.Info(str.ToString());
 
             if (sensors != null && sensors.Count > 0)
             {
@@ -254,8 +251,11 @@ namespace HSMServer.Controllers
 
                 model = oldModel.Update(sensors);
             }
-               
-            return ViewHelper.CreateNotSelectedLists(selectedList, model.Clone());
+
+            int index = selectedList.IndexOf('_');
+            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
+
+            return ViewHelper.CreateNotSelectedLists(formattedPath, model.Clone());
         }
 
         [HttpPost]
@@ -521,6 +521,32 @@ namespace HSMServer.Controllers
         }
         #endregion
 
+        #region Sensor info
+
+        [HttpGet]
+        public HtmlString GetSensorInfo([FromQuery(Name = "Path")] string encodedPath)
+        {
+            ParseProductAndPath(encodedPath, out string product, out string path);
+            var info = _productManager.GetSensorInfo(product, path);
+            if (info == null)
+                return new HtmlString(string.Empty);
+
+            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            return ViewHelper.CreateSensorInfoTable(viewModel);
+        }
+
+        [HttpPost]
+        public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
+        {
+            ParseProductAndPath(updateModel.EncodedPath, out var product, out var path);
+            var info = _productManager.GetSensorInfo(product, path);
+            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            viewModel.Update(updateModel);
+            var infoFromViewModel = CreateModelFromViewModel(viewModel);
+            _productManager.UpdateSensorInfo(infoFromViewModel);
+        }
+
+        #endregion
         private void ParseProductAndPath(string encodedPath, out string product, out string path)
         {
             var decodedPath = SensorPathHelper.Decode(encodedPath);
@@ -560,6 +586,17 @@ namespace HSMServer.Controllers
             if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
+        }
+
+        private SensorInfo CreateModelFromViewModel(SensorInfoViewModel viewModel)
+        {
+            SensorInfo result = new SensorInfo();
+            result.ProductName = viewModel.ProductName;
+            result.ExpectedUpdateInterval = TimeSpan.Parse(viewModel.ExpectedUpdateInterval);
+            result.Unit = viewModel.Unit;
+            result.Path = viewModel.Path;
+            result.Description = viewModel.Description;
+            return result;
         }
     }
 }

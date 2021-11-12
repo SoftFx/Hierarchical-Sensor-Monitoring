@@ -5,6 +5,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 

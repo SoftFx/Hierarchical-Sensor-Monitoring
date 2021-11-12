@@ -15,6 +15,7 @@ namespace HSMServer.Core.Model.Sensor
         public TransactionType TransactionType { get; set; }
         public string Description { get; set; }
         public string ShortStringValue { get; set; }
+        public string ValidationError { get; set; }
         public SensorData Clone()
         {
             SensorData copy = new SensorData();
@@ -28,6 +29,7 @@ namespace HSMServer.Core.Model.Sensor
             copy.TransactionType = TransactionType;
             copy.Description = Description;
             copy.ShortStringValue = ShortStringValue;
+            copy.ValidationError = ValidationError;
             return copy;
         }
     }

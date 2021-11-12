@@ -14,6 +14,7 @@ using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using NLog;
 
 namespace HSMServer
 {
@@ -23,7 +24,6 @@ namespace HSMServer
         {
             var logger = NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             CertificatesConfig.InitializeConfig();
-
             try
             {
                 logger.Debug("init main");
@@ -86,6 +86,7 @@ namespace HSMServer
                     logging.ClearProviders();
                     logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
                     logging.AddNLog();
+                    logging.AddNLogWeb();
                 }).UseNLog().UseConsoleLifetime();
         }
 

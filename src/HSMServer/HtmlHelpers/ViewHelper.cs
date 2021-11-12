@@ -4,7 +4,6 @@ using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Html;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using System.Text;
 
@@ -94,7 +93,11 @@ namespace HSMServer.HtmlHelpers
 
             return new HtmlString(result.ToString());
         }
-        
+
+        public static HtmlString CreateSensorInfoTable(SensorInfoViewModel viewModel)
+        {
+            return new HtmlString(TableHelper.CreateSensorInfoTable(viewModel));
+        }
         public static string GetStatusHeaderColorClass(SensorStatus status)
         {
             switch (status)
