@@ -350,7 +350,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
 
@@ -392,7 +392,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
 
@@ -435,7 +435,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
                 //bool isNew = false;
@@ -477,7 +477,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
                 //bool isNew = false;
@@ -519,7 +519,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
                 //bool isNew = false;
@@ -561,7 +561,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
                 //bool isNew = false;
@@ -624,7 +624,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 _barsStorage.Remove(processedData.Product, value.Path);
                 //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
                 //Task.Run(() => SaveSensorValue(dataObject, productName));
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
             }
             catch (Exception e)
@@ -659,7 +659,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 }
 
                 _barsStorage.Remove(processedData.Product, value.Path);
-                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected);
+                SensorDataEntity databaseObj = _converter.ConvertToDatabase(value, timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
                 //string productName = _productManager.GetProductNameByKey(value.Key);
                 //bool isNew = false;

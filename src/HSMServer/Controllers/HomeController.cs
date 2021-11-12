@@ -251,8 +251,11 @@ namespace HSMServer.Controllers
 
                 model = oldModel.Update(sensors);
             }
-               
-            return ViewHelper.CreateNotSelectedLists(selectedList, model.Clone());
+
+            int index = selectedList.IndexOf('_');
+            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
+
+            return ViewHelper.CreateNotSelectedLists(formattedPath, model.Clone());
         }
 
         [HttpPost]

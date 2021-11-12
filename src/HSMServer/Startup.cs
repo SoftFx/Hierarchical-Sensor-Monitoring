@@ -9,7 +9,7 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsDataProcessor;
-using HSMServer.Core.SensorsDataValidator;
+using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;

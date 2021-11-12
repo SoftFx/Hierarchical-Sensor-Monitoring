@@ -41,3 +41,7 @@
     width: 400px;
     overflow: auto;
 }
+
+.info-link {
+    cursor: pointer;
+}

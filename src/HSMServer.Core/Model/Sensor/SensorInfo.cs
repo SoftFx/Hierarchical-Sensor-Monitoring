@@ -28,7 +28,8 @@ namespace HSMServer.Core.Model.Sensor
             Path = entity.Path;
             SensorName = entity.SensorName;
             Description = entity.Description;
-            ExpectedUpdateInterval = entity.ExpectedUpdateInterval;
+            //ExpectedUpdateInterval = entity.ExpectedUpdateInterval;
+            ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
             Unit = entity.Unit;
             ValidationParameters = new List<SensorValidationParameter>();
             if (entity.ValidationParameters != null && entity.ValidationParameters.Any())

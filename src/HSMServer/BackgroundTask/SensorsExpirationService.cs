@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMCommon.Constants;
+using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
@@ -74,6 +75,7 @@ namespace HSMServer.BackgroundTask
             SensorData clone = originalData.Clone();
             clone.Status = SensorStatus.Warning;
             clone.TransactionType = TransactionType.Update;
+            clone.ValidationError = ValidationConstants.SensorValueOutdated;
             return clone;
         }
     }
