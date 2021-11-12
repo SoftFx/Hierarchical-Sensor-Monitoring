@@ -3,6 +3,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using Microsoft.Extensions.Logging;
@@ -138,55 +139,55 @@ namespace HSMServer.Core.MonitoringServerCore
             dataObject.TimeCollected = timeCollected.ToUniversalTime();
             dataObject.Timestamp = GetTimestamp(value.Time);
         }
-        public SensorDataEntity ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.BooleanSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             BoolSensorData typedData = new BoolSensorData() { BoolValue = sensorValue.BoolValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataEntity ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.IntSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             IntSensorData typedData = new IntSensorData() { IntValue = sensorValue.IntValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataEntity ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.DoubleSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             DoubleSensorData typedData = new DoubleSensorData() { DoubleValue = sensorValue.DoubleValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataEntity ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.StringSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             StringSensorData typedData = new StringSensorData() { StringValue = sensorValue.StringValue, Comment = sensorValue.Comment };
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
 
-        public SensorDataEntity ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.FileSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             FileSensorData typedData = new FileSensorData()
             {
@@ -200,11 +201,11 @@ namespace HSMServer.Core.MonitoringServerCore
 
         }
 
-        public SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.FileSensor;
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             FileSensorBytesData typedData = new FileSensorBytesData()
             {
@@ -216,25 +217,25 @@ namespace HSMServer.Core.MonitoringServerCore
             result.TypedData = JsonSerializer.Serialize(typedData);
             return result;
         }
-        public SensorDataEntity ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.IntegerBarSensor;
 
             IntBarSensorData typedData = ToTypedData(sensorValue);
             result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
             return result;
         }
 
-        public SensorDataEntity ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected)
+        public SensorDataEntity ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
             result.DataType = (byte)SensorType.DoubleBarSensor;
 
             DoubleBarSensorData typedData = ToTypedData(sensorValue);
             result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Status = (byte)sensorValue.Status;
+            result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
             return result;
         }
 
@@ -1056,11 +1057,11 @@ namespace HSMServer.Core.MonitoringServerCore
         #endregion
 
         #region UnitedSensorValue to database objects
-        public SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected)
+        public SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(value, timeCollected, out var result);
             result.DataType = (byte)value.Type;
-            result.Status = (byte)value.Status;
+            result.Status = (byte)value.Status.GetWorst(validationStatus);
             result.TypedData = GetTypedData(value);
             return result;
         }

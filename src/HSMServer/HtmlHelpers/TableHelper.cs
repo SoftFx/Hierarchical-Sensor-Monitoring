@@ -653,5 +653,52 @@ namespace HSMServer.HtmlHelpers
         }
 
         #endregion
+
+        #region Sensor info
+
+        public static string CreateSensorInfoTable(SensorInfoViewModel sensorInfo)
+        {
+            StringBuilder result = new StringBuilder();
+
+            string encodedPath = SensorPathHelper.Encode($"{sensorInfo.ProductName}/{sensorInfo.Path}");
+            result.Append("<div style='margin: 10px'><div class='row justify-content-start'><div class='col-md-auto'>" +
+                          $"<h5 style='margin: 10px 20px 10px;'>{sensorInfo.ProductName}/{sensorInfo.Path}</h5><div>" +
+                          $"{CreateEditButtonForInfo(encodedPath)}{CreateSaveButtonForInfo(encodedPath)}" +
+                          $"{CreateResetButtonForInfo(encodedPath)}</div></div></div></div>");
+            result.Append("<table class='table table-bordered'><tbody>");
+            result.Append($"<tr><td>Product</td><td>{sensorInfo.ProductName}</td></tr>");
+            result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
+            result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
+            result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
+                          "title='Time format: dd.hh:mm:ss'></i></td><td><input disabled type='text' " +
+                          $"class='form-control' style='max-width:300px' id='interval_{encodedPath}' " +
+                          $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
+            result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
+                          $" id='description_{encodedPath}' value='{sensorInfo.Description}'></td></tr>");
+            result.Append("<tr><td>Unit</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
+                          $" id='unit_{encodedPath}' value='{sensorInfo.Unit}'></td></tr>");
+
+            result.Append("</div>");
+            return result.ToString();
+        }
+
+        public static string CreateEditButtonForInfo(string encodedPath)
+        {
+            return $"<button id='editInfo_{encodedPath}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                   " title='edit meta info'><i class='fas fa-edit'></i></button>";
+        }
+
+        public static string CreateSaveButtonForInfo(string encodedPath)
+        {
+            return $"<button disabled id='saveInfo_{encodedPath}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                   " title='save meta info'><i class='fas fa-check'></i></button>";
+        }
+
+        public static string CreateResetButtonForInfo(string encodedPath)
+        {
+            return $"<button disabled style='margin-left: 5px' id='revertInfo_{encodedPath}' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+                " title='revert changes'><i class='fas fa-times'></i></button></td></tr>";
+        }
+        #endregion
     }
 }

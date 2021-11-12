@@ -48,6 +48,10 @@
 
                                     $('#list_' + $node.id).remove();
                                     $('#noData').css('display', 'block');
+
+                                    $('[id^="list_"][style*="display: block;"]').each(function (index) {
+                                        this.remove();
+                                    }); 
                                 });                               
                             });
 

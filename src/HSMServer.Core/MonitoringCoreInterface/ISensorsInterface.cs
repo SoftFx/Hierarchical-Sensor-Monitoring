@@ -8,8 +8,8 @@ namespace HSMServer.Core.MonitoringCoreInterface
 {
     public interface ISensorsInterface
     {
-        void RemoveSensor(string product, string path);
-        void RemoveSensors(string product, IEnumerable<string> paths);
+        void RemoveSensor(string product, string key, string path);
+        void RemoveSensors(string product, string key, IEnumerable<string> paths);
         bool HideProduct(Product product, out string error);
         List<SensorInfo> GetAllAvailableSensorInfos(User user);
         List<SensorData> GetSensorUpdates(User user);

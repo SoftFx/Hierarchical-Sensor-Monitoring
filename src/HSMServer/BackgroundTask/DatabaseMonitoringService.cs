@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundTask
 {
+    /// <summary>
+    /// Background service, which reports database size every 5 minutes 
+    /// </summary>
     public class DatabaseMonitoringService : BackgroundService
     {
         private DateTime _lastReported;

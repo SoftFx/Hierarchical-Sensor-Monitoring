@@ -12,14 +12,17 @@
     var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
 </script>
 
-<div class="container row justify-content-center">
-    @if (TempData[TextConstants.TempDataErrorText] != null)
-    {
-        <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-    }
+<div class="container">
+    <div class="row justify-content-center">
+        @if (TempData[TextConstants.TempDataErrorText] != null)
+        {
+            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+        }
 
-    @ViewHelper.CreateUserList(Context.User, Model)
+        @ViewHelper.CreateUserList(Context.User, Model)
+    </div>
 </div>
+
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

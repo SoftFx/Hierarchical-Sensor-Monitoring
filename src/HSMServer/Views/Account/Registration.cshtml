@@ -3,39 +3,42 @@
     ViewData["Title"] = "Registration";
 }
 
-<h4 style="margin: 20px 0px">Registration</h4>
+<div class="container-sm" style="margin-left: 40%">
+    <div class="row justify-content-center">
+        <h4 style="margin: 20px 0px">Registration</h4>
 
-<div class="login-form-div">
-    <form method="post" action="Registrate" enctype="application/x-www-form-urlencoded">
-        <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <input type="text" class="form-control" id="username" name="username" value="@Model.Username" style="width: 200px">
+        <div class="login-form-div">
+            <form method="post" action="Registrate" enctype="application/x-www-form-urlencoded">
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" name="username" value="@Model.Username" style="width: 200px">
+                </div>
+
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" value="@Model.Password" style="width: 200px">
+                </div>
+
+                <div class="mb-3">
+                    <label for="secondPassword" class="form-label">Repeat Password</label>
+                    <input type="password" class="form-control" id="secondPassword" name="secondPassword" value="@Model.SecondPassword" style="width: 200px" />
+                </div>
+
+                <input id="productKey" name="ProductKey" value="@Model.ProductKey" style="display: none" />
+                <input id="role" name="Role" value="@Model.Role" style="display: none" />
+                <input id="ticketId" name="TicketId" value="@Model.TicketId" style="display: none" />
+
+                <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-user-plus"></i></button>
+            </form>
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <p style="color: red;font-size: large;font-weight:normal">
+                    @TempData["ErrorMessage"].ToString()
+                </p>
+
+            }
+
+
         </div>
-
-        <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" value="@Model.Password" style="width: 200px">
         </div>
-
-        <div class="mb-3">
-            <label for="secondPassword" class="form-label">Repeat Password</label>
-            <input type="password" class="form-control" id="secondPassword" name="secondPassword" value="@Model.SecondPassword" style="width: 200px" />
-        </div>
-
-        <input id="productKey" name="ProductKey" value="@Model.ProductKey" style="display: none" />
-        <input id="role" name="Role" value="@Model.Role" style="display: none" />
-        <input id="ticketId" name="TicketId" value="@Model.TicketId" style="display: none"/>
-
-        <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-user-plus"></i></button>
-    </form>
-    @if (TempData["ErrorMessage"] != null)
-    {
-        <p style="color: red;font-size: large;font-weight:normal">
-            @TempData["ErrorMessage"].ToString()
-        </p>
-
-    }
-
-
-</div>
-
+    </div>
