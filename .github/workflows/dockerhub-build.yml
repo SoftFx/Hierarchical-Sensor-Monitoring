@@ -22,10 +22,10 @@ jobs:
           split-by: 'v'
           
       - name: print tag
-        run: echo ${{ steps.split.outputs._1 }}
+        run: echo ${{ steps.split.outputs._2 }}
         
       - id: get-tag
-        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"      
+        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._2 }}"      
 
   build:
     runs-on: windows-latest
