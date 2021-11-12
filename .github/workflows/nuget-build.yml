@@ -19,7 +19,7 @@ jobs:
         uses: rishabhgupta/split-by@v1.0.1        
         with:
           string: '${{ env.RAW_TAG }}'
-          split-by: '-'
+          split-by: 'v'
           
       - name: print tag
         run: echo ${{ steps.split.outputs._1 }}
