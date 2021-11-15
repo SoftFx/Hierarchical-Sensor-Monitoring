@@ -1,9 +1,9 @@
 ﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 
-namespace HSMServer.Core.SensorsDataValidator
+namespace HSMServer.Core.SensorsDataValidation
 {
-    public  interface ISensorsDataValidator
+    public interface ISensorsDataValidator
     {
         ValidationResult ValidateValueWithoutType(SensorValueBase value, string productName, out string validationError);
         ValidationResult ValidateBoolean(bool value, string path, string productName, out string validationError);

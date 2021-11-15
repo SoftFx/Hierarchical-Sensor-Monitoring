@@ -10,6 +10,7 @@ namespace HSMServer.Model.ViewModel
         public string Status { get; set; }
         public string Value { get; set; }
         public string UpdateTime { get; set; }
+        public string ValidationError { get; set; }
 
         public SensorDataViewModel(string path, SensorViewModel sensor)
         {
@@ -24,6 +25,7 @@ namespace HSMServer.Model.ViewModel
             Id = "sensor_" + SensorPathHelper.Encode($"{decodedPath}/{sensor.Name}");
             
             Value = sensor.ShortStringValue;
+            ValidationError = sensor.ValidationError;
         }
     }
 }

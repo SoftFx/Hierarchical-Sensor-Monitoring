@@ -125,7 +125,7 @@
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
     hubConnection.on('SendSensorUpdates',
-        function (sensors) {
+        function(sensors) {
             if (sensors == undefined) return;
 
             //update tree
@@ -137,18 +137,11 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function (treeData) {
+            }).done(function(treeData) {
                 //var node = $('#jstree').jstree().get_selected(true)[0];
                 treeData = treeData.replace('{"value":"', '');
                 treeData = treeData.slice(0, treeData.length - 2);
                 treeData = treeData.replaceAll("\\", "");
-                $('#jstree').jstree(true).settings.core.data = treeData;
-                $('#jstree').jstree(true).refresh(true);
-
-                treeData = treeData.replace('{"value":"', '');
-                treeData = treeData.slice(0, treeData.length - 2);
-                treeData = treeData.replaceAll("\\", "");
-
                 $('#jstree').jstree(true).settings.core.data = treeData;
                 $('#jstree').jstree(true).refresh(true);
 
@@ -167,11 +160,11 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function (listsData) {
+            }).done(function(listsData) {
                 //removing invisible lists
                 $('[id^="list_"][style*="display: none;"]').each(function(index) {
                     this.remove();
-                });    
+                });
                 let parsedData = JSON.parse(listsData);
                 $('#listContainer').append(parsedData.value);
                 initializeDataHistoryRequests();
@@ -179,7 +172,7 @@
             });
 
             if (listId != "" && listId != undefined)
-                //update selected list
+            //update selected list
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -188,35 +181,22 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function (listsData) {
+                }).done(function(listsData) {
                     var array = JSON.parse(listsData);
                     for (let i = 0; i < array.length; i++) {
-                        var id = array[i].id.substring('sensor_'.length);
-                        $('#value_' + id).empty().append(array[i].value);
-                        $('#update_' + id).empty().append('updated ' + array[i].updateTime);
-                        $('#status_' + id).removeClass('tree-icon-unknown ' +
-                            'tree-icon-ok ' +
-                            'tree-icon-warning ' +
-                            'tree-icon-error ' +
-                            'tree-icon-unknown');
-                        $('#status_' + id).addClass(array[i].status);
-                        initializeDataHistoryRequests();
-                        initializeInfoLinks();
-
+                        let id = array[i].id.substring('sensor_'.length);
+                        updateSelectedSensor(array[i], id);
                         let selectedRadio = $('input[id$=' + id + ']:checked');
                         if (selectedRadio !== undefined) {
                             selectedRadio.click();
                         }
-                        //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                        //let selectedRadio = $('input[type="radio"]:checked');
-                        //if (selectedRadio !== undefined) {
-                        //    selectedRadio.click();
-                        //}
                     }
+                    initializeDataHistoryRequests();
+                    initializeInfoLinks();
                 });
 
             if (listId != "" && listId != undefined)
-                //add new sensors
+            //add new sensors
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -225,7 +205,7 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function (sensorsData) {
+                }).done(function(sensorsData) {
                     sensorsData = sensorsData.replace('{"value":"', '');
                     sensorsData = sensorsData.slice(0, sensorsData.length - 2);
                     sensorsData = sensorsData.replaceAll("\\", "");
@@ -244,7 +224,7 @@
                 });
 
             if (listId != "" && listId != undefined)
-                //remove sensors
+            //remove sensors
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -253,7 +233,7 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function (idsData) {
+                }).done(function(idsData) {
                     var array = JSON.parse(idsData);
 
                     if (array != undefined && array.length > 0)
@@ -286,7 +266,7 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (treeData) {
+        }).done(function(treeData) {
             //var node = $('#jstree').jstree().get_selected(true)[0];
 
             treeData = treeData.replace('{"value":"', '');
@@ -310,9 +290,9 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function (listsData) {
+        }).done(function(listsData) {
             //removing invisible lists
-            $('[id^="list_"][style*="display: none;"]').each(function (index) {
+            $('[id^="list_"][style*="display: none;"]').each(function(index) {
                 this.remove();
             });
 
@@ -335,34 +315,18 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function (listsData) {
+            }).done(function(listsData) {
                 var array = JSON.parse(listsData);
                 for (let i = 0; i < array.length; i++) {
-                    var id = array[i].id.substring('sensor_'.length);
-
-                    $('#value_' + id).empty().append(array[i].value);
-                    $('#update_' + id).empty().append('updated ' + array[i].updateTime);
-                    $('#status_' + id).removeClass('tree-icon-unknown ' +
-                        'tree-icon-ok ' +
-                        'tree-icon-warning ' +
-                        'tree-icon-error ' +
-                        'tree-icon-unknown');
-                    $('#status_' + id).addClass(array[i].status);
-
-                    initializeDataHistoryRequests();
-                    initializeInfoLinks();
-
+                    let id = array[i].id.substring('sensor_'.length);
+                    updateSelectedSensor(array[i], id);
                     let selectedRadio = $('input[id$=' + id + ']:checked');
                     if (selectedRadio !== undefined) {
                         selectedRadio.click();
                     }
-                    //var selectedAccordion = $('button[id^="' + id + '"][class*=accordion-button][aria-expanded=true]');
-                    //$('#reload_' + selectedAccordion.attr('id')).click();
-                    //let selectedRadio = $('input[type="radio"]:checked');
-                    //if (selectedRadio !== undefined) {
-                    //    selectedRadio.click();
-                    //}
                 }
+                initializeDataHistoryRequests();
+                initializeInfoLinks();
             });
 
         $('#updateTime').empty();
@@ -412,5 +376,29 @@
             }
         }
         return selectedListId;
-    }        
+    }
+
+    function updateSelectedSensor(dataObject, id) {
+        $('#value_' + id).empty().append(dataObject.value);
+        $('#update_' + id).empty().append('updated ' + dataObject.updateTime);
+        $('#status_' + id).removeClass('tree-icon-unknown ' +
+            'tree-icon-ok ' +
+            'tree-icon-warning ' +
+            'tree-icon-error ' +
+            'tree-icon-unknown');
+        $('#status_' + id).addClass(dataObject.status);
+        clearValidationError(id);
+        if (dataObject.ValidationError != null || dataObject.validationError) {
+            updateValidationError(id, dataObject.validationError);
+        }
+    }
+
+    function clearValidationError(id) {
+        $('#validation_' + id).empty();
+    }
+
+    function updateValidationError(id, error) {
+        $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'"+
+            " title=' " + error + "'></li>");
+    }
 </script>

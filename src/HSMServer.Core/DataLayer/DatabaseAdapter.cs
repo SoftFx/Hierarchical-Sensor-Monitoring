@@ -300,7 +300,8 @@ namespace HSMServer.Core.DataLayer
             result.SensorName = info.SensorName;
             result.SensorType = (int)info.SensorType;
             result.Unit = info.Unit;
-            result.ExpectedUpdateInterval = info.ExpectedUpdateInterval;
+            //result.ExpectedUpdateInterval = info.ExpectedUpdateInterval;
+            result.ExpectedUpdateIntervalTicks = info.ExpectedUpdateInterval.Ticks;
             if (info.ValidationParameters != null && info.ValidationParameters.Any())
             {
                 result.ValidationParameters = new List<ValidationParameterEntity>();

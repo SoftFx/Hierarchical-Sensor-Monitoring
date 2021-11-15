@@ -25,28 +25,31 @@ function Data(to, from, type, path) {
         InitializePeriodRequests();
         initializeTabLinksRequests();
 
-        $('[id^="button_view"]').on("click", viewFile);
+        $('[id^="button_view_"]').on("click", viewFile);
 
-        $('[id^="button_download"]').on("click", downloadFile);
+        $('[id^="button_download_"]').on("click", downloadFile);
     }
 
     function downloadFile() {
-        let id = this.id.substring("button_download_".length, this.id.length);
-
-        window.location.href = getFileAction + "?Selected=" + id;
+        let path = this.id.substring("button_download_".length);
+        
+        window.location.href = getFileAction + "?Selected=" + path;
     }
 
     function viewFile() {
-        let id = this.id.substring("button_view_".length, this.id.length);
-        let fileType = document.getElementById('fileType_' + id).value;
+        let path = this.id.substring("button_view_".length);
+        let fileType = document.getElementById('fileType_' + path).value;
 
-        viewFile(id, fileType, viewFileAction);
+        openFileInBrowser(path, fileType, viewFileAction);
     }
 
     function accordionClicked() {
         let path = this.id.substring("collapse_".length);
         let type = getTypeForSensor(path);
         let from = new Date();
+        if (isFileSensor(type)) {
+            return;
+        }
         if (isGraphAvailable(type)) {
             initializeGraph(path, rawHistoryLatestAction, type, Data(from, from, type, path), true);
         } else {
@@ -288,6 +291,10 @@ function deleteSensor() {
         }
 
         $('#radio_all_' + path).prop("checked", true);
+    }
+
+    function isFileSensor(type) {
+        return type === "6" || type === "7";
     }
 
     function isGraphAvailable(type) {

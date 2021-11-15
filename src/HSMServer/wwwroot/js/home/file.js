@@ -21,7 +21,7 @@ function getExtensionFromName(fileName) {
     return fileName.substring(dotIndex + 1, fileName.length);
 }
 
-function viewFile(path, fileName, viewFileAction) {
+function openFileInBrowser(path, fileName, viewFileAction) {
     let fileType = getMimeType(fileName);
     //var xhr = new XMLHttpRequest();
     //xhr.open('POST', viewFileAction, true);

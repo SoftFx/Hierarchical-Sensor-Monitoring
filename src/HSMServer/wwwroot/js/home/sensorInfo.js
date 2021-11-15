@@ -46,6 +46,7 @@ function editInfoButtonClick() {
     let path = this.id.substring("editInfo_".length);
     $('#interval_' + path).removeAttr("disabled");
     $('#description_' + path).removeAttr("disabled");
+    $('#unit_' + path).removeAttr("disabled");
     $('#saveInfo_' + path).removeAttr("disabled");
     $('#revertInfo_' + path).removeAttr("disabled");
 }
@@ -59,7 +60,8 @@ function saveInfoClick() {
     let path = this.id.substring('saveInfo_'.length);
     let description = getDescription(path);
     let interval = getInterval(path);
-    let body = Info(description, interval, path);
+    let unit = getUnit(path);
+    let body = Info(description, interval, path, unit);
     saveSensorInfo(body);
 }
 
@@ -77,8 +79,8 @@ function saveSensorInfo(body) {
     });
 }
 
-function Info(description, updatePeriod, encodedPath) {
-    return { "Description": description, "ExpectedUpdateInterval": updatePeriod, "EncodedPath": encodedPath };
+function Info(description, updatePeriod, encodedPath, unit) {
+    return { "Description": description, "ExpectedUpdateInterval": updatePeriod, "EncodedPath": encodedPath , "Unit": unit };
 }
 
 function getDescription(path) {
@@ -87,6 +89,10 @@ function getDescription(path) {
 
 function getInterval(path) {
     return $('#interval_' + path).val();
+}
+
+function getUnit(path) {
+    return $('#unit_' + path).val();
 }
 
 function reloadInfo(path) {
