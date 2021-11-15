@@ -8,6 +8,7 @@ namespace HSMServer.Model.ViewModel
 {
     public class NodeViewModel
     {
+        private readonly object _lockObj = new object();
         public IComparer<NodeViewModel> NodeComparer { get; set; }
         public IComparer<SensorViewModel> SensorComparer { get; set; }
         public int Count { get; set; }
@@ -183,20 +184,23 @@ namespace HSMServer.Model.ViewModel
 
         public void Recursion()
         {
-            int count = 0;
-            if (Nodes != null && Nodes.Count > 0)
+            lock (_lockObj)
             {
-                foreach (var node in Nodes)
+                int count = 0;
+                if (Nodes != null && Nodes.Count > 0)
                 {
-                    node.Recursion();
-                    count += node.Count;
+                    foreach (var node in Nodes)
+                    {
+                        node.Recursion();
+                        count += node.Count;
+                    }
                 }
-            }
 
-            Count = count + (Sensors?.Count ?? 0);
-            //if (Sensors != null && Sensors.Count > 0)
-            ModifyUpdateTime();
-            ModifyStatus();
+                Count = count + (Sensors?.Count ?? 0);
+                //if (Sensors != null && Sensors.Count > 0)
+                ModifyUpdateTime();
+                ModifyStatus();
+            }
         }
 
         public void ModifyUpdateTime()
