@@ -186,10 +186,7 @@
                     for (let i = 0; i < array.length; i++) {
                         let id = array[i].id.substring('sensor_'.length);
                         updateSelectedSensor(array[i], id);
-                        let selectedRadio = $('input[id$=' + id + ']:checked');
-                        if (selectedRadio !== undefined) {
-                            selectedRadio.click();
-                        }
+                        pickSelectedRadio(id);
                     }
                     initializeDataHistoryRequests();
                     initializeInfoLinks();
@@ -320,10 +317,7 @@
                 for (let i = 0; i < array.length; i++) {
                     let id = array[i].id.substring('sensor_'.length);
                     updateSelectedSensor(array[i], id);
-                    let selectedRadio = $('input[id$=' + id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
-                    }
+                    pickSelectedRadio(id);
                 }
                 initializeDataHistoryRequests();
                 initializeInfoLinks();
@@ -398,7 +392,23 @@
     }
 
     function updateValidationError(id, error) {
-        $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'"+
-            " title=' " + error + "'></li>");
+        $('#validation_' + id).append("<li id='errorIcon_ " +
+            id +
+            "' class='fas fa-exclamation-triangle' style='margin-right:5px'" +
+            " title=' " +
+            error +
+            "'></li>");
+    }
+
+    function pickSelectedRadio(id) {
+        let parentAccordion = $('#sensorData_' + id);
+        //Check whether parent accordion is opened, exit otherwise
+        if (parentAccordion.css('display') == 'none') {
+            return;
+        }
+        let selectedRadio = $('input[id$=' + id + ']:checked');
+        if (selectedRadio !== undefined) {
+            selectedRadio.click();
+        }
     }
 </script>
