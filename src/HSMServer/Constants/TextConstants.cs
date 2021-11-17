@@ -1,6 +1,6 @@
 ﻿namespace HSMServer.Constants
 {
-    public class TextConstants
+    public static class TextConstants
     {
         public const string TempDataErrorText = "ErrorMessage";
         public const string TempDataUserErrorText = "UserErrorMessage";

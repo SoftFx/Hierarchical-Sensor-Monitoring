@@ -1,6 +1,6 @@
 ﻿namespace HSMServer.Constants
 {
-    public class ViewConstants
+    public static class ViewConstants
     {
         //ToDo: get from configuration
         public const string ApiServer = "https://localhost:44330";
@@ -65,6 +65,7 @@
 
         public const string ExportHistoryAction = "ExportHistory";
         public const string ExportHistoryAllAction = "ExportHistoryAll";
+
         #endregion
     }
 }
