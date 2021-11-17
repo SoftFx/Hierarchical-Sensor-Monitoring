@@ -52,14 +52,8 @@ namespace HSMServer.Core.DataLayer
             return entity != null ? new Product(entity) : null;
         }
 
-        public List<Product> GetProducts()
-        {
-            var productEntities = _database.GetAllProducts();
-            if ((productEntities?.Count ?? 0) == 0)
-                return new List<Product>();
-
-            return productEntities.Select(e => new Product(e)).ToList();
-        }
+        public List<Product> GetProducts() =>
+            _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
 
         #endregion
 

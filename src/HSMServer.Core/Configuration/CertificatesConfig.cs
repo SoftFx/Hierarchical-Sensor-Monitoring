@@ -240,7 +240,7 @@ namespace HSMServer.Core.Configuration
             certificateAttr.Value = CommonConstants.DefaultServerPfxCertificateName;
             configElement.Attributes.Append(certificateAttr);
 
-            StringBuilder sb = new StringBuilder(2 << 10);
+            StringBuilder sb = new StringBuilder(1 << 10);
             using (StringWriter sw = new StringWriter(sb))
             {
                 document.Save(sw);
