@@ -1,0 +1,87 @@
+name: Dockerhub image build and publish
+
+on:  
+  push:
+    tags:
+      - server-v[0-9]+.[0-9]+.[0-9]+
+      
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version-tag: ${{ steps.get-tag.outputs.parsedTag }}
+    steps:      
+      - name: set raw tag
+        run: echo "RAW_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV       
+        
+      - name: split-by
+        id: split
+        uses: rishabhgupta/split-by@v1.0.1        
+        with:
+          string: '${{ env.RAW_TAG }}'
+          split-by: 'v'
+          
+      - name: print tag
+        run: echo ${{ steps.split.outputs._2 }}
+        
+      - id: get-tag
+        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._2 }}"      
+
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2          
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    
+    - name: Install dependencies
+      run: dotnet restore src/HSMServer/HSMServer.sln
+      
+    - name: Build
+      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
+      
+    - name: Test
+      run: dotnet test --no-restore --verbosity normal src/HSMServer/HSMServer.sln
+      
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        path: ${{ github.workspace }}\Release
+        name: Release            
+  
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build, version]
+    environment: DockerHub
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set env
+        run: echo "RELEASE_VERSION=${{ needs.version.outputs.version-tag }}" >> $GITHUB_ENV
+          
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with: 
+          name: Release
+          path: ${{ github.workspace }}/Release
+          
+      - name: Add product version file
+        uses: DamianReeves/write-file-action@master
+        with: 
+           path: ${{ github.workspace }}/Release/version.txt
+           contents: "${{ env.RELEASE_VERSION }}"
+           write-mode: overwrite    
+       
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: ${{ github.workspace }}/Release
+        
+      - name: Push to Docker Hub
+        uses: elgohr/Publish-Docker-Github-Action@master              
+        with:
+          name: hsmonitoring/hierarchical_sensor_monitoring
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}      
+          tags: "${{ env.RELEASE_VERSION }}"  
