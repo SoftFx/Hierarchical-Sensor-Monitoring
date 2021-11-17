@@ -246,9 +246,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemoveSensor(string productName, string path)
         {
-            //TODO: write this method
-            _environmentDatabase.RemoveSensor(productName, path);
-            _environmentDatabase.RemoveSensorFromList(productName, path);
+            //TAM-90: Do not delete metadata when delete sensors
+            //_environmentDatabase.RemoveSensor(productName, path);
+            //_environmentDatabase.RemoveSensorFromList(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
