@@ -1,47 +1,40 @@
-﻿using HSMCommon;
-using HSMCommon.Certificates;
-using HSMCommon.Constants;
-using HSMCommon.Model;
-using HSMDatabase.DatabaseInterface;
-using HSMDatabase.DatabaseWorkCore;
-using HSMServer.Core.DataLayer;
-using NLog;
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
+using HSMCommon;
+using HSMCommon.Certificates;
+using HSMCommon.Constants;
+using HSMServer.Core.DataLayer;
+using NLog;
 
 namespace HSMServer.Core.Configuration
 {
     public static class CertificatesConfig
     {
-        #region Sync objects
+        private const string CaCertificateFileName = "ca.crt";
+        private const string CaKeyFileName = "ca.key.pem";
+        private const string ConfigFolderName = "Config";
+        private const string CertificatesFolderName = "Certificates";
+        private const string CAFolderName = "CA";
 
-        private static object _certificateSync = new object();
+        private static readonly string _configFileName = "config.xml";
 
-        #endregion
-
-        #region Private fields
-
-        private static ClientVersionModel _lastAvailableClientVersion;
-        private static bool _isFirstLaunch = false;
         private static Logger _logger;
-        private static string _configFolderPath;
+        private static bool _isFirstLaunch = false;
+
         private static string _configFilePath;
         private static string _serverCertName;
         private static string _caFolderPath;
-        private static string _certificatesFolderPath;
         private static string _serverCertificatePath;
-        private static string _caKeyFilePath;
-        private static string _configFileName = "config.xml";
-        private const string _caCertificateFileName = "ca.crt";
-        private const string _caKeyFileName = "ca.key.pem";
-        private const string _configFolderName = "Config";
-        private const string _certificatesFolderName = "Certificates";
-        private const string _CAFolderName = "CA";
+
+        private static X509Certificate2 _serverCertificate;
+        private static X509Certificate2 _caCertificate;
+        private static IDatabaseAdapter _databaseAdapter;
+
         private static string ServerCertName
         {
             get
@@ -60,22 +53,20 @@ namespace HSMServer.Core.Configuration
             }
         }
 
-        private static string CACertificatePath => Path.Combine(_caFolderPath, _caCertificateFileName);
-        private static X509Certificate2 _serverCertificate;
-        private static X509Certificate2 _caCertificate;
-        private static X509Certificate2 _caCertificateWithKey;
-        private static IDatabaseAdapter _databaseAdapter;
-        #endregion
+        private static string CACertificatePath =>
+            Path.Combine(_caFolderPath, CaCertificateFileName);
 
-        #region Public fields
-        public static X509Certificate2 ServerCertificate => _serverCertificate ??= ReadServerCertificate();
+        public static X509Certificate2 ServerCertificate =>
+            _serverCertificate ??= ReadServerCertificate();
 
-        public static X509Certificate2 CACertificate => _caCertificate ??= ReadCACertificate();
-        public static string CAKeyFilePath => _caKeyFilePath;
-        public static string CertificatesFolderPath => _certificatesFolderPath;
-        public static string ConfigFolderPath => _configFolderPath;
+        public static X509Certificate2 CACertificate =>
+            _caCertificate ??= ReadCACertificate();
 
-        #endregion
+        public static string CAKeyFilePath { get; private set; }
+
+        public static string CertificatesFolderPath { get; private set; }
+
+        public static string ConfigFolderPath { get; private set; }
 
 
         public static void InitializeConfig()
@@ -85,18 +76,21 @@ namespace HSMServer.Core.Configuration
 
             InitializeIndependentConstants();
 
-            if (!Directory.Exists(_configFolderPath))
+            if (!Directory.Exists(ConfigFolderPath))
             {
-                FileManager.SafeCreateDirectory(_configFolderPath);
+                FileManager.SafeCreateDirectory(ConfigFolderPath);
             }
 
             if (!File.Exists(_configFilePath))
             {
                 _isFirstLaunch = true;
+
                 CreateDefaultConfig();
+
                 _serverCertificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                     CommonConstants.DefaultCertificatesFolderName,
                     CommonConstants.DefaultServerPfxCertificateName);
+
                 string defaultCAPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                     CommonConstants.DefaultCertificatesFolderName,
                     CommonConstants.DefaultCACrtCertificateName);
@@ -116,9 +110,11 @@ namespace HSMServer.Core.Configuration
 
             if (_isFirstLaunch)
             {
-                FileManager.SafeCopy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.DefaultCertificatesFolderName,
-                    CommonConstants.DefaultClientCrtCertificateName), Path.Combine(_certificatesFolderPath,
-                    CommonConstants.DefaultClientCrtCertificateName));
+                FileManager.SafeCopy(
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                                 CommonConstants.DefaultCertificatesFolderName,
+                                 CommonConstants.DefaultClientCrtCertificateName),
+                    Path.Combine(CertificatesFolderPath, CommonConstants.DefaultClientCrtCertificateName));
 
                 _logger.Info("Added default client certificate to certificates folder");
             }
@@ -126,42 +122,38 @@ namespace HSMServer.Core.Configuration
 
         private static void InitializeIndependentConstants()
         {
-            _configFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _configFolderName);
-            _configFilePath = Path.Combine(_configFolderPath, _configFileName);
-            _certificatesFolderPath = Path.Combine(_configFolderPath, _certificatesFolderName);
-            _caFolderPath = Path.Combine(_certificatesFolderPath, _CAFolderName);
-            _caKeyFilePath = Path.Combine(_caFolderPath, _caKeyFileName);
+            ConfigFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolderName);
+            _configFilePath = Path.Combine(ConfigFolderPath, _configFileName);
+            CertificatesFolderPath = Path.Combine(ConfigFolderPath, CertificatesFolderName);
+            _caFolderPath = Path.Combine(CertificatesFolderPath, CAFolderName);
+            CAKeyFilePath = Path.Combine(_caFolderPath, CaKeyFileName);
         }
 
-        private static void InitializeDependentConstants()
-        {
-            if (_isFirstLaunch)
-            {
-                _serverCertificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                    CommonConstants.DefaultCertificatesFolderName,
-                    CommonConstants.DefaultServerPfxCertificateName);
-            }
-            else
-            {
-                _serverCertificatePath = Path.Combine(_certificatesFolderPath, ServerCertName);
-            }
-        }
+        private static void InitializeDependentConstants() =>
+            _serverCertificatePath = _isFirstLaunch
+                ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                               CommonConstants.DefaultCertificatesFolderName,
+                               CommonConstants.DefaultServerPfxCertificateName)
+                : Path.Combine(CertificatesFolderPath, ServerCertName);
 
         private static void CreateDefaultConfig()
         {
             string defaultConfigContent = GetDefaultConfig();
             FileManager.SafeWriteToNewFile(_configFilePath, defaultConfigContent);
-
         }
+
         private static void CreateCertificateAuthority()
         {
-            CertificateData data = new CertificateData();
-            data.CommonName = "HSM CA";
-            data.CountryName = RegionInfo.CurrentRegion.TwoLetterISORegionName;
-            data.OrganizationName = "HSM";
+            CertificateData data = new CertificateData
+            {
+                CommonName = "HSM CA",
+                CountryName = RegionInfo.CurrentRegion.TwoLetterISORegionName,
+                OrganizationName = "HSM"
+            };
+
             X509Certificate2 caCertificate = CertificatesProcessor.CreateSelfSignedCertificate(data);
-            CertificatesProcessor.ExportCrt(caCertificate, Path.Combine(_caFolderPath, _caCertificateFileName));
-            CertificatesProcessor.ExportPEMPrivateKey(caCertificate, _caKeyFilePath);
+            CertificatesProcessor.ExportCrt(caCertificate, Path.Combine(_caFolderPath, CaCertificateFileName));
+            CertificatesProcessor.ExportPEMPrivateKey(caCertificate, CAKeyFilePath);
             CertificatesProcessor.AddCertificateToTrustedRootCA(caCertificate);
 
             _logger.Info("CA created");
@@ -169,41 +161,37 @@ namespace HSMServer.Core.Configuration
 
         private static X509Certificate2 ReadServerCertificate()
         {
-            //return CertificateReader.ReadCertificateFromPEMCertAndKey(ServerCertPath, ServerKeyPath);
             if (!_isFirstLaunch)
             {
-                //var pwdParam = _databaseAdapter.GetConfigurationObjectOld(ConfigurationConstants.ServerCertificatePassword);
                 var pwdParam =
                     _databaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
-                if (pwdParam != null)
-                {
-                    return new X509Certificate2(_serverCertificatePath,pwdParam.Value);
-                }
-                return new X509Certificate2(_serverCertificatePath);
+
+                return pwdParam != null
+                    ? new X509Certificate2(_serverCertificatePath, pwdParam.Value)
+                    : new X509Certificate2(_serverCertificatePath);
             }
 
             string certOriginalPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 CommonConstants.DefaultCertificatesFolderName, CommonConstants.DefaultServerPfxCertificateName);
-
             X509Certificate2 serverCert = new X509Certificate2(certOriginalPath);
+
             try
             {
-                Task.Run(() => FileManager.SafeCopy(certOriginalPath, Path.Combine(_certificatesFolderPath,
-                    CommonConstants.DefaultServerPfxCertificateName)));
+                Task.Run(() => FileManager.SafeCopy(certOriginalPath,
+                    Path.Combine(CertificatesFolderPath, CommonConstants.DefaultServerPfxCertificateName)));
+
                 CertificatesProcessor.InstallCertificate(serverCert);
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to copy default server certificate");                
+                _logger.Error(e, "Failed to copy default server certificate");
             }
-            
+
             return serverCert;
         }
 
-        private static X509Certificate2 ReadCACertificate()
-        {
-            return CertificatesProcessor.ReadCertificate(CACertificatePath, CAKeyFilePath);
-        }
+        private static X509Certificate2 ReadCACertificate() =>
+            CertificatesProcessor.ReadCertificate(CACertificatePath, CAKeyFilePath);
 
         private static void ReadConfig()
         {
@@ -234,41 +222,9 @@ namespace HSMServer.Core.Configuration
         private static void ParseServerConfigurationNode(XmlNode serverConfigNode)
         {
             var certAttr = serverConfigNode.Attributes?["certificate"];
+
             if (certAttr != null)
-            {
                 _serverCertName = certAttr.Value;
-            }
-
-            //XmlNode endpointsConfigNode = serverConfigNode.SelectSingleNode("endpointsConfiguration");
-
-            //var gRPCPortAttr = endpointsConfigNode?.Attributes?["gRPCPort"];
-            //if (gRPCPortAttr != null)
-            //{
-            //    _gRPCPort = int.Parse(gRPCPortAttr.Value);
-            //}
-
-            //var sensorsPortAttr = endpointsConfigNode?.Attributes?["sensorsPort"];
-            //if (sensorsPortAttr != null)
-            //{
-            //    _sensorsPort = int.Parse(sensorsPortAttr.Value);
-            //}
-        }
-
-        private static string ConfigToXml()
-        {
-            XmlDocument document = new XmlDocument();
-            XmlElement rootElement = document.CreateElement("machines");
-            document.AppendChild(rootElement);
-
-            StringBuilder sb = new StringBuilder();
-            using (StringWriter sw = new StringWriter(sb))
-            {
-                document.Save(sw);
-            }
-
-            sb.Replace("encoding=\"utf-16\"", string.Empty);
-
-            return sb.ToString();
         }
 
         private static string GetDefaultConfig()
@@ -284,7 +240,7 @@ namespace HSMServer.Core.Configuration
             certificateAttr.Value = CommonConstants.DefaultServerPfxCertificateName;
             configElement.Attributes.Append(certificateAttr);
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder(2 << 10);
             using (StringWriter sw = new StringWriter(sb))
             {
                 document.Save(sw);
@@ -293,33 +249,6 @@ namespace HSMServer.Core.Configuration
             sb.Replace("encoding=\"utf-16\"", string.Empty);
 
             return sb.ToString();
-        }
-
-        public static void InstallCertificate(X509Certificate2 certificate)
-        {
-            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            try
-            {
-                
-                store.Open(OpenFlags.ReadWrite);
-                store.Add(certificate);
-                store.Close();
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to install certificate with thumbprint = {certificate.Thumbprint}");
-            }
-            finally
-            {
-                store.Close();
-            }
-            
-        }
-
-        public static void Dispose()
-        {
-            //SaveConfigFile();
-            _logger = null;
         }
     }
 }
