@@ -1,4 +1,4 @@
-﻿using HSMDatabase.DatabaseInterface;
+﻿using HSMDatabase.DatabaseInterfaces;
 using HSMDatabase.Entity;
 using HSMDatabase.EnvironmentDatabase;
 using HSMDatabase.SensorsDatabase;
@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public class DatabaseCore : IDatabaseCore
+    public sealed class DatabaseCore : IDatabaseCore
     {
         #region Singleton
 

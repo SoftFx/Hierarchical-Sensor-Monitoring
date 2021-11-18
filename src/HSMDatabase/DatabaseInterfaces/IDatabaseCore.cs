@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using HSMDatabase.Entity;
 
-namespace HSMDatabase.DatabaseInterface
+namespace HSMDatabase.DatabaseInterfaces
 {
     public interface IDatabaseCore
     {
@@ -11,6 +11,7 @@ namespace HSMDatabase.DatabaseInterface
         /// </summary>
         /// <returns>Databases folder size in bytes, including environment and all monitoring databases</returns>
         long GetDatabaseSize();
+
         /// <summary>
         /// Get the size of all monitoring data
         /// </summary>
@@ -22,7 +23,9 @@ namespace HSMDatabase.DatabaseInterface
         /// </summary>
         /// <returns>Size of environment database in bytes</returns>
         long GetEnvironmentDatabaseSize();
+
         #region Sensors
+
         List<SensorDataEntity> GetAllSensorData(string productName, string path);
         List<SensorDataEntity> GetSensorData(string productName, string path, int n);
         List<SensorDataEntity> GetSensorData(string productName, string path, DateTime from);
@@ -34,14 +37,17 @@ namespace HSMDatabase.DatabaseInterface
         SensorEntity GetSensorInfo(string productName, string path);
         List<SensorEntity> GetProductSensors(string productName);
         long GetSensorSize(string productName, string path);
+
         #endregion
 
         #region Products
+
         void RemoveProduct(string productName);
         void UpdateProduct(ProductEntity productEntity);
         void AddProduct(ProductEntity productEntity);
         ProductEntity GetProduct(string productName);
         List<ProductEntity> GetAllProducts();
+
         #endregion
 
         #region User
