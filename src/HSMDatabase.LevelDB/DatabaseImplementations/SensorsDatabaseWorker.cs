@@ -95,11 +95,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return GetValuesWithKeyEqualOrGreater(bytesKey, path);
         }
 
-        //public List<ISensorDataEntity> GetSensorValues(string productName, string path, int count)
-        //{
-        //    throw new NotImplementedException();
-        //}
-
         public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
