@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.Entity
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class SensorEntity : ISensorEntity
+    public class SensorEntity
     {
         public string Path { get; set; }
         public string ProductName { get; set; }

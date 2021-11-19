@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.Entity;
 using NLog;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
@@ -47,7 +46,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return 0;
         }
 
-        public void PutSensorData(ISensorDataEntity sensorData, string productName)
+        public void PutSensorData(SensorDataEntity sensorData, string productName)
         {
             var writeKey = PrefixConstants.GetSensorWriteValueKey(productName, sensorData.Path, sensorData.TimeCollected);
             var bytesKey = Encoding.UTF8.GetBytes(writeKey);
@@ -77,7 +76,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public ISensorDataEntity GetLatestSensorValue(string productName, string path)
+        public SensorDataEntity GetLatestSensorValue(string productName, string path)
         {
             var readKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             var bytesKey = Encoding.UTF8.GetBytes(readKey);
@@ -89,7 +88,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return values.First(v => v.Path == path);
         }
 
-        public List<ISensorDataEntity> GetAllSensorValues(string productName, string path)
+        public List<SensorDataEntity> GetAllSensorValues(string productName, string path)
         {
             var readKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             var bytesKey = Encoding.UTF8.GetBytes(readKey);
@@ -101,13 +100,13 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         //    throw new NotImplementedException();
         //}
 
-        public List<ISensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
+        public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
             byte[] bytesKey = Encoding.UTF8.GetBytes(readKey);
             var startWithKey = PrefixConstants.GetSensorReadValueKey(productName, path);
             byte[] startWithBytes = Encoding.UTF8.GetBytes(startWithKey);
-            List<ISensorDataEntity> result = new List<ISensorDataEntity>();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
                 var values = _database.GetAllStartingWithAndSeek(startWithBytes, bytesKey);
@@ -133,7 +132,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public List<ISensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to)
+        public List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to)
         {
             string fromKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
             string toKey = PrefixConstants.GetSensorWriteValueKey(productName, path, to);
@@ -141,7 +140,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] fromBytes = Encoding.UTF8.GetBytes(fromKey);
             byte[] toBytes = Encoding.UTF8.GetBytes(toKey);
             byte[] startWithBytes = Encoding.UTF8.GetBytes(startWithKey);
-            List<ISensorDataEntity> result = new List<ISensorDataEntity>();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
                 var values = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
@@ -165,9 +164,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        private List<ISensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key, string path)
+        private List<SensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key, string path)
         {
-            List<ISensorDataEntity> result = new List<ISensorDataEntity>();
+            List<SensorDataEntity> result = new List<SensorDataEntity>();
             try
             {
                 var values = _database.GetAllStartingWith(key);

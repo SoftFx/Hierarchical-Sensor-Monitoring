@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;

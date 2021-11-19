@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.Entity
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class UserEntity : IUserEntity
+    public class UserEntity
     {
         public Guid Id { get; set; }
         public bool IsAdmin { get; set; }

@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.DatabaseInterface;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore

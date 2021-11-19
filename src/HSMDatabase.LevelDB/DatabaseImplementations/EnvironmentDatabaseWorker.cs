@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.Entity;
 using NLog;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
@@ -69,7 +68,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public IProductEntity GetProductInfo(string productName)
+        public ProductEntity GetProductInfo(string productName)
         {
             string key = PrefixConstants.GetProductInfoKey(productName);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -91,7 +90,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void PutProductInfo(IProductEntity product)
+        public void PutProductInfo(ProductEntity product)
         {
             string key = PrefixConstants.GetProductInfoKey(product.Name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -168,7 +167,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void AddSensor(ISensorEntity info)
+        public void AddSensor(SensorEntity info)
         {
             var key = PrefixConstants.GetSensorInfoKey(info.ProductName, info.Path);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -278,7 +277,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public ISensorEntity GetSensorInfo(string productName, string path)
+        public SensorEntity GetSensorInfo(string productName, string path)
         {
             string key = PrefixConstants.GetSensorInfoKey(productName, path);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -318,7 +317,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region User
 
-        public void AddUser(IUserEntity user)
+        public void AddUser(UserEntity user)
         {
             var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
             var keyBytes = Encoding.UTF8.GetBytes(userKey);
@@ -334,11 +333,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<IUserEntity> ReadUsers()
+        public List<UserEntity> ReadUsers()
         {
             var key = PrefixConstants.GetUsersReadKey();
             var keyBytes = Encoding.UTF8.GetBytes(key);
-            List<IUserEntity> users = new List<IUserEntity>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 List<byte[]> values = _database.GetAllStartingWith(keyBytes);
@@ -362,7 +361,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return users;
         }
 
-        public void RemoveUser(IUserEntity user)
+        public void RemoveUser(UserEntity user)
         {
             var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
             var keyBytes = Encoding.UTF8.GetBytes(userKey);
@@ -376,11 +375,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<IUserEntity> ReadUsersPage(int page, int pageSize)
+        public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
             var key = PrefixConstants.GetUsersReadKey();
             var keyBytes = Encoding.UTF8.GetBytes(key);
-            List<IUserEntity> users = new List<IUserEntity>();
+            List<UserEntity> users = new List<UserEntity>();
             try
             {
                 List<byte[]> values = _database.GetPageStartingWith(keyBytes, page, pageSize);
@@ -408,7 +407,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Configuration objects
 
-        public IConfigurationEntity ReadConfigurationObject(string name)
+        public ConfigurationEntity ReadConfigurationObject(string name)
         {
             var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -430,7 +429,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void WriteConfigurationObject(IConfigurationEntity obj)
+        public void WriteConfigurationObject(ConfigurationEntity obj)
         {
             var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -464,7 +463,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Registration ticket
 
-        public IRegisterTicketEntity ReadRegistrationTicket(Guid id)
+        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
             var key = PrefixConstants.GetRegistrationTicketKey(id);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -500,7 +499,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void WriteRegistrationTicket(IRegisterTicketEntity ticket)
+        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
         {
             var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);

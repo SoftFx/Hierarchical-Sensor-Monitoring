@@ -1,7 +1,7 @@
 ﻿using HSMCommon;
 using HSMCommon.Certificates;
 using HSMCommon.Model;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;

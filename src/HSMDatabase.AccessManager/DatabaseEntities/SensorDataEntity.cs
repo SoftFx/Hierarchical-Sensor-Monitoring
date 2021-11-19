@@ -1,9 +1,8 @@
 ﻿using System;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.Entity
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class SensorDataEntity : ISensorDataEntity
+    public class SensorDataEntity
     {
         public DateTime Time { get; set; }
         public long Timestamp { get; set; }

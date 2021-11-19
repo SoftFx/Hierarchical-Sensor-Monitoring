@@ -10,8 +10,8 @@ namespace HSMDatabase.AccessManager
 
         void AddProductToList(string productName);
         List<string> GetProductsList();
-        IProductEntity GetProductInfo(string productName);
-        void PutProductInfo(IProductEntity product);
+        ProductEntity GetProductInfo(string productName);
+        void PutProductInfo(ProductEntity product);
         void RemoveProductInfo(string productName);
         void RemoveProductFromList(string productName);
 
@@ -20,38 +20,38 @@ namespace HSMDatabase.AccessManager
         #region Sensors
 
         void RemoveSensor(string productName, string path);
-        void AddSensor(ISensorEntity info);
+        void AddSensor(SensorEntity info);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorsList(string productName);
         void RemoveSensorFromList(string productName, string path);
-        ISensorEntity GetSensorInfo(string productName, string path);
+        SensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
 
         #endregion
 
         #region Users
 
-        void AddUser(IUserEntity user);
-        List<IUserEntity> ReadUsers();
-        void RemoveUser(IUserEntity user);
-        List<IUserEntity> ReadUsersPage(int page, int pageSize);
+        void AddUser(UserEntity user);
+        List<UserEntity> ReadUsers();
+        void RemoveUser(UserEntity user);
+        List<UserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
 
         #region Configuration
 
-        IConfigurationEntity ReadConfigurationObject(string name);
-        void WriteConfigurationObject(IConfigurationEntity obj);
+        ConfigurationEntity ReadConfigurationObject(string name);
+        void WriteConfigurationObject(ConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
 
         #endregion
 
         #region Registration Ticket
 
-        IRegisterTicketEntity ReadRegistrationTicket(Guid id);
+        RegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(IRegisterTicketEntity ticket);
+        void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
 

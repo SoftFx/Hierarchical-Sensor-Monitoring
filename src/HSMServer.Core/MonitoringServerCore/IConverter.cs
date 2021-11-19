@@ -1,4 +1,4 @@
-﻿using HSMDatabase.Entity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;

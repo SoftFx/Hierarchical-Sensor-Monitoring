@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.DatabaseInterface
 {

@@ -11,11 +11,11 @@ namespace HSMDatabase.AccessManager
         DateTime DatabaseMaxDateTime { get; }
         DateTime DatabaseMinDateTime { get; }
         long GetSensorSize(string productName, string path);
-        void PutSensorData(ISensorDataEntity sensorData, string productName);
+        void PutSensorData(SensorDataEntity sensorData, string productName);
         void DeleteAllSensorValues(string productName, string path);
-        ISensorDataEntity GetLatestSensorValue(string productName, string path);
-        List<ISensorDataEntity> GetAllSensorValues(string productName, string path);
-        List<ISensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
-        List<ISensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
+        SensorDataEntity GetLatestSensorValue(string productName, string path);
+        List<SensorDataEntity> GetAllSensorValues(string productName, string path);
+        List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
+        List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
     }
 }
