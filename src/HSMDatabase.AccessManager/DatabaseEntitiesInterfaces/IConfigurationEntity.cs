@@ -1,6 +1,6 @@
-﻿namespace HSMDatabase.Entity
+﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class ConfigurationEntity
+    public interface IConfigurationEntity
     {
         public string Name { get; set; }
         public string Value { get; set; }

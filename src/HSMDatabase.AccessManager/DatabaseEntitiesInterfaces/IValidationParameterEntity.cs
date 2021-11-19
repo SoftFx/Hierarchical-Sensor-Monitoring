@@ -1,6 +1,6 @@
-﻿namespace HSMDatabase.Entity
+﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class ValidationParameterEntity
+    public interface IValidationParameterEntity
     {
         public int ParameterType { get; set; }
         public string ValidationValue { get; set; }

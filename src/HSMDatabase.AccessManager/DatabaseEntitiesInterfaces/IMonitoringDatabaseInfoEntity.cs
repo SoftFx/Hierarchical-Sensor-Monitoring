@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace HSMDatabase.Entity
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class MonitoringDatabaseInfoEntity
+    public interface IMonitoringDatabaseInfoEntity
     {
         public long Id { get; set; }
         public string FolderName { get; set; }

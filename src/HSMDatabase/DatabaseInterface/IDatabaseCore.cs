@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using HSMDatabase.Entity;
 
-namespace HSMDatabase.DatabaseInterfaces
+namespace HSMDatabase.DatabaseInterface
 {
     public interface IDatabaseCore
     {

@@ -1,13 +1,13 @@
-﻿using HSMDatabase.DatabaseWorkCore;
-using HSMDatabase.Entity;
-using HSMDatabase.LevelDB;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.Entity;
+using NLog;
 
-namespace HSMDatabase.EnvironmentDatabase
+namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
@@ -69,7 +69,7 @@ namespace HSMDatabase.EnvironmentDatabase
             return result;
         }
 
-        public ProductEntity GetProductInfo(string productName)
+        public IProductEntity GetProductInfo(string productName)
         {
             string key = PrefixConstants.GetProductInfoKey(productName);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -91,7 +91,7 @@ namespace HSMDatabase.EnvironmentDatabase
             return null;
         }
 
-        public void PutProductInfo(ProductEntity product)
+        public void PutProductInfo(IProductEntity product)
         {
             string key = PrefixConstants.GetProductInfoKey(product.Name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -168,7 +168,7 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-        public void AddSensor(SensorEntity info)
+        public void AddSensor(ISensorEntity info)
         {
             var key = PrefixConstants.GetSensorInfoKey(info.ProductName, info.Path);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -278,7 +278,7 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-        public SensorEntity GetSensorInfo(string productName, string path)
+        public ISensorEntity GetSensorInfo(string productName, string path)
         {
             string key = PrefixConstants.GetSensorInfoKey(productName, path);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -318,7 +318,7 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #region User
 
-        public void AddUser(UserEntity user)
+        public void AddUser(IUserEntity user)
         {
             var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
             var keyBytes = Encoding.UTF8.GetBytes(userKey);
@@ -334,11 +334,11 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-        public List<UserEntity> ReadUsers()
+        public List<IUserEntity> ReadUsers()
         {
             var key = PrefixConstants.GetUsersReadKey();
             var keyBytes = Encoding.UTF8.GetBytes(key);
-            List<UserEntity> users = new List<UserEntity>();
+            List<IUserEntity> users = new List<IUserEntity>();
             try
             {
                 List<byte[]> values = _database.GetAllStartingWith(keyBytes);
@@ -362,7 +362,7 @@ namespace HSMDatabase.EnvironmentDatabase
             return users;
         }
 
-        public void RemoveUser(UserEntity user)
+        public void RemoveUser(IUserEntity user)
         {
             var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
             var keyBytes = Encoding.UTF8.GetBytes(userKey);
@@ -376,11 +376,11 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-        public List<UserEntity> ReadUsersPage(int page, int pageSize)
+        public List<IUserEntity> ReadUsersPage(int page, int pageSize)
         {
             var key = PrefixConstants.GetUsersReadKey();
             var keyBytes = Encoding.UTF8.GetBytes(key);
-            List<UserEntity> users = new List<UserEntity>();
+            List<IUserEntity> users = new List<IUserEntity>();
             try
             {
                 List<byte[]> values = _database.GetPageStartingWith(keyBytes, page, pageSize);
@@ -408,7 +408,7 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #region Configuration objects
 
-        public ConfigurationEntity ReadConfigurationObject(string name)
+        public IConfigurationEntity ReadConfigurationObject(string name)
         {
             var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -430,7 +430,7 @@ namespace HSMDatabase.EnvironmentDatabase
             return null;
         }
 
-        public void WriteConfigurationObject(ConfigurationEntity obj)
+        public void WriteConfigurationObject(IConfigurationEntity obj)
         {
             var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -464,7 +464,7 @@ namespace HSMDatabase.EnvironmentDatabase
 
         #region Registration ticket
 
-        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
+        public IRegisterTicketEntity ReadRegistrationTicket(Guid id)
         {
             var key = PrefixConstants.GetRegistrationTicketKey(id);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -500,7 +500,7 @@ namespace HSMDatabase.EnvironmentDatabase
             }
         }
 
-        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
+        public void WriteRegistrationTicket(IRegisterTicketEntity ticket)
         {
             var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);

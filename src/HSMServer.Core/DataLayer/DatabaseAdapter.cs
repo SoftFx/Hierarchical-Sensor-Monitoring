@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMDatabase.DatabaseInterfaces;
+using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Entity;
 using HSMSensorDataObjects;

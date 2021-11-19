@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.EnvironmentDatabase
+namespace HSMDatabase.AccessManager
 {
-    internal interface IEnvironmentDatabase
+    public interface IEnvironmentDatabase
     {
         #region Products
 
         void AddProductToList(string productName);
         List<string> GetProductsList();
-        ProductEntity GetProductInfo(string productName);
-        void PutProductInfo(ProductEntity product);
+        IProductEntity GetProductInfo(string productName);
+        void PutProductInfo(IProductEntity product);
         void RemoveProductInfo(string productName);
         void RemoveProductFromList(string productName);
 
@@ -20,38 +20,38 @@ namespace HSMDatabase.EnvironmentDatabase
         #region Sensors
 
         void RemoveSensor(string productName, string path);
-        void AddSensor(SensorEntity info);
+        void AddSensor(ISensorEntity info);
         List<string> GetSensorsList(string productName);
         void AddNewSensorToList(string productName, string path);
         void RemoveSensorsList(string productName);
         void RemoveSensorFromList(string productName, string path);
-        SensorEntity GetSensorInfo(string productName, string path);
+        ISensorEntity GetSensorInfo(string productName, string path);
         void RemoveSensorValues(string productName, string path);
 
         #endregion
 
         #region Users
 
-        void AddUser(UserEntity user);
-        List<UserEntity> ReadUsers();
-        void RemoveUser(UserEntity user);
-        List<UserEntity> ReadUsersPage(int page, int pageSize);
+        void AddUser(IUserEntity user);
+        List<IUserEntity> ReadUsers();
+        void RemoveUser(IUserEntity user);
+        List<IUserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
 
         #region Configuration
 
-        ConfigurationEntity ReadConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationEntity obj);
+        IConfigurationEntity ReadConfigurationObject(string name);
+        void WriteConfigurationObject(IConfigurationEntity obj);
         void RemoveConfigurationObject(string name);
 
         #endregion
 
         #region Registration Ticket
 
-        RegisterTicketEntity ReadRegistrationTicket(Guid id);
+        IRegisterTicketEntity ReadRegistrationTicket(Guid id);
         void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegisterTicketEntity ticket);
+        void WriteRegistrationTicket(IRegisterTicketEntity ticket);
 
         #endregion
 

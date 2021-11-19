@@ -1,9 +1,9 @@
-﻿using HSMDatabase.EnvironmentDatabase;
-using HSMDatabase.SensorsDatabase;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -24,7 +24,7 @@ namespace HSMDatabase.DatabaseWorkCore
             ISensorsDatabase correspondingItem;
             lock (_accessLock)
             {
-                correspondingItem = _sensorsDatabases.FirstOrDefault(i => 
+                correspondingItem = _sensorsDatabases.FirstOrDefault(i =>
                     i.DatabaseMinTicks <= ticks && i.DatabaseMaxTicks >= ticks);
 
             }
@@ -53,7 +53,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 DateTime minDateTime = DateTimeMethods.GetMinDateTime(time);
                 DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(time);
                 string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
-                ISensorsDatabase newDatabase = new SensorsDatabaseWorker(
+                ISensorsDatabase newDatabase = LevelDBManager.GetSensorDatabaseInstance(
                     $"{DatabaseCore.DatabaseParentFolder}/{newDatabaseName}", minDateTime, maxDateTime);
                 _sensorsDatabases.Add(newDatabase);
                 Task.Run(() => _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName));
@@ -96,8 +96,10 @@ namespace HSMDatabase.DatabaseWorkCore
                     return 1;
 
                 long longResult = x.DatabaseMinTicks - y.DatabaseMinTicks;
-                if (longResult < 0) return -1;
-                if (longResult > 0) return 1;
+                if (longResult < 0)
+                    return -1;
+                if (longResult > 0)
+                    return 1;
                 return 0;
             }
         }

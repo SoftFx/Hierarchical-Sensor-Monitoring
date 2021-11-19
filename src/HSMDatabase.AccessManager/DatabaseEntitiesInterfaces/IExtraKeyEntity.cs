@@ -1,6 +1,6 @@
-﻿namespace HSMDatabase.Entity
+﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class ExtraKeyEntity
+    public interface IExtraKeyEntity
     {
         public string Name { get; set; }
         public string Key { get; set; }

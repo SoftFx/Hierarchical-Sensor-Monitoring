@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMDatabase.Entity;
 
-namespace HSMDatabase.Entity
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class ProductEntity
+    public interface IProductEntity
     {
         public string Key { get; set; }
         public string Name { get; set; }
