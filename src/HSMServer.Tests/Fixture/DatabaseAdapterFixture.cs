@@ -1,5 +1,5 @@
 ﻿using HSMCommon;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;

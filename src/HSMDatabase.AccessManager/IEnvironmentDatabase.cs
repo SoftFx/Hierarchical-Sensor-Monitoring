@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.EnvironmentDatabase
+namespace HSMDatabase.AccessManager
 {
-    internal interface IEnvironmentDatabase
+    public interface IEnvironmentDatabase
     {
         #region Products
 

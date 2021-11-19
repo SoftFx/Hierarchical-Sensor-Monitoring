@@ -1,14 +1,13 @@
-﻿using HSMDatabase.Entity;
-using HSMDatabase.LevelDB;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMDatabase.DatabaseWorkCore;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using NLog;
 
-namespace HSMDatabase.SensorsDatabase
+namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class SensorsDatabaseWorker : ISensorsDatabase
     {
@@ -96,11 +95,6 @@ namespace HSMDatabase.SensorsDatabase
             return GetValuesWithKeyEqualOrGreater(bytesKey, path);
         }
 
-        //public List<SensorDataEntity> GetSensorValues(string productName, string path, int count)
-        //{
-        //    throw new NotImplementedException();
-        //}
-
         public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
@@ -159,7 +153,7 @@ namespace HSMDatabase.SensorsDatabase
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             { }
 
             return result;

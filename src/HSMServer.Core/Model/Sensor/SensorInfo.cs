@@ -1,4 +1,4 @@
-﻿using HSMDatabase.Entity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using System;
 using System.Collections.Generic;

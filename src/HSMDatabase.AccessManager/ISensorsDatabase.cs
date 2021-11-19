@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMDatabase.SensorsDatabase
+namespace HSMDatabase.AccessManager
 {
-    internal interface ISensorsDatabase
+    public interface ISensorsDatabase
     {
         long DatabaseMinTicks { get; }
         long DatabaseMaxTicks { get; }
@@ -15,7 +15,6 @@ namespace HSMDatabase.SensorsDatabase
         void DeleteAllSensorValues(string productName, string path);
         SensorDataEntity GetLatestSensorValue(string productName, string path);
         List<SensorDataEntity> GetAllSensorValues(string productName, string path);
-        //List<SensorDataEntity> GetSensorValues(string productName, string path, int count);
         List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
     }

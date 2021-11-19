@@ -1,13 +1,12 @@
-﻿using HSMDatabase.DatabaseWorkCore;
-using HSMDatabase.Entity;
-using HSMDatabase.LevelDB;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using NLog;
 
-namespace HSMDatabase.EnvironmentDatabase
+namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {

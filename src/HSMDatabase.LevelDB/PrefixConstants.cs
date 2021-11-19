@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace HSMDatabase.DatabaseWorkCore
+namespace HSMDatabase.LevelDB
 {
-    public class PrefixConstants
+    internal class PrefixConstants
     {
         public const string JOB_SENSOR_PREFIX = "JobSensorValue";
         public const string SENSOR_KEY_PREFIX = "SensorKey";
@@ -72,3 +72,4 @@ namespace HSMDatabase.DatabaseWorkCore
         }
     }
 }
+

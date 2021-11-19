@@ -1,4 +1,4 @@
-﻿namespace HSMDatabase.Entity
+﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public class ValidationParameterEntity
     {
