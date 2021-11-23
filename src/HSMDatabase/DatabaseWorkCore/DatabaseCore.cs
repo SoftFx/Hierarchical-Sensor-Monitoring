@@ -13,10 +13,17 @@ namespace HSMDatabase.DatabaseWorkCore
     {
         #region Singleton
 
-        private static volatile DatabaseCore _instance;
         private static readonly object _singletonLockObj = new object();
-        public static IDatabaseCore GetInstance()
+        private static DatabaseCore _instance;
+
+        // TODO: Remove static dbsettings and singleton
+        private static IDatabaseSettings _dbSettings;
+
+        public static IDatabaseCore GetInstance(IDatabaseSettings dbSettings)
         {
+            if (_dbSettings == null)
+                _dbSettings = dbSettings;
+
             return Instance;
         }
 
@@ -30,7 +37,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     {
                         if (_instance == null)
                         {
-                            _instance = new DatabaseCore();
+                            _instance = new DatabaseCore(_dbSettings);
                         }
                     }
                 }
@@ -42,14 +49,18 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
-        internal const string DatabaseParentFolder = "Databases";
-        private const string EnvironmentDatabaseName = "EnvironmentData";
-        private DatabaseCore()
+        private readonly IDatabaseSettings _databaseSettings;
+
+
+        private DatabaseCore(IDatabaseSettings dbSettings)
         {
-            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(Path.Combine(DatabaseParentFolder, EnvironmentDatabaseName));
-            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase);
+            _databaseSettings = dbSettings;
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
+            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings);
+
             OpenAllExistingSensorDatabases();
         }
+
 
         private void OpenAllExistingSensorDatabases()
         {
@@ -59,7 +70,8 @@ namespace HSMDatabase.DatabaseWorkCore
                 GetDatesFromFolderName(databaseName, out DateTime from, out DateTime to);
                 if (from != DateTime.MinValue && to != DateTime.MinValue)
                 {
-                    ISensorsDatabase database = LevelDBManager.GetSensorDatabaseInstance(Path.Combine(DatabaseParentFolder, databaseName), from, to);
+                    ISensorsDatabase database = LevelDBManager.GetSensorDatabaseInstance(
+                        _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
             }
@@ -67,10 +79,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Database size
 
-
         public long GetDatabaseSize()
         {
-            DirectoryInfo databasesDir = new DirectoryInfo(DatabaseParentFolder);
+            DirectoryInfo databasesDir = new DirectoryInfo(_databaseSettings.DatabaseFolder);
             return GetDirectorySize(databasesDir);
         }
 
@@ -80,7 +91,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var databasesList = _environmentDatabase.GetMonitoringDatabases();
             foreach (var monitoringDB in databasesList)
             {
-                DirectoryInfo info = new DirectoryInfo(Path.Combine(DatabaseParentFolder, monitoringDB));
+                DirectoryInfo info = new DirectoryInfo(_databaseSettings.GetPathToMonitoringDatabase(monitoringDB));
                 size += GetDirectorySize(info);
             }
 
@@ -90,7 +101,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public long GetEnvironmentDatabaseSize()
         {
             DirectoryInfo environmentDatabaseDir =
-                new DirectoryInfo(Path.Combine(DatabaseParentFolder, EnvironmentDatabaseName));
+                new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
             return GetDirectorySize(environmentDatabaseDir);
         }
 

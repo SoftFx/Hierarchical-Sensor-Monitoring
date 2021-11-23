@@ -12,12 +12,17 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly object _accessLock = new object();
         private readonly SortedSet<ISensorsDatabase> _sensorsDatabases;
         private readonly IEnvironmentDatabase _environmentDatabase;
-        private const string DatabaseFolderName = "MonitoringData";
-        public TimeDatabaseDictionary(IEnvironmentDatabase environmentDatabase)
+        private readonly IDatabaseSettings _databaseSettings;
+
+
+        public TimeDatabaseDictionary(IEnvironmentDatabase environmentDatabase, IDatabaseSettings dbSettings)
         {
+            _databaseSettings = dbSettings;
             _environmentDatabase = environmentDatabase;
             _sensorsDatabases = new SortedSet<ISensorsDatabase>(new SensorDatabaseComparer());
         }
+
+
         public bool TryGetDatabase(DateTime time, out ISensorsDatabase database)
         {
             long ticks = time.Ticks;
@@ -54,7 +59,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(time);
                 string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
                 ISensorsDatabase newDatabase = LevelDBManager.GetSensorDatabaseInstance(
-                    $"{DatabaseCore.DatabaseParentFolder}/{newDatabaseName}", minDateTime, maxDateTime);
+                    _databaseSettings.GetPathToMonitoringDatabase(newDatabaseName), minDateTime, maxDateTime);
                 _sensorsDatabases.Add(newDatabase);
                 Task.Run(() => _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName));
                 return newDatabase;
@@ -80,7 +85,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string CreateSensorsDatabaseName(DateTime from, DateTime to)
         {
-            return $"{DatabaseFolderName}_{from.Ticks}_{to.Ticks}";
+            return $"{_databaseSettings.MonitoringDatabaseName}_{from.Ticks}_{to.Ticks}";
         }
         private class SensorDatabaseComparer : IComparer<ISensorsDatabase>
         {
