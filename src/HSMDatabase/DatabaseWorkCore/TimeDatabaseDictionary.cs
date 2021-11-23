@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager;
@@ -60,7 +59,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(time);
                 string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
                 ISensorsDatabase newDatabase = LevelDBManager.GetSensorDatabaseInstance(
-                    Path.Combine(_databaseSettings.DatabaseFolder, newDatabaseName), minDateTime, maxDateTime);
+                    _databaseSettings.GetPathToMonitoringDatabase(newDatabaseName), minDateTime, maxDateTime);
                 _sensorsDatabases.Add(newDatabase);
                 Task.Run(() => _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName));
                 return newDatabase;

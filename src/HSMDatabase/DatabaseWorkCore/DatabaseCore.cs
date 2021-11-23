@@ -14,14 +14,16 @@ namespace HSMDatabase.DatabaseWorkCore
         #region Singleton
 
         private static readonly object _singletonLockObj = new object();
-        private static volatile DatabaseCore _instance;
+        private static DatabaseCore _instance;
 
         // TODO: Remove static dbsettings and singleton
         private static IDatabaseSettings _dbSettings;
 
         public static IDatabaseCore GetInstance(IDatabaseSettings dbSettings)
         {
-            _dbSettings = dbSettings;
+            if (_dbSettings == null)
+                _dbSettings = dbSettings;
+
             return Instance;
         }
 
@@ -50,11 +52,10 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IDatabaseSettings _databaseSettings;
 
 
-        public DatabaseCore(IDatabaseSettings dbSettings)
+        private DatabaseCore(IDatabaseSettings dbSettings)
         {
             _databaseSettings = dbSettings;
-            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(
-                Path.Combine(_databaseSettings.DatabaseFolder, _databaseSettings.EnvironmentDatabaseName));
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
             _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings);
 
             OpenAllExistingSensorDatabases();
@@ -70,7 +71,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (from != DateTime.MinValue && to != DateTime.MinValue)
                 {
                     ISensorsDatabase database = LevelDBManager.GetSensorDatabaseInstance(
-                        Path.Combine(_databaseSettings.DatabaseFolder, databaseName), from, to);
+                        _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
             }
@@ -90,7 +91,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var databasesList = _environmentDatabase.GetMonitoringDatabases();
             foreach (var monitoringDB in databasesList)
             {
-                DirectoryInfo info = new DirectoryInfo(Path.Combine(_databaseSettings.DatabaseFolder, monitoringDB));
+                DirectoryInfo info = new DirectoryInfo(_databaseSettings.GetPathToMonitoringDatabase(monitoringDB));
                 size += GetDirectorySize(info);
             }
 
@@ -100,7 +101,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public long GetEnvironmentDatabaseSize()
         {
             DirectoryInfo environmentDatabaseDir =
-                new DirectoryInfo(Path.Combine(_databaseSettings.DatabaseFolder, _databaseSettings.EnvironmentDatabaseName));
+                new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
             return GetDirectorySize(environmentDatabaseDir);
         }
 
