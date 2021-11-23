@@ -25,16 +25,16 @@ namespace HSMCommon
             DoActionWhileThereAreAttempts(CopyFile);
         }
 
-        public static void SafeWriteToNewFile(string filePath, string text)
+        public static void SafeWriteToFile(string filePath, string text)
         {
-            void WriteToNewFile()
+            void WriteToFile()
             {
                 using FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate);
                 byte[] bytes = Encoding.UTF8.GetBytes(text);
                 fs.Write(bytes, 0, bytes.Length);
             }
 
-            DoActionWhileThereAreAttempts(WriteToNewFile);
+            DoActionWhileThereAreAttempts(WriteToFile);
         }
 
         private static async void DoActionWhileThereAreAttempts(Action action)

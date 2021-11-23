@@ -139,7 +139,7 @@ namespace HSMServer.Core.Configuration
         private static void CreateDefaultConfig()
         {
             string defaultConfigContent = GetDefaultConfig();
-            FileManager.SafeWriteToNewFile(_configFilePath, defaultConfigContent);
+            FileManager.SafeWriteToFile(_configFilePath, defaultConfigContent);
         }
 
         private static void CreateCertificateAuthority()
