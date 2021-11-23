@@ -1,207 +1,59 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMCommon
 {
     public static class FileManager
     {
-        const int _waitTime = 5000;
-        public static void SafeDelete(string fileName)
-        {
-            //try to delete existing file. It can be locked.
-            bool isDelete = false;
-            int attempts = 5;
+        private const int WaitTime = 5000;
+        private const int MaxAttemptsCount = 5;
 
-            while (!isDelete)
-            {
-                try
-                {
-                    File.Delete(fileName);
-                    isDelete = true;
-                }
-                catch (IOException ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
-        }
 
         public static void SafeCreateDirectory(string directoryPath)
         {
-            bool isCreate = false;
-            int attempts = 5;
+            void CreateDirectory() => Directory.CreateDirectory(directoryPath);
 
-            while (!isCreate)
-            {
-                try
-                {
-                    Directory.CreateDirectory(directoryPath);
-                    isCreate = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
+            DoActionWhileThereAreAttempts(CreateDirectory);
         }
 
-        public static void SafeCreateFile(string filePath)
-        {
-            bool isCreate = false;
-            int attempts = 5;
-
-            while (!isCreate)
-            {
-                try
-                {
-                    File.Create(filePath);
-                    isCreate = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
-        }
-
-        public static void SafeWriteText(string filePath, string text)
-        {
-            bool isWrite = false;
-            int attempts = 5;
-
-            while (!isWrite)
-            {
-                try
-                {
-                    File.WriteAllText(filePath, text);
-                    isWrite = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
-        }
-
-        public static void SafeMove(string source, string destination)
-        {
-            bool isWrite = false;
-            int attempts = 5;
-
-            while (!isWrite)
-            {
-                try
-                {
-                    File.Move(source, destination);
-                    isWrite = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
-        }
         public static void SafeCopy(string path, string destination)
         {
-            bool isWrite = false;
-            int attempts = 5;
+            void CopyFile() => File.Copy(path, destination);
 
-            while (!isWrite)
-            {
-                try
-                {
-                    File.Copy(path, destination);
-                    isWrite = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
-            }
+            DoActionWhileThereAreAttempts(CopyFile);
         }
 
-        public static void SafeWriteBytes(string path, byte[] dataBytes)
+        public static void SafeWriteToFile(string filePath, string text)
         {
-            bool isWrite = false;
-            int attempts = 5;
-
-            while (!isWrite)
+            void WriteToFile()
             {
-                try
-                {
-                    File.WriteAllBytes(path, dataBytes);
-                    isWrite = true;
-                }
-                catch (Exception ex)
-                {
-                    attempts -= 1;
-
-                    if (attempts == 0)
-                        throw;
-
-                    Thread.Sleep(_waitTime);
-                }
+                using FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate);
+                byte[] bytes = Encoding.UTF8.GetBytes(text);
+                fs.Write(bytes, 0, bytes.Length);
             }
+
+            DoActionWhileThereAreAttempts(WriteToFile);
         }
 
-        public static void SafeWriteToNewFile(string filePath, string text)
+        private static async void DoActionWhileThereAreAttempts(Action action)
         {
-            bool isWrite = false;
-            int attempts = 5;
+            int attempts = 0;
 
-            while (!isWrite)
+            while (true)
             {
                 try
                 {
-                    using (FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate))
-                    {
-                        byte[] bytes = Encoding.UTF8.GetBytes(text);
-                        fs.Write(bytes, 0, bytes.Length);
-                        fs.Flush();
-                        fs.Close();
-                    }
-                    isWrite = true;
+                    action?.Invoke();
+                    return;
                 }
-                catch (Exception ex)
+                catch (IOException)
                 {
-                    attempts -= 1;
-
-                    if (attempts == 0)
+                    if (++attempts == MaxAttemptsCount)
                         throw;
 
-                    Thread.Sleep(_waitTime);
+                    await Task.Delay(WaitTime);
                 }
             }
         }
