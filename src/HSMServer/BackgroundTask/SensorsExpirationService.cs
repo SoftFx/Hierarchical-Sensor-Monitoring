@@ -22,7 +22,7 @@ namespace HSMServer.BackgroundTask
         /// <summary>
         /// The check is performed via this interval
         /// </summary>
-        private readonly TimeSpan _checkInterval = new TimeSpan(0,0,10,0);
+        private readonly TimeSpan _checkInterval = new TimeSpan(0,0,5,0);
         /// <summary>
         /// Sensor values that had been updated less than this interval from now are not processed
         /// </summary>
