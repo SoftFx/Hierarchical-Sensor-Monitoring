@@ -18,7 +18,7 @@ namespace HSMServer.Core.DataLayer
 
         public DatabaseAdapter()
         {
-            _database = DatabaseCore.GetInstance();
+            _database = DatabaseCore.GetInstance(new DatabaseSettings());
         }
 
 
