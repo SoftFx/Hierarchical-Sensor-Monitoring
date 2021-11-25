@@ -4,7 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.AccessManager
 {
-    public interface ISensorsDatabase
+    public interface ISensorsDatabase : IDisposable
     {
         long DatabaseMinTicks { get; }
         long DatabaseMaxTicks { get; }

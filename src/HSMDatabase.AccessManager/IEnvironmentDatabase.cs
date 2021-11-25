@@ -4,7 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.AccessManager
 {
-    public interface IEnvironmentDatabase
+    public interface IEnvironmentDatabase : IDisposable
     {
         #region Products
 
