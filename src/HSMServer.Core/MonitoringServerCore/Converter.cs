@@ -204,7 +204,7 @@ namespace HSMServer.Core.MonitoringServerCore
         public SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = (byte)SensorType.FileSensor;
+            result.DataType = (byte)SensorType.FileSensorBytes;
             result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             FileSensorBytesData typedData = new FileSensorBytesData()
