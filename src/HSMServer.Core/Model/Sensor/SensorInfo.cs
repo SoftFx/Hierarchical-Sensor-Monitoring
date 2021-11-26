@@ -28,6 +28,7 @@ namespace HSMServer.Core.Model.Sensor
             Path = entity.Path;
             SensorName = entity.SensorName;
             Description = entity.Description;
+            SensorType = (SensorType)entity.SensorType;
             //ExpectedUpdateInterval = entity.ExpectedUpdateInterval;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
             Unit = entity.Unit;

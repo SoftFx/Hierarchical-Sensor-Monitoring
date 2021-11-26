@@ -240,10 +240,10 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(_databaseFixture.TestProduct.Name, actual.ProductName);
             Assert.Equal(expected.Path, actual.SensorName);
+            Assert.Equal(expectedType, actual.SensorType);
             Assert.Equal(default, actual.ExpectedUpdateInterval);
             Assert.Empty(actual.ValidationParameters);
             Assert.Null(actual.Unit);
-            Assert.Equal(expectedType, actual.SensorType);
         }
     }
 }
