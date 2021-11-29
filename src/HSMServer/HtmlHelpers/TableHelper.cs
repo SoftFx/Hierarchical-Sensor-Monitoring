@@ -670,7 +670,7 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
             result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
             result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
-                          "title='Time format: dd.hh:mm:ss'></i></td><td><input disabled type='text' " +
+                          "title='Time format: dd.hh:mm:ss min value 00:05:00'></i></td><td><input disabled type='text' " +
                           $"class='form-control' style='max-width:300px' id='interval_{encodedPath}' " +
                           $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
             result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
