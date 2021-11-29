@@ -24,6 +24,7 @@ namespace HSMServer.Core.Tests
             DatabaseAdapter = new DatabaseAdapter(new DatabaseSettings() { DatabaseFolder = DatabaseFolder });
             DatabaseAdapter.AddProduct(TestProduct);
 
+            SensorValuesFactory.Initialize(this);
             SensorValuesTester.Initialize(this);
         }
 
