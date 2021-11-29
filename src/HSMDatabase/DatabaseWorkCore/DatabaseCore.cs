@@ -398,6 +398,9 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
+
+            _instance = null;
+            _dbSettings = null;
         }
     }
 }
