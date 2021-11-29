@@ -317,7 +317,7 @@ namespace HSMServer.Controllers
             var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
             var path = SensorPathHelper.Decode(formattedPath);
 
-            var node = model.Clone().GetNode(path);
+            var node = model.GetNode(path);
             StringBuilder result = new StringBuilder();
             if (node?.Sensors != null)
 
