@@ -10,8 +10,8 @@
         let dataElement = $('#sensorData_' + path)[0];
         $('#sensorData_' + path).css('display', 'block');
         $('#sensorInfo_parent_' + path).css('display', 'block');
-        let parent = dataElement.parentNode;
-        parent.style.display = 'block';
+        let parent = data.node.parent;
+        $('#list_' + parent).css('display', 'block');
         $('#' + path).click();
     } else {
         hideSensorInfoParentBlocks();
