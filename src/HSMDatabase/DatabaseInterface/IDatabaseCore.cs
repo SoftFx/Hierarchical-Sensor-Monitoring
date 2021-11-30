@@ -4,7 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.DatabaseInterface
 {
-    public interface IDatabaseCore
+    public interface IDatabaseCore : IDisposable
     {
         /// <summary>
         /// Get size of the whole database

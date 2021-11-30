@@ -593,5 +593,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, "Failed to add prodct to list");
             }
         }
+
+        public void Dispose() => _database.Dispose();
     }
 }

@@ -391,6 +391,16 @@ namespace HSMDatabase.DatabaseWorkCore
             bool success2 = long.TryParse(splitResults[2], out long toTicks);
             to = success2 ? new DateTime(toTicks) : DateTime.MinValue;
         }
+
         #endregion
+
+        public void Dispose()
+        {
+            _environmentDatabase.Dispose();
+            _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
+
+            _instance = null;
+            _dbSettings = null;
+        }
     }
 }

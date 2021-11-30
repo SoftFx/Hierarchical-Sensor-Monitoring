@@ -204,7 +204,7 @@ namespace HSMServer.Core.MonitoringServerCore
         public SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected, SensorStatus validationStatus)
         {
             FillCommonFields(sensorValue, timeCollected, out var result);
-            result.DataType = (byte)SensorType.FileSensor;
+            result.DataType = (byte)SensorType.FileSensorBytes;
             result.Status = (byte)sensorValue.Status.GetWorst(validationStatus);
 
             FileSensorBytesData typedData = new FileSensorBytesData()
@@ -1282,8 +1282,24 @@ namespace HSMServer.Core.MonitoringServerCore
             result.Description = sensorValue.Description;
             result.ProductName = productName;
             result.SensorName = ExtractSensor(sensorValue.Path);
+            result.SensorType = GetSensorType(sensorValue);
             return result;
         }
+
+        private static SensorType GetSensorType(SensorValueBase sensorValue) =>
+            sensorValue switch
+            {
+                BoolSensorValue => SensorType.BooleanSensor,
+                IntSensorValue => SensorType.IntSensor,
+                DoubleSensorValue => SensorType.DoubleSensor,
+                StringSensorValue => SensorType.StringSensor,
+                IntBarSensorValue => SensorType.IntegerBarSensor,
+                DoubleBarSensorValue => SensorType.DoubleBarSensor,
+                FileSensorBytesValue => SensorType.FileSensorBytes,
+                FileSensorValue => SensorType.FileSensor,
+                _ => (SensorType)0,
+            };
+
         //public ProductDataMessage Convert(Product product)
         //{
         //    ProductDataMessage result = new ProductDataMessage();

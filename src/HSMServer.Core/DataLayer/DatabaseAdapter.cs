@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
@@ -16,9 +17,9 @@ namespace HSMServer.Core.DataLayer
         private readonly IDatabaseCore _database;
 
 
-        public DatabaseAdapter()
+        public DatabaseAdapter(IDatabaseSettings dbSettings = null)
         {
-            _database = DatabaseCore.GetInstance(new DatabaseSettings());
+            _database = DatabaseCore.GetInstance(dbSettings ?? new DatabaseSettings());
         }
 
 
@@ -269,5 +270,7 @@ namespace HSMServer.Core.DataLayer
             };
 
         #endregion
+
+        public void Dispose() => _database.Dispose();
     }
 }

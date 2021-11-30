@@ -186,5 +186,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             return result;
         }
+
+        public void Dispose() => _database.Dispose();
     }
 }
