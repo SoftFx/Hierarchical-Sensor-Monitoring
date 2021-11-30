@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
@@ -19,6 +18,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
     public class MonitoringDataReceiverTests : IClassFixture<MonitoringDataReceiverFixture>, IDisposable
     {
+        private const int SeveralSensorValuesCount = 3;
+
         private readonly MonitoringCore _monitoringCore;
         private readonly DatabaseAdapterManager _databaseAdapterManager;
         private readonly ValuesCache _valuesCache;
@@ -84,10 +85,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(boolSensorValue);
 
-            FullSensorValueTest(boolSensorValue, SensorType.BooleanSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(boolSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -97,10 +98,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(intSensorValue);
 
-            FullSensorValueTest(intSensorValue, SensorType.IntSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(intSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -110,10 +111,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(doubleSensorValue);
 
-            FullSensorValueTest(doubleSensorValue, SensorType.DoubleSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(doubleSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -123,10 +124,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(stringSensorValue);
 
-            FullSensorValueTest(stringSensorValue, SensorType.StringSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(stringSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -136,10 +137,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(intBarSensorValue);
 
-            FullSensorValueTest(intBarSensorValue, SensorType.IntegerBarSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(intBarSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -149,10 +150,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(doubleBarSensorValue);
 
-            FullSensorValueTest(doubleBarSensorValue, SensorType.DoubleBarSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(doubleBarSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -162,10 +163,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(fileSensorBytesValue);
 
-            FullSensorValueTest(fileSensorBytesValue, SensorType.FileSensorBytes,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(fileSensorBytesValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
@@ -175,27 +176,163 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(fileSensorValue);
 
-            FullSensorValueTest(fileSensorValue, SensorType.FileSensor,
-                                _valuesCache.GetValues,
-                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+            FullSensorValueTestAsync(fileSensorValue,
+                                     _valuesCache.GetValues,
+                                     _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                     _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
 
-        private async void FullSensorValueTest(SensorValueBase sensorValue, SensorType sensorType,
+        [Fact]
+        public void AddSeveralBoolSensorValuesTest()
+        {
+            var boolSensorValues = new List<BoolSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                boolSensorValues.Add(_sensorValuesFactory.BuildBoolSensorValue());
+
+            boolSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(boolSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralIntSensorValuesTest()
+        {
+            var intSensorValues = new List<IntSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                intSensorValues.Add(_sensorValuesFactory.BuildIntSensorValue());
+
+            intSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(intSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralDoubleSensorValuesTest()
+        {
+            var doubleSensorValues = new List<DoubleSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                doubleSensorValues.Add(_sensorValuesFactory.BuildDoubleSensorValue());
+
+            doubleSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(doubleSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralStringSensorValuesTest()
+        {
+            var stringSensorValues = new List<StringSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                stringSensorValues.Add(_sensorValuesFactory.BuildStringSensorValue());
+
+            stringSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(stringSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralIntBarSensorValuesTest()
+        {
+            var intBarSensorValues = new List<IntBarSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                intBarSensorValues.Add(_sensorValuesFactory.BuildIntBarSensorValue());
+
+            intBarSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(intBarSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralDoubleBarSensorValuesTest()
+        {
+            var doubleBarSensorValues = new List<DoubleBarSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                doubleBarSensorValues.Add(_sensorValuesFactory.BuildDoubleBarSensorValue());
+
+            doubleBarSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(doubleBarSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralFileSensorBytesValuesTest()
+        {
+            var fileSensorBytesValues = new List<FileSensorBytesValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                fileSensorBytesValues.Add(_sensorValuesFactory.BuildFileSensorBytesValue());
+
+            fileSensorBytesValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(fileSensorBytesValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Fact]
+        public void AddSeveralFileSensorValuesTest()
+        {
+            var fileSensorValues = new List<FileSensorValue>(SeveralSensorValuesCount);
+            for (int i = 0; i < SeveralSensorValuesCount; ++i)
+                fileSensorValues.Add(_sensorValuesFactory.BuildFileSensorValue());
+
+            fileSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(fileSensorValues.Select(s => (SensorValueBase)s),
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+
+        private async void FullSensorValueTestAsync(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
+            GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
+        {
+            await Task.Delay(100);
+
+            FullSensorValueTest(sensorValue, getCachedValues, getSensorHistoryData, getSensorInfo);
+        }
+
+        private async void FullSeveralSensorValuesTestAsync(IEnumerable<SensorValueBase> sensorValues,
             GetValuesFromCache getCachedValues, GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
         {
             await Task.Delay(100);
 
-            TestSensorDataFromCache(sensorValue, sensorType, getCachedValues);
+            foreach (var sensorValue in sensorValues)
+                FullSensorValueTest(sensorValue, getCachedValues, getSensorHistoryData, getSensorInfo);
+        }
+
+        private void FullSensorValueTest(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
+            GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
+        {
+            TestSensorDataFromCache(sensorValue, getCachedValues);
             TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
             TestSensorInfoFromDB(sensorValue, getSensorInfo);
         }
 
-        private void TestSensorDataFromCache(SensorValueBase sensorValue, SensorType sensorType, GetValuesFromCache getCachedValues)
+        private void TestSensorDataFromCache(SensorValueBase sensorValue, GetValuesFromCache getCachedValues)
         {
             var sensorDataFromCache = getCachedValues?.Invoke(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                                                     ?.FirstOrDefault(s => s.SensorType == sensorType);
+                                                     ?.FirstOrDefault(s => s.Path == sensorValue.Path);
 
             _sensorValuesTester.TestSensorDataFromCache(sensorValue, sensorDataFromCache);
         }

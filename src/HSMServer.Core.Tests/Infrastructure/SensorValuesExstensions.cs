@@ -25,7 +25,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 var sensorValueType = typeof(T);
 
                 sensorValueBase.Key = productKey;
-                sensorValueBase.Path = $"{sensorValueType}";
+                sensorValueBase.Path = $"{sensorValueType} {RandomValuesGenerator.GetRandomString()}";
                 sensorValueBase.Description = $"{sensorValueType} {nameof(SensorValueBase.Description)}";
                 sensorValueBase.Comment = $"{sensorValueType} {nameof(SensorValueBase.Comment)}";
                 sensorValueBase.Time = DateTime.UtcNow;
