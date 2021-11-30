@@ -21,10 +21,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         public DatabaseAdapterManager()
         {
             TestProduct = GetTestProduct();
-        }
 
-        internal void CreateDatabaseWithTestProduct()
-        {
             ++_dbNumber;
 
             DatabaseAdapter = new DatabaseAdapter(
@@ -34,9 +31,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                     EnvironmentDatabaseName = $"EnvironmentData{_dbNumber}",
                     MonitoringDatabaseName = $"MonitoringData{_dbNumber}",
                 });
-
-            DatabaseAdapter.AddProduct(TestProduct);
         }
+
+        internal void CreateDatabaseWithTestProduct() =>
+            DatabaseAdapter.AddProduct(TestProduct);
 
         internal void ClearDatabase()
         {

@@ -17,7 +17,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var boolSensorValue = new BoolSensorValue()
             {
-                BoolValue = RandomValues.GetRandomBool(),
+                BoolValue = RandomValuesGenerator.GetRandomBool(),
             };
 
             return boolSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var intSensorValue = new IntSensorValue()
             {
-                IntValue = RandomValues.GetRandomInt(),
+                IntValue = RandomValuesGenerator.GetRandomInt(),
             };
 
             return intSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -37,7 +37,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var doubleSensorValue = new DoubleSensorValue()
             {
-                DoubleValue = RandomValues.GetRandomDouble(),
+                DoubleValue = RandomValuesGenerator.GetRandomDouble(),
             };
 
             return doubleSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var stringSensorValue = new StringSensorValue()
             {
-                StringValue = RandomValues.GetRandomString(),
+                StringValue = RandomValuesGenerator.GetRandomString(),
             };
 
             return stringSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -57,10 +57,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var intBarSensorValue = new IntBarSensorValue()
             {
-                LastValue = RandomValues.GetRandomInt(),
-                Min = RandomValues.GetRandomInt(),
-                Max = RandomValues.GetRandomInt(),
-                Mean = RandomValues.GetRandomInt(),
+                LastValue = RandomValuesGenerator.GetRandomInt(),
+                Min = RandomValuesGenerator.GetRandomInt(),
+                Max = RandomValuesGenerator.GetRandomInt(),
+                Mean = RandomValuesGenerator.GetRandomInt(),
                 Percentiles = GetPercentileValuesInt(),
             };
 
@@ -71,10 +71,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var doubleBarSensorValue = new DoubleBarSensorValue()
             {
-                LastValue = RandomValues.GetRandomDouble(),
-                Min = RandomValues.GetRandomDouble(),
-                Max = RandomValues.GetRandomDouble(),
-                Mean = RandomValues.GetRandomDouble(),
+                LastValue = RandomValuesGenerator.GetRandomDouble(),
+                Min = RandomValuesGenerator.GetRandomDouble(),
+                Max = RandomValuesGenerator.GetRandomDouble(),
+                Mean = RandomValuesGenerator.GetRandomDouble(),
                 Percentiles = GetPercentileValuesDouble(),
             };
 
@@ -85,8 +85,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var fileSensorBytesValue = new FileSensorBytesValue()
             {
-                Extension = RandomValues.GetRandomString(3),
-                FileContent = RandomValues.GetRandomBytes(),
+                Extension = RandomValuesGenerator.GetRandomString(3),
+                FileContent = RandomValuesGenerator.GetRandomBytes(),
                 FileName = nameof(FileSensorBytesValue),
             };
 
@@ -97,8 +97,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var fileSensorValue = new FileSensorValue()
             {
-                Extension = RandomValues.GetRandomString(3),
-                FileContent = RandomValues.GetRandomString(),
+                Extension = RandomValuesGenerator.GetRandomString(3),
+                FileContent = RandomValuesGenerator.GetRandomString(),
                 FileName = nameof(FileSensorValue),
             };
 
@@ -110,7 +110,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var percentiles = new List<PercentileValueInt>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueInt(RandomValues.GetRandomInt(), RandomValues.GetRandomDouble()));
+                percentiles.Add(new PercentileValueInt(RandomValuesGenerator.GetRandomInt(), RandomValuesGenerator.GetRandomDouble()));
 
             return percentiles;
         }
@@ -120,7 +120,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var percentiles = new List<PercentileValueDouble>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueDouble(RandomValues.GetRandomDouble(), RandomValues.GetRandomDouble()));
+                percentiles.Add(new PercentileValueDouble(RandomValuesGenerator.GetRandomDouble(), RandomValuesGenerator.GetRandomDouble()));
 
             return percentiles;
         }

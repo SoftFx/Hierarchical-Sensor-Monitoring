@@ -2,11 +2,12 @@
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
-    internal static class RandomValues
+    internal static class RandomValuesGenerator
     {
-        private static readonly Random _random = new(134134278);
-        private static readonly string _possibleChars =
+        private const string PossibleChars =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        private static readonly Random _random = new(134134278);
 
 
         internal static bool GetRandomBool() => _random.Next(0, 2) > 0;
@@ -22,7 +23,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var stringChars = new char[size];
 
             for (int i = 0; i < size; i++)
-                stringChars[i] = _possibleChars[_random.Next(_possibleChars.Length)];
+                stringChars[i] = PossibleChars[_random.Next(PossibleChars.Length)];
 
             return new string(stringChars);
         }
