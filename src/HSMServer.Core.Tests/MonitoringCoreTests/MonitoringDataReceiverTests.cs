@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             _valuesCache = new ValuesCache();
 
             _databaseAdapterManager = new DatabaseAdapterManager();
-            _databaseAdapterManager.CreateDatabaseWithTestProduct();
+            _databaseAdapterManager.AddTestProduct();
 
             _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
             _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);

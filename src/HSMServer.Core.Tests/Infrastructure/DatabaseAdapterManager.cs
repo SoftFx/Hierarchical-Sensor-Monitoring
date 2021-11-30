@@ -33,7 +33,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 });
         }
 
-        internal void CreateDatabaseWithTestProduct() =>
+        internal void AddTestProduct() =>
             DatabaseAdapter.AddProduct(TestProduct);
 
         internal void ClearDatabase()
