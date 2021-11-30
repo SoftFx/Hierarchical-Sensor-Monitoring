@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataProcessor;
@@ -22,6 +25,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
+
+        private delegate List<SensorData> GetValuesFromCache(List<string> products);
+        private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
+        private delegate SensorInfo GetSensorInfo(string productName, string path);
 
 
         public MonitoringDataReceiverTests()
@@ -71,171 +78,140 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
 
         [Fact]
-        public async void AddBoolSensorValueTest()
+        public void AddBoolSensorValueTest()
         {
             var boolSensorValue = _sensorValuesFactory.BuildBoolSensorValue();
 
             _monitoringCore.AddSensorValue(boolSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.BooleanSensor);
-            _sensorValuesTester.TestSensorDataFromCache(boolSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, boolSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(boolSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, boolSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(boolSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(boolSensorValue, SensorType.BooleanSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddIntSensorValueTest()
+        public void AddIntSensorValueTest()
         {
             var intSensorValue = _sensorValuesFactory.BuildIntSensorValue();
 
             _monitoringCore.AddSensorValue(intSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.IntSensor);
-            _sensorValuesTester.TestSensorDataFromCache(intSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, intSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(intSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, intSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(intSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(intSensorValue, SensorType.IntSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddDoubleSensorValueTest()
+        public void AddDoubleSensorValueTest()
         {
             var doubleSensorValue = _sensorValuesFactory.BuildDoubleSensorValue();
 
             _monitoringCore.AddSensorValue(doubleSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.DoubleSensor);
-            _sensorValuesTester.TestSensorDataFromCache(doubleSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, doubleSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(doubleSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, doubleSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(doubleSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(doubleSensorValue, SensorType.DoubleSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddStringSensorValueTest()
+        public void AddStringSensorValueTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
 
             _monitoringCore.AddSensorValue(stringSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.StringSensor);
-            _sensorValuesTester.TestSensorDataFromCache(stringSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, stringSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(stringSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, stringSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(stringSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(stringSensorValue, SensorType.StringSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddIntBarSensorValueTest()
+        public void AddIntBarSensorValueTest()
         {
             var intBarSensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
 
             _monitoringCore.AddSensorValue(intBarSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.IntegerBarSensor);
-            _sensorValuesTester.TestSensorDataFromCache(intBarSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, intBarSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(intBarSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, intBarSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(intBarSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(intBarSensorValue, SensorType.IntegerBarSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddDoubleBarSensorValueTest()
+        public void AddDoubleBarSensorValueTest()
         {
             var doubleBarSensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
 
             _monitoringCore.AddSensorValue(doubleBarSensorValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.DoubleBarSensor);
-            _sensorValuesTester.TestSensorDataFromCache(doubleBarSensorValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, doubleBarSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(doubleBarSensorValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, doubleBarSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(doubleBarSensorValue, sensorInfoFromDB);
+            FullSensorValueTest(doubleBarSensorValue, SensorType.DoubleBarSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddFileSensorBytesValueTest()
+        public void AddFileSensorBytesValueTest()
         {
             var fileSensorBytesValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
             _monitoringCore.AddSensorValue(fileSensorBytesValue);
 
-            await Task.Delay(100);
-
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.FileSensorBytes);
-            _sensorValuesTester.TestSensorDataFromCache(fileSensorBytesValue, sensorDataFromCache);
-
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, fileSensorBytesValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(fileSensorBytesValue, sensorHistoryDataFromDB);
-
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, fileSensorBytesValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(fileSensorBytesValue, sensorInfoFromDB);
+            FullSensorValueTest(fileSensorBytesValue, SensorType.FileSensorBytes,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
         [Fact]
-        public async void AddFileSensorValueTest()
+        public void AddFileSensorValueTest()
         {
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
 
             _monitoringCore.AddSensorValue(fileSensorValue);
 
+            FullSensorValueTest(fileSensorValue, SensorType.FileSensor,
+                                _valuesCache.GetValues,
+                                _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
+                                _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+
+        private async void FullSensorValueTest(SensorValueBase sensorValue, SensorType sensorType,
+            GetValuesFromCache getCachedValues, GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
+        {
             await Task.Delay(100);
 
-            var sensorDataFromCache =
-                _valuesCache.GetValues(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
-                            ?.FirstOrDefault(s => s.SensorType == HSMSensorDataObjects.SensorType.FileSensor);
-            _sensorValuesTester.TestSensorDataFromCache(fileSensorValue, sensorDataFromCache);
+            TestSensorDataFromCache(sensorValue, sensorType, getCachedValues);
+            TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
+            TestSensorInfoFromDB(sensorValue, getSensorInfo);
+        }
 
-            var sensorHistoryDataFromDB = _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue(_databaseAdapterManager.TestProduct.Name, fileSensorValue.Path);
-            _sensorValuesTester.TestSensorHistoryDataFromDB(fileSensorValue, sensorHistoryDataFromDB);
+        private void TestSensorDataFromCache(SensorValueBase sensorValue, SensorType sensorType, GetValuesFromCache getCachedValues)
+        {
+            var sensorDataFromCache = getCachedValues?.Invoke(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
+                                                     ?.FirstOrDefault(s => s.SensorType == sensorType);
 
-            var sensorInfoFromDB = _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_databaseAdapterManager.TestProduct.Name, fileSensorValue.Path);
-            _sensorValuesTester.TestSensorInfoFromDB(fileSensorValue, sensorInfoFromDB);
+            _sensorValuesTester.TestSensorDataFromCache(sensorValue, sensorDataFromCache);
+        }
+
+        private void TestSensorHistoryDataFromDB(SensorValueBase sensorValue, GetSensorHistoryData getSensorHistoryData)
+        {
+            var sensorHistoryDataFromDB = getSensorHistoryData?.Invoke(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+
+            SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue, sensorHistoryDataFromDB);
+        }
+
+        private void TestSensorInfoFromDB(SensorValueBase sensorValue, GetSensorInfo getSensorInfo)
+        {
+            var sensorInfoFromDB = getSensorInfo?.Invoke(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+
+            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfoFromDB);
         }
     }
 }

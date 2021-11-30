@@ -15,7 +15,101 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             _productName = dbManager.TestProduct.Name;
 
 
-        internal void TestSensorDataFromCache(BoolSensorValue expected, SensorData actual)
+        internal void TestSensorDataFromCache(SensorValueBase expected, SensorData actual)
+        {
+            switch (expected)
+            {
+                case BoolSensorValue boolSensorValue:
+                    TestSensorDataFromCache(boolSensorValue, actual);
+                    break;
+                case IntSensorValue intSensorValue:
+                    TestSensorDataFromCache(intSensorValue, actual);
+                    break;
+                case DoubleSensorValue doubleSensorValue:
+                    TestSensorDataFromCache(doubleSensorValue, actual);
+                    break;
+                case StringSensorValue stringSensorValue:
+                    TestSensorDataFromCache(stringSensorValue, actual);
+                    break;
+                case IntBarSensorValue intBarSensorValue:
+                    TestSensorDataFromCache(intBarSensorValue, actual);
+                    break;
+                case DoubleBarSensorValue doubleBarSensorValue:
+                    TestSensorDataFromCache(doubleBarSensorValue, actual);
+                    break;
+                case FileSensorBytesValue fileSensorBytesValue:
+                    TestSensorDataFromCache(fileSensorBytesValue, actual);
+                    break;
+                case FileSensorValue fileSensorValue:
+                    TestSensorDataFromCache(fileSensorValue, actual);
+                    break;
+            };
+        }
+
+        internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
+        {
+            switch (expected)
+            {
+                case BoolSensorValue boolSensorValue:
+                    TestSensorInfoFromDB(boolSensorValue, actual);
+                    break;
+                case IntSensorValue intSensorValue:
+                    TestSensorInfoFromDB(intSensorValue, actual);
+                    break;
+                case DoubleSensorValue doubleSensorValue:
+                    TestSensorInfoFromDB(doubleSensorValue, actual);
+                    break;
+                case StringSensorValue stringSensorValue:
+                    TestSensorInfoFromDB(stringSensorValue, actual);
+                    break;
+                case IntBarSensorValue intBarSensorValue:
+                    TestSensorInfoFromDB(intBarSensorValue, actual);
+                    break;
+                case DoubleBarSensorValue doubleBarSensorValue:
+                    TestSensorInfoFromDB(doubleBarSensorValue, actual);
+                    break;
+                case FileSensorBytesValue fileSensorBytesValue:
+                    TestSensorInfoFromDB(fileSensorBytesValue, actual);
+                    break;
+                case FileSensorValue fileSensorValue:
+                    TestSensorInfoFromDB(fileSensorValue, actual);
+                    break;
+            };
+        }
+
+        internal static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorHistoryData actual)
+        {
+            switch (expected)
+            {
+                case BoolSensorValue boolSensorValue:
+                    TestSensorHistoryDataFromDB(boolSensorValue, actual);
+                    break;
+                case IntSensorValue intSensorValue:
+                    TestSensorHistoryDataFromDB(intSensorValue, actual);
+                    break;
+                case DoubleSensorValue doubleSensorValue:
+                    TestSensorHistoryDataFromDB(doubleSensorValue, actual);
+                    break;
+                case StringSensorValue stringSensorValue:
+                    TestSensorHistoryDataFromDB(stringSensorValue, actual);
+                    break;
+                case IntBarSensorValue intBarSensorValue:
+                    TestSensorHistoryDataFromDB(intBarSensorValue, actual);
+                    break;
+                case DoubleBarSensorValue doubleBarSensorValue:
+                    TestSensorHistoryDataFromDB(doubleBarSensorValue, actual);
+                    break;
+                case FileSensorBytesValue fileSensorBytesValue:
+                    TestSensorHistoryDataFromDB(fileSensorBytesValue, actual);
+                    break;
+                case FileSensorValue fileSensorValue:
+                    TestSensorHistoryDataFromDB(fileSensorValue, actual);
+                    break;
+            };
+        }
+
+
+        private void TestSensorDataFromCache(BoolSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.BooleanSensor, actual);
 
@@ -23,7 +117,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value = {expected.BoolValue}, comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(IntSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(IntSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.IntSensor, actual);
 
@@ -31,7 +125,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value = {expected.IntValue}, comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(DoubleSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(DoubleSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.DoubleSensor, actual);
 
@@ -39,7 +133,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value = {expected.DoubleValue}, comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(StringSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(StringSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.StringSensor, actual);
 
@@ -47,7 +141,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value = {expected.StringValue}, comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(IntBarSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(IntBarSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.IntegerBarSensor, actual);
 
@@ -55,7 +149,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value: Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}. Comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(DoubleBarSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(DoubleBarSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.DoubleBarSensor, actual);
 
@@ -63,7 +157,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". Value: Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}. Comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(FileSensorBytesValue expected, SensorData actual)
+        private void TestSensorDataFromCache(FileSensorBytesValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.FileSensorBytes, actual);
 
@@ -71,7 +165,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorDataFromCache(FileSensorValue expected, SensorData actual)
+        private void TestSensorDataFromCache(FileSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.FileSensor, actual);
 
@@ -79,7 +173,31 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
         }
 
-        internal void TestSensorHistoryDataFromDB(BoolSensorValue expected, SensorHistoryData actual)
+        private void TestSensorInfoFromDB(BoolSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.BooleanSensor, actual);
+
+        private void TestSensorInfoFromDB(IntSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.IntSensor, actual);
+
+        private void TestSensorInfoFromDB(DoubleSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.DoubleSensor, actual);
+
+        private void TestSensorInfoFromDB(StringSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.StringSensor, actual);
+
+        private void TestSensorInfoFromDB(IntBarSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.IntegerBarSensor, actual);
+
+        private void TestSensorInfoFromDB(DoubleBarSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.DoubleBarSensor, actual);
+
+        private void TestSensorInfoFromDB(FileSensorBytesValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.FileSensorBytes, actual);
+
+        private void TestSensorInfoFromDB(FileSensorValue expected, SensorInfo actual) =>
+            TestSensorInfoFromDB(expected, SensorType.FileSensor, actual);
+
+        private static void TestSensorHistoryDataFromDB(BoolSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -90,7 +208,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.BooleanSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(IntSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(IntSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -101,7 +219,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.IntSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(DoubleSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(DoubleSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -112,7 +230,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.DoubleSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(StringSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(StringSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -123,7 +241,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.StringSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(IntBarSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(IntBarSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -141,7 +259,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.IntegerBarSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(DoubleBarSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(DoubleBarSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -159,7 +277,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.DoubleBarSensor, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(FileSensorBytesValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(FileSensorBytesValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -172,7 +290,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             TestSensorHistoryDataFromDB(expected, SensorType.FileSensorBytes, typedData, actual);
         }
 
-        internal void TestSensorHistoryDataFromDB(FileSensorValue expected, SensorHistoryData actual)
+        private static void TestSensorHistoryDataFromDB(FileSensorValue expected, SensorHistoryData actual)
         {
             var typedData = new
             {
@@ -184,30 +302,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             TestSensorHistoryDataFromDB(expected, SensorType.FileSensor, typedData, actual);
         }
-
-        internal void TestSensorInfoFromDB(BoolSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.BooleanSensor, actual);
-
-        internal void TestSensorInfoFromDB(IntSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.IntSensor, actual);
-
-        internal void TestSensorInfoFromDB(DoubleSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.DoubleSensor, actual);
-
-        internal void TestSensorInfoFromDB(StringSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.StringSensor, actual);
-
-        internal void TestSensorInfoFromDB(IntBarSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.IntegerBarSensor, actual);
-
-        internal void TestSensorInfoFromDB(DoubleBarSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.DoubleBarSensor, actual);
-
-        internal void TestSensorInfoFromDB(FileSensorBytesValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.FileSensorBytes, actual);
-
-        internal void TestSensorInfoFromDB(FileSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.FileSensor, actual);
 
 
         private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)
