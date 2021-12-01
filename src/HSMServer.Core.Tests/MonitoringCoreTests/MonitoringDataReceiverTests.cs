@@ -6,6 +6,7 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
@@ -29,7 +30,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
         private delegate List<SensorData> GetValuesFromCache(List<string> products);
         private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
+        private delegate List<SensorHistoryData> GetAllSensorHistoryData(string productName, string path);
         private delegate SensorInfo GetSensorInfo(string productName, string path);
+        private delegate List<SensorInfo> GetAllSensorInfo(Product product);
 
 
         public MonitoringDataReceiverTests()
@@ -78,7 +81,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         public void Dispose() => _databaseAdapterManager.ClearDatabase();
 
 
+        #region Add one sensor value tests
+
         [Fact]
+        [Trait("Category", "One")]
         public void AddBoolSensorValueTest()
         {
             var boolSensorValue = _sensorValuesFactory.BuildBoolSensorValue();
@@ -92,6 +98,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddIntSensorValueTest()
         {
             var intSensorValue = _sensorValuesFactory.BuildIntSensorValue();
@@ -105,6 +112,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddDoubleSensorValueTest()
         {
             var doubleSensorValue = _sensorValuesFactory.BuildDoubleSensorValue();
@@ -118,6 +126,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddStringSensorValueTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
@@ -131,6 +140,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddIntBarSensorValueTest()
         {
             var intBarSensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
@@ -144,6 +154,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddDoubleBarSensorValueTest()
         {
             var doubleBarSensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
@@ -157,6 +168,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddFileSensorBytesValueTest()
         {
             var fileSensorBytesValue = _sensorValuesFactory.BuildFileSensorBytesValue();
@@ -170,6 +182,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public void AddFileSensorValueTest()
         {
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
@@ -182,151 +195,267 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                      _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
+        #endregion
+
+        #region Add several sensor values tests
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralBoolSensorValuesTest()
         {
-            var boolSensorValues = new List<BoolSensorValue>(SeveralSensorValuesCount);
+            var boolSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 boolSensorValues.Add(_sensorValuesFactory.BuildBoolSensorValue());
 
-            boolSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            boolSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(boolSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(boolSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralIntSensorValuesTest()
         {
-            var intSensorValues = new List<IntSensorValue>(SeveralSensorValuesCount);
+            var intSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 intSensorValues.Add(_sensorValuesFactory.BuildIntSensorValue());
 
-            intSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            intSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(intSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(intSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralDoubleSensorValuesTest()
         {
-            var doubleSensorValues = new List<DoubleSensorValue>(SeveralSensorValuesCount);
+            var doubleSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 doubleSensorValues.Add(_sensorValuesFactory.BuildDoubleSensorValue());
 
-            doubleSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            doubleSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(doubleSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(doubleSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralStringSensorValuesTest()
         {
-            var stringSensorValues = new List<StringSensorValue>(SeveralSensorValuesCount);
+            var stringSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 stringSensorValues.Add(_sensorValuesFactory.BuildStringSensorValue());
 
-            stringSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            stringSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(stringSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(stringSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralIntBarSensorValuesTest()
         {
-            var intBarSensorValues = new List<IntBarSensorValue>(SeveralSensorValuesCount);
+            var intBarSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 intBarSensorValues.Add(_sensorValuesFactory.BuildIntBarSensorValue());
 
-            intBarSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            intBarSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(intBarSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(intBarSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralDoubleBarSensorValuesTest()
         {
-            var doubleBarSensorValues = new List<DoubleBarSensorValue>(SeveralSensorValuesCount);
+            var doubleBarSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 doubleBarSensorValues.Add(_sensorValuesFactory.BuildDoubleBarSensorValue());
 
-            doubleBarSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            doubleBarSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(doubleBarSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(doubleBarSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralFileSensorBytesValuesTest()
         {
-            var fileSensorBytesValues = new List<FileSensorBytesValue>(SeveralSensorValuesCount);
+            var fileSensorBytesValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 fileSensorBytesValues.Add(_sensorValuesFactory.BuildFileSensorBytesValue());
 
-            fileSensorBytesValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            fileSensorBytesValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(fileSensorBytesValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(fileSensorBytesValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
         [Fact]
+        [Trait("Category", "Several")]
         public void AddSeveralFileSensorValuesTest()
         {
-            var fileSensorValues = new List<FileSensorValue>(SeveralSensorValuesCount);
+            var fileSensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 fileSensorValues.Add(_sensorValuesFactory.BuildFileSensorValue());
 
-            fileSensorValues.ForEach(s => _monitoringCore.AddSensorValue(s));
+            fileSensorValues.ForEach(MonitoringCoreAddSensorValue);
 
-            FullSeveralSensorValuesTestAsync(fileSensorValues.Select(s => (SensorValueBase)s),
+            FullSeveralSensorValuesTestAsync(fileSensorValues,
                                              _valuesCache.GetValues,
-                                             _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
-                                             _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
+        #endregion
+
+        #region Add different sensor values tests
+
+        [Fact]
+        [Trait("Category", "Random")]
+        public void Add10RandomSensorValuesTest()
+        {
+            var sensorValues = GetRandomSensorValues(10);
+
+            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(sensorValues,
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+        [Fact]
+        [Trait("Category", "Random")]
+        public void Add50RandomSensorValuesTest()
+        {
+            var sensorValues = GetRandomSensorValues(50);
+
+            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(sensorValues,
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+        [Fact]
+        [Trait("Category", "Random")]
+        public void Add100RandomSensorValuesTest()
+        {
+            var sensorValues = GetRandomSensorValues(100);
+
+            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(sensorValues,
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+        [Fact]
+        [Trait("Category", "Random")]
+        public void Add500RandomSensorValuesTest()
+        {
+            var sensorValues = GetRandomSensorValues(500);
+
+            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(sensorValues,
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+        [Fact]
+        [Trait("Category", "Random")]
+        public void Add1000RandomSensorValuesTest()
+        {
+            var sensorValues = GetRandomSensorValues(1000);
+
+            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+
+            FullSeveralSensorValuesTestAsync(sensorValues,
+                                             _valuesCache.GetValues,
+                                             _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                             _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+        #endregion
+
+
+        private void MonitoringCoreAddSensorValue(SensorValueBase sensorValue)
+        {
+            switch (sensorValue)
+            {
+                case BoolSensorValue boolSensorValue:
+                    _monitoringCore.AddSensorValue(boolSensorValue);
+                    break;
+                case IntSensorValue intSensorValue:
+                    _monitoringCore.AddSensorValue(intSensorValue);
+                    break;
+                case DoubleSensorValue doubleSensorValue:
+                    _monitoringCore.AddSensorValue(doubleSensorValue);
+                    break;
+                case StringSensorValue stringSensorValue:
+                    _monitoringCore.AddSensorValue(stringSensorValue);
+                    break;
+                case IntBarSensorValue intBarSensorValue:
+                    _monitoringCore.AddSensorValue(intBarSensorValue);
+                    break;
+                case DoubleBarSensorValue doubleBarSensorValue:
+                    _monitoringCore.AddSensorValue(doubleBarSensorValue);
+                    break;
+                case FileSensorBytesValue fileSensorBytesValue:
+                    _monitoringCore.AddSensorValue(fileSensorBytesValue);
+                    break;
+                case FileSensorValue fileSensorValue:
+                    _monitoringCore.AddSensorValue(fileSensorValue);
+                    break;
+            };
+        }
 
         private async void FullSensorValueTestAsync(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
             GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
         {
             await Task.Delay(100);
 
-            FullSensorValueTest(sensorValue, getCachedValues, getSensorHistoryData, getSensorInfo);
-        }
-
-        private async void FullSeveralSensorValuesTestAsync(IEnumerable<SensorValueBase> sensorValues,
-            GetValuesFromCache getCachedValues, GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
-        {
-            await Task.Delay(100);
-
-            foreach (var sensorValue in sensorValues)
-                FullSensorValueTest(sensorValue, getCachedValues, getSensorHistoryData, getSensorInfo);
-        }
-
-        private void FullSensorValueTest(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
-            GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
-        {
             TestSensorDataFromCache(sensorValue, getCachedValues);
             TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
             TestSensorInfoFromDB(sensorValue, getSensorInfo);
+        }
+
+        private async void FullSeveralSensorValuesTestAsync(List<SensorValueBase> sensorValues,
+           GetValuesFromCache getCachedValues, GetAllSensorHistoryData getAllSensorHistoryData, GetAllSensorInfo getAllSensorInfo)
+        {
+            await Task.Delay(100);
+
+            var sensorsDict = sensorValues.GroupBy(s => s.Path)
+                                          .ToDictionary(s => s.Key, s => s.ToList());
+
+            TestSeveralSensorDataFromCache(sensorsDict, getCachedValues);
+            TestSeveralSensorHistoryDataFromDB(sensorsDict, getAllSensorHistoryData);
+            TestSeveralSensorInfoFromDB(sensorsDict, getAllSensorInfo);
         }
 
         private void TestSensorDataFromCache(SensorValueBase sensorValue, GetValuesFromCache getCachedValues)
@@ -349,6 +478,46 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var sensorInfoFromDB = getSensorInfo?.Invoke(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfoFromDB);
+        }
+
+        private void TestSeveralSensorDataFromCache(Dictionary<string, List<SensorValueBase>> sensorValues,
+            GetValuesFromCache getValuesFromCache)
+        {
+            var cache = getValuesFromCache?.Invoke(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
+                                          ?.ToDictionary(s => s.Path);
+
+            foreach (var sensors in sensorValues)
+                _sensorValuesTester.TestSensorDataFromCache(sensors.Value.LastOrDefault(), cache[sensors.Key]);
+        }
+
+        private void TestSeveralSensorHistoryDataFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
+            GetAllSensorHistoryData getAllSensorHistoryData)
+        {
+            foreach (var sensors in sensorValues)
+            {
+                var datas = getAllSensorHistoryData?.Invoke(_databaseAdapterManager.TestProduct.Name, sensors.Key);
+                for (int i = 0; i < sensors.Value.Count; ++i)
+                    SensorValuesTester.TestSensorHistoryDataFromDB(sensors.Value[i], datas[i]);
+            }
+        }
+
+        private void TestSeveralSensorInfoFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
+            GetAllSensorInfo getAllSensorInfo)
+        {
+            var infos = getAllSensorInfo(_databaseAdapterManager.TestProduct).ToDictionary(s => s.Path);
+
+            foreach (var sensors in sensorValues)
+                for (int i = 0; i < sensors.Value.Count; ++i)
+                    _sensorValuesTester.TestSensorInfoFromDB(sensors.Value[i], infos[sensors.Key]);
+        }
+
+        private List<SensorValueBase> GetRandomSensorValues(int size)
+        {
+            var sensorValues = new List<SensorValueBase>(size);
+            for (int i = 0; i < size; ++i)
+                sensorValues.Add(_sensorValuesFactory.BuildRandomSensorValue());
+
+            return sensorValues;
         }
     }
 }

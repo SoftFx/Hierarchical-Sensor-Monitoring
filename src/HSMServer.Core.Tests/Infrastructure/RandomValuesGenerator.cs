@@ -12,8 +12,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
         internal static bool GetRandomBool() => _random.Next(0, 2) > 0;
 
-        internal static int GetRandomInt(bool positive = false) =>
-            _random.Next(positive ? 0 : -100, 100);
+        internal static int GetRandomInt(int min = -100, int max = 100, bool positive = false) =>
+            _random.Next(positive ? 0 : min, max);
 
         internal static double GetRandomDouble() =>
             _random.NextDouble() * (GetRandomBool() ? -100 : 100);

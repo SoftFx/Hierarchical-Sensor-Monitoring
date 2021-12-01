@@ -13,6 +13,20 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             _productKey = dbManager.TestProduct.Key;
 
 
+        internal SensorValueBase BuildRandomSensorValue() =>
+            RandomValuesGenerator.GetRandomInt(min: 0, max: 8) switch
+            {
+                0 => BuildBoolSensorValue(),
+                1 => BuildIntSensorValue(),
+                2 => BuildDoubleSensorValue(),
+                3 => BuildStringSensorValue(),
+                4 => BuildIntBarSensorValue(),
+                5 => BuildDoubleBarSensorValue(),
+                6 => BuildFileSensorBytesValue(),
+                7 => BuildFileSensorValue(),
+                _ => null,
+            };
+
         internal BoolSensorValue BuildBoolSensorValue()
         {
             var boolSensorValue = new BoolSensorValue()
