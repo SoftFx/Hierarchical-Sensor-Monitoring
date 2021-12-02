@@ -33,6 +33,11 @@ function openFileInBrowser(path, fileName, viewFileAction) {
     //    window.open(url);
     //}
     //xhr.send(JSON.stringify(fileData(product, path)));
+
+    $("#spinner").css("display", "block");
+    $("#mainContainer").css("display", "none");
+    $("#navbar").css("display", "none");
+
     $.ajax({
         type: 'POST',
         url: viewFileAction + "?Selected=" + path,
@@ -46,6 +51,17 @@ function openFileInBrowser(path, fileName, viewFileAction) {
             let blob = new Blob([response], { type: fileType });
             let url = window.URL.createObjectURL(blob);
             window.open(url);
+
+            $("#spinner").css("display", "none");
+            $("#mainContainer").css("display", "block");
+            $("#navbar").css("display", "block");
+        },
+        error: {
+            console.log("Failed to load file!");
+
+            $("#spinner").css("display", "none");
+            $("#mainContainer").css("display", "block");
+            $("#navbar").css("display", "block");
         }
     });
 }
