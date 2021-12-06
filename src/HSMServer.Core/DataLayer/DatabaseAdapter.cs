@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.DatabaseInterface;
 using HSMDatabase.DatabaseWorkCore;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
@@ -14,12 +13,12 @@ namespace HSMServer.Core.DataLayer
 {
     public class DatabaseAdapter : IDatabaseAdapter
     {
-        private readonly IDatabaseCore _database;
+        private readonly DatabaseCore _database;
 
 
         public DatabaseAdapter(IDatabaseSettings dbSettings = null)
         {
-            _database = DatabaseCore.GetInstance(dbSettings ?? new DatabaseSettings());
+            _database = new DatabaseCore(dbSettings ?? new DatabaseSettings());
         }
 
 
