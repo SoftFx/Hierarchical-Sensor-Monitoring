@@ -67,48 +67,55 @@
     </div>
 </div>
 
-<div style="margin: 10px">
+
+
+
+<div id="mainContainer">
+    <div style="margin: 10px">
+        <div class="row">
+            <div class="col-md-auto">
+                <div id="state"></div>
+            </div>
+            <div class="col-md-auto">
+                <div id="updateTime"></div>
+            </div>
+        </div>
+        <hr />
+    </div>
+
     <div class="row">
-        <div class="col-md-auto">
-            <div id="state"></div>
-        </div>
-        <div class="col-md-auto">
-            <div id="updateTime"></div>
-        </div>
+
     </div>
-    <hr />
-</div>
 
-<div class="row">
+    <div class='btn-group' style="margin-left: 20px; margin-bottom: 10px">
+        <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
+            Views
+        </button>
+        <ul class='dropdown-menu'>
+            <li>
+                <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
+            </li>
 
-</div>
-
-<div class='btn-group' style="margin-left: 20px; margin-bottom: 10px">
-    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
-        Views
-    </button>
-    <ul class='dropdown-menu'>
-        <li>
-            <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
-        </li>
-
-        <li>
-            <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
-        </li>
-    </ul>
-</div>
-
-<div>
-    <div id="mainContainer" class="row">
-        <div class="scrollableBlock">
-            <div id="treeContainer" class="col-md-4">@ViewHelper.CreateTree(Model)</div>
-        </div>
-
-
-        <div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>
+            <li>
+                <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
+            </li>
+        </ul>
     </div>
-    <hr />
+
+    <div>
+        <div id="mainContainer" class="row">
+            <div class="scrollableBlock">
+                <div id="treeContainer" class="col-md-4">@ViewHelper.CreateTree(Model)</div>
+            </div>
+
+
+            <div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>
+        </div>
+        <hr />
+    </div>
 </div>
+
+
 
 <script>
     initializeTree();
@@ -125,7 +132,7 @@
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
     hubConnection.on('SendSensorUpdates',
-        function(sensors) {
+        function (sensors) {
             if (sensors == undefined) return;
 
             //update tree
@@ -137,7 +144,7 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function(treeData) {
+            }).done(function (treeData) {
                 //var node = $('#jstree').jstree().get_selected(true)[0];
                 treeData = treeData.replace('{"value":"', '');
                 treeData = treeData.slice(0, treeData.length - 2);
@@ -160,9 +167,9 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function(listsData) {
+            }).done(function (listsData) {
                 //removing invisible lists
-                $('[id^="list_"][style*="display: none;"]').each(function(index) {
+                $('[id^="list_"][style*="display: none;"]').each(function (index) {
                     this.remove();
                 });
                 let parsedData = JSON.parse(listsData);
@@ -172,7 +179,7 @@
             });
 
             if (listId != "" && listId != undefined)
-            //update selected list
+                //update selected list
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -181,7 +188,7 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function(listsData) {
+                }).done(function (listsData) {
                     var array = JSON.parse(listsData);
                     for (let i = 0; i < array.length; i++) {
                         let id = array[i].id.substring('sensor_'.length);
@@ -196,7 +203,7 @@
                 });
 
             if (listId != "" && listId != undefined)
-            //add new sensors
+                //add new sensors
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -205,7 +212,7 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function(sensorsData) {
+                }).done(function (sensorsData) {
                     sensorsData = sensorsData.replace('{"value":"', '');
                     sensorsData = sensorsData.slice(0, sensorsData.length - 2);
                     sensorsData = sensorsData.replaceAll("\\", "");
@@ -224,7 +231,7 @@
                 });
 
             if (listId != "" && listId != undefined)
-            //remove sensors
+                //remove sensors
                 $.ajax({
                     type: 'POST',
                     data: JSON.stringify(sensors),
@@ -233,7 +240,7 @@
                     contentType: 'application/json',
                     cache: false,
                     async: true
-                }).done(function(idsData) {
+                }).done(function (idsData) {
                     var array = JSON.parse(idsData);
 
                     if (array != undefined && array.length > 0)
@@ -266,7 +273,7 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function(treeData) {
+        }).done(function (treeData) {
             //var node = $('#jstree').jstree().get_selected(true)[0];
 
             treeData = treeData.replace('{"value":"', '');
@@ -290,9 +297,9 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function(listsData) {
+        }).done(function (listsData) {
             //removing invisible lists
-            $('[id^="list_"][style*="display: none;"]').each(function(index) {
+            $('[id^="list_"][style*="display: none;"]').each(function (index) {
                 this.remove();
             });
 
@@ -307,7 +314,7 @@
         });
 
         if (listId != "" && listId != undefined)
-        //update selected list
+            //update selected list
             $.ajax({
                 type: 'POST',
                 url: updateSelectedList + '?Selected=' + listId,
@@ -315,7 +322,7 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function(listsData) {
+            }).done(function (listsData) {
                 var array = JSON.parse(listsData);
                 for (let i = 0; i < array.length; i++) {
                     let id = array[i].id.substring('sensor_'.length);
@@ -337,7 +344,7 @@
 
     setInterval(update, 30000);
     $('#sortByName').off("click").on("click",
-        function() {
+        function () {
             $.ajax({
                 type: 'POST',
                 url: sortByNameAction,
@@ -345,13 +352,13 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function() {
+            }).done(function () {
                 location.reload();
             });
         });
 
     $('#sortByTime').off("click").on("click",
-        function() {
+        function () {
             $.ajax({
                 type: 'POST',
                 url: sortByTimeAction,
@@ -398,7 +405,7 @@
     }
 
     function updateValidationError(id, error) {
-        $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'"+
+        $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'" +
             " title=' " + error + "'></li>");
     }
 </script>
