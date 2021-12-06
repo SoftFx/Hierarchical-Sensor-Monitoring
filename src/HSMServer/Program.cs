@@ -82,6 +82,12 @@ namespace HSMServer
                         options.Limits.MaxRequestBodySize = 41943040;//Set up to 40 MB
                         options.Limits.MaxConcurrentConnections = 100;
                         options.Limits.MaxConcurrentUpgradedConnections = 100;
+                        options.Limits.MinRequestBodyDataRate = new MinDataRate(bytesPerSecond: 100,
+                            gracePeriod: TimeSpan.FromSeconds(10));
+                        options.Limits.MinResponseDataRate = new MinDataRate(bytesPerSecond: 100,
+                            gracePeriod: TimeSpan.FromSeconds(10));
+                        options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+                        options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
                     });
                     webBuilder.UseStartup<Startup>();
                 })
