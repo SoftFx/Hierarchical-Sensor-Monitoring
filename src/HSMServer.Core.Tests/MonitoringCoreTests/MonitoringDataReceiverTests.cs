@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMSensorDataObjects.FullDataObject;
@@ -17,7 +16,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
-    public class MonitoringDataReceiverTests : IClassFixture<MonitoringDataReceiverFixture>, IDisposable
+    public class MonitoringDataReceiverTests : IClassFixture<MonitoringDataReceiverFixture>
     {
         private const int SeveralSensorValuesCount = 3;
 
@@ -35,12 +34,13 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private delegate List<SensorInfo> GetAllSensorInfo(Product product);
 
 
-        public MonitoringDataReceiverTests()
+        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture)
         {
             _valuesCache = new ValuesCache();
 
             _databaseAdapterManager = new DatabaseAdapterManager();
             _databaseAdapterManager.AddTestProduct();
+            fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
             _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
             _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
@@ -77,8 +77,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 converter,
                 monitoringLogger);
         }
-
-        public void Dispose() => _databaseAdapterManager.ClearDatabase();
 
 
         #region Add one sensor value tests
