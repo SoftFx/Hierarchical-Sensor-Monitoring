@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMSensorDataObjects.FullDataObject;
@@ -77,6 +77,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 converter,
                 monitoringLogger);
         }
+
 
         #region Add one sensor value tests
 
