@@ -14,7 +14,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly DateTime _databaseMinTime;
         private readonly DateTime _databaseMaxTime;
         private readonly string _name;
-        private readonly Database _database;
+        private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
         public long DatabaseMinTicks => _databaseMinTime.Ticks;
         public long DatabaseMaxTicks => _databaseMaxTime.Ticks;
@@ -26,7 +26,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             _databaseMinTime = minTime;
             _databaseMaxTime = maxTime;
             _name = name;
-            _database = new Database(_name);
+            _database = new LevelDBDatabaseAdapter(_name);
             _logger = LogManager.GetCurrentClassLogger();
         }
 

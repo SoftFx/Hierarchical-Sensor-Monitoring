@@ -10,11 +10,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
-        private readonly Database _database;
+        private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
         public EnvironmentDatabaseWorker(string name)
         {
-            _database = new Database(name);
+            _database = new LevelDBDatabaseAdapter(name);
             _logger = LogManager.GetCurrentClassLogger();
         }
 

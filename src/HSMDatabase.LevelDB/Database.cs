@@ -7,14 +7,14 @@ using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
 {
-    public class Database : IDisposable
+    public class LevelDBDatabaseAdapter : IDisposable
     {
         private readonly DB _database;
         private readonly string _name;
         private readonly WriteOptions _writeOptions;
 
 
-        public Database(string name)
+        public LevelDBDatabaseAdapter(string name)
         {
             Options databaseOptions = new Options();
             databaseOptions.CreateIfMissing = true;
