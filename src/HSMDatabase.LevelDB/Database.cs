@@ -1,4 +1,4 @@
-﻿using HSMDatabase.LevelDB.Extensions;
+using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
 {
-    public class Database : IDatabase
+    public class Database : IDisposable
     {
         private readonly DB _database;
         private readonly string _name;

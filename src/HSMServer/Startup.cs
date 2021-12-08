@@ -8,7 +8,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
@@ -58,9 +57,7 @@ namespace HSMServer
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-            //Use singleton, created in DatabaseCore
-            //services.AddSingleton<IDatabaseCore, DatabaseCore>();
-            services.AddTransient<IDatabaseAdapter, DatabaseAdapter>();
+            services.AddSingleton(CertificatesConfig.DatabaseAdapter);
             services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();

@@ -4,55 +4,18 @@ using System.IO;
 using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.DatabaseInterface;
 using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public sealed class DatabaseCore : IDatabaseCore
+    public sealed class DatabaseCore
     {
-        #region Singleton
-
-        private static readonly object _singletonLockObj = new object();
-        private static DatabaseCore _instance;
-
-        // TODO: Remove static dbsettings and singleton
-        private static IDatabaseSettings _dbSettings;
-
-        public static IDatabaseCore GetInstance(IDatabaseSettings dbSettings)
-        {
-            if (_dbSettings == null)
-                _dbSettings = dbSettings;
-
-            return Instance;
-        }
-
-        private static DatabaseCore Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_singletonLockObj)
-                    {
-                        if (_instance == null)
-                        {
-                            _instance = new DatabaseCore(_dbSettings);
-                        }
-                    }
-                }
-
-                return _instance;
-            }
-        }
-        #endregion
-
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private readonly IDatabaseSettings _databaseSettings;
 
 
-        private DatabaseCore(IDatabaseSettings dbSettings)
+        public DatabaseCore(IDatabaseSettings dbSettings)
         {
             _databaseSettings = dbSettings;
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
@@ -398,9 +361,6 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
-
-            _instance = null;
-            _dbSettings = null;
         }
     }
 }
