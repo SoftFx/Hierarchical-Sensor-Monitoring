@@ -1,14 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
 {
-    public class Database : IDatabase
+    public class Database : IDisposable
     {
         private readonly DB _database;
         private readonly string _name;
@@ -189,9 +188,9 @@ namespace HSMDatabase.LevelDB
                 for (iterator.Seek(startWithKey); iterator.IsValid() && iterator.Key().StartsWith(startWithKey) &&
                     index <= lastIndex; iterator.Next(), ++index)
                 {
-                    if(index <= skip)
+                    if (index <= skip)
                         continue;
-                    
+
                     values.Add(iterator.Value());
                 }
 

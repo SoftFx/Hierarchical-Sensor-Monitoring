@@ -10,7 +10,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
-        private readonly IDatabase _database;
+        private readonly Database _database;
         private readonly Logger _logger;
         public EnvironmentDatabaseWorker(string name)
         {

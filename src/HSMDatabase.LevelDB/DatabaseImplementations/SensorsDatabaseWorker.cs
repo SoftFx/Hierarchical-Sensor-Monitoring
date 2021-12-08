@@ -14,7 +14,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly DateTime _databaseMinTime;
         private readonly DateTime _databaseMaxTime;
         private readonly string _name;
-        private readonly IDatabase _database;
+        private readonly Database _database;
         private readonly Logger _logger;
         public long DatabaseMinTicks => _databaseMinTime.Ticks;
         public long DatabaseMaxTicks => _databaseMaxTime.Ticks;
