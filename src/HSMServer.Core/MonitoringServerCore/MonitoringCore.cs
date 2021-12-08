@@ -138,7 +138,8 @@ namespace HSMServer.Core.MonitoringServerCore
         /// <param name="productName"></param>
         private void SaveSensorValue(SensorDataEntity dataObject, string productName)
         {
-            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+            //await Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+            _databaseAdapter.PutSensorData(dataObject, productName);
         }
 
         /// <summary>

@@ -37,6 +37,13 @@ namespace HSMCommon
             DoActionWhileThereAreAttempts(WriteToFile);
         }
 
+        public static void SafeRemoveFolder(string folderPath)
+        {
+            void RemoveFolder() => Directory.Delete(folderPath, true);
+
+            DoActionWhileThereAreAttempts(RemoveFolder);
+        }
+
         private static async void DoActionWhileThereAreAttempts(Action action)
         {
             int attempts = 0;

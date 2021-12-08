@@ -78,7 +78,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 monitoringLogger);
         }
 
-        public void Dispose() => _databaseAdapterManager.ClearDatabase();
+        public void Dispose()
+        {
+            //_databaseAdapterManager.ClearDatabase();
+        }
 
 
         #region Add one sensor value tests
@@ -446,9 +449,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
         private async void FullSeveralSensorValuesTestAsync(List<SensorValueBase> sensorValues,
-           GetValuesFromCache getCachedValues, GetAllSensorHistoryData getAllSensorHistoryData, GetAllSensorInfo getAllSensorInfo)
+           GetValuesFromCache getCachedValues, GetAllSensorHistoryData getAllSensorHistoryData, GetAllSensorInfo getAllSensorInfo, int? time = null)
         {
-            await Task.Delay(100);
+            await Task.Delay(sensorValues.Count);
 
             var sensorsDict = sensorValues.GroupBy(s => s.Path)
                                           .ToDictionary(s => s.Key, s => s.ToList());

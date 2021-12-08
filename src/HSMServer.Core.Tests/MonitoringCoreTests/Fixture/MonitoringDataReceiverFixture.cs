@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon;
+using System;
 using System.IO;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
@@ -12,9 +13,12 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
 
-        public void Dispose() =>  DeleteDatabaseDirectory();
+        public void Dispose()
+        {
+            DeleteDatabaseDirectory();
+        }
 
         private static void DeleteDatabaseDirectory() =>
-            Directory.Delete(DatabaseAdapterManager.DatabaseFolder, true);
+            FileManager.SafeRemoveFolder(DatabaseAdapterManager.DatabaseFolder);
     }
 }
