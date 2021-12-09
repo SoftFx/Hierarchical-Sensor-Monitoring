@@ -313,7 +313,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Equal(_productName, actual.Product);
             Assert.Equal(expectedType, actual.SensorType);
             Assert.Equal(SensorStatus.Ok, actual.Status);
-            Assert.Equal(TransactionType.Add, actual.TransactionType);
+            //Assert.Equal(TransactionType.Add, actual.TransactionType);
             Assert.Equal(string.Empty, actual.ValidationError);
             Assert.NotEqual(default, actual.Time);
         }

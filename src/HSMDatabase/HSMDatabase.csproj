@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
     <ProjectReference Include="..\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />
   </ItemGroup>
 

@@ -19,7 +19,7 @@ namespace HSMServer.Core.Products
         private readonly ILogger<ProductManager> _logger;
         private readonly IConverter _converter;
         private readonly List<Product> _products;
-        private readonly Dictionary<string, Dictionary<string, SensorInfo>> _productSensorsDictionary = 
+        private readonly Dictionary<string, Dictionary<string, SensorInfo>> _productSensorsDictionary =
             new Dictionary<string, Dictionary<string, SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
@@ -95,7 +95,7 @@ namespace HSMServer.Core.Products
             {
                 _logger.LogInformation($"{_products.Count} products read, ProductManager initialized");
             }
-            
+
         }
 
         private void AddSelfMonitoringProduct()
@@ -221,18 +221,24 @@ namespace HSMServer.Core.Products
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
-            var newObject = _converter.Convert(productName, sensorValue);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))
                 {
                     _productSensorsDictionary[productName] = new Dictionary<string, SensorInfo>();
                 }
-                _productSensorsDictionary[productName].Add(newObject.Path, newObject);
+
+                var newSensor = _converter.Convert(productName, sensorValue);
+
+                if (!_productSensorsDictionary[productName].ContainsKey(newSensor.Path))
+                {
+                    _productSensorsDictionary[productName].Add(newSensor.Path, newSensor);
+                    _databaseAdapter.AddSensor(newSensor);
+                    //Task.Run(() => _databaseAdapter.AddSensor(newSensor));
+                }
             }
 
             //Task.Run(() => _databaseAdapter.AddSensorOld(newObject));
-            Task.Run(() => _databaseAdapter.AddSensor(newObject));
         }
 
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
@@ -248,7 +254,7 @@ namespace HSMServer.Core.Products
                 }
 
                 var doesSensorExist = _productSensorsDictionary[productName]
-                    .TryGetValue(sensorValue.Path, out var existingSensor);                   
+                    .TryGetValue(sensorValue.Path, out var existingSensor);
                 if (!doesSensorExist || !string.IsNullOrEmpty(sensorValue.Description))
                 {
                     _productSensorsDictionary[productName].Add(newObject.Path, newObject);
@@ -297,7 +303,7 @@ namespace HSMServer.Core.Products
             {
                 _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
             }
-            
+
         }
         public string GetProductKeyByName(string name)
         {

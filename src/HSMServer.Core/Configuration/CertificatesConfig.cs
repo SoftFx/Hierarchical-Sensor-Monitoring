@@ -33,7 +33,6 @@ namespace HSMServer.Core.Configuration
 
         private static X509Certificate2 _serverCertificate;
         private static X509Certificate2 _caCertificate;
-        private static IDatabaseAdapter _databaseAdapter;
 
         private static string ServerCertName
         {
@@ -56,6 +55,8 @@ namespace HSMServer.Core.Configuration
         private static string CACertificatePath =>
             Path.Combine(_caFolderPath, CaCertificateFileName);
 
+        public static IDatabaseAdapter DatabaseAdapter { get; private set; }
+
         public static X509Certificate2 ServerCertificate =>
             _serverCertificate ??= ReadServerCertificate();
 
@@ -72,7 +73,7 @@ namespace HSMServer.Core.Configuration
         public static void InitializeConfig()
         {
             _logger = LogManager.GetCurrentClassLogger();
-            _databaseAdapter = new DatabaseAdapter();
+            DatabaseAdapter = new DatabaseAdapter();
 
             InitializeIndependentConstants();
 
@@ -164,7 +165,7 @@ namespace HSMServer.Core.Configuration
             if (!_isFirstLaunch)
             {
                 var pwdParam =
-                    _databaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
+                    DatabaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
 
                 return pwdParam != null
                     ? new X509Certificate2(_serverCertificatePath, pwdParam.Value)
