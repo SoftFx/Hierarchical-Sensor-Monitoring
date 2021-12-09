@@ -24,7 +24,6 @@ namespace HSMDataCollector.CustomFuncSensor
             TryGetWindowsVersion(obj, out _windowsVersion);
             TryGetWindowsUpdateDate(obj, out _windowsLastUpdate);
 
-           //check windows ?
             if (isLogging)
             {
                 _logger = Logger.Create(nameof(WindowsUpdateFuncSensor));
@@ -102,7 +101,6 @@ namespace HSMDataCollector.CustomFuncSensor
 
         protected override UnitedSensorValue GetInvokeResult() =>
             CreateDataObject(IsVersionNeedUpdate());
-
 
         public override UnitedSensorValue GetLastValue() =>
             CreateDataObject(IsVersionNeedUpdate());
