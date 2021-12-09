@@ -20,6 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -143,9 +144,29 @@ namespace HSMDataCollector.Core
             string path = $"{TextConstants.PerformanceNodeName}/Service alive";
             _logger?.Info($"Initialize {path} sensor...");
 
-            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, "",
-                TimeSpan.FromSeconds(15), SensorType.BooleanSensor, () => true,_isLogging);
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, 
+                _productKey, _dataQueue as IValuesQueue, "", TimeSpan.FromSeconds(15),
+                SensorType.BooleanSensor, () => true,_isLogging);
             AddNewSensor(aliveSensor, path);
+        }
+
+        public void InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval)
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                _logger?.Error($"Failed to create {nameof(WindowsUpdateFuncSensor)} " +
+                    $"because current OS is not Windows");
+                return;
+            }
+
+            _logger?.Info($"Initialize windows update sensor...");
+            var path = $"{TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}";
+
+            var updateSensor = new WindowsUpdateFuncSensor(path,
+                _productKey, _dataQueue as IValuesQueue, string.Empty, sensorInterval,
+                SensorType.BooleanSensor, _isLogging, updateInterval);
+
+            AddNewSensor(updateSensor, path);
         }
 
         #region Generic sensors functionality
