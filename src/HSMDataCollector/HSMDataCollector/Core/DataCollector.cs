@@ -20,6 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -38,6 +39,9 @@ namespace HSMDataCollector.Core
         private NLog.Logger _logger;
         private bool _isStopped;
         private bool _isLogging;
+        internal static string ServiceAliveNode => 
+            $"{TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
+
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
@@ -140,12 +144,31 @@ namespace HSMDataCollector.Core
 
         public void MonitorServiceAlive()
         {
-            string path = $"{TextConstants.PerformanceNodeName}/Service alive";
-            _logger?.Info($"Initialize {path} sensor...");
+           _logger?.Info($"Initialize {ServiceAliveNode} sensor...");
 
-            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, _productKey, _dataQueue as IValuesQueue, "",
-                TimeSpan.FromSeconds(15), SensorType.BooleanSensor, () => true,_isLogging);
-            AddNewSensor(aliveSensor, path);
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(ServiceAliveNode, 
+                _productKey, _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15),
+                SensorType.BooleanSensor, () => true,_isLogging);
+            AddNewSensor(aliveSensor, ServiceAliveNode);
+        }
+
+        public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval)
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                _logger?.Error($"Failed to create {nameof(WindowsUpdateFuncSensor)} " +
+                    $"because current OS is not Windows");
+                return false;
+            }
+
+            _logger?.Info($"Initialize windows update sensor...");
+
+            var updateSensor = new WindowsUpdateFuncSensor(WindowsUpdateFuncSensor.WindowsUpdateNode,
+                _productKey, _dataQueue as IValuesQueue, string.Empty, sensorInterval,
+                SensorType.BooleanSensor, _isLogging, updateInterval);
+
+            AddNewSensor(updateSensor, WindowsUpdateFuncSensor.WindowsUpdateNode);
+            return true;
         }
 
         #region Generic sensors functionality
