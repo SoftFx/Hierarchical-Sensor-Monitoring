@@ -3,6 +3,7 @@
     public class TextConstants
     {
         public const string PerformanceNodeName = "System monitoring";
+        public const string ServiceAlive = "Service alive";
         public const string CurrentProcessNodeName = "CurrentProcess";
         public const string WindowsUpdateNodeName = "Is need Windows update";
 

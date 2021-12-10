@@ -7,7 +7,7 @@ using System.Management;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal class WindowsUpdateFuncSensor : CustomFuncSensorBase
+    internal sealed class WindowsUpdateFuncSensor : CustomFuncSensorBase
     {
         private readonly NLog.Logger _logger;
         private readonly TimeSpan _updateInterval;
@@ -21,8 +21,9 @@ namespace HSMDataCollector.CustomFuncSensor
             _updateInterval = updateInterval;
 
             ManagementObject obj = GetManagementObject();
-            TryGetWindowsVersion(obj, out _windowsVersion);
-            TryGetWindowsUpdateDate(obj, out _windowsLastUpdate);
+            TryGetWindowsValue(obj, TextConstants.Version, out _windowsVersion);
+            _windowsLastUpdate = TryGetWindowsValue(obj, TextConstants.InstallDate, out var strDate) 
+                ? ToUTCDateTime(strDate) : DateTime.MinValue;
 
             if (isLogging)
             {
@@ -30,11 +31,15 @@ namespace HSMDataCollector.CustomFuncSensor
             }
         }
 
-        private ManagementObject GetManagementObject()
+        private static DateTime ToUTCDateTime(string str) => 
+            ManagementDateTimeConverter.ToDateTime(str).ToUniversalTime();
+
+        private static ManagementObject GetManagementObject()
         {
             var searcher = new ManagementObjectSearcher(TextConstants.Win32OperatingSystem);
             ManagementObjectCollection collection = searcher.Get();
-            if (collection == null) return null;
+            if (collection == null) 
+                return null;
 
             foreach (ManagementObject obj in collection)
                 return obj;
@@ -42,36 +47,18 @@ namespace HSMDataCollector.CustomFuncSensor
             return null;
         }
 
-        private bool TryGetWindowsVersion(ManagementObject obj, out string windowsVersion)
+        private bool TryGetWindowsValue(ManagementObject obj, string key, out string value)
         {
             bool isComplete = false;
             try
             {
-                windowsVersion = obj[TextConstants.Version].ToString();
+                value = obj[key].ToString();
                 isComplete = true;
             }
             catch(Exception ex)
             {
-                windowsVersion = string.Empty;
-                _logger?.Error(ex, "Failed to get windows version.");
-                CreateErrorDataObject(ex);
-            }
-
-            return isComplete;
-        }
-
-        private bool TryGetWindowsUpdateDate(ManagementObject obj, out DateTime updateDate)
-        {
-            bool isComplete = false;
-            try
-            {
-                updateDate = ManagementDateTimeConverter.ToDateTime(obj[TextConstants.InstallDate].ToString());
-                isComplete = true;
-            }
-            catch (Exception ex)
-            {
-                updateDate = DateTime.MinValue;
-                _logger?.Error(ex, "Failed to get windows update date.");
+                value = string.Empty;
+                _logger?.Error(ex, $"Failed to get windows {key}");
                 CreateErrorDataObject(ex);
             }
 
@@ -81,28 +68,14 @@ namespace HSMDataCollector.CustomFuncSensor
         private bool IsVersionNeedUpdate() => 
             DateTime.UtcNow - _windowsLastUpdate >= _updateInterval;
 
-        private UnitedSensorValue CreateDataObject(bool value)
-        {
-            var valueObject = new UnitedSensorValue();
-
-            valueObject.Data = value.ToString();
-            valueObject.Description = GetDescription();
-            valueObject.Path = Path;
-            valueObject.Key = ProductKey;
-            valueObject.Time = DateTime.Now;
-            valueObject.Type = Type;
-
-            return valueObject;
-        }
-
         private string GetDescription() =>
             $"Windows Version: {_windowsVersion} Last Update Date: {_windowsLastUpdate}\n " +
             $"User Description: {Description}";
 
         protected override UnitedSensorValue GetInvokeResult() =>
-            CreateDataObject(IsVersionNeedUpdate());
+            CreateDataObject(IsVersionNeedUpdate(), GetDescription());
 
         public override UnitedSensorValue GetLastValue() =>
-            CreateDataObject(IsVersionNeedUpdate());
+            CreateDataObject(IsVersionNeedUpdate(), GetDescription());
     }
 }

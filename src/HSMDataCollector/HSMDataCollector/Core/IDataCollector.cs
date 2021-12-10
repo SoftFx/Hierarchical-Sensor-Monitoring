@@ -59,7 +59,7 @@ namespace HSMDataCollector.Core
         /// </summary>
         /// <param name="sensorInterval">The function is invoked every time the interval passes</param>
         /// <param name="updateInterval">Time interval for the version to become old</param>
-        void InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval);
+        bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval);
 
         #endregion
 
