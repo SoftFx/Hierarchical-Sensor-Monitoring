@@ -14,6 +14,9 @@ namespace HSMDataCollector.CustomFuncSensor
         private readonly DateTime _windowsLastUpdate;
         private readonly string _windowsVersion;
 
+        internal static string WindowsUpdateNode =>
+            $"{TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}";
+
         public WindowsUpdateFuncSensor(string path, string productKey, IValuesQueue queue,
             string description, TimeSpan timerSpan, SensorType type, bool isLogging, TimeSpan updateInterval) 
             : base(path, productKey, queue, description, timerSpan, type)
@@ -23,7 +26,7 @@ namespace HSMDataCollector.CustomFuncSensor
             ManagementObject obj = GetManagementObject();
             TryGetWindowsValue(obj, TextConstants.Version, out _windowsVersion);
             _windowsLastUpdate = TryGetWindowsValue(obj, TextConstants.InstallDate, out var strDate) 
-                ? ToUTCDateTime(strDate) : DateTime.MinValue;
+                ? ToUTC(strDate) : DateTime.MinValue;
 
             if (isLogging)
             {
@@ -31,7 +34,7 @@ namespace HSMDataCollector.CustomFuncSensor
             }
         }
 
-        private static DateTime ToUTCDateTime(string str) => 
+        private static DateTime ToUTC(string str) => 
             ManagementDateTimeConverter.ToDateTime(str).ToUniversalTime();
 
         private static ManagementObject GetManagementObject()

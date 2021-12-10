@@ -41,8 +41,6 @@ namespace HSMDataCollector.Core
         private bool _isLogging;
         internal static string ServiceAliveNode => 
             $"{TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
-        internal static string WindowsUpdateNode =>
-            $"{TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}";
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
@@ -165,11 +163,11 @@ namespace HSMDataCollector.Core
 
             _logger?.Info($"Initialize windows update sensor...");
 
-            var updateSensor = new WindowsUpdateFuncSensor(WindowsUpdateNode,
+            var updateSensor = new WindowsUpdateFuncSensor(WindowsUpdateFuncSensor.WindowsUpdateNode,
                 _productKey, _dataQueue as IValuesQueue, string.Empty, sensorInterval,
                 SensorType.BooleanSensor, _isLogging, updateInterval);
 
-            AddNewSensor(updateSensor, WindowsUpdateNode);
+            AddNewSensor(updateSensor, WindowsUpdateFuncSensor.WindowsUpdateNode);
             return true;
         }
 
