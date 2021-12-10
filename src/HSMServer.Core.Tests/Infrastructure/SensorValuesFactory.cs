@@ -12,6 +12,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         internal SensorValuesFactory(DatabaseAdapterManager dbManager) =>
             _productKey = dbManager.TestProduct.Key;
 
+        internal SensorValuesFactory(string productKey) =>
+            _productKey = productKey;
+
 
         internal SensorValueBase BuildRandomSensorValue() =>
             RandomValuesGenerator.GetRandomInt(min: 0, max: 8) switch

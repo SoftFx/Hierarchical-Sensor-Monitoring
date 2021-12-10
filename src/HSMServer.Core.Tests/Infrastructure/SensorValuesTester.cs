@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Text.Json;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model.Sensor;
@@ -108,6 +110,76 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             };
         }
 
+        internal static void TestSensorDataEntity(BoolSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.BooleanSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(IntSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.IntSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(DoubleSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.DoubleSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(StringSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.StringSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(IntBarSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.IntegerBarSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(DoubleBarSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.DoubleBarSensor, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(FileSensorBytesValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.FileSensorBytes, actual.DataType);
+        }
+
+        internal static void TestSensorDataEntity(FileSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        {
+            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
+
+            Assert.Equal((byte)SensorType.FileSensor, actual.DataType);
+        }
+
+
+        private static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual,
+            object expectedTypedData, DateTime timeCollected)
+        {
+            var timeSpan = expected.Time - DateTime.UnixEpoch;
+
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal((byte)expected.Status, actual.Status);
+            Assert.Equal(JsonSerializer.Serialize(expectedTypedData), actual.TypedData);
+            Assert.Equal(expected.Time, actual.Time);
+            Assert.Equal(timeCollected, actual.TimeCollected);
+            Assert.Equal((long)timeSpan.TotalSeconds, actual.Timestamp);
+        }
+
 
         private void TestSensorDataFromCache(BoolSensorValue expected, SensorData actual)
         {
@@ -172,6 +244,20 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Equal($"File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}.", actual.ShortStringValue);
             Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
         }
+        private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Key, actual.Key);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(_productName, actual.Product);
+            Assert.Equal(expectedType, actual.SensorType);
+            Assert.Equal(SensorStatus.Ok, actual.Status);
+            //Assert.Equal(TransactionType.Add, actual.TransactionType);
+            Assert.Equal(string.Empty, actual.ValidationError);
+            Assert.NotEqual(default, actual.Time);
+        }
+
 
         private void TestSensorInfoFromDB(BoolSensorValue expected, SensorInfo actual) =>
             TestSensorInfoFromDB(expected, SensorType.BooleanSensor, actual);
@@ -197,136 +283,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private void TestSensorInfoFromDB(FileSensorValue expected, SensorInfo actual) =>
             TestSensorInfoFromDB(expected, SensorType.FileSensor, actual);
 
-        private static void TestSensorHistoryDataFromDB(BoolSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.Comment,
-                expected.BoolValue,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.BooleanSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(IntSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.IntValue,
-                expected.Comment,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.IntSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(DoubleSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.DoubleValue,
-                expected.Comment,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.DoubleSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(StringSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.StringValue,
-                expected.Comment,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.StringSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(IntBarSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.Comment,
-                expected.Min,
-                expected.Max,
-                expected.Mean,
-                expected.Percentiles,
-                expected.Count,
-                expected.StartTime,
-                expected.EndTime,
-                expected.LastValue,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.IntegerBarSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(DoubleBarSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.Comment,
-                expected.Min,
-                expected.Max,
-                expected.Mean,
-                expected.Count,
-                expected.Percentiles,
-                expected.StartTime,
-                expected.EndTime,
-                expected.LastValue,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.DoubleBarSensor, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(FileSensorBytesValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.Comment,
-                expected.Extension,
-                expected.FileContent,
-                expected.FileName,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.FileSensorBytes, typedData, actual);
-        }
-
-        private static void TestSensorHistoryDataFromDB(FileSensorValue expected, SensorHistoryData actual)
-        {
-            var typedData = new
-            {
-                expected.Comment,
-                expected.Extension,
-                expected.FileContent,
-                expected.FileName,
-            };
-
-            TestSensorHistoryDataFromDB(expected, SensorType.FileSensor, typedData, actual);
-        }
-
-
-        private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Key, actual.Key);
-            Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(_productName, actual.Product);
-            Assert.Equal(expectedType, actual.SensorType);
-            Assert.Equal(SensorStatus.Ok, actual.Status);
-            //Assert.Equal(TransactionType.Add, actual.TransactionType);
-            Assert.Equal(string.Empty, actual.ValidationError);
-            Assert.NotEqual(default, actual.Time);
-        }
-
-        private static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorType expectedType, object expectedTypeData, SensorHistoryData actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expectedType, actual.SensorType);
-            Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
-            Assert.Contains(expected.Comment, actual.TypedData);
-            Assert.Equal(JsonSerializer.Serialize(expectedTypeData), actual.TypedData);
-        }
-
         private void TestSensorInfoFromDB(SensorValueBase expected, SensorType expectedType, SensorInfo actual)
         {
             Assert.NotNull(actual);
@@ -339,5 +295,114 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Empty(actual.ValidationParameters);
             Assert.Null(actual.Unit);
         }
+
+
+        private static void TestSensorHistoryDataFromDB(BoolSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.BooleanSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(IntSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.IntSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(DoubleSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.DoubleSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(StringSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.StringSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(IntBarSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.IntegerBarSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(DoubleBarSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.DoubleBarSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(FileSensorBytesValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.FileSensorBytes, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(FileSensorValue expected, SensorHistoryData actual) =>
+            TestSensorHistoryDataFromDB(expected, SensorType.FileSensor, GetSensorValueTypedData(expected), actual);
+
+        private static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorType expectedType, object expectedTypeData, SensorHistoryData actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expectedType, actual.SensorType);
+            Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
+            Assert.Contains(expected.Comment, actual.TypedData);
+            Assert.Equal(JsonSerializer.Serialize(expectedTypeData), actual.TypedData);
+        }
+
+
+        private static object GetSensorValueTypedData(BoolSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.Comment,
+                sensorValue.BoolValue,
+            };
+
+        private static object GetSensorValueTypedData(IntSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.IntValue,
+                sensorValue.Comment,
+            };
+
+        private static object GetSensorValueTypedData(DoubleSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.DoubleValue,
+                sensorValue.Comment,
+            };
+
+        private static object GetSensorValueTypedData(StringSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.StringValue,
+                sensorValue.Comment,
+            };
+
+        private static object GetSensorValueTypedData(IntBarSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.Comment,
+                sensorValue.Min,
+                sensorValue.Max,
+                sensorValue.Mean,
+                sensorValue.Percentiles,
+                sensorValue.Count,
+                sensorValue.StartTime,
+                sensorValue.EndTime,
+                sensorValue.LastValue,
+            };
+
+        private static object GetSensorValueTypedData(DoubleBarSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.Comment,
+                sensorValue.Min,
+                sensorValue.Max,
+                sensorValue.Mean,
+                sensorValue.Count,
+                sensorValue.Percentiles,
+                sensorValue.StartTime,
+                sensorValue.EndTime,
+                sensorValue.LastValue,
+            };
+
+        private static object GetSensorValueTypedData(FileSensorBytesValue sensorValue) =>
+            new
+            {
+                sensorValue.Comment,
+                sensorValue.Extension,
+                sensorValue.FileContent,
+                sensorValue.FileName,
+            };
+
+        private static object GetSensorValueTypedData(FileSensorValue sensorValue) =>
+            new
+            {
+                sensorValue.Comment,
+                sensorValue.Extension,
+                sensorValue.FileContent,
+                sensorValue.FileName,
+            };
     }
 }
