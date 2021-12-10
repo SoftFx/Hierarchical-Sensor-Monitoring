@@ -36,6 +36,20 @@ namespace HSMDataCollector.CustomFuncSensor
             result.Data = ex.Message;
             return result;
         }
+
+        protected UnitedSensorValue CreateDataObject<T>(T value, string description = "")
+        {
+            var valueObject = new UnitedSensorValue();
+
+            valueObject.Data = value.ToString();
+            valueObject.Description = description;
+            valueObject.Path = Path;
+            valueObject.Key = ProductKey;
+            valueObject.Time = DateTime.Now;
+            valueObject.Type = Type;
+
+            return valueObject;
+        }
         protected abstract UnitedSensorValue GetInvokeResult();
 
         protected void RestartTimerInternal(TimeSpan timerSpan)
