@@ -29,35 +29,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        #region Convert to database objects
-
-        //SensorDataObject ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected);
-        //SensorDataObject ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected);
-
-        SensorDataEntity ConvertToDatabase(BoolSensorValue sensorValue, DateTime timeCollected, 
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(IntSensorValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(DoubleSensorValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(StringSensorValue sensorValue, DateTime timeCollected, 
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(FileSensorValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(FileSensorBytesValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(IntBarSensorValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        SensorDataEntity ConvertToDatabase(DoubleBarSensorValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus = SensorStatus.Unknown);
-        #endregion
-
         #region Independent update messages
         //SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName);
         //SensorData Convert(SensorDataObject dataObject, string productName);
