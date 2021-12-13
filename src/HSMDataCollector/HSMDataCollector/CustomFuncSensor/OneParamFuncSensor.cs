@@ -55,17 +55,6 @@ namespace HSMDataCollector.CustomFuncSensor
                 return CreateErrorDataObject(e);
             }
         }
-        private UnitedSensorValue CreateDataObject(T value)
-        {
-            UnitedSensorValue valueObject = new UnitedSensorValue();
-            valueObject.Data = value.ToString();
-            valueObject.Description = Description;
-            valueObject.Path = Path;
-            valueObject.Key = ProductKey;
-            valueObject.Time = DateTime.Now;
-            valueObject.Type = Type;
-            return valueObject;
-        }
 
         public void AddValue(U value)
         {

@@ -54,6 +54,12 @@ namespace HSMDataCollector.Core
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>
         void MonitorServiceAlive();
+        /// <summary>
+        ///  Creates a sensor, which sends boolean value when since windows update date passed more time then <see cref="updateInterval"/>
+        /// </summary>
+        /// <param name="sensorInterval">The function is invoked every time the interval passes</param>
+        /// <param name="updateInterval">Time interval for the version to become old</param>
+        bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval);
 
         #endregion
 
