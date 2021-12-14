@@ -16,6 +16,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         internal SensorValuesTester(DatabaseAdapterManager dbManager) =>
             _productName = dbManager.TestProduct.Name;
 
+        internal SensorValuesTester(string productName) =>
+            _productName = productName;
+
 
         internal void TestSensorDataFromCache(SensorValueBase expected, SensorData actual)
         {
@@ -46,6 +49,15 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                     TestSensorDataFromCache(fileSensorValue, actual);
                     break;
             };
+        }
+
+        internal void TestSensorData(SensorValueBase expected, SensorData actual,
+            DateTime timeCollected, TransactionType type)
+        {
+            TestSensorDataFromCache(expected, actual);
+
+            Assert.Equal(timeCollected, actual.Time);
+            Assert.Equal(type, actual.TransactionType);
         }
 
         internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
@@ -244,6 +256,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Equal($"File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}.", actual.ShortStringValue);
             Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
         }
+
         private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)
         {
             Assert.NotNull(actual);
@@ -254,7 +267,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Equal(expectedType, actual.SensorType);
             Assert.Equal(SensorStatus.Ok, actual.Status);
             //Assert.Equal(TransactionType.Add, actual.TransactionType);
-            Assert.Equal(string.Empty, actual.ValidationError);
+            Assert.True(string.IsNullOrEmpty(actual.ValidationError));
             Assert.NotEqual(default, actual.Time);
         }
 
