@@ -10,7 +10,7 @@ using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Extensions;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;

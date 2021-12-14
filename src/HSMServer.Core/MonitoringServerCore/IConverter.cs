@@ -34,16 +34,6 @@ namespace HSMServer.Core.MonitoringServerCore
         //SensorData Convert(SensorDataObject dataObject, string productName);
         SensorData Convert(SensorDataEntity dataObject, SensorInfo sensorInfo, string productName);
         SensorData Convert(SensorDataEntity dataObject, string productName);
-        SensorData Convert(BoolSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(IntSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(DoubleSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(StringSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(FileSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(FileSensorBytesValue value, string productName, DateTime timeCollected,
-            TransactionType type);
-        SensorData Convert(IntBarSensorValue value, string productName, DateTime timeCollected, TransactionType type);
-        SensorData Convert(DoubleBarSensorValue value, string productName, DateTime timeCollected,
-            TransactionType type);
         #endregion
 
         SensorData ConvertUnitedValue(UnitedSensorValue value, string productName,

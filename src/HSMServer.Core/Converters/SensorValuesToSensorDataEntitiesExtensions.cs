@@ -4,10 +4,11 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Extensions;
 
-namespace HSMServer.Core.Extensions
+namespace HSMServer.Core.Converters
 {
-    public static class ConvertSensorValuesToDataEntitiesExtensions
+    public static class SensorValuesToSensorDataEntitiesExtensions
     {
         public static SensorDataEntity Convert(this BoolSensorValue sensorValue, DateTime timeCollected,
             SensorStatus validationStatus = SensorStatus.Unknown)

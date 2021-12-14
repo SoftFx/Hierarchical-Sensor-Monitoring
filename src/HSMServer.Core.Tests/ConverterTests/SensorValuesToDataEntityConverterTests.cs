@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.Json;
 using HSMSensorDataObjects;
-using HSMServer.Core.Extensions;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.MonitoringDataReceiverTests;
 using Xunit;
 

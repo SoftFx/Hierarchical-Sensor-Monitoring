@@ -1,16 +1,17 @@
-﻿using HSMCommon.Constants;
+﻿using System;
+using System.Text.Json;
+using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Text.Json;
 using HSMServer.Core.SensorsDataValidation;
+using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Core.SensorsDataProcessor
 {
@@ -48,7 +49,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -71,7 +72,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -95,7 +96,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -126,7 +127,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -140,7 +141,7 @@ namespace HSMServer.Core.SensorsDataProcessor
             if (baseProcessingResult == ValidationResult.Failed)
                 return baseProcessingResult;
 
-            var typedValidationResult = _dataValidator.ValidateDoubleBar(value.Max, value.Min, value.Mean, value.Count, value.Path, 
+            var typedValidationResult = _dataValidator.ValidateDoubleBar(value.Max, value.Min, value.Mean, value.Count, value.Path,
                 productName, out var typedProcessingError);
 
             var worstResult = baseProcessingResult.GetWorst(typedValidationResult);
@@ -150,7 +151,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -174,7 +175,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
 
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;
@@ -189,7 +190,7 @@ namespace HSMServer.Core.SensorsDataProcessor
                 return baseProcessingResult;
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, baseProcessingResult);
             processedData.ValidationError = processingError;
             return baseProcessingResult;
@@ -204,7 +205,7 @@ namespace HSMServer.Core.SensorsDataProcessor
                 return baseProcessingResult;
 
             AddSensorIfNotRegistered(productName, value, out var transactionType);
-            processedData = _converter.Convert(value, productName, timeCollected, transactionType);
+            processedData = value.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, baseProcessingResult);
             processedData.ValidationError = processingError;
             return baseProcessingResult;
@@ -240,7 +241,7 @@ namespace HSMServer.Core.SensorsDataProcessor
             processedData.ValidationError = processingError;
             return worstResult;
         }
-        
+
         #endregion
 
 
