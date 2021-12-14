@@ -56,7 +56,7 @@ function openFileInBrowser(path, fileName, viewFileAction) {
             $("#mainContainer").css("display", "block");
             $("#navbar").css("display", "block");
         },
-        error: {
+        error: function(error){
             console.log("Failed to load file!");
 
             $("#spinner").css("display", "none");
