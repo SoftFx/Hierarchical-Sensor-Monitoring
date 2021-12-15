@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Tests.MonitoringDataReceiverTests;
+﻿using HSMServer.Core.Tests.Infrastructure;
 
 namespace HSMServer.Core.Tests.ConverterTests
 {

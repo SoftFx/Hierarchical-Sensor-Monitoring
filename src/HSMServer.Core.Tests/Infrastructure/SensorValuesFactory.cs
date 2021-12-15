@@ -2,7 +2,7 @@
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal sealed class SensorValuesFactory
     {

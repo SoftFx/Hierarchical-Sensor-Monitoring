@@ -217,36 +217,36 @@ namespace HSMServer.Core.MonitoringServerCore
         private string GetStringValueForBool(bool boolValue, DateTime timeCollected, string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}, comment = {comment}"
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}, comment = {comment}."
                 : $"Time: {timeCollected.ToUniversalTime():G}. Value = {boolValue}.";
         }
 
         private string GetStringValueForInt(int intValue, DateTime timeCollected, string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}, comment = {comment}"
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}, comment = {comment}."
                 : $"Time: {timeCollected.ToUniversalTime():G}. Value = {intValue}.";
         }
 
         private string GetStringValueForDouble(double doubleValue, DateTime timeCollected, string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}, comment = {comment}"
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}, comment = {comment}."
                 : $"Time: {timeCollected.ToUniversalTime():G}. Value = {doubleValue}.";
         }
 
         private string GetStringValueForString(string stringValue, DateTime timeCollected, string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}', comment = {comment}"
-                : $"Time: {timeCollected.ToUniversalTime():G}. Value = '{stringValue}'.";
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value = {stringValue}, comment = {comment}."
+                : $"Time: {timeCollected.ToUniversalTime():G}. Value = {stringValue}.";
         }
 
         private string GetStringValueForIntBar(int min, int max, int mean, int count, int last, DateTime timeCollected,
             string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}."
                 : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
         }
 
@@ -254,7 +254,7 @@ namespace HSMServer.Core.MonitoringServerCore
             DateTime timeCollected, string comment)
         {
             return !string.IsNullOrEmpty(comment)
-                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}"
+                ? $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}. Comment = {comment}."
                 : $"Time: {timeCollected.ToUniversalTime():G}. Value: Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {last}.";
         }
         private string GetStringValue(string stringData, SensorType sensorType, DateTime timeCollected)
@@ -345,7 +345,7 @@ namespace HSMServer.Core.MonitoringServerCore
                     {
                     try
                     {
-                        FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                        FileSensorBytesData fileData = JsonSerializer.Deserialize<FileSensorBytesData>(stringData);
                         string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
                         string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
                         result = !string.IsNullOrEmpty(fileData.Comment)
@@ -447,7 +447,7 @@ namespace HSMServer.Core.MonitoringServerCore
                     {
                         try
                         {
-                            FileSensorData fileData = JsonSerializer.Deserialize<FileSensorData>(stringData);
+                            FileSensorBytesData fileData = JsonSerializer.Deserialize<FileSensorBytesData>(stringData);
                             string sizeString = FileSizeToNormalString(fileData?.FileContent?.Length ?? 0);
                             string fileNameString = GetFileNameString(fileData.FileName, fileData.Extension);
                             result = $"File size: {sizeString}. {fileNameString}";

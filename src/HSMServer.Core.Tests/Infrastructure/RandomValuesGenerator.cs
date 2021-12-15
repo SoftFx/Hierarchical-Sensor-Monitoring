@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class RandomValuesGenerator
     {

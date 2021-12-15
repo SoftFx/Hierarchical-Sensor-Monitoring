@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using HSMCommon;
+using HSMServer.Core.Tests.Infrastructure;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {

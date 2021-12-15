@@ -4,7 +4,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal sealed class DatabaseAdapterManager
     {

@@ -11,6 +11,7 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataProcessor;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.Tests.Infrastructure;
 using Moq;
 using Xunit;
 

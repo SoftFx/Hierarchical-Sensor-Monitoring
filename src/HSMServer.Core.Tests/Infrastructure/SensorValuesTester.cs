@@ -6,7 +6,7 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model.Sensor;
 using Xunit;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal sealed class SensorValuesTester
     {
