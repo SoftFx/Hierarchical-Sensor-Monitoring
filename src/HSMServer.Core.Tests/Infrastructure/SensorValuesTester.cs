@@ -198,7 +198,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorDataFromCache(expected, SensorType.BooleanSensor, actual);
 
             Assert.Equal(expected.BoolValue.ToString(), actual.ShortStringValue);
-            Assert.EndsWith($". Value = {expected.BoolValue}, comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.BoolValue), actual.StringValue);
         }
 
         private void TestSensorDataFromCache(IntSensorValue expected, SensorData actual)
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorDataFromCache(expected, SensorType.IntSensor, actual);
 
             Assert.Equal(expected.IntValue.ToString(), actual.ShortStringValue);
-            Assert.EndsWith($". Value = {expected.IntValue}, comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.IntValue), actual.StringValue);
         }
 
         private void TestSensorDataFromCache(DoubleSensorValue expected, SensorData actual)
@@ -214,7 +214,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorDataFromCache(expected, SensorType.DoubleSensor, actual);
 
             Assert.Equal(expected.DoubleValue.ToString(), actual.ShortStringValue);
-            Assert.EndsWith($". Value = {expected.DoubleValue}, comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.DoubleValue), actual.StringValue);
         }
 
         private void TestSensorDataFromCache(StringSensorValue expected, SensorData actual)
@@ -222,39 +222,47 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorDataFromCache(expected, SensorType.StringSensor, actual);
 
             Assert.Equal(expected.StringValue, actual.ShortStringValue);
-            Assert.EndsWith($". Value = {expected.StringValue}, comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.StringValue), actual.StringValue);
         }
 
         private void TestSensorDataFromCache(IntBarSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.IntegerBarSensor, actual);
 
-            Assert.Equal($"Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}.", actual.ShortStringValue);
-            Assert.EndsWith($". Value: Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}. Comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
+                         actual.ShortStringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
+                         actual.StringValue);
         }
 
         private void TestSensorDataFromCache(DoubleBarSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.DoubleBarSensor, actual);
 
-            Assert.Equal($"Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}.", actual.ShortStringValue);
-            Assert.EndsWith($". Value: Min = {expected.Min}, Mean = {expected.Mean}, Max = {expected.Max}, Count = {expected.Count}, Last = {expected.LastValue}. Comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
+                         actual.ShortStringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
+                         actual.StringValue);
         }
 
         private void TestSensorDataFromCache(FileSensorBytesValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.FileSensorBytes, actual);
 
-            Assert.Equal($"File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}.", actual.ShortStringValue);
-            Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(expected.FileName, expected.Extension, expected.FileContent.Length),
+                         actual.ShortStringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, expected.FileName, expected.Extension, expected.FileContent.Length),
+                         actual.StringValue);
         }
 
         private void TestSensorDataFromCache(FileSensorValue expected, SensorData actual)
         {
             TestSensorDataFromCache(expected, SensorType.FileSensor, actual);
 
-            Assert.Equal($"File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}.", actual.ShortStringValue);
-            Assert.EndsWith($". File size: {expected.FileContent.Length} bytes. File name: {expected.FileName}.{expected.Extension}. Comment = {expected.Comment}.", actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(expected.FileName, expected.Extension, expected.FileContent.Length),
+                         actual.ShortStringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, expected.FileName, expected.Extension, expected.FileContent.Length),
+                         actual.StringValue);
         }
 
         private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)

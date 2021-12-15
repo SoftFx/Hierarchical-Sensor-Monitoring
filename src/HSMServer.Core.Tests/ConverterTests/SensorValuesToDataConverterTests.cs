@@ -138,7 +138,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = boolSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal($"Time: {_timeCollected.ToUniversalTime():G}. Value = {boolSensorValue.BoolValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(_timeCollected, boolSensorValue.Comment, boolSensorValue.BoolValue), data.StringValue);
         }
 
         [Fact]
@@ -150,7 +150,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = intSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal($"Time: {_timeCollected.ToUniversalTime():G}. Value = {intSensorValue.IntValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(_timeCollected, intSensorValue.Comment, intSensorValue.IntValue), data.StringValue);
         }
 
         [Fact]
@@ -162,7 +162,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = doubleSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal($"Time: {_timeCollected.ToUniversalTime():G}. Value = {doubleSensorValue.DoubleValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(_timeCollected, doubleSensorValue.Comment, doubleSensorValue.DoubleValue), data.StringValue);
         }
 
         [Fact]
@@ -174,7 +174,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = stringSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal($"Time: {_timeCollected.ToUniversalTime():G}. Value = {stringSensorValue.StringValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(_timeCollected, stringSensorValue.Comment, stringSensorValue.StringValue), data.StringValue);
         }
 
         [Fact]
@@ -186,10 +186,8 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = intBarSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal(
-                $"Time: {_timeCollected.ToUniversalTime():G}. Value: Min = {intBarSensorValue.Min}," +
-                $" Mean = {intBarSensorValue.Mean}, Max = {intBarSensorValue.Max}, Count = {intBarSensorValue.Count}," +
-                $" Last = {intBarSensorValue.LastValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(_timeCollected, intBarSensorValue.Comment, intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
+                         data.StringValue);
         }
 
         [Fact]
@@ -201,10 +199,8 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = doubleBarSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal(
-                $"Time: {_timeCollected.ToUniversalTime():G}. Value: Min = {doubleBarSensorValue.Min}," +
-                $" Mean = {doubleBarSensorValue.Mean}, Max = {doubleBarSensorValue.Max}, Count = {doubleBarSensorValue.Count}," +
-                $" Last = {doubleBarSensorValue.LastValue}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(_timeCollected, doubleBarSensorValue.Comment, doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
+                         data.StringValue);
         }
 
         [Fact]
@@ -216,9 +212,8 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = fileSensorBytesValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal(
-                $"Time: {_timeCollected.ToUniversalTime():G}. File size: {fileSensorBytesValue.FileContent.Length} bytes." +
-                $" File name: {fileSensorBytesValue.FileName}.{fileSensorBytesValue.Extension}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(_timeCollected, fileSensorBytesValue.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
+                         data.StringValue);
         }
 
         [Fact]
@@ -230,9 +225,8 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var data = fileSensorValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
-            Assert.Equal(
-                $"Time: {_timeCollected.ToUniversalTime():G}. File size: {fileSensorValue.FileContent.Length} bytes." +
-                $" File name: {fileSensorValue.FileName}.{fileSensorValue.Extension}.", data.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(_timeCollected, fileSensorValue.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
+                         data.StringValue);
         }
     }
 }
