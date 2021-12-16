@@ -167,37 +167,37 @@ namespace HSMServer.Core.MonitoringServerCore
                 {
                     case SensorType.IntegerBarSensor:
                     {
-                        var typedValue = _converter.GetIntBarSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<IntBarSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }
                     case SensorType.DoubleBarSensor:
                     {
-                        var typedValue = _converter.GetDoubleBarSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<DoubleBarSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }
                     case SensorType.DoubleSensor:
                     {
-                        var typedValue = _converter.GetDoubleSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<DoubleSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }
                     case SensorType.IntSensor:
                     {
-                        var typedValue = _converter.GetIntSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<IntSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }
                     case SensorType.BooleanSensor:
                     {
-                        var typedValue = _converter.GetBoolSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<BoolSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }
                     case SensorType.StringSensor:
                     {
-                        var typedValue = _converter.GetStringSensorValue(value.TypedValue);
+                        var typedValue = value.Convert<StringSensorValue>();
                         AddSensorValue(typedValue);
                         break;
                     }

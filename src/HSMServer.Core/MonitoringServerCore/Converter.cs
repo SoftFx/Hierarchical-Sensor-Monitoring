@@ -21,39 +21,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _logger = logger;
         }
 
-        #region Deserialize
-
-        public BoolSensorValue GetBoolSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<BoolSensorValue>(json);
-        }
-
-        public IntSensorValue GetIntSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<IntSensorValue>(json);
-        }
-
-        public DoubleSensorValue GetDoubleSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<DoubleSensorValue>(json);
-        }
-
-        public StringSensorValue GetStringSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<StringSensorValue>(json);
-        }
-        public IntBarSensorValue GetIntBarSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<IntBarSensorValue>(json);
-        }
-
-        public DoubleBarSensorValue GetDoubleBarSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<DoubleBarSensorValue>(json);
-        }
-
-        #endregion
-
         #region Convert to history items
 
         public SensorHistoryData Convert(ExtendedBarSensorData data)
