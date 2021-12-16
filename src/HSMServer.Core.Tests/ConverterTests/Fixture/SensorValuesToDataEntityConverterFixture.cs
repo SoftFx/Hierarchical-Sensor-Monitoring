@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Tests.ConverterTests
 {
-    public class SensorValuesToDataEntityConverterFixture
+    public class EntitiesConverterFixture
     {
         internal const string ProductKey = "TestProduct";
 
@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         internal SensorValuesTester SensorValuesTester { get; }
 
 
-        public SensorValuesToDataEntityConverterFixture()
+        public EntitiesConverterFixture()
         {
             SensorValuesFactory = new SensorValuesFactory(ProductKey);
             SensorValuesTester = new SensorValuesTester(ProductKey);

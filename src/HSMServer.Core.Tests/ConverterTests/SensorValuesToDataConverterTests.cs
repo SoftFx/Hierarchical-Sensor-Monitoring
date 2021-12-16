@@ -6,7 +6,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
 {
-    public class SensorValuesToDataConverterTests : IClassFixture<SensorValuesToDataEntityConverterFixture>
+    public class SensorValuesToDataConverterTests : IClassFixture<EntitiesConverterFixture>
     {
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
@@ -14,11 +14,11 @@ namespace HSMServer.Core.Tests.ConverterTests
         private readonly DateTime _timeCollected;
 
 
-        public SensorValuesToDataConverterTests(SensorValuesToDataEntityConverterFixture converterFixture)
+        public SensorValuesToDataConverterTests(EntitiesConverterFixture converterFixture)
         {
             _sensorValuesFactory = converterFixture.SensorValuesFactory;
             _sensorValuesTester = converterFixture.SensorValuesTester;
-            _productName = SensorValuesToDataEntityConverterFixture.ProductKey;
+            _productName = EntitiesConverterFixture.ProductKey;
 
             _timeCollected = DateTime.UtcNow;
         }

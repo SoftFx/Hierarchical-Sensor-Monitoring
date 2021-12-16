@@ -502,7 +502,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return (long)timeSpan.TotalSeconds;
         }
 
-        public string ExtractSensor(string path)
+        private string ExtractSensor(string path)
         {
             var splitRes = path.Split("/".ToCharArray());
             return splitRes[^1];

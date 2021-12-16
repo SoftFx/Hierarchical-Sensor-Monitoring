@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class SensorDataEntityConverterTests
     {
-        private readonly string _productName = $"{nameof(SensorInfo)} product name";
+        private static readonly string _productName = EntitiesConverterFixture.ProductKey;
 
 
         [Fact]
@@ -316,7 +316,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             new()
             {
                 Path = $"{typeof(SensorInfo)}",
-                ProductName = $"{nameof(SensorInfo)} product name",
+                ProductName = _productName,
                 SensorName = nameof(SensorInfo),
                 Description = $"{nameof(SensorInfo)} {nameof(SensorInfo.Description)}",
                 SensorType = (SensorType)sensorType,

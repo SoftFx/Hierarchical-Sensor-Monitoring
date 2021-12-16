@@ -7,12 +7,12 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
 {
-    public class CommonSensorValuesToSensorValuesConverterTests : IClassFixture<SensorValuesToDataEntityConverterFixture>
+    public class CommonSensorValuesToSensorValuesConverterTests : IClassFixture<EntitiesConverterFixture>
     {
         private readonly SensorValuesFactory _sensorValuesFactory;
 
 
-        public CommonSensorValuesToSensorValuesConverterTests(SensorValuesToDataEntityConverterFixture fixture) =>
+        public CommonSensorValuesToSensorValuesConverterTests(EntitiesConverterFixture fixture) =>
             _sensorValuesFactory = fixture.SensorValuesFactory;
 
 
