@@ -252,6 +252,8 @@ namespace HSMServer.Controllers
                 model = oldModel.Update(sensors);
             }
 
+            if (selectedList == null) selectedList = string.Empty;
+
             int index = selectedList.IndexOf('_');
             var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
 
@@ -279,6 +281,8 @@ namespace HSMServer.Controllers
 
                 model = oldModel.Update(sensors);
             }
+
+            if (selectedList == null) selectedList = string.Empty;
 
             int index = selectedList.IndexOf('_');
             var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
@@ -312,6 +316,8 @@ namespace HSMServer.Controllers
             var model = oldModel;
             if (sensors != null && sensors.Count > 0)
                 model = oldModel.Update(sensors);
+
+            if (selectedList == null) selectedList = string.Empty;
 
             int index = selectedList.IndexOf('_');
             var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
