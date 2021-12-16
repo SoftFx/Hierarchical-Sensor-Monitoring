@@ -2,8 +2,8 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
@@ -11,165 +11,215 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class SensorDataEntityConverterTests
     {
-        private readonly Converter _converter;
         private readonly string _productName = $"{nameof(SensorInfo)} product name";
 
-        private delegate SensorData ConvertDataEntityToData(SensorDataEntity dataObject, SensorInfo sensorInfo, string productName);
-        private delegate SensorData SimpleConvertDataEntityToData(SensorDataEntity dataObject, string productName);
-        private delegate SensorHistoryData ConvertDataEntityToHistoryData(SensorDataEntity dataObject);
 
-
-        public SensorDataEntityConverterTests()
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void BoolSensorDataEntityToSensorDataConverterTest()
         {
-            var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
-            _converter = new Converter(converterLogger);
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.BooleanSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void IntSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.IntSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void DoubleSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.DoubleSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void StringSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.StringSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void IntBarSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.IntegerBarSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void DoubleBarSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.DoubleBarSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void FileBytesSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.FileSensorBytes);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData")]
+        public void FileSensorDataEntityToSensorDataConverterTest()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.FileSensor);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestConvertSensorDataEntityToSensorData(sensorDataEntity, sensorInfo, data);
         }
 
 
         [Fact]
-        [Trait("Category", "to SensorData")]
-        public void BoolSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.BooleanSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void IntSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.IntSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void DoubleSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.DoubleSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void StringSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.StringSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void IntBarSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.IntegerBarSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void DoubleBarSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.DoubleBarSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void FileBytesSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.FileSensorBytes);
-
-        [Fact]
-        [Trait("Category", "to SensorData")]
-        public void FileSensorDataEntityToSensorDataConverterTest() =>
-            TestConvertSensorDataEntityToSensorData(_converter.Convert, SensorType.FileSensor);
-
-
-        [Fact]
         [Trait("Category", "to SensorData without comment")]
-        public void BoolSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.BooleanSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void IntSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.IntSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void DoubleSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.DoubleSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void StringSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.StringSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void IntBarSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.IntegerBarSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void DoubleBarSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.DoubleBarSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void FileBytesSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.FileSensorBytes);
-
-        [Fact]
-        [Trait("Category", "to SensorData without comment")]
-        public void FileSensorDataEntityToSensorDataConverter_WithoutComment_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutComment(_converter.Convert, SensorType.FileSensor);
-
-
-        [Fact]
-        [Trait("Category", "to SensorData without SensorInfo")]
-        public void FileBytesSensorDataEntityToSensorDataConverter_WithoutSensorInfo_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutSensorInfo(_converter.Convert, SensorType.FileSensorBytes, _productName);
-
-        [Fact]
-        [Trait("Category", "to SensorData without SensorInfo")]
-        public void FileSensorDataEntityToSensorDataConverter_WithoutSensorInfo_Test() =>
-            TestConvertSensorDataEntityToSensorData_WithoutSensorInfo(_converter.Convert, SensorType.FileSensor, _productName);
-
-
-        [Fact]
-        [Trait("Category", "to SensorHistoryData")]
-        public void BoolSensorDataEntityToSensorHistoryDataConverterTest() =>
-            TestSensorDataEntityToSensorHistoryDataConverter(_converter.Convert, SensorType.BooleanSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorHistoryData")]
-        public void IntSensorDataEntityToSensorHistoryDataConverterTest() =>
-            TestSensorDataEntityToSensorHistoryDataConverter(_converter.Convert, SensorType.IntSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorHistoryData")]
-        public void DoubleBarSensorDataEntityToSensorHistoryDataConverterTest() =>
-            TestSensorDataEntityToSensorHistoryDataConverter(_converter.Convert, SensorType.DoubleBarSensor);
-
-        [Fact]
-        [Trait("Category", "to SensorHistoryData")]
-        public void FileBytesSensorDataEntityToSensorHistoryDataConverterTest() =>
-            TestSensorDataEntityToSensorHistoryDataConverter(_converter.Convert, SensorType.FileSensorBytes);
-
-
-        private static void TestConvertSensorDataEntityToSensorData(ConvertDataEntityToData convert, SensorType sensorType)
+        public void BoolSensorDataEntityToSensorDataConverter_WithoutComment_Test()
         {
-            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType);
-            var sensorInfo = BuildSensorInfo(sensorDataEntity.DataType);
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.BooleanSensor, false);
 
-            var data = convert(sensorDataEntity, sensorInfo, sensorInfo.ProductName);
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
 
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void IntSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.IntSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void DoubleSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.DoubleSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void StringSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.StringSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void IntBarSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.IntegerBarSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void DoubleBarSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.DoubleBarSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void FileBytesSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.FileSensorBytes, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without comment")]
+        public void FileSensorDataEntityToSensorDataConverter_WithoutComment_Test()
+        {
+            (SensorDataEntity sensorDataEntity, SensorInfo sensorInfo) = BuildDatasForTests(SensorType.FileSensor, false);
+
+            var data = sensorDataEntity.Convert(sensorInfo, sensorInfo.ProductName);
+
+            TestSensorDataStringValues(sensorDataEntity, data, (SensorType)sensorDataEntity.DataType);
+        }
+
+
+        [Fact]
+        [Trait("Category", "to SensorData without SensorInfo")]
+        public void FileBytesSensorDataEntityToSensorDataConverter_WithoutSensorInfo_Test()
+        {
+            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(SensorType.FileSensorBytes);
+
+            var data = sensorDataEntity.Convert(_productName);
+
+            TestSensorDataCommonProperties(sensorDataEntity, data, _productName, (SensorType)sensorDataEntity.DataType);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without SensorInfo")]
+        public void FileSensorDataEntityToSensorDataConverter_WithoutSensorInfo_Test()
+        {
+            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(SensorType.FileSensor);
+
+            var data = sensorDataEntity.Convert(_productName);
+
+            TestSensorDataCommonProperties(sensorDataEntity, data, _productName, (SensorType)sensorDataEntity.DataType);
+        }
+
+
+        private static void TestConvertSensorDataEntityToSensorData(SensorDataEntity sensorDataEntity, SensorInfo sensorInfo, SensorData data)
+        {
             Assert.Equal(sensorInfo.Description, data.Description);
 
-            TestSensorDataCommonProperties(sensorDataEntity, data, sensorInfo.ProductName, sensorType);
-        }
-
-        private static void TestConvertSensorDataEntityToSensorData_WithoutComment(ConvertDataEntityToData convert, SensorType sensorType)
-        {
-            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType, false);
-            var sensorInfo = BuildSensorInfo(sensorDataEntity.DataType);
-
-            var data = convert(sensorDataEntity, sensorInfo, sensorInfo.ProductName);
-
-            TestSensorDataStringValues(sensorDataEntity, data, sensorType);
-        }
-
-        private static void TestConvertSensorDataEntityToSensorData_WithoutSensorInfo(SimpleConvertDataEntityToData convert,
-            SensorType sensorType, string productName)
-        {
-            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType);
-
-            var data = convert(sensorDataEntity, productName);
-
-            TestSensorDataCommonProperties(sensorDataEntity, data, productName, sensorType);
+            TestSensorDataCommonProperties(sensorDataEntity, data, sensorInfo.ProductName, (SensorType)sensorDataEntity.DataType);
         }
 
         private static void TestSensorDataCommonProperties(SensorDataEntity expected, SensorData actual, string productName, SensorType sensorType)
@@ -253,18 +303,14 @@ namespace HSMServer.Core.Tests.ConverterTests
             }
         }
 
-        private static void TestSensorDataEntityToSensorHistoryDataConverter(ConvertDataEntityToHistoryData convert, SensorType sensorType)
+
+        private static (SensorDataEntity, SensorInfo) BuildDatasForTests(SensorType sensorType, bool withComment = true)
         {
-            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType);
+            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType, withComment);
+            var sensorInfo = BuildSensorInfo(sensorDataEntity.DataType);
 
-            var historyData = convert(sensorDataEntity);
-
-            Assert.NotNull(historyData);
-            Assert.Equal(sensorDataEntity.TypedData, historyData.TypedData);
-            Assert.Equal((SensorType)sensorDataEntity.DataType, historyData.SensorType);
-            Assert.Equal(sensorDataEntity.Time, historyData.Time);
+            return (sensorDataEntity, sensorInfo);
         }
-
 
         private static SensorInfo BuildSensorInfo(byte sensorType) =>
             new()

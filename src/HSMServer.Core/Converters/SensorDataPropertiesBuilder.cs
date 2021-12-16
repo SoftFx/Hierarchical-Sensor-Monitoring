@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Text.Json;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.TypedDataObject;
 
 namespace HSMServer.Core.Converters
 {
@@ -35,6 +39,76 @@ namespace HSMServer.Core.Converters
                 FileSensorValue fileSensorValue => GetShortStringValue(fileSensorValue),
                 _ => null,
             };
+
+        internal static string GetStringValue(SensorDataEntity dataEntity)
+        {
+            switch ((SensorType)dataEntity.DataType)
+            {
+                case SensorType.BooleanSensor:
+                    BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(dataEntity.TypedData);
+                    return GetSimpleSensorsString(dataEntity.TimeCollected, boolData.Comment, boolData.BoolValue);
+                case SensorType.IntSensor:
+                    IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(dataEntity.TypedData);
+                    return GetSimpleSensorsString(dataEntity.TimeCollected, intData.Comment, intData.IntValue);
+                case SensorType.DoubleSensor:
+                    DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(dataEntity.TypedData);
+                    return GetSimpleSensorsString(dataEntity.TimeCollected, doubleData.Comment, doubleData.DoubleValue);
+                case SensorType.StringSensor:
+                    StringSensorData stringData = JsonSerializer.Deserialize<StringSensorData>(dataEntity.TypedData);
+                    return GetSimpleSensorsString(dataEntity.TimeCollected, stringData.Comment, stringData.StringValue);
+                case SensorType.IntegerBarSensor:
+                    IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(dataEntity.TypedData);
+                    return GetBarSensorsString(dataEntity.TimeCollected, intBarData.Comment, intBarData.Min, intBarData.Mean,
+                                               intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(dataEntity.TypedData);
+                    return GetBarSensorsString(dataEntity.TimeCollected, doubleBarData.Comment, doubleBarData.Min,
+                                               doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                case SensorType.FileSensorBytes:
+                    FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
+                    return GetFileSensorsString(dataEntity.TimeCollected, fileSensorBytesData.Comment, fileSensorBytesData.FileName,
+                                                fileSensorBytesData.Extension, fileSensorBytesData.FileContent?.Length ?? 0);
+                case SensorType.FileSensor:
+                    FileSensorData fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
+                    return GetFileSensorsString(dataEntity.TimeCollected, fileSensorData.Comment, fileSensorData.FileName,
+                                                fileSensorData.Extension, fileSensorData.FileContent?.Length ?? 0);
+            }
+
+            return null;
+        }
+
+        internal static string GetShortStringValue(SensorDataEntity dataEntity)
+        {
+            switch ((SensorType)dataEntity.DataType)
+            {
+                case SensorType.BooleanSensor:
+                    BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(dataEntity.TypedData);
+                    return boolData.BoolValue.ToString();
+                case SensorType.IntSensor:
+                    IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(dataEntity.TypedData);
+                    return intData.IntValue.ToString();
+                case SensorType.DoubleSensor:
+                    DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(dataEntity.TypedData);
+                    return doubleData.DoubleValue.ToString();
+                case SensorType.StringSensor:
+                    StringSensorData stringData = JsonSerializer.Deserialize<StringSensorData>(dataEntity.TypedData);
+                    return stringData.StringValue;
+                case SensorType.IntegerBarSensor:
+                    IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(dataEntity.TypedData);
+                    return GetBarSensorsShortString(intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(dataEntity.TypedData);
+                    return GetBarSensorsShortString(doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                case SensorType.FileSensorBytes:
+                    FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
+                    return GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, fileSensorBytesData.FileContent?.Length ?? 0);
+                case SensorType.FileSensor:
+                    FileSensorData fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
+                    return GetFileSensorsShortString(fileSensorData.FileName, fileSensorData.Extension, fileSensorData.FileContent?.Length ?? 0);
+            }
+
+            return null;
+        }
 
 
         private static string GetStringValue(BoolSensorValue value, DateTime timeCollected) =>

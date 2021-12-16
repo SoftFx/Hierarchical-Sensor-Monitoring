@@ -24,16 +24,7 @@ namespace HSMServer.Core.MonitoringServerCore
         #region Convert to history items
 
         SensorHistoryData Convert(ExtendedBarSensorData data);
-        //SensorHistoryData Convert(SensorDataObject dataObject);
-        SensorHistoryData Convert(SensorDataEntity dataObject);
 
-        #endregion
-
-        #region Independent update messages
-        //SensorData Convert(SensorDataObject dataObject, SensorInfo sensorInfo, string productName);
-        //SensorData Convert(SensorDataObject dataObject, string productName);
-        SensorData Convert(SensorDataEntity dataObject, SensorInfo sensorInfo, string productName);
-        SensorData Convert(SensorDataEntity dataObject, string productName);
         #endregion
 
         SensorData ConvertUnitedValue(UnitedSensorValue value, string productName,

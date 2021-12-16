@@ -98,7 +98,7 @@ namespace HSMServer.Core.MonitoringServerCore
                     var lastVal = _databaseAdapter.GetLastSensorValue(product.Name, sensor.Path);
                     if (lastVal != null)
                     {
-                        _valuesCache.AddValue(product.Name, _converter.Convert(lastVal, sensor, product.Name));
+                        _valuesCache.AddValue(product.Name, lastVal.Convert(sensor, product.Name));
                     }
                 }
             }
