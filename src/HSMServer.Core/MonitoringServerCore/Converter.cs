@@ -15,16 +15,6 @@ namespace HSMServer.Core.MonitoringServerCore
     public class Converter : IConverter
     {
         private readonly ILogger<Converter> _logger;
-        private const double SIZE_DENOMINATOR = 1024.0;
-
-        //public SignedCertificateMessage Convert(X509Certificate2 signedCertificate,
-        //    X509Certificate2 caCertificate)
-        //{
-        //    SignedCertificateMessage message = new SignedCertificateMessage();
-        //    message.CaCertificateBytes = ByteString.CopyFrom(caCertificate.Export(X509ContentType.Cert));
-        //    message.SignedCertificateBytes = ByteString.CopyFrom(signedCertificate.Export(X509ContentType.Pfx));
-        //    return message;
-        //}
 
         public Converter(ILogger<Converter> logger)
         {
@@ -60,11 +50,6 @@ namespace HSMServer.Core.MonitoringServerCore
         public DoubleBarSensorValue GetDoubleBarSensorValue(string json)
         {
             return JsonSerializer.Deserialize<DoubleBarSensorValue>(json);
-        }
-
-        public FileSensorValue GetFileSensorValue(string json)
-        {
-            return JsonSerializer.Deserialize<FileSensorValue>(json);
         }
 
         #endregion
@@ -516,14 +501,7 @@ namespace HSMServer.Core.MonitoringServerCore
             catch (Exception e)
             { }
         }
-        public SensorInfo Convert(string productName, string path)
-        {
-            SensorInfo result = new SensorInfo();
-            result.Path = path;
-            result.ProductName = productName;
-            result.SensorName = ExtractSensor(path);
-            return result;
-        }
+
         public SensorInfo Convert(string productName, SensorValueBase sensorValue)
         {
             SensorInfo result = new SensorInfo();
@@ -549,81 +527,12 @@ namespace HSMServer.Core.MonitoringServerCore
                 _ => (SensorType)0,
             };
 
-        //public ProductDataMessage Convert(Product product)
-        //{
-        //    ProductDataMessage result = new ProductDataMessage();
-        //    result.Name = product.Name;
-        //    result.Key = product.Key;
-        //    result.DateAdded = product.DateAdded.ToUniversalTime().ToTimestamp();
-        //    return result;
-        //}
-
-        //public GenerateClientCertificateModel Convert(CertificateRequestMessage requestMessage)
-        //{
-        //    GenerateClientCertificateModel model = new GenerateClientCertificateModel
-        //    {
-        //        CommonName = requestMessage.CommonName,
-        //        CountryName = requestMessage.CountryName,
-        //        EmailAddress = requestMessage.EmailAddress,
-        //        LocalityName = requestMessage.LocalityName,
-        //        OrganizationName = requestMessage.OrganizationName,
-        //        OrganizationUnitName = requestMessage.OrganizationUnitName,
-        //        StateOrProvinceName = requestMessage.StateOrProvinceName
-        //    };
-        //    return model;
-        //}
-
-        //public RSAParameters Convert(HSMService.RSAParameters rsaParameters)
-        //{
-        //    RSAParameters result = new RSAParameters();
-        //    result.D = rsaParameters.D.ToByteArray();
-        //    result.DP = rsaParameters.DP.ToByteArray();
-        //    result.DQ = rsaParameters.DQ.ToByteArray();
-        //    result.Exponent = rsaParameters.Exponent.ToByteArray();
-        //    result.InverseQ = rsaParameters.InverseQ.ToByteArray();
-        //    result.Modulus = rsaParameters.Modulus.ToByteArray();
-        //    result.P = rsaParameters.P.ToByteArray();
-        //    result.Q = rsaParameters.Q.ToByteArray();
-        //    return result;
-        //}
-
         #region Sub-methods
 
-        //private SensorObjectType Convert(SensorType type)
-        //{
-        //    //return (SensorObjectType) ((int) type);
-        //    switch (type)
-        //    {
-        //        case SensorType.BooleanSensor:
-        //            return SensorObjectType.ObjectTypeBoolSensor;
-        //        case SensorType.DoubleSensor:
-        //            return SensorObjectType.ObjectTypeDoubleSensor;
-        //        case SensorType.IntSensor:
-        //            return SensorObjectType.ObjectTypeIntSensor;
-        //        case SensorType.StringSensor:
-        //            return SensorObjectType.ObjectTypeStringSensor;
-        //        case SensorType.IntegerBarSensor:
-        //            return SensorObjectType.ObjectTypeBarIntSensor;
-        //        case SensorType.DoubleBarSensor:
-        //            return SensorObjectType.ObjectTypeBarDoubleSensor;
-        //        case SensorType.FileSensor:
-        //            return SensorObjectType.ObjectTypeFileSensor;
-        //    }
-        //    throw new Exception($"Unknown SensorDataType = {type}!");
-        //}
         private long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = (dateTime - DateTime.UnixEpoch);
             return (long)timeSpan.TotalSeconds;
-        }
-
-        public void ExtractProductAndSensor(string path, out string server, out string sensor)
-        {
-            server = string.Empty;
-            sensor = string.Empty;
-            var splitRes = path.Split("/".ToCharArray());
-            server = splitRes[0];
-            sensor = splitRes[^1];
         }
 
         public string ExtractSensor(string path)

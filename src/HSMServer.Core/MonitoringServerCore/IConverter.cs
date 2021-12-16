@@ -17,7 +17,6 @@ namespace HSMServer.Core.MonitoringServerCore
         StringSensorValue GetStringSensorValue(string json);
         IntBarSensorValue GetIntBarSensorValue(string json);
         DoubleBarSensorValue GetDoubleBarSensorValue(string json);
-        FileSensorValue GetFileSensorValue(string json);
 
         #endregion
 
@@ -33,7 +32,6 @@ namespace HSMServer.Core.MonitoringServerCore
         SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected,
             SensorStatus validationStatus = SensorStatus.Unknown);
         BarSensorValueBase GetBarSensorValue(UnitedSensorValue value);
-        SensorInfo Convert(string productName, string path);
         SensorInfo Convert(string productName, SensorValueBase sensorValue);
     }
 }
