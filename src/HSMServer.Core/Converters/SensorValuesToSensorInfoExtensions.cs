@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model.Sensor;
 
 namespace HSMServer.Core.Converters
@@ -15,24 +14,10 @@ namespace HSMServer.Core.Converters
                 Path = sensorValue.Path,
                 Description = sensorValue.Description,
                 ProductName = productName,
-                SensorType = GetSensorType(sensorValue),
+                SensorType = SensorTypeFactory.GetSensorType(sensorValue),
                 SensorName = ExtractSensor(sensorValue.Path),
             };
 
-
-        private static SensorType GetSensorType(SensorValueBase sensorValue) =>
-            sensorValue switch
-            {
-                BoolSensorValue => SensorType.BooleanSensor,
-                IntSensorValue => SensorType.IntSensor,
-                DoubleSensorValue => SensorType.DoubleSensor,
-                StringSensorValue => SensorType.StringSensor,
-                IntBarSensorValue => SensorType.IntegerBarSensor,
-                DoubleBarSensorValue => SensorType.DoubleBarSensor,
-                FileSensorBytesValue => SensorType.FileSensorBytes,
-                FileSensorValue => SensorType.FileSensor,
-                _ => (SensorType)0,
-            };
 
         private static string ExtractSensor(string path) => path?.Split(SensorPathSeparator)?[^1];
     }

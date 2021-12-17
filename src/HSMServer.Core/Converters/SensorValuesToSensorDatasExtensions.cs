@@ -1,5 +1,4 @@
 ﻿using System;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model.Sensor;
 
@@ -10,20 +9,20 @@ namespace HSMServer.Core.Converters
         public static SensorData Convert(this SensorValueBase sensorValue, string productName, DateTime timeCollected, TransactionType type) =>
            sensorValue switch
            {
-               BoolSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.BooleanSensor),
-               IntSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.IntSensor),
-               DoubleSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.DoubleSensor),
-               StringSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.StringSensor),
-               IntBarSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.IntegerBarSensor),
-               DoubleBarSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.DoubleBarSensor),
-               FileSensorBytesValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.FileSensorBytes),
-               FileSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type, SensorType.FileSensor),
+               BoolSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               IntSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               DoubleSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               StringSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               IntBarSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               DoubleBarSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               FileSensorBytesValue => CreateSensorData(sensorValue, productName, timeCollected, type),
+               FileSensorValue => CreateSensorData(sensorValue, productName, timeCollected, type),
                _ => null,
            };
 
 
         private static SensorData CreateSensorData(SensorValueBase sensorValue, string productName,
-            DateTime timeCollected, TransactionType transactionType, SensorType sensorType) =>
+            DateTime timeCollected, TransactionType transactionType) =>
             new()
             {
                 Path = sensorValue.Path,
@@ -33,7 +32,7 @@ namespace HSMServer.Core.Converters
                 Product = productName,
                 Time = timeCollected,
                 TransactionType = transactionType,
-                SensorType = sensorType,
+                SensorType = SensorTypeFactory.GetSensorType(sensorValue),
                 StringValue = SensorDataPropertiesBuilder.GetStringValue(sensorValue, timeCollected),
                 ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(sensorValue),
             };
