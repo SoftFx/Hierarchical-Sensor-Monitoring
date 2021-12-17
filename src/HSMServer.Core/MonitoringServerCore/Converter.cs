@@ -28,15 +28,15 @@ namespace HSMServer.Core.MonitoringServerCore
             switch (data.ValueType)
             {
                 case SensorType.DoubleBarSensor:
-                    return Convert(data.Value as DoubleBarSensorValue, data.TimeCollected);
+                    return Convert(data.Value as DoubleBarSensorValue);
                 case SensorType.IntegerBarSensor:
-                    return Convert(data.Value as IntBarSensorValue, data.TimeCollected);
+                    return Convert(data.Value as IntBarSensorValue);
                 default:
                     return null;
             }
         }
 
-        private SensorHistoryData Convert(IntBarSensorValue value, DateTime timeCollected)
+        private SensorHistoryData Convert(IntBarSensorValue value)
         {
             SensorHistoryData result = new SensorHistoryData();
             try
@@ -50,7 +50,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             return result;
         }
-        private SensorHistoryData Convert(DoubleBarSensorValue value, DateTime timeCollected)
+        private SensorHistoryData Convert(DoubleBarSensorValue value)
         {
             SensorHistoryData result = new SensorHistoryData();
             try

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -121,6 +123,23 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
+
+        internal ExtendedBarSensorData BuildExtendedIntBarSensorData() =>
+            new()
+            {
+                Value = BuildIntBarSensorValue(),
+                ValueType = SensorType.IntegerBarSensor,
+                ProductName = _productKey,
+            };
+
+        internal ExtendedBarSensorData BuildExtendedDoubleBarSensorData() =>
+            new()
+            {
+                Value = BuildDoubleBarSensorValue(),
+                ValueType = SensorType.DoubleBarSensor,
+                ProductName = _productKey,
+            };
+
 
         private static List<PercentileValueInt> GetPercentileValuesInt(int size = 2)
         {

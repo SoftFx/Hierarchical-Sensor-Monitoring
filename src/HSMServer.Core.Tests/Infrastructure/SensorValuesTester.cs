@@ -3,6 +3,7 @@ using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using Xunit;
 
@@ -89,6 +90,13 @@ namespace HSMServer.Core.Tests.Infrastructure
                     TestSensorInfoFromDB(fileSensorValue, actual);
                     break;
             };
+        }
+
+        internal static void TestSensorHistoryDataFromExtendedBarSensorData(ExtendedBarSensorData expected, SensorHistoryData actual)
+        {
+            Assert.Equal(expected.ValueType, actual.SensorType);
+
+            TestSensorHistoryDataFromDB(expected.Value, actual);
         }
 
         internal static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorHistoryData actual)
@@ -351,6 +359,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(JsonSerializer.Serialize(expectedTypeData), actual.TypedData);
         }
 
+
+        private static object GetSensorValueTypedData(ExtendedBarSensorData sensorData) =>
+            sensorData.Value switch
+            {
+                IntBarSensorValue intBarSensorValue => GetSensorValueTypedData(intBarSensorValue),
+                DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
+                _ => null,
+            };
 
         private static object GetSensorValueTypedData(BoolSensorValue sensorValue) =>
             new
