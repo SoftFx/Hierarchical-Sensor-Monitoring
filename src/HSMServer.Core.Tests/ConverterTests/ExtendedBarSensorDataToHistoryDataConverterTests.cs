@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Text.Json;
 using HSMSensorDataObjects;
-using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
@@ -11,14 +10,10 @@ namespace HSMServer.Core.Tests.ConverterTests
     public class ExtendedBarSensorDataToHistoryDataConverterTests : IClassFixture<EntitiesConverterFixture>
     {
         private readonly SensorValuesFactory _sensorValuesFactory;
-        private readonly Converter _converter;
 
 
-        public ExtendedBarSensorDataToHistoryDataConverterTests(EntitiesConverterFixture fixture)
-        {
+        public ExtendedBarSensorDataToHistoryDataConverterTests(EntitiesConverterFixture fixture) =>
             _sensorValuesFactory = fixture.SensorValuesFactory;
-            _converter = new Converter(CommonMoqs.CreateNullLogger<Converter>());
-        }
 
 
         [Fact]
@@ -27,7 +22,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorData = _sensorValuesFactory.BuildExtendedIntBarSensorData();
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
             SensorValuesTester.TestSensorHistoryDataFromExtendedBarSensorData(sensorData, historyData);
         }
@@ -38,7 +33,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
             SensorValuesTester.TestSensorHistoryDataFromExtendedBarSensorData(sensorData, historyData);
         }
@@ -53,7 +48,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorData = _sensorValuesFactory.BuildExtendedIntBarSensorData();
             sensorData.Value.EndTime = sensorValueEndTime;
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
             Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), historyData.TypedData);
         }
@@ -67,7 +62,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
             sensorData.Value.EndTime = sensorValueEndTime;
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
             Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), historyData.TypedData);
         }
@@ -80,7 +75,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
             sensorData.ValueType = SensorType.BooleanSensor;
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
             Assert.Null(historyData);
         }
@@ -93,9 +88,10 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorData = _sensorValuesFactory.BuildExtendedIntBarSensorData();
             sensorData.ValueType = SensorType.DoubleBarSensor;
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
-            TestDefaultSensorHistoryData(historyData);
+            Assert.Equal(SensorType.IntegerBarSensor, historyData.SensorType);
+            SensorValuesTester.TestSensorHistoryDataFromDB(sensorData.Value, historyData);
         }
 
         [Fact]
@@ -105,18 +101,10 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
             sensorData.ValueType = SensorType.IntegerBarSensor;
 
-            var historyData = _converter.Convert(sensorData);
+            var historyData = sensorData.Convert();
 
-            TestDefaultSensorHistoryData(historyData);
-        }
-
-
-        private static void TestDefaultSensorHistoryData(SensorHistoryData historyData)
-        {
-            Assert.NotNull(historyData);
-            Assert.Null(historyData.TypedData);
-            Assert.Equal((SensorType)0, historyData.SensorType);
-            Assert.Equal(DateTime.MinValue, historyData.Time);
+            Assert.Equal(SensorType.DoubleBarSensor, historyData.SensorType);
+            SensorValuesTester.TestSensorHistoryDataFromDB(sensorData.Value, historyData);
         }
     }
 }

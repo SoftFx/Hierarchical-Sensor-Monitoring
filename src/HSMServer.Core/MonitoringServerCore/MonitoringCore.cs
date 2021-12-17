@@ -755,7 +755,7 @@ namespace HSMServer.Core.MonitoringServerCore
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
             {
-                historyValues.Add(_converter.Convert(lastValue));
+                historyValues.Add(lastValue.Convert());
             }
             return historyValues;
         }
@@ -766,7 +766,7 @@ namespace HSMServer.Core.MonitoringServerCore
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null)
             {
-                allValues.Add(_converter.Convert(lastValue));
+                allValues.Add(lastValue.Convert());
             }
             return allValues;
         }
@@ -777,7 +777,7 @@ namespace HSMServer.Core.MonitoringServerCore
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null)
             {
-                historyList.Add(_converter.Convert(lastValue));
+                historyList.Add(lastValue.Convert());
             }
 
             if (n != -1)

@@ -4,7 +4,6 @@ using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Extensions;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,51 +20,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _logger = logger;
         }
 
-        #region Convert to history items
-
-        public SensorHistoryData Convert(ExtendedBarSensorData data)
-        {
-            switch (data.ValueType)
-            {
-                case SensorType.DoubleBarSensor:
-                    return Convert(data.Value as DoubleBarSensorValue);
-                case SensorType.IntegerBarSensor:
-                    return Convert(data.Value as IntBarSensorValue);
-                default:
-                    return null;
-            }
-        }
-
-        private SensorHistoryData Convert(IntBarSensorValue value)
-        {
-            SensorHistoryData result = new SensorHistoryData();
-            try
-            {
-                result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time.ToUniversalTime();
-                result.SensorType = SensorType.IntegerBarSensor;
-            }
-            catch (Exception e)
-            { }
-
-            return result;
-        }
-        private SensorHistoryData Convert(DoubleBarSensorValue value)
-        {
-            SensorHistoryData result = new SensorHistoryData();
-            try
-            {
-                result.TypedData = JsonSerializer.Serialize(ToTypedData(value));
-                result.Time = value.Time.ToUniversalTime();
-                result.SensorType = SensorType.DoubleBarSensor;
-            }
-            catch (Exception e)
-            { }
-
-            return result;
-        }
-
-        #endregion
         #region Convert to database objects
 
         private void FillCommonFields(SensorValueBase value, DateTime timeCollected, out SensorDataEntity dataObject)
@@ -77,43 +31,6 @@ namespace HSMServer.Core.MonitoringServerCore
             dataObject.Timestamp = GetTimestamp(value.Time);
         }
 
-        private IntBarSensorData ToTypedData(IntBarSensorValue sensorValue)
-        {
-            IntBarSensorData typedData = new IntBarSensorData()
-            {
-                Max = sensorValue.Max,
-                Min = sensorValue.Min,
-                Mean = sensorValue.Mean,
-                Count = sensorValue.Count,
-                Comment = sensorValue.Comment,
-                StartTime = sensorValue.StartTime.ToUniversalTime(),
-                Percentiles = sensorValue.Percentiles,
-                LastValue = sensorValue.LastValue
-            };
-            typedData.EndTime = (sensorValue.EndTime == DateTime.MinValue)
-                ? DateTime.Now.ToUniversalTime() 
-                : sensorValue.EndTime.ToUniversalTime();
-            return typedData;
-        }
-
-        private DoubleBarSensorData ToTypedData(DoubleBarSensorValue sensorValue)
-        {
-            DoubleBarSensorData typedData = new DoubleBarSensorData()
-            {
-                Max = sensorValue.Max,
-                Min = sensorValue.Min,
-                Mean = sensorValue.Mean,
-                Count = sensorValue.Count,
-                Comment = sensorValue.Comment,
-                StartTime = sensorValue.StartTime.ToUniversalTime(),
-                Percentiles = sensorValue.Percentiles,
-                LastValue = sensorValue.LastValue
-            };
-            typedData.EndTime = (sensorValue.EndTime == DateTime.MinValue) 
-                ? DateTime.Now.ToUniversalTime() 
-                : sensorValue.EndTime.ToUniversalTime();
-            return typedData;
-        }
         #endregion
         
         #region Independent update messages
