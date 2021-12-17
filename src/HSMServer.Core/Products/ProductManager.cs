@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
@@ -228,7 +229,7 @@ namespace HSMServer.Core.Products
                     _productSensorsDictionary[productName] = new Dictionary<string, SensorInfo>();
                 }
 
-                var newSensor = _converter.Convert(productName, sensorValue);
+                var newSensor = sensorValue.Convert(productName);
 
                 if (!_productSensorsDictionary[productName].ContainsKey(newSensor.Path))
                 {
@@ -244,7 +245,7 @@ namespace HSMServer.Core.Products
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
         {
             bool needToAdd = false;
-            var newObject = _converter.Convert(productName, sensorValue);
+            var newObject = sensorValue.Convert(productName);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))

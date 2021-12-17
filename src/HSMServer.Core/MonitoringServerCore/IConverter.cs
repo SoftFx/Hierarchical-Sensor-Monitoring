@@ -20,6 +20,5 @@ namespace HSMServer.Core.MonitoringServerCore
         SensorDataEntity ConvertUnitedValueToDatabase(UnitedSensorValue value, DateTime timeCollected,
             SensorStatus validationStatus = SensorStatus.Unknown);
         BarSensorValueBase GetBarSensorValue(UnitedSensorValue value);
-        SensorInfo Convert(string productName, SensorValueBase sensorValue);
     }
 }

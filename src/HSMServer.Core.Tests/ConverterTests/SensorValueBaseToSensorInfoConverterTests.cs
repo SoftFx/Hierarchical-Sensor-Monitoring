@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
@@ -9,15 +9,14 @@ namespace HSMServer.Core.Tests.ConverterTests
     {
         private const char SensorPathSeparator = '/';
 
+        private readonly string _productName = EntitiesConverterFixture.ProductKey;
+
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
-        private readonly string _productName = EntitiesConverterFixture.ProductKey;
-        private readonly Converter _converter;
 
 
         public SensorValueBaseToSensorInfoConverterTests(EntitiesConverterFixture fixture)
         {
-            _converter = new Converter(CommonMoqs.CreateNullLogger<Converter>());
             _sensorValuesFactory = fixture.SensorValuesFactory;
             _sensorValuesTester = fixture.SensorValuesTester;
         }
@@ -29,7 +28,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildBoolSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -40,7 +39,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildIntSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -51,7 +50,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildDoubleSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -62,7 +61,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildStringSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -73,7 +72,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -84,7 +83,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -95,7 +94,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -106,7 +105,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
         }
@@ -118,7 +117,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
             sensorValue.Path = GetSensorPath(_productName, sensorValue.Path);
 
-            var sensorInfo = _converter.Convert(_productName, sensorValue);
+            var sensorInfo = sensorValue.Convert(_productName);
 
             Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
         }
