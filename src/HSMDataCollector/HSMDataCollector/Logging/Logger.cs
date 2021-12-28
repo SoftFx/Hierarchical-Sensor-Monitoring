@@ -9,7 +9,7 @@ namespace HSMDataCollector.Logging
         //ToDo: take level from configuration
         public static NLog.Logger Create(string className)
         {
-            GenerateConfigFile(LogLevel.Trace, LogLevel.Fatal);
+            CreateConfigFile(LogLevel.Trace, LogLevel.Fatal);
 
             return LogManager.GetLogger(className);
         }
@@ -23,18 +23,22 @@ namespace HSMDataCollector.Logging
             LogManager.Configuration = configuration;
         }
 
-        public static void GenerateConfigFile(LogLevel minLevel, LogLevel maxLevel)
+        public static void CreateConfigFile(LogLevel minLevel, LogLevel maxLevel)
         {
-            //var config = new NLog.Config.LoggingConfiguration();
-            var file = new FileTarget(TextConstants.LogTargetFile)
+            if (LogManager.Configuration is null)
             {
-                FileName = "${basedir}/logs/DataCollector_${shortdate}.log",
-                Layout = "${longdate} [${uppercase:${level}}] ${logger}: ${message}"
-            };
+                var config = new NLog.Config.LoggingConfiguration();
 
-            //config.AddRule(minLevel, maxLevel, file);
+                var file = new FileTarget(TextConstants.LogTargetFile)
+                {
+                    FileName = "${basedir}/logs/DataCollector_${shortdate}.log",
+                    Layout = "${longdate} [${uppercase:${level}}] ${logger}: ${message}"
+                };
 
-            LogManager.Configuration.AddRule(minLevel, maxLevel, file);
+                config.AddRule(minLevel, maxLevel, file);
+
+                LogManager.Configuration = config;
+            }
         }
     }
 }
