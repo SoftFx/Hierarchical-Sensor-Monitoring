@@ -54,10 +54,22 @@ namespace HSMServer.Core.Tests.ConverterTests
             Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
         }
 
+        [Fact]
+        [Trait("Category", "With complex path")]
+        public void FileSensorValueToSensorInfoConverter_WithComplexPath2_Test()
+        {
+            var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            sensorValue.Path = null;
+
+            var sensorInfo = sensorValue.Convert(_productName);
+
+            Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
+        }
+
 
         private static string GetSensorPath(string productName, string sensorName) =>
             string.Join(SensorPathSeparator, new List<string> { productName, sensorName });
 
-        private static string GetSensorName(string path) => path.Split(SensorPathSeparator)?[^1];
+        private static string GetSensorName(string path) => path?.Split(SensorPathSeparator)?[^1];
     }
 }

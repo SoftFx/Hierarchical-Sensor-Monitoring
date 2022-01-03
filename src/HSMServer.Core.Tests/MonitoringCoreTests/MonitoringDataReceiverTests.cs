@@ -140,7 +140,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var sensorValues = GetRandomSensorValues(count);
 
-            sensorValues.ForEach(s => MonitoringCoreAddSensorValue(s));
+            sensorValues.ForEach(MonitoringCoreAddSensorValue);
 
             FullSeveralSensorValuesTestAsync(sensorValues,
                                              _valuesCache.GetValues,
