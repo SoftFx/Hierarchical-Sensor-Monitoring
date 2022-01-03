@@ -3,7 +3,6 @@ using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Tests.MonitoringDataReceiverTests;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {

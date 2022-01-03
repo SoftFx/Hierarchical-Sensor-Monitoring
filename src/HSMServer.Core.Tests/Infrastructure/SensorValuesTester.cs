@@ -23,33 +23,18 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal void TestSensorDataFromCache(SensorValueBase expected, SensorData actual)
         {
-            switch (expected)
-            {
-                case BoolSensorValue boolSensorValue:
-                    TestSensorDataFromCache(boolSensorValue, actual);
-                    break;
-                case IntSensorValue intSensorValue:
-                    TestSensorDataFromCache(intSensorValue, actual);
-                    break;
-                case DoubleSensorValue doubleSensorValue:
-                    TestSensorDataFromCache(doubleSensorValue, actual);
-                    break;
-                case StringSensorValue stringSensorValue:
-                    TestSensorDataFromCache(stringSensorValue, actual);
-                    break;
-                case IntBarSensorValue intBarSensorValue:
-                    TestSensorDataFromCache(intBarSensorValue, actual);
-                    break;
-                case DoubleBarSensorValue doubleBarSensorValue:
-                    TestSensorDataFromCache(doubleBarSensorValue, actual);
-                    break;
-                case FileSensorBytesValue fileSensorBytesValue:
-                    TestSensorDataFromCache(fileSensorBytesValue, actual);
-                    break;
-                case FileSensorValue fileSensorValue:
-                    TestSensorDataFromCache(fileSensorValue, actual);
-                    break;
-            };
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Key, actual.Key);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(_productName, actual.Product);
+            Assert.Equal(GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(SensorStatus.Ok, actual.Status);
+            //Assert.Equal(TransactionType.Add, actual.TransactionType);
+            Assert.True(string.IsNullOrEmpty(actual.ValidationError));
+            Assert.NotEqual(default, actual.Time);
+
+            TestSensorDataStringValues(expected, actual);
         }
 
         internal void TestSensorData(SensorValueBase expected, SensorData actual,
@@ -63,33 +48,15 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
         {
-            switch (expected)
-            {
-                case BoolSensorValue boolSensorValue:
-                    TestSensorInfoFromDB(boolSensorValue, actual);
-                    break;
-                case IntSensorValue intSensorValue:
-                    TestSensorInfoFromDB(intSensorValue, actual);
-                    break;
-                case DoubleSensorValue doubleSensorValue:
-                    TestSensorInfoFromDB(doubleSensorValue, actual);
-                    break;
-                case StringSensorValue stringSensorValue:
-                    TestSensorInfoFromDB(stringSensorValue, actual);
-                    break;
-                case IntBarSensorValue intBarSensorValue:
-                    TestSensorInfoFromDB(intBarSensorValue, actual);
-                    break;
-                case DoubleBarSensorValue doubleBarSensorValue:
-                    TestSensorInfoFromDB(doubleBarSensorValue, actual);
-                    break;
-                case FileSensorBytesValue fileSensorBytesValue:
-                    TestSensorInfoFromDB(fileSensorBytesValue, actual);
-                    break;
-                case FileSensorValue fileSensorValue:
-                    TestSensorInfoFromDB(fileSensorValue, actual);
-                    break;
-            };
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(_productName, actual.ProductName);
+            Assert.Equal(expected.Path, actual.SensorName);
+            Assert.Equal(GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(default, actual.ExpectedUpdateInterval);
+            Assert.Empty(actual.ValidationParameters);
+            Assert.Null(actual.Unit);
         }
 
         internal static void TestSensorHistoryDataFromExtendedBarSensorData(ExtendedBarSensorData expected, SensorHistoryData actual)
@@ -101,215 +68,73 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorHistoryData actual)
         {
-            switch (expected)
-            {
-                case BoolSensorValue boolSensorValue:
-                    TestSensorHistoryDataFromDB(boolSensorValue, actual);
-                    break;
-                case IntSensorValue intSensorValue:
-                    TestSensorHistoryDataFromDB(intSensorValue, actual);
-                    break;
-                case DoubleSensorValue doubleSensorValue:
-                    TestSensorHistoryDataFromDB(doubleSensorValue, actual);
-                    break;
-                case StringSensorValue stringSensorValue:
-                    TestSensorHistoryDataFromDB(stringSensorValue, actual);
-                    break;
-                case IntBarSensorValue intBarSensorValue:
-                    TestSensorHistoryDataFromDB(intBarSensorValue, actual);
-                    break;
-                case DoubleBarSensorValue doubleBarSensorValue:
-                    TestSensorHistoryDataFromDB(doubleBarSensorValue, actual);
-                    break;
-                case FileSensorBytesValue fileSensorBytesValue:
-                    TestSensorHistoryDataFromDB(fileSensorBytesValue, actual);
-                    break;
-                case FileSensorValue fileSensorValue:
-                    TestSensorHistoryDataFromDB(fileSensorValue, actual);
-                    break;
-            };
+            Assert.NotNull(actual);
+            Assert.Equal(GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
+            Assert.Contains(expected.Comment, actual.TypedData);
+            Assert.Equal(JsonSerializer.Serialize(GetSensorValueTypedData(expected)), actual.TypedData);
         }
 
-        internal static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual, SensorType type, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)type, actual.DataType);
-        }
-
-
-        private static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual,
-            object expectedTypedData, DateTime timeCollected)
+        internal static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual, DateTime timeCollected)
         {
             var timeSpan = expected.Time - DateTime.UnixEpoch;
 
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal((byte)expected.Status, actual.Status);
-            Assert.Equal(JsonSerializer.Serialize(expectedTypedData), actual.TypedData);
+            Assert.Equal(JsonSerializer.Serialize(GetSensorValueTypedData(expected)), actual.TypedData);
             Assert.Equal(expected.Time, actual.Time);
             Assert.Equal(timeCollected, actual.TimeCollected);
             Assert.Equal((long)timeSpan.TotalSeconds, actual.Timestamp);
+            Assert.Equal((byte)GetSensorValueType(expected), actual.DataType);
         }
 
 
-        private void TestSensorDataFromCache(BoolSensorValue expected, SensorData actual)
+        private static void TestSensorDataStringValues(SensorValueBase expected, SensorData actual)
         {
-            TestSensorDataFromCache(expected, SensorType.BooleanSensor, actual);
-
-            Assert.Equal(expected.BoolValue.ToString(), actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.BoolValue), actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(IntSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.IntSensor, actual);
-
-            Assert.Equal(expected.IntValue.ToString(), actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.IntValue), actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(DoubleSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.DoubleSensor, actual);
-
-            Assert.Equal(expected.DoubleValue.ToString(), actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.DoubleValue), actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(StringSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.StringSensor, actual);
-
-            Assert.Equal(expected.StringValue, actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, expected.StringValue), actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(IntBarSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.IntegerBarSensor, actual);
-
-            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
+            switch (expected)
+            {
+                case BoolSensorValue boolSensorValue:
+                    Assert.Equal(boolSensorValue.BoolValue.ToString(), actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, boolSensorValue.BoolValue), actual.StringValue);
+                    break;
+                case IntSensorValue intSensorValue:
+                    Assert.Equal(intSensorValue.IntValue.ToString(), actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, intSensorValue.IntValue), actual.StringValue);
+                    break;
+                case DoubleSensorValue doubleSensorValue:
+                    Assert.Equal(doubleSensorValue.DoubleValue.ToString(), actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, doubleSensorValue.DoubleValue), actual.StringValue);
+                    break;
+                case StringSensorValue stringSensorValue:
+                    Assert.Equal(stringSensorValue.StringValue, actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, stringSensorValue.StringValue), actual.StringValue);
+                    break;
+                case IntBarSensorValue intBarSensorValue:
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
+                        actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
+                                 actual.StringValue);
+                    break;
+                case DoubleBarSensorValue doubleBarSensorValue:
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
+                          actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
+                                 actual.StringValue);
+                    break;
+                case FileSensorBytesValue fileSensorBytesValue:
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
+                          actual.ShortStringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
+                                 actual.StringValue);
+                    break;
+                case FileSensorValue fileSensorValue:
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                          actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
-                         actual.StringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
+                                 actual.StringValue);
+                    break;
+            }
         }
-
-        private void TestSensorDataFromCache(DoubleBarSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.DoubleBarSensor, actual);
-
-            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
-                         actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, expected.Min, expected.Mean, expected.Max, expected.Count, expected.LastValue),
-                         actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(FileSensorBytesValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.FileSensorBytes, actual);
-
-            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(expected.FileName, expected.Extension, expected.FileContent.Length),
-                         actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, expected.FileName, expected.Extension, expected.FileContent.Length),
-                         actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(FileSensorValue expected, SensorData actual)
-        {
-            TestSensorDataFromCache(expected, SensorType.FileSensor, actual);
-
-            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(expected.FileName, expected.Extension, expected.FileContent.Length),
-                         actual.ShortStringValue);
-            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, expected.FileName, expected.Extension, expected.FileContent.Length),
-                         actual.StringValue);
-        }
-
-        private void TestSensorDataFromCache(SensorValueBase expected, SensorType expectedType, SensorData actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Key, actual.Key);
-            Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(_productName, actual.Product);
-            Assert.Equal(expectedType, actual.SensorType);
-            Assert.Equal(SensorStatus.Ok, actual.Status);
-            //Assert.Equal(TransactionType.Add, actual.TransactionType);
-            Assert.True(string.IsNullOrEmpty(actual.ValidationError));
-            Assert.NotEqual(default, actual.Time);
-        }
-
-
-        private void TestSensorInfoFromDB(BoolSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.BooleanSensor, actual);
-
-        private void TestSensorInfoFromDB(IntSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.IntSensor, actual);
-
-        private void TestSensorInfoFromDB(DoubleSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.DoubleSensor, actual);
-
-        private void TestSensorInfoFromDB(StringSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.StringSensor, actual);
-
-        private void TestSensorInfoFromDB(IntBarSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.IntegerBarSensor, actual);
-
-        private void TestSensorInfoFromDB(DoubleBarSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.DoubleBarSensor, actual);
-
-        private void TestSensorInfoFromDB(FileSensorBytesValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.FileSensorBytes, actual);
-
-        private void TestSensorInfoFromDB(FileSensorValue expected, SensorInfo actual) =>
-            TestSensorInfoFromDB(expected, SensorType.FileSensor, actual);
-
-        private void TestSensorInfoFromDB(SensorValueBase expected, SensorType expectedType, SensorInfo actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(_productName, actual.ProductName);
-            Assert.Equal(expected.Path, actual.SensorName);
-            Assert.Equal(expectedType, actual.SensorType);
-            Assert.Equal(default, actual.ExpectedUpdateInterval);
-            Assert.Empty(actual.ValidationParameters);
-            Assert.Null(actual.Unit);
-        }
-
-
-        private static void TestSensorHistoryDataFromDB(BoolSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.BooleanSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(IntSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.IntSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(DoubleSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.DoubleSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(StringSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.StringSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(IntBarSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.IntegerBarSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(DoubleBarSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.DoubleBarSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(FileSensorBytesValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.FileSensorBytes, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(FileSensorValue expected, SensorHistoryData actual) =>
-            TestSensorHistoryDataFromDB(expected, SensorType.FileSensor, GetSensorValueTypedData(expected), actual);
-
-        private static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorType expectedType, object expectedTypeData, SensorHistoryData actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expectedType, actual.SensorType);
-            Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
-            Assert.Contains(expected.Comment, actual.TypedData);
-            Assert.Equal(JsonSerializer.Serialize(expectedTypeData), actual.TypedData);
-        }
-
 
         private static object GetSensorValueTypedData(SensorValueBase sensorValue) =>
             sensorValue switch
@@ -398,5 +223,19 @@ namespace HSMServer.Core.Tests.Infrastructure
                 sensorValue.FileContent,
                 sensorValue.FileName,
             };
+
+        private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
+           sensorValue switch
+           {
+               BoolSensorValue => SensorType.BooleanSensor,
+               IntSensorValue => SensorType.IntSensor,
+               DoubleSensorValue => SensorType.DoubleSensor,
+               StringSensorValue => SensorType.StringSensor,
+               IntBarSensorValue => SensorType.IntegerBarSensor,
+               DoubleBarSensorValue => SensorType.DoubleBarSensor,
+               FileSensorBytesValue => SensorType.FileSensorBytes,
+               FileSensorValue => SensorType.FileSensor,
+               _ => (SensorType)0,
+           };
     }
 }

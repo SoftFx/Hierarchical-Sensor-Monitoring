@@ -37,7 +37,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var dataEntity = sensorValue.Convert(_timeCollected, SensorStatus.Ok);
 
-            SensorValuesTester.TestSensorDataEntity(sensorValue, dataEntity, type, _timeCollected);
+            SensorValuesTester.TestSensorDataEntity(sensorValue, dataEntity, _timeCollected);
         }
 
         [Fact]
