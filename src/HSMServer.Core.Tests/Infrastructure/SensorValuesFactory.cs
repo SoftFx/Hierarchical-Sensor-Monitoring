@@ -19,16 +19,19 @@ namespace HSMServer.Core.Tests.Infrastructure
 
 
         internal SensorValueBase BuildRandomSensorValue() =>
-            RandomValuesGenerator.GetRandomInt(min: 0, max: 8) switch
+            BuildSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8));
+
+        internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
+            sensorType switch
             {
-                0 => BuildBoolSensorValue(),
-                1 => BuildIntSensorValue(),
-                2 => BuildDoubleSensorValue(),
-                3 => BuildStringSensorValue(),
-                4 => BuildIntBarSensorValue(),
-                5 => BuildDoubleBarSensorValue(),
-                6 => BuildFileSensorBytesValue(),
-                7 => BuildFileSensorValue(),
+                SensorType.BooleanSensor => BuildBoolSensorValue(),
+                SensorType.IntSensor => BuildIntSensorValue(),
+                SensorType.DoubleSensor => BuildDoubleSensorValue(),
+                SensorType.StringSensor => BuildStringSensorValue(),
+                SensorType.IntegerBarSensor => BuildIntBarSensorValue(),
+                SensorType.DoubleBarSensor => BuildDoubleBarSensorValue(),
+                SensorType.FileSensorBytes => BuildFileSensorBytesValue(),
+                SensorType.FileSensor => BuildFileSensorValue(),
                 _ => null,
             };
 
@@ -123,6 +126,14 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
+
+        internal ExtendedBarSensorData BuildExtendedBarSensorData(SensorType type) =>
+            type switch
+            {
+                SensorType.IntegerBarSensor => BuildExtendedIntBarSensorData(),
+                SensorType.DoubleBarSensor => BuildExtendedDoubleBarSensorData(),
+                _ => null,
+            };
 
         internal ExtendedBarSensorData BuildExtendedIntBarSensorData() =>
             new()

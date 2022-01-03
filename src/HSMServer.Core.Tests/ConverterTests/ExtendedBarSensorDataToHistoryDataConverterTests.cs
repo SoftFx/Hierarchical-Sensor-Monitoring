@@ -16,57 +16,34 @@ namespace HSMServer.Core.Tests.ConverterTests
             _sensorValuesFactory = fixture.SensorValuesFactory;
 
 
-        [Fact]
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
         [Trait("Category", "Simple")]
-        public void ExtendedIntBarSensorDataToHistoryDataConverterTest()
+        public void ExtendedBarSensorDataToHistoryDataConverterTest(SensorType type)
         {
-            var sensorData = _sensorValuesFactory.BuildExtendedIntBarSensorData();
+            var sensorData = _sensorValuesFactory.BuildExtendedBarSensorData(type);
 
             var historyData = sensorData.Convert();
 
             SensorValuesTester.TestSensorHistoryDataFromExtendedBarSensorData(sensorData, historyData);
         }
 
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void ExtendedDoubleBarSensorDataToHistoryDataConverterTest()
-        {
-            var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
-
-            var historyData = sensorData.Convert();
-
-            SensorValuesTester.TestSensorHistoryDataFromExtendedBarSensorData(sensorData, historyData);
-        }
-
-
-        [Fact]
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
         [Trait("Category", "With min EndTime")]
-        public void ExtendedIntBarSensorDataToHistoryDataConverter_WithMinEndTime_Test()
+        public void ExtendedBarSensorDataToHistoryDataConverter_WithMinEndTime_Test(SensorType type)
         {
             DateTime sensorValueEndTime = DateTime.MinValue;
 
-            var sensorData = _sensorValuesFactory.BuildExtendedIntBarSensorData();
+            var sensorData = _sensorValuesFactory.BuildExtendedBarSensorData(type);
             sensorData.Value.EndTime = sensorValueEndTime;
 
             var historyData = sensorData.Convert();
 
             Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), historyData.TypedData);
         }
-
-        [Fact]
-        [Trait("Category", "With min EndTime")]
-        public void ExtendedDoubleBarSensorDataToHistoryDataConverter_WithMinEndTime_Test()
-        {
-            DateTime sensorValueEndTime = DateTime.MinValue;
-
-            var sensorData = _sensorValuesFactory.BuildExtendedDoubleBarSensorData();
-            sensorData.Value.EndTime = sensorValueEndTime;
-
-            var historyData = sensorData.Convert();
-
-            Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), historyData.TypedData);
-        }
-
 
         [Fact]
         [Trait("Category", "Not Bar ValueType")]
