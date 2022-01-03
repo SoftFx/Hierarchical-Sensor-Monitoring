@@ -130,60 +130,11 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
         }
 
-        internal static void TestSensorDataEntity(BoolSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
+        internal static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual, SensorType type, DateTime timeCollected)
         {
             TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
 
-            Assert.Equal((byte)SensorType.BooleanSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(IntSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.IntSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(DoubleSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.DoubleSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(StringSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.StringSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(IntBarSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.IntegerBarSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(DoubleBarSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.DoubleBarSensor, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(FileSensorBytesValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.FileSensorBytes, actual.DataType);
-        }
-
-        internal static void TestSensorDataEntity(FileSensorValue expected, SensorDataEntity actual, DateTime timeCollected)
-        {
-            TestSensorDataEntity(expected, actual, GetSensorValueTypedData(expected), timeCollected);
-
-            Assert.Equal((byte)SensorType.FileSensor, actual.DataType);
+            Assert.Equal((byte)type, actual.DataType);
         }
 
 
@@ -360,11 +311,17 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
-        private static object GetSensorValueTypedData(ExtendedBarSensorData sensorData) =>
-            sensorData.Value switch
+        private static object GetSensorValueTypedData(SensorValueBase sensorValue) =>
+            sensorValue switch
             {
+                BoolSensorValue boolSensorValue => GetSensorValueTypedData(boolSensorValue),
+                IntSensorValue intSensorValue => GetSensorValueTypedData(intSensorValue),
+                DoubleSensorValue doubleSensorValue => GetSensorValueTypedData(doubleSensorValue),
+                StringSensorValue stringSensorValue => GetSensorValueTypedData(stringSensorValue),
                 IntBarSensorValue intBarSensorValue => GetSensorValueTypedData(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
+                FileSensorBytesValue fileSensorBytesValue => GetSensorValueTypedData(fileSensorBytesValue),
+                FileSensorValue fileSensorValue => GetSensorValueTypedData(fileSensorValue),
                 _ => null,
             };
 

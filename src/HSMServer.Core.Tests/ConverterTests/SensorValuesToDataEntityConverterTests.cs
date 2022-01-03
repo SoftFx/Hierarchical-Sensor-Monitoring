@@ -21,59 +21,23 @@ namespace HSMServer.Core.Tests.ConverterTests
         }
 
 
-        [Fact]
+        [Theory]
+        [InlineData(SensorType.BooleanSensor)]
+        [InlineData(SensorType.IntSensor)]
+        [InlineData(SensorType.DoubleSensor)]
+        [InlineData(SensorType.StringSensor)]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "Simple")]
-        public void BoolSensorValueToSensorDataEntityConverterTest()
+        public void BoolSensorValueToSensorDataEntityConverterTest(SensorType type)
         {
-            var boolSensorValue = _sensorValuesFactory.BuildBoolSensorValue();
+            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
-            var dataEntity = boolSensorValue.Convert(_timeCollected, SensorStatus.Ok);
+            var dataEntity = sensorValue.Convert(_timeCollected, SensorStatus.Ok);
 
-            SensorValuesTester.TestSensorDataEntity(boolSensorValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void IntSensorValueToSensorDataEntityConverterTest()
-        {
-            var intSensorValue = _sensorValuesFactory.BuildIntSensorValue();
-
-            var dataEntity = intSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(intSensorValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void DoubleSensorValueToSensorDataEntityConverterTest()
-        {
-            var doubleSensorValue = _sensorValuesFactory.BuildDoubleSensorValue();
-
-            var dataEntity = doubleSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(doubleSensorValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void StringSensorValueToSensorDataEntityConverterTest()
-        {
-            var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-
-            var dataEntity = stringSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(stringSensorValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void IntBarSensorValueToSensorDataEntityConverterTest()
-        {
-            var intBarSensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
-
-            var dataEntity = intBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(intBarSensorValue, dataEntity, _timeCollected);
+            SensorValuesTester.TestSensorDataEntity(sensorValue, dataEntity, type, _timeCollected);
         }
 
         [Fact]
@@ -91,17 +55,6 @@ namespace HSMServer.Core.Tests.ConverterTests
         }
 
         [Fact]
-        [Trait("Category", "Simple")]
-        public void DoubleBarSensorValueToSensorDataEntityConverterTest()
-        {
-            var doubleBarSensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
-
-            var dataEntity = doubleBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(doubleBarSensorValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
         [Trait("Category", "BarSensorValue without EndTime")]
         public void DoubleBarSensorValueToSensorDataEntityConverter_WithoutEndTime_Test()
         {
@@ -113,28 +66,6 @@ namespace HSMServer.Core.Tests.ConverterTests
             var dataEntity = doubleBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
 
             Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), dataEntity.TypedData);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void FileSensorBytesValueToSensorDataEntityConverterTest()
-        {
-            var fileSensorBytesValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-
-            var dataEntity = fileSensorBytesValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(fileSensorBytesValue, dataEntity, _timeCollected);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void FileSensorValueToSensorDataEntityConverterTest()
-        {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
-
-            var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Ok);
-
-            SensorValuesTester.TestSensorDataEntity(fileSensorValue, dataEntity, _timeCollected);
         }
 
         [Fact]
