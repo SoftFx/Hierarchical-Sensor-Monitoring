@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using HSMSensorDataObjects;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
@@ -22,88 +23,19 @@ namespace HSMServer.Core.Tests.ConverterTests
         }
 
 
-        [Fact]
+        [Theory]
+        [InlineData(SensorType.BooleanSensor)]
+        [InlineData(SensorType.IntSensor)]
+        [InlineData(SensorType.DoubleSensor)]
+        [InlineData(SensorType.StringSensor)]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "Simple")]
-        public void BoolSensorValueToSensorInfoConverterTest()
+        public void SensorValueToSensorInfoConverterTest(SensorType type)
         {
-            var sensorValue = _sensorValuesFactory.BuildBoolSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void IntSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildIntSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void DoubleSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildDoubleSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void StringSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildStringSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void IntBarSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void DoubleBarSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void FileSensorBytesValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-
-            var sensorInfo = sensorValue.Convert(_productName);
-
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
-
-        [Fact]
-        [Trait("Category", "Simple")]
-        public void FileSensorValueToSensorInfoConverterTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
             var sensorInfo = sensorValue.Convert(_productName);
 
