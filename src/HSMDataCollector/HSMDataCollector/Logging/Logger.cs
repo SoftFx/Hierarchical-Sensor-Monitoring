@@ -25,7 +25,7 @@ namespace HSMDataCollector.Logging
 
         public static void CreateConfigFile(LogLevel minLevel, LogLevel maxLevel)
         {
-            if ( LogManager.Configuration is null)
+            if (LogManager.Configuration is null)
             {
                 var config = new NLog.Config.LoggingConfiguration();
 
