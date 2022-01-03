@@ -29,7 +29,7 @@ DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::
 
 void DataCollectorImpl::Initialize(bool use_logging, const std::string& folder_path, const std::string& file_name_format)
 {
-	data_collector->Initialize(use_logging, (folder_path != "") ? gcnew String(folder_path.c_str()) : nullptr, (file_name_format != "") ? gcnew String(file_name_format.c_str()) : nullptr);
+	data_collector->Initialize(use_logging, !folder_path.empty() ? gcnew String(folder_path.c_str()) : nullptr, !file_name_format.empty() ? gcnew String(file_name_format.c_str()) : nullptr);
 }
 
 void DataCollectorImpl::Stop()
@@ -51,6 +51,12 @@ void DataCollectorImpl::InitializeProcessMonitoring(const std::string& process_n
 {
 	data_collector->InitializeProcessMonitoring(gcnew String(process_name.c_str()), is_cpu, is_memory, is_threads);
 }
+
+void DataCollectorImpl::InitializeOsMonitoring(bool is_updated)
+{
+	data_collector->InitializeOsMonitoring(is_updated);
+}
+
 
 void DataCollectorImpl::MonitoringServiceAlive()
 {
@@ -187,6 +193,21 @@ void DataCollectorImplWrapper::InitializeProcessMonitoring(const std::string& pr
 		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
 	}
 }
+
+
+void DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated)
+{
+	try
+	{
+		impl->InitializeOsMonitoring(is_updated);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+
 
 void DataCollectorImplWrapper::MonitoringServiceAlive()
 {
@@ -349,8 +370,6 @@ shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> DataCollectorImplWrapper::Creat
 }
 
 
-
-
 DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port) : impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port))
 {
 }
@@ -379,6 +398,12 @@ void DataCollectorProxy::InitializeProcessMonitoring(const std::string& process_
 {
 	impl_wrapper->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads);
 }
+
+void DataCollectorProxy::InitializeOsMonitoring(bool is_updated)
+{
+	impl_wrapper->InitializeOsMonitoring(is_updated);
+}
+
 
 void DataCollectorProxy::MonitoringServiceAlive()
 {
@@ -435,9 +460,6 @@ DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& pat
 {
 	return impl_wrapper->CreateDoubleBarSensor(path, timeout, small_period, precision, description);
 }
-
-
-
 
 
 #define InstantiateOneParamTemplates(X)\
