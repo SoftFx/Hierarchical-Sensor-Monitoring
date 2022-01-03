@@ -315,7 +315,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         private static SensorInfo BuildSensorInfo(byte sensorType) =>
             new()
             {
-                Path = $"{typeof(SensorInfo)}",
+                Path = nameof(SensorInfo),
                 ProductName = _productName,
                 SensorName = nameof(SensorInfo),
                 Description = $"{nameof(SensorInfo)} {nameof(SensorInfo.Description)}",

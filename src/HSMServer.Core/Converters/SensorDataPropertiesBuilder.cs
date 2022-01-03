@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
@@ -9,7 +10,7 @@ namespace HSMServer.Core.Converters
 {
     internal static class SensorDataPropertiesBuilder
     {
-        private const double SIZE_DENOMINATOR = 1024.0;
+        private const double SizeDenominator = 1024.0;
 
 
         internal static string GetStringValue(SensorValueBase sensorValue, DateTime timeCollected) =>
@@ -166,12 +167,10 @@ namespace HSMServer.Core.Converters
             $"{(string.IsNullOrEmpty(comment) ? string.Empty : $", comment = {comment}")}.";
 
         private static string GetFileSensorsString(DateTime timeCollected, string comment, string fileName, string extension, int contentLength) =>
-            $"Time: {timeCollected.ToUniversalTime():G}. {GetFileSensorsShortString(fileName, extension, contentLength)}" +
-            $"{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
+            $"Time: {timeCollected.ToUniversalTime():G}. {GetFileSensorsShortString(fileName, extension, contentLength)}".AddComment(comment);
 
         private static string GetBarSensorsString<T>(DateTime timeCollected, string comment, T min, T mean, T max, int count, T lastValue) where T : struct =>
-            $"Time: {timeCollected.ToUniversalTime():G}. Value: {GetBarSensorsShortString(min, mean, max, count, lastValue)}" +
-            $"{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
+            $"Time: {timeCollected.ToUniversalTime():G}. Value: {GetBarSensorsShortString(min, mean, max, count, lastValue)}".AddComment(comment);
 
         private static string GetBarSensorsShortString<T>(T min, T mean, T max, int count, T lastValue) where T : struct =>
             $"Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {lastValue}.";
@@ -192,27 +191,34 @@ namespace HSMServer.Core.Converters
             if (string.IsNullOrEmpty(fileName))
                 return $"Extension: {extension}.";
 
-            if (fileName.IndexOf('.') != -1)
+            if (!string.IsNullOrEmpty(Path.GetExtension(fileName)))
                 return $"File name: {fileName}.";
 
-            return $"File name: {fileName}.{extension}.";
+            return $"File name: {Path.ChangeExtension(fileName, extension)}.";
         }
 
         private static string FileSizeToNormalString(int size)
         {
-            if (size < SIZE_DENOMINATOR)
+            if (size < SizeDenominator)
                 return $"{size} bytes";
 
-            double kb = size / SIZE_DENOMINATOR;
-            if (kb < SIZE_DENOMINATOR)
+            double kb = size / SizeDenominator;
+            if (kb < SizeDenominator)
                 return $"{kb:#,##0} KB";
 
-            double mb = kb / SIZE_DENOMINATOR;
-            if (mb < SIZE_DENOMINATOR)
+            double mb = kb / SizeDenominator;
+            if (mb < SizeDenominator)
                 return $"{mb:#,##0.0} MB";
 
-            double gb = mb / SIZE_DENOMINATOR;
+            double gb = mb / SizeDenominator;
             return $"{gb:#,##0.0} GB";
         }
+    }
+
+
+    public static class StringExtensions
+    {
+        public static string AddComment(this string source, string comment) =>
+             $"{source}{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
     }
 }

@@ -164,7 +164,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Time = dateTime.AddMinutes(-5),
                 Timestamp = GetTimestamp(dateTime),
-                Path = $"{typeof(SensorDataEntity)}",
+                Path = nameof(SensorDataEntity),
                 TimeCollected = dateTime,
                 Status = (byte)RandomValuesGenerator.GetRandomInt(0, 4),
             };
