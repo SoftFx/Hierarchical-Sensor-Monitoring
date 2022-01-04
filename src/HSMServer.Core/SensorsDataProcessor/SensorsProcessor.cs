@@ -236,7 +236,7 @@ namespace HSMServer.Core.SensorsDataProcessor
 
             AddSensorIfNotRegistered(productName, unitedValue, out var transactionType);
 
-            processedData = _converter.ConvertUnitedValue(unitedValue, productName, timeCollected, transactionType);
+            processedData = unitedValue.Convert(productName, timeCollected, transactionType);
             SetStatusViaValidationResult(processedData, worstResult);
             processedData.ValidationError = processingError;
             return worstResult;

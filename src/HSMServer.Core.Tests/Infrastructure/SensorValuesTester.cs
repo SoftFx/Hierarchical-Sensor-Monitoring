@@ -24,7 +24,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             _productName = productName;
 
 
-        internal void TestSensorDataFromCache(SensorValueBase expected, SensorData actual)
+        internal void TestSensorDataFromCache(SensorValueBase expected, SensorData actual, DateTime? timeCollected = null)
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Description, actual.Description);
@@ -37,13 +37,13 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.True(string.IsNullOrEmpty(actual.ValidationError));
             Assert.NotEqual(default, actual.Time);
 
-            TestSensorDataStringValues(expected, actual);
+            TestSensorDataStringValues(expected, actual, timeCollected);
         }
 
         internal void TestSensorData(SensorValueBase expected, SensorData actual,
             DateTime timeCollected, TransactionType type)
         {
-            TestSensorDataFromCache(expected, actual);
+            TestSensorDataFromCache(expected, actual, timeCollected);
 
             Assert.Equal(timeCollected, actual.Time);
             Assert.Equal(type, actual.TransactionType);
@@ -168,7 +168,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                _ => (SensorType)0,
            };
 
-        private static void TestSensorDataStringValues(SensorValueBase expected, SensorData actual)
+        private static void TestSensorDataStringValues(SensorValueBase expected, SensorData actual, DateTime? timeCollected = null)
         {
             switch (expected)
             {
@@ -214,7 +214,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     break;
                 case UnitedSensorValue unitedSensorValue:
                     Assert.Equal(GetUnitedSensorValueShortStringValue(unitedSensorValue), actual.ShortStringValue);
-                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue), actual.StringValue);
+                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue, timeCollected.Value), actual.StringValue);
                     break;
             }
         }
@@ -239,7 +239,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             }
         }
 
-        private static string GetUnitedSensorValueStringValue(UnitedSensorValue value)
+        private static string GetUnitedSensorValueStringValue(UnitedSensorValue value, DateTime timeCollected)
         {
             switch (value.Type)
             {
@@ -247,13 +247,13 @@ namespace HSMServer.Core.Tests.Infrastructure
                 case SensorType.IntSensor:
                 case SensorType.DoubleSensor:
                 case SensorType.StringSensor:
-                    return SensorDataStringValuesFactory.GetSimpleSensorsString(value.Time, value.Comment, value.Data);
+                    return SensorDataStringValuesFactory.GetSimpleSensorsString(timeCollected, value.Comment, value.Data);
                 case SensorType.IntegerBarSensor:
                     IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
-                    return SensorDataStringValuesFactory.GetBarSensorsString(value.Time, value.Comment, intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                    return SensorDataStringValuesFactory.GetBarSensorsString(timeCollected, value.Comment, intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
                 case SensorType.DoubleBarSensor:
                     DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
-                    return SensorDataStringValuesFactory.GetBarSensorsString(value.Time, value.Comment, doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                    return SensorDataStringValuesFactory.GetBarSensorsString(timeCollected, value.Comment, doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
                 default:
                     return string.Empty;
             }

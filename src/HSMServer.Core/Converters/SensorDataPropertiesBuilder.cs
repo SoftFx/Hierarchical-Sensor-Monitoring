@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 
@@ -24,6 +25,7 @@ namespace HSMServer.Core.Converters
                 DoubleBarSensorValue doubleBarSensorValue => GetStringValue(doubleBarSensorValue, timeCollected),
                 FileSensorBytesValue fileSensorBytesValue => GetStringValue(fileSensorBytesValue, timeCollected),
                 FileSensorValue fileSensorValue => GetStringValue(fileSensorValue, timeCollected),
+                UnitedSensorValue unitedSensorValue => GetStringValue(unitedSensorValue, timeCollected),
                 _ => null,
             };
 
@@ -38,6 +40,7 @@ namespace HSMServer.Core.Converters
                 DoubleBarSensorValue doubleBarSensorValue => GetShortStringValue(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetShortStringValue(fileSensorBytesValue),
                 FileSensorValue fileSensorValue => GetShortStringValue(fileSensorValue),
+                UnitedSensorValue unitedSensorValue => GetShortStringValue(unitedSensorValue),
                 _ => null,
             };
 
@@ -136,18 +139,34 @@ namespace HSMServer.Core.Converters
         private static string GetStringValue(DoubleBarSensorValue value, DateTime timeCollected) =>
             GetBarSensorsString(timeCollected, value.Comment, value.Min, value.Mean, value.Max, value.Count, value.LastValue);
 
+        private static string GetStringValue(UnitedSensorValue value, DateTime timeCollected)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                case SensorType.IntSensor:
+                case SensorType.DoubleSensor:
+                case SensorType.StringSensor:
+                    return GetSimpleSensorsString(timeCollected, value.Comment, value.Data);
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return GetBarSensorsString(timeCollected, value.Comment, intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return GetBarSensorsString(timeCollected, value.Comment, doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                default:
+                    return string.Empty;
+            }
+        }
 
-        private static string GetShortStringValue(BoolSensorValue value) =>
-            value.BoolValue.ToString();
 
-        private static string GetShortStringValue(IntSensorValue value) =>
-            value.IntValue.ToString();
+        private static string GetShortStringValue(BoolSensorValue value) => value.BoolValue.ToString();
 
-        private static string GetShortStringValue(DoubleSensorValue value) =>
-            value.DoubleValue.ToString();
+        private static string GetShortStringValue(IntSensorValue value) => value.IntValue.ToString();
 
-        private static string GetShortStringValue(StringSensorValue value) =>
-            value.StringValue;
+        private static string GetShortStringValue(DoubleSensorValue value) => value.DoubleValue.ToString();
+
+        private static string GetShortStringValue(StringSensorValue value) => value.StringValue;
 
         private static string GetShortStringValue(IntBarSensorValue value) =>
             GetBarSensorsShortString(value.Min, value.Mean, value.Max, value.Count, value.LastValue);
@@ -160,6 +179,26 @@ namespace HSMServer.Core.Converters
 
         private static string GetShortStringValue(FileSensorBytesValue value) =>
             GetFileSensorsShortString(value.FileName, value.Extension, value.FileContent?.Length ?? 0);
+
+        private static string GetShortStringValue(UnitedSensorValue value)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                case SensorType.IntSensor:
+                case SensorType.DoubleSensor:
+                case SensorType.StringSensor:
+                    return value.Data;
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return GetBarSensorsShortString(intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return GetBarSensorsShortString(doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                default:
+                    return string.Empty;
+            }
+        }
 
 
         private static string GetSimpleSensorsString<T>(DateTime timeCollected, string comment, T value) =>

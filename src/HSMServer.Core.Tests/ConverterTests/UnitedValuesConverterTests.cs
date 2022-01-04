@@ -1,5 +1,6 @@
 ﻿using System;
 using HSMSensorDataObjects;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
@@ -38,7 +39,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorData = _converter.ConvertUnitedValue(unitedValue, _productName, _timeCollected, transactionType);
+            var sensorData = unitedValue.Convert(_productName, _timeCollected, transactionType);
 
             _sensorValuesTester.TestSensorData(unitedValue, sensorData, _timeCollected, transactionType);
         }
@@ -51,7 +52,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorData = _converter.ConvertUnitedValue(unitedValue, _productName, _timeCollected, TransactionType.Unknown);
+            var sensorData = unitedValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
 
             Assert.Equal(string.Empty, sensorData.StringValue);
             Assert.Equal(string.Empty, sensorData.ShortStringValue);
