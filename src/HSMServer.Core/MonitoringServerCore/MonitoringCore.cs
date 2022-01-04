@@ -275,7 +275,7 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             try
             {
-                var bar = _converter.GetBarSensorValue(value);
+                var bar = value.Convert();
 
                 if (bar.EndTime != DateTime.MinValue)
                 {

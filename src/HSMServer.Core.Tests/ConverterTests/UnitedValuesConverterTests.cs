@@ -98,7 +98,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var barSensorValue = _converter.GetBarSensorValue(unitedValue);
+            var barSensorValue = unitedValue.Convert();
 
             SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, barSensorValue);
         }
@@ -111,7 +111,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var barSensorValue = _converter.GetBarSensorValue(unitedValue);
+            var barSensorValue = unitedValue.Convert();
 
             Assert.Null(barSensorValue);
         }
