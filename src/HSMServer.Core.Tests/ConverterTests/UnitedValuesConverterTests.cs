@@ -43,6 +43,20 @@ namespace HSMServer.Core.Tests.ConverterTests
             _sensorValuesTester.TestSensorData(unitedValue, sensorData, _timeCollected, transactionType);
         }
 
+        [Theory]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "to SensorData")]
+        public void UnitedValueToSensorData_WithoutSpecificFields_Test(SensorType sensorType)
+        {
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+
+            var sensorData = _converter.ConvertUnitedValue(unitedValue, _productName, _timeCollected, TransactionType.Unknown);
+
+            Assert.Equal(string.Empty, sensorData.StringValue);
+            Assert.Equal(string.Empty, sensorData.ShortStringValue);
+        }
+
 
         [Theory]
         [InlineData(SensorType.BooleanSensor)]
@@ -59,6 +73,46 @@ namespace HSMServer.Core.Tests.ConverterTests
             var sensorDataEntity = _converter.ConvertUnitedValueToDatabase(unitedValue, _timeCollected, SensorStatus.Ok);
 
             SensorValuesTester.TestSensorDataEntity(unitedValue, sensorDataEntity, _timeCollected);
+        }
+
+        [Theory]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "to SensorDataEntity")]
+        public void UnitedValueToSensorDataEntity_WithoutSpecificFields_Test(SensorType sensorType)
+        {
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+
+            var sensorDataEntity = _converter.ConvertUnitedValueToDatabase(unitedValue, _timeCollected, SensorStatus.Ok);
+
+            Assert.Equal(string.Empty, sensorDataEntity.TypedData);
+        }
+
+
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "to BarSensorValue")]
+        public void UnitedValueToBarSensorValueTest(SensorType sensorType)
+        {
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+
+            var barSensorValue = _converter.GetBarSensorValue(unitedValue);
+
+            SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, barSensorValue);
+        }
+
+        [Fact]
+        [Trait("Category", "to BarSensorValue")]
+        public void UnitedValueToBarSensorValue_Null_Test()
+        {
+            const SensorType sensorType = SensorType.BooleanSensor;
+
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+
+            var barSensorValue = _converter.GetBarSensorValue(unitedValue);
+
+            Assert.Null(barSensorValue);
         }
     }
 }

@@ -91,6 +91,67 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal((byte)GetSensorValueType(expected), actual.DataType);
         }
 
+        internal static void TestBarSensorFromUnitedSensor(UnitedSensorValue expected, BarSensorValueBase actual)
+        {
+            Assert.Equal(expected.Comment, actual.Comment);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Status, actual.Status);
+            Assert.Equal(expected.Key, actual.Key);
+            Assert.Equal(expected.Time, actual.Time);
+
+            switch (expected.Type)
+            {
+                case SensorType.IntegerBarSensor:
+                    TestUnitedSensorValueData(expected, (IntBarSensorValue)actual);
+                    break;
+                case SensorType.DoubleBarSensor:
+                    TestUnitedSensorValueData(expected, (DoubleBarSensorValue)actual);
+                    break;
+            }
+        }
+
+
+        private static void TestUnitedSensorValueData(UnitedSensorValue expected, DoubleBarSensorValue actual)
+        {
+            var barData = JsonSerializer.Deserialize<DoubleBarData>(expected.Data);
+
+            Assert.Equal(barData.Min, actual.Min);
+            Assert.Equal(barData.Max, actual.Max);
+            Assert.Equal(barData.Mean, actual.Mean);
+            Assert.Equal(barData.LastValue, actual.LastValue);
+            Assert.Equal(barData.Count, actual.Count);
+            Assert.Equal(barData.StartTime, actual.StartTime);
+            Assert.Equal(barData.EndTime, actual.EndTime);
+
+            Assert.Equal(barData.Percentiles.Count, actual.Percentiles.Count);
+            for (int i = 0; i < barData.Percentiles.Count; ++i)
+            {
+                Assert.Equal(barData.Percentiles[i].Value, actual.Percentiles[i].Value);
+                Assert.Equal(barData.Percentiles[i].Percentile, actual.Percentiles[i].Percentile);
+            }
+        }
+
+        private static void TestUnitedSensorValueData(UnitedSensorValue expected, IntBarSensorValue actual)
+        {
+            var barData = JsonSerializer.Deserialize<IntBarData>(expected.Data);
+
+            Assert.Equal(barData.Min, actual.Min);
+            Assert.Equal(barData.Max, actual.Max);
+            Assert.Equal(barData.Mean, actual.Mean);
+            Assert.Equal(barData.LastValue, actual.LastValue);
+            Assert.Equal(barData.Count, actual.Count);
+            Assert.Equal(barData.StartTime, actual.StartTime);
+            Assert.Equal(barData.EndTime, actual.EndTime);
+
+            Assert.Equal(barData.Percentiles.Count, actual.Percentiles.Count);
+            for (int i = 0; i < barData.Percentiles.Count; ++i)
+            {
+                Assert.Equal(barData.Percentiles[i].Value, actual.Percentiles[i].Value);
+                Assert.Equal(barData.Percentiles[i].Percentile, actual.Percentiles[i].Percentile);
+            }
+        }
+
 
         private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
            sensorValue switch

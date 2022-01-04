@@ -363,6 +363,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 intBarObj.Min = data.Min;
                 intBarObj.Percentiles = data.Percentiles;
                 intBarObj.LastValue = data.LastValue;
+                intBarObj.Count = data.Count;
                 intBarObj.StartTime = data.StartTime;
                 intBarObj.EndTime = data.EndTime;
             }
@@ -379,6 +380,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 intBarObj.Min = data.Min;
                 intBarObj.Percentiles = data.Percentiles;
                 intBarObj.LastValue = data.LastValue;
+                intBarObj.Count = data.Count;
                 intBarObj.StartTime = data.StartTime;
                 intBarObj.EndTime = data.EndTime;
             }
