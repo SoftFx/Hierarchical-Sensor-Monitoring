@@ -1,30 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using HSMCommon;
-
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 {
-    public class MonitoringDataReceiverFixture : IDisposable
+    public class MonitoringDataReceiverFixture : DatabaseFixture
     {
-        internal List<DatabaseAdapterManager> CreatedDatabases { get; } =
-            new List<DatabaseAdapterManager>(1 << 5);
-
-
-        public MonitoringDataReceiverFixture()
-        {
-            if (Directory.Exists(DatabaseAdapterManager.DatabaseFolder))
-                DeleteDatabaseDirectory();
-        }
-
-
-        public void Dispose()
-        {
-            CreatedDatabases.ForEach(db => db.ClearDatabase());
-            DeleteDatabaseDirectory();
-        }
-
-        private static void DeleteDatabaseDirectory() =>
-            FileManager.SafeRemoveFolder(DatabaseAdapterManager.DatabaseFolder);
+        public override string DatabaseFolder => nameof(MonitoringDataReceiverTests);
+        public override int DatabaseCount => 1 << 5; 
     }
 }
