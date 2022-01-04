@@ -380,10 +380,10 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         private static DoubleBarSensorData GetDoubleBarSensorData(string data, string comment)
         {
-            var intBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(data);
+            var doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(data);
 
-            return GetDoubleBarSensorData(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.LastValue,
-                intBarData.Count, intBarData.StartTime, intBarData.EndTime, intBarData.Percentiles, comment);
+            return GetDoubleBarSensorData(doubleBarData.Min, doubleBarData.Max, doubleBarData.Mean, doubleBarData.LastValue,
+                doubleBarData.Count, doubleBarData.StartTime, doubleBarData.EndTime, doubleBarData.Percentiles, comment);
         }
 
         private static FileSensorBytesData GetFileSensorBytesData(string extension, string filename, byte[] content, string comment) =>

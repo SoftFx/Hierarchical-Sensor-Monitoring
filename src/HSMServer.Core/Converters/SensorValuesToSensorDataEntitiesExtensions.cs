@@ -10,10 +10,6 @@ namespace HSMServer.Core.Converters
     {
         public static SensorDataEntity Convert(this SensorValueBase sensorValue, DateTime timeCollected,
             SensorStatus validationStatus = SensorStatus.Unknown) =>
-            CreateSensorDataEntity(sensorValue, timeCollected, validationStatus);
-
-
-        private static SensorDataEntity CreateSensorDataEntity(SensorValueBase sensorValue, DateTime timeCollected, SensorStatus validationStatus) =>
             new()
             {
                 Path = sensorValue.Path,
@@ -24,6 +20,7 @@ namespace HSMServer.Core.Converters
                 TypedData = TypedDataFactory.GetTypedData(sensorValue),
                 DataType = (byte)SensorTypeFactory.GetSensorType(sensorValue),
             };
+
 
         private static long GetTimestamp(DateTime dateTime)
         {

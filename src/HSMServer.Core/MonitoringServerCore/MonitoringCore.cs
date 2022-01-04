@@ -262,7 +262,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!isToDB)
                     return;
 
-                SensorDataEntity dataObject = _converter.ConvertUnitedValueToDatabase(value, timeCollected);
+                SensorDataEntity dataObject = value.Convert(timeCollected);
                 SaveSensorValue(dataObject, processedData.Product);
             }
             catch (Exception e)

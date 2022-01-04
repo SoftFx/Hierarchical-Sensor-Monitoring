@@ -71,7 +71,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorDataEntity = _converter.ConvertUnitedValueToDatabase(unitedValue, _timeCollected, SensorStatus.Ok);
+            var sensorDataEntity = unitedValue.Convert(_timeCollected, SensorStatus.Ok);
 
             SensorValuesTester.TestSensorDataEntity(unitedValue, sensorDataEntity, _timeCollected);
         }
@@ -84,7 +84,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorDataEntity = _converter.ConvertUnitedValueToDatabase(unitedValue, _timeCollected, SensorStatus.Ok);
+            var sensorDataEntity = unitedValue.Convert(_timeCollected, SensorStatus.Ok);
 
             Assert.Equal(string.Empty, sensorDataEntity.TypedData);
         }
