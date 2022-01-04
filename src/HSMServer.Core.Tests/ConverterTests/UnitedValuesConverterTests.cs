@@ -2,7 +2,6 @@
 using HSMSensorDataObjects;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
@@ -10,7 +9,6 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class UnitedValuesConverterTests : IClassFixture<EntitiesConverterFixture>
     {
-        private readonly Converter _converter;
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
 
@@ -19,7 +17,6 @@ namespace HSMServer.Core.Tests.ConverterTests
 
         public UnitedValuesConverterTests(EntitiesConverterFixture fixture)
         {
-            _converter = new Converter(CommonMoqs.CreateNullLogger<Converter>());
             _sensorValuesFactory = fixture.SensorValuesFactory;
             _sensorValuesTester = fixture.SensorValuesTester;
 

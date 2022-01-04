@@ -8,7 +8,6 @@ using HSMServer.Core.Converters;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataValidation;
 using Microsoft.Extensions.Logging;
@@ -18,14 +17,12 @@ namespace HSMServer.Core.SensorsDataProcessor
     public class SensorsProcessor : ISensorsProcessor
     {
         private readonly ILogger<SensorsProcessor> _logger;
-        private readonly IConverter _converter;
         private readonly ISensorsDataValidator _dataValidator;
         private readonly IProductManager _productManager;
-        public SensorsProcessor(ILogger<SensorsProcessor> logger, IConverter converter, ISensorsDataValidator validator,
+        public SensorsProcessor(ILogger<SensorsProcessor> logger, ISensorsDataValidator validator,
             IProductManager productManager)
         {
             _logger = logger;
-            _converter = converter;
             _dataValidator = validator;
             _productManager = productManager;
         }

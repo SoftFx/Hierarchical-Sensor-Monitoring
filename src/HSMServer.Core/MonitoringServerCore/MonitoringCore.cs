@@ -45,11 +45,10 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ISensorsProcessor _sensorsProcessor;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
-        private readonly IConverter _converter;
 
         public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, ISensorsProcessor sensorsProcessor, IConfigurationProvider configurationProvider, 
-            IValuesCache valuesVCache, IConverter converter, ILogger<MonitoringCore> logger)
+            IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;
@@ -63,7 +62,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _configurationProvider = configurationProvider;
             _sensorsProcessor = sensorsProcessor;
             _valuesCache = valuesVCache;
-            _converter = converter;
             //MigrateSensorsValuesToNewDatabase();
             Thread.Sleep(5000);
             FillValuesCache();

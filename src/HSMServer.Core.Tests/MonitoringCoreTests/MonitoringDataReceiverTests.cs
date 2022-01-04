@@ -52,21 +52,18 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             var barSensorsStorage = new BarSensorsStorage();
 
-            var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
-            var converter = new Converter(converterLogger);
-
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, converter, productManagerLogger);
+            var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
             var sensorDataValidatorLogger = CommonMoqs.CreateNullLogger<SensorsDataValidator>();
             var sensorDataValidator = new SensorsDataValidator(configurationProvider, _databaseAdapterManager.DatabaseAdapter,
                 productManager, sensorDataValidatorLogger);
 
             var sensorsProcessorLogger = CommonMoqs.CreateNullLogger<SensorsProcessor>();
-            var sensorsProcessor = new SensorsProcessor(sensorsProcessorLogger, converter, sensorDataValidator, productManager);
+            var sensorsProcessor = new SensorsProcessor(sensorsProcessorLogger, sensorDataValidator, productManager);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
@@ -77,7 +74,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 sensorsProcessor,
                 configurationProvider,
                 _valuesCache,
-                converter,
                 monitoringLogger);
         }
 

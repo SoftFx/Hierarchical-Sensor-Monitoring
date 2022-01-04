@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Core.Model;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -20,15 +19,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         public ProductManagerTests(ProductManagerFixture fixture)
         {
-            var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
-            var converter = new Converter(converterLogger);
-
             _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, converter, productManagerLogger);
+            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
         }
 
         [Fact]
