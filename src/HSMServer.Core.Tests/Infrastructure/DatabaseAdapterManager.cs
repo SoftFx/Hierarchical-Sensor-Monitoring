@@ -9,7 +9,6 @@ namespace HSMServer.Core.Tests.Infrastructure
     internal sealed class DatabaseAdapterManager
     {
         private const string ProductName = "TestProduct";
-        internal const string DatabaseFolder = "TestDB";
 
         private static int _dbNumber;
 
@@ -18,7 +17,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         public Product TestProduct { get; }
 
 
-        public DatabaseAdapterManager()
+        public DatabaseAdapterManager(string databaseFolder)
         {
             TestProduct = GetTestProduct();
 
@@ -27,7 +26,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             DatabaseAdapter = new DatabaseAdapter(
                 new DatabaseSettings()
                 {
-                    DatabaseFolder = DatabaseFolder,
+                    DatabaseFolder = databaseFolder,
                     EnvironmentDatabaseName = $"EnvironmentData{_dbNumber}",
                     MonitoringDatabaseName = $"MonitoringData{_dbNumber}",
                 });

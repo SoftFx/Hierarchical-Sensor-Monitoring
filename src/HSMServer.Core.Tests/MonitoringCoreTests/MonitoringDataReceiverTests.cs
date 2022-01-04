@@ -13,6 +13,7 @@ using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataProcessor;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
 using Xunit;
 
@@ -40,7 +41,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             _valuesCache = new ValuesCache();
 
-            _databaseAdapterManager = new DatabaseAdapterManager();
+            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
