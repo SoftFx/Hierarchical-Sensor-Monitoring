@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
@@ -149,6 +151,56 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = BuildDoubleBarSensorValue(),
                 ValueType = SensorType.DoubleBarSensor,
                 ProductName = _productKey,
+            };
+
+        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType)
+        {
+            var sensorValue = new UnitedSensorValue
+            {
+                Type = sensorType,
+                Data = BuildUnitedValueData(sensorType)
+            };
+
+            return sensorValue.FillCommonSensorValueProperties(_productKey);
+        }
+
+
+        private static string BuildUnitedValueData(SensorType sensorType) =>
+            sensorType switch
+            {
+                SensorType.BooleanSensor => RandomValuesGenerator.GetRandomBool().ToString(),
+                SensorType.IntSensor => RandomValuesGenerator.GetRandomInt().ToString(),
+                SensorType.DoubleSensor => RandomValuesGenerator.GetRandomDouble().ToString(),
+                SensorType.StringSensor => RandomValuesGenerator.GetRandomString(),
+                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData()),
+                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData()),
+                _ => null,
+            };
+
+        private static IntBarData BuildIntBarData() =>
+            new()
+            {
+                LastValue = RandomValuesGenerator.GetRandomInt(),
+                Min = RandomValuesGenerator.GetRandomInt(),
+                Max = RandomValuesGenerator.GetRandomInt(),
+                Mean = RandomValuesGenerator.GetRandomInt(),
+                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                StartTime = DateTime.UtcNow.AddSeconds(-10),
+                EndTime = DateTime.UtcNow.AddSeconds(10),
+                Percentiles = GetPercentileValuesInt(),
+            };
+
+        private static DoubleBarData BuildDoubleBarData() =>
+            new()
+            {
+                LastValue = RandomValuesGenerator.GetRandomDouble(),
+                Min = RandomValuesGenerator.GetRandomDouble(),
+                Max = RandomValuesGenerator.GetRandomDouble(),
+                Mean = RandomValuesGenerator.GetRandomDouble(),
+                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                StartTime = DateTime.UtcNow.AddSeconds(-10),
+                EndTime = DateTime.UtcNow.AddSeconds(10),
+                Percentiles = GetPercentileValuesDouble(),
             };
 
 

@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using Xunit;
@@ -89,6 +92,21 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
+        private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
+           sensorValue switch
+           {
+               BoolSensorValue => SensorType.BooleanSensor,
+               IntSensorValue => SensorType.IntSensor,
+               DoubleSensorValue => SensorType.DoubleSensor,
+               StringSensorValue => SensorType.StringSensor,
+               IntBarSensorValue => SensorType.IntegerBarSensor,
+               DoubleBarSensorValue => SensorType.DoubleBarSensor,
+               FileSensorBytesValue => SensorType.FileSensorBytes,
+               FileSensorValue => SensorType.FileSensor,
+               UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
+               _ => (SensorType)0,
+           };
+
         private static void TestSensorDataStringValues(SensorValueBase expected, SensorData actual)
         {
             switch (expected)
@@ -133,6 +151,50 @@ namespace HSMServer.Core.Tests.Infrastructure
                     Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                                  actual.StringValue);
                     break;
+                case UnitedSensorValue unitedSensorValue:
+                    Assert.Equal(GetUnitedSensorValueShortStringValue(unitedSensorValue), actual.ShortStringValue);
+                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue), actual.StringValue);
+                    break;
+            }
+        }
+
+        private static string GetUnitedSensorValueShortStringValue(UnitedSensorValue value)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                case SensorType.IntSensor:
+                case SensorType.DoubleSensor:
+                case SensorType.StringSensor:
+                    return value.Data;
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return SensorDataStringValuesFactory.GetBarSensorsShortString(intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return SensorDataStringValuesFactory.GetBarSensorsShortString(doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static string GetUnitedSensorValueStringValue(UnitedSensorValue value)
+        {
+            switch (value.Type)
+            {
+                case SensorType.BooleanSensor:
+                case SensorType.IntSensor:
+                case SensorType.DoubleSensor:
+                case SensorType.StringSensor:
+                    return SensorDataStringValuesFactory.GetSimpleSensorsString(value.Time, value.Comment, value.Data);
+                case SensorType.IntegerBarSensor:
+                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(value.Data);
+                    return SensorDataStringValuesFactory.GetBarSensorsString(value.Time, value.Comment, intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
+                    return SensorDataStringValuesFactory.GetBarSensorsString(value.Time, value.Comment, doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                default:
+                    return string.Empty;
             }
         }
 
@@ -147,95 +209,138 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetSensorValueTypedData(fileSensorBytesValue),
                 FileSensorValue fileSensorValue => GetSensorValueTypedData(fileSensorValue),
+                UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
                 _ => null,
             };
 
-        private static object GetSensorValueTypedData(BoolSensorValue sensorValue) =>
-            new
+        private static BoolSensorData GetSensorValueTypedData(BoolSensorValue sensorValue) =>
+            GetBoolSensorData(sensorValue.BoolValue, sensorValue.Comment);
+
+        private static IntSensorData GetSensorValueTypedData(IntSensorValue sensorValue) =>
+            GetIntSensorData(sensorValue.IntValue, sensorValue.Comment);
+
+        private static DoubleSensorData GetSensorValueTypedData(DoubleSensorValue sensorValue) =>
+            GetDoubleSensorData(sensorValue.DoubleValue, sensorValue.Comment);
+
+        private static StringSensorData GetSensorValueTypedData(StringSensorValue sensorValue) =>
+            GetStringSensorData(sensorValue.StringValue, sensorValue.Comment);
+
+        private static IntBarSensorData GetSensorValueTypedData(IntBarSensorValue sensorValue) =>
+            GetIntBarSensorData(sensorValue.Min, sensorValue.Max, sensorValue.Mean, sensorValue.LastValue, sensorValue.Count,
+                sensorValue.StartTime, sensorValue.EndTime, sensorValue.Percentiles, sensorValue.Comment);
+
+        private static DoubleBarSensorData GetSensorValueTypedData(DoubleBarSensorValue sensorValue) =>
+            GetDoubleBarSensorData(sensorValue.Min, sensorValue.Max, sensorValue.Mean, sensorValue.LastValue, sensorValue.Count,
+                sensorValue.StartTime, sensorValue.EndTime, sensorValue.Percentiles, sensorValue.Comment);
+
+        private static FileSensorBytesData GetSensorValueTypedData(FileSensorBytesValue sensorValue) =>
+            GetFileSensorBytesData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
+
+        private static FileSensorData GetSensorValueTypedData(FileSensorValue sensorValue) =>
+            GetFileSensorData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
+
+        private static object GetSensorValueTypedData(UnitedSensorValue sensorValue) =>
+            sensorValue.Type switch
             {
-                sensorValue.Comment,
-                sensorValue.BoolValue,
+                SensorType.BooleanSensor => GetBoolSensorData(bool.Parse(sensorValue.Data), sensorValue.Comment),
+                SensorType.IntSensor => GetIntSensorData(int.Parse(sensorValue.Data), sensorValue.Comment),
+                SensorType.DoubleSensor => GetDoubleSensorData(double.Parse(sensorValue.Data), sensorValue.Comment),
+                SensorType.StringSensor => GetStringSensorData(sensorValue.Data, sensorValue.Comment),
+                SensorType.IntegerBarSensor => GetIntBarSensorData(sensorValue.Data, sensorValue.Comment),
+                SensorType.DoubleBarSensor => GetDoubleBarSensorData(sensorValue.Data, sensorValue.Comment),
+                _ => null,
             };
 
-        private static object GetSensorValueTypedData(IntSensorValue sensorValue) =>
-            new
+        private static BoolSensorData GetBoolSensorData(bool value, string comment) =>
+            new()
             {
-                sensorValue.IntValue,
-                sensorValue.Comment,
+                BoolValue = value,
+                Comment = comment,
             };
 
-        private static object GetSensorValueTypedData(DoubleSensorValue sensorValue) =>
-            new
+        private static IntSensorData GetIntSensorData(int value, string comment) =>
+            new()
             {
-                sensorValue.DoubleValue,
-                sensorValue.Comment,
+                IntValue = value,
+                Comment = comment,
             };
 
-        private static object GetSensorValueTypedData(StringSensorValue sensorValue) =>
-            new
+        private static DoubleSensorData GetDoubleSensorData(double value, string comment) =>
+            new()
             {
-                sensorValue.StringValue,
-                sensorValue.Comment,
+                DoubleValue = value,
+                Comment = comment,
             };
 
-        private static object GetSensorValueTypedData(IntBarSensorValue sensorValue) =>
-            new
+        private static StringSensorData GetStringSensorData(string value, string comment) =>
+            new()
             {
-                sensorValue.Comment,
-                sensorValue.Min,
-                sensorValue.Max,
-                sensorValue.Mean,
-                sensorValue.Percentiles,
-                sensorValue.Count,
-                sensorValue.StartTime,
-                sensorValue.EndTime,
-                sensorValue.LastValue,
+                StringValue = value,
+                Comment = comment,
             };
 
-        private static object GetSensorValueTypedData(DoubleBarSensorValue sensorValue) =>
-            new
+        private static IntBarSensorData GetIntBarSensorData(int min, int max, int mean, int lastValue, int count,
+            DateTime startTime, DateTime endTime, List<PercentileValueInt> percentiles, string comment) =>
+            new()
             {
-                sensorValue.Comment,
-                sensorValue.Min,
-                sensorValue.Max,
-                sensorValue.Mean,
-                sensorValue.Count,
-                sensorValue.Percentiles,
-                sensorValue.StartTime,
-                sensorValue.EndTime,
-                sensorValue.LastValue,
+                Comment = comment,
+                Min = min,
+                Max = max,
+                Mean = mean,
+                Percentiles = percentiles,
+                Count = count,
+                StartTime = startTime,
+                EndTime = endTime,
+                LastValue = lastValue,
             };
 
-        private static object GetSensorValueTypedData(FileSensorBytesValue sensorValue) =>
-            new
+        private static IntBarSensorData GetIntBarSensorData(string data, string comment)
+        {
+            var intBarData = JsonSerializer.Deserialize<IntBarData>(data);
+
+            return GetIntBarSensorData(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.LastValue,
+                intBarData.Count, intBarData.StartTime, intBarData.EndTime, intBarData.Percentiles, comment);
+        }
+
+        private static DoubleBarSensorData GetDoubleBarSensorData(double min, double max, double mean, double lastValue, int count,
+            DateTime startTime, DateTime endTime, List<PercentileValueDouble> percentiles, string comment) =>
+            new()
             {
-                sensorValue.Comment,
-                sensorValue.Extension,
-                sensorValue.FileContent,
-                sensorValue.FileName,
+                Comment = comment,
+                Min = min,
+                Max = max,
+                Mean = mean,
+                Percentiles = percentiles,
+                Count = count,
+                StartTime = startTime,
+                EndTime = endTime,
+                LastValue = lastValue,
             };
 
-        private static object GetSensorValueTypedData(FileSensorValue sensorValue) =>
-            new
+        private static DoubleBarSensorData GetDoubleBarSensorData(string data, string comment)
+        {
+            var intBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(data);
+
+            return GetDoubleBarSensorData(intBarData.Min, intBarData.Max, intBarData.Mean, intBarData.LastValue,
+                intBarData.Count, intBarData.StartTime, intBarData.EndTime, intBarData.Percentiles, comment);
+        }
+
+        private static FileSensorBytesData GetFileSensorBytesData(string extension, string filename, byte[] content, string comment) =>
+            new()
             {
-                sensorValue.Comment,
-                sensorValue.Extension,
-                sensorValue.FileContent,
-                sensorValue.FileName,
+                Extension = extension,
+                FileName = filename,
+                FileContent = content,
+                Comment = comment,
             };
 
-        private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
-           sensorValue switch
-           {
-               BoolSensorValue => SensorType.BooleanSensor,
-               IntSensorValue => SensorType.IntSensor,
-               DoubleSensorValue => SensorType.DoubleSensor,
-               StringSensorValue => SensorType.StringSensor,
-               IntBarSensorValue => SensorType.IntegerBarSensor,
-               DoubleBarSensorValue => SensorType.DoubleBarSensor,
-               FileSensorBytesValue => SensorType.FileSensorBytes,
-               FileSensorValue => SensorType.FileSensor,
-               _ => (SensorType)0,
-           };
+        private static FileSensorData GetFileSensorData(string extension, string filename, string content, string comment) =>
+            new()
+            {
+                Extension = extension,
+                FileName = filename,
+                FileContent = content,
+                Comment = comment,
+            };
     }
 }
