@@ -1,10 +1,9 @@
-﻿using HSMCommon;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.MonitoringDataReceiverTests;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,22 +11,22 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class ProductManagerTests : IDisposable
+    public class ProductManagerTests : IClassFixture<ProductManagerFixture>
     {
         private readonly IProductManager _productManager;
         private readonly DatabaseAdapterManager _databaseAdapterManager;
 
         private delegate string GetProductNameByKey(string key);
-        private delegate Product GetProductByName(string name);
-        private delegate Product GetProductByKey(string key);
+        private delegate Product GetProduct(string value);
 
-        public ProductManagerTests()
+        public ProductManagerTests(ProductManagerFixture fixture)
         {
             var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
             var converter = new Converter(converterLogger);
 
-            _databaseAdapterManager = new DatabaseAdapterManager();
+            _databaseAdapterManager = new DatabaseAdapterManager($"TestDB_{nameof(ProductManagerTests)}");
             _databaseAdapterManager.AddTestProduct();
+            fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, converter, productManagerLogger);
@@ -41,8 +40,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.AddProduct(name);
 
-            FullProductTest(name, _productManager.GetProductByName,
-                _productManager.GetProductByKey, _productManager.GetProductNameByKey);
+            FullProductTest(name, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
         }
 
         [Fact]
@@ -55,8 +54,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var key = _productManager.GetProductByName(name).Key;
             _productManager.RemoveProduct(name);
 
-            FullRemoveProductTest(name, key, _productManager.GetProductByName,
-                _productManager.GetProductByKey, _productManager.GetProductNameByKey);
+            FullRemoveProductTest(name, key, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
         }
 
         [Fact]
@@ -87,10 +86,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var names = GetRandomProductsNames(count);
 
-            names.ForEach(n => _productManager.AddProduct(n));
+            names.ForEach(_productManager.AddProduct);
 
-            FullSeveralProductsTest(names, _productManager.GetProductByName,
-                _productManager.GetProductByKey, _productManager.GetProductNameByKey);
+            FullSeveralProductsTest(names, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
         }
 
         [Theory]
@@ -108,7 +107,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var product = _productManager.GetProductByName(name);
 
             var extraKeyNames = GetRandomProductsNames(count);
-            extraKeyNames.ForEach(ekn => product.AddExtraKey(ekn));
+            extraKeyNames.ForEach(product.AddExtraKey);
             
             _productManager.UpdateProduct(product);
 
@@ -126,37 +125,39 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public void RemoveSeveralProductsTest(int count)
         {
             var names = GetRandomProductsNames(count);
-            names.ForEach(n => _productManager.AddProduct(n));
+            names.ForEach(_productManager.AddProduct);
 
-            var pairs = new List<KeyValuePair<string, string>>(count);
+            //TODO TUPLE
+            var tuples = new List<(string name, string key)> (count);
             foreach (var name in names)
-                pairs.Add(new KeyValuePair<string, string>(name, _productManager.GetProductByName(name).Key));
+                tuples.Add((name, _productManager.GetProductByName(name).Key));
 
-            names.ForEach(n => _productManager.RemoveProduct(n));
+            names.ForEach(_productManager.RemoveProduct);
 
-            FullSeveralRemoveProductsTest(pairs, _productManager.GetProductByName, _productManager.GetProductByKey,
+            FullSeveralRemoveProductsTest(tuples, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
         }
 
         #region [Private methods]
 
-        private static void FullProductTest(string name, GetProductByName getProductByName,
-            GetProductByKey getProductByKey, GetProductNameByKey getNameByKey)
+        private static void FullProductTest(string name, GetProduct getProductByName,
+            GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
             var product = TestProductByName(name, getProductByName);
             TestProductByKey(name, product.Key, getProductByKey);
             TestProductNameByKey(product.Name, product.Key, getNameByKey);
         }
 
-        private static void FullRemoveProductTest(string name, string key, GetProductByName getProductByName,
-            GetProductByKey getProductByKey, GetProductNameByKey getNameByKey)
+        private static void FullRemoveProductTest(string name, string key, GetProduct getProductByName,
+            GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
             TestRemoveProductByName(name, getProductByName);
             TestRemoveProductByKey(key, getProductByKey);
             TestRemoveProductNameByKey(key, getNameByKey);
         }
-        private async static void FullUpdateExtraProductKeyTest(Product product, GetProductByName getProductByName,
-            GetProductByKey getProductByKey)
+
+        private async static void FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
+            GetProduct getProductByKey)
         {
             await Task.Delay(100);
 
@@ -164,21 +165,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestExtraProductKeyByKey(product, getProductByKey);
         }
 
-        private static void FullSeveralProductsTest(List<string> names, GetProductByName getProductByName,
-            GetProductByKey getProductByKey, GetProductNameByKey getNameByKey)
+        private static void FullSeveralProductsTest(List<string> names, GetProduct getProductByName,
+            GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
             for (int i = 0; i < names.Count; i++)
                 FullProductTest(names[i], getProductByName, getProductByKey, getNameByKey);
         }
 
-        private static void FullSeveralRemoveProductsTest(List<KeyValuePair<string, string>> pairs,
-            GetProductByName getProductByName, GetProductByKey getProductByKey, GetProductNameByKey getNameByKey)
+        private static void FullSeveralRemoveProductsTest(List<(string name, string key)> tuples,
+            GetProduct getProductByName, GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            for (int i = 0; i < pairs.Count; i++)
-                FullRemoveProductTest(pairs[i].Key, pairs[i].Value, getProductByName, getProductByKey, getNameByKey);
+            for (int i = 0; i < tuples.Count; i++)
+                FullRemoveProductTest(tuples[i].name, tuples[i].key, getProductByName, getProductByKey, getNameByKey);
         }
 
-        private static Product TestProductByName(string name, GetProductByName getProductByName)
+        private static Product TestProductByName(string name, GetProduct getProductByName)
         {
             var product = getProductByName?.Invoke(name);
 
@@ -188,21 +189,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return product;
         }
 
-        private static void TestRemoveProductByName(string name, GetProductByName getProductByName)
+        private static void TestRemoveProductByName(string name, GetProduct getProductByName)
         {
             var product = getProductByName?.Invoke(name);
 
             Assert.Null(product);
         }
 
-        private static void TestExtraProductKeyByName(Product product, GetProductByName getProductByName)
+        private static void TestExtraProductKeyByName(Product product, GetProduct getProductByName)
         {
             var updatedProduct = getProductByName?.Invoke(product.Name);
 
             TestExtraKeys(product, updatedProduct);
         }
 
-        private static void TestProductByKey(string name, string key, GetProductByKey getProductByKey)
+        private static void TestProductByKey(string name, string key, GetProduct getProductByKey)
         {
             var product = getProductByKey?.Invoke(key);
 
@@ -211,7 +212,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(name, product.Name);
         }
 
-        private static void TestExtraProductKeyByKey(Product product, GetProductByKey getProductByKey)
+        private static void TestExtraProductKeyByKey(Product product, GetProduct getProductByKey)
         {
             var updatedProduct = getProductByKey?.Invoke(product.Key);
 
@@ -222,17 +223,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             Assert.Equal(product.ExtraKeys.Count, updatedProduct.ExtraKeys.Count);
 
+            product.ExtraKeys.OrderBy(ek => ek.Name);
+            updatedProduct.ExtraKeys.OrderBy(ek => ek.Name);
+
             for (int i = 0; i < updatedProduct.ExtraKeys.Count; i++)
             {
-                var expectedKey = product.ExtraKeys.FirstOrDefault(ek => ek.Equals(updatedProduct.ExtraKeys[i].Name));
+                var expectedKey = product.ExtraKeys[i];
+                var updatedKey = updatedProduct.ExtraKeys[i];
 
-                Assert.NotNull(expectedKey);
-                Assert.Equal(expectedKey.Name, updatedProduct.ExtraKeys[i].Name);
-                Assert.Equal(expectedKey.Key, updatedProduct.ExtraKeys[i].Key);
+                Assert.NotNull(updatedKey);
+                Assert.Equal(expectedKey.Name, updatedKey.Name);
+                Assert.Equal(expectedKey.Key, updatedKey.Key);
             }
         }
 
-        private static void TestRemoveProductByKey(string key, GetProductByKey getProductByKey)
+        private static void TestRemoveProductByKey(string key, GetProduct getProductByKey)
         {
             var product = getProductByKey?.Invoke(key);
 
@@ -264,12 +269,5 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         #endregion
-
-        public void Dispose()
-        {
-            _databaseAdapterManager.ClearDatabase();
-            FileManager.SafeRemoveFolder(DatabaseAdapterManager.DatabaseFolder);
-        }
-
     }
 }
