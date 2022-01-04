@@ -9,8 +9,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
     {
         public abstract string DatabaseFolder { get; }
         public abstract int DatabaseCount { get; }
+        public string DatabasePath => $"TestDB_{DatabaseFolder}";
 
-        internal List<DatabaseAdapterManager> CreatedDatabases { get; set; }
+        internal List<DatabaseAdapterManager> CreatedDatabases { get; }
 
         public DatabaseFixture()
         {
@@ -27,6 +28,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
         }
 
         private void DeleteDatabaseDirectory() =>
-            FileManager.SafeRemoveFolder(DatabaseFolder);
+            FileManager.SafeRemoveFolder(DatabasePath);
     }
 }

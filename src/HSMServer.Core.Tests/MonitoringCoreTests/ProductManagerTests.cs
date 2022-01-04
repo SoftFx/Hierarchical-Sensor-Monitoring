@@ -24,7 +24,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
             var converter = new Converter(converterLogger);
 
-            _databaseAdapterManager = new DatabaseAdapterManager($"TestDB_{nameof(ProductManagerTests)}");
+            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
@@ -127,8 +127,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var names = GetRandomProductsNames(count);
             names.ForEach(_productManager.AddProduct);
 
-            //TODO TUPLE
-            var tuples = new List<(string name, string key)> (count);
+            var tuples = new List<(string name, string key)>(count);
             foreach (var name in names)
                 tuples.Add((name, _productManager.GetProductByName(name).Key));
 

@@ -39,7 +39,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             _valuesCache = new ValuesCache();
 
-            _databaseAdapterManager = new DatabaseAdapterManager($"TestDB_{nameof(MonitoringDataReceiverTests)}");
+            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
