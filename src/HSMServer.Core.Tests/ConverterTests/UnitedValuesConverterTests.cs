@@ -9,11 +9,11 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class UnitedValuesConverterTests : IClassFixture<EntitiesConverterFixture>
     {
+        private const string ProductName = EntitiesConverterFixture.ProductKey;
+
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
-
         private readonly DateTime _timeCollected;
-        private readonly string _productName = EntitiesConverterFixture.ProductKey;
 
         public UnitedValuesConverterTests(EntitiesConverterFixture fixture)
         {
@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorData = unitedValue.Convert(_productName, _timeCollected, transactionType);
+            var sensorData = unitedValue.Convert(ProductName, _timeCollected, transactionType);
 
             _sensorValuesTester.TestSensorData(unitedValue, sensorData, _timeCollected, transactionType);
         }
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            var sensorData = unitedValue.Convert(_productName, _timeCollected, TransactionType.Unknown);
+            var sensorData = unitedValue.Convert(ProductName, _timeCollected, TransactionType.Unknown);
 
             Assert.Equal(string.Empty, sensorData.StringValue);
             Assert.Equal(string.Empty, sensorData.ShortStringValue);

@@ -55,7 +55,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "OneUpdateExtraKey")]
-        public void UpdateExtraProductKeyTest()
+        public async Task UpdateExtraProductKeyTest()
         {
             var name = RandomValuesGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -66,7 +66,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.UpdateProduct(product);
 
-            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Theory]
@@ -95,7 +95,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [InlineData(500)]
         [InlineData(1000)]
         [Trait("Category", "SeveralUpdateExtraKeys")]
-        public void UpdateSeveralExtraProductKeysTest(int count)
+        public async Task UpdateSeveralExtraProductKeysTest(int count)
         {
             var name = RandomValuesGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -106,7 +106,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.UpdateProduct(product);
 
-            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Theory]
@@ -150,7 +150,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestRemoveProductNameByKey(key, getNameByKey);
         }
 
-        private static async void FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
+        private static async Task FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
             GetProduct getProductByKey)
         {
             await Task.Delay(100);
