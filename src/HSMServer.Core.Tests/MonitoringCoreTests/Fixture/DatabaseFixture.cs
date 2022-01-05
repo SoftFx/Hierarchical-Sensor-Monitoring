@@ -1,11 +1,12 @@
 ﻿using HSMCommon;
-using HSMServer.Core.Tests.MonitoringDataReceiverTests;
+using HSMServer.Core.Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 {
-    public abstract class DatabaseFixture
+    public abstract class DatabaseFixture : IDisposable
     {
         public abstract string DatabaseFolder { get; }
         public abstract int DatabaseCount { get; }

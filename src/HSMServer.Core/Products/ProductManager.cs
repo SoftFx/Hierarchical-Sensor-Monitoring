@@ -1,10 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -17,17 +17,15 @@ namespace HSMServer.Core.Products
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<ProductManager> _logger;
-        private readonly IConverter _converter;
         private readonly List<Product> _products;
         private readonly Dictionary<string, Dictionary<string, SensorInfo>> _productSensorsDictionary =
             new Dictionary<string, Dictionary<string, SensorInfo>>();
         private readonly object _productsLock = new object();
         private readonly object _dictionaryLock = new object();
-        public ProductManager(IDatabaseAdapter databaseAdapter, IConverter converter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;
-            _converter = converter;
             _products = new List<Product>();
             //MigrateProductsToNewDatabase();
             InitializeProducts();
@@ -228,7 +226,7 @@ namespace HSMServer.Core.Products
                     _productSensorsDictionary[productName] = new Dictionary<string, SensorInfo>();
                 }
 
-                var newSensor = _converter.Convert(productName, sensorValue);
+                var newSensor = sensorValue.Convert(productName);
 
                 if (!_productSensorsDictionary[productName].ContainsKey(newSensor.Path))
                 {
@@ -244,7 +242,7 @@ namespace HSMServer.Core.Products
         public void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue)
         {
             bool needToAdd = false;
-            var newObject = _converter.Convert(productName, sensorValue);
+            var newObject = sensorValue.Convert(productName);
             lock (_dictionaryLock)
             {
                 if (!_productSensorsDictionary.ContainsKey(productName))

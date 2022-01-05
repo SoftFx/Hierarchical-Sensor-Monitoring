@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Tests
+﻿namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class Constants
     {

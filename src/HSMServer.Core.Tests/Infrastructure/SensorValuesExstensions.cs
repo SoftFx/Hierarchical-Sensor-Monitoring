@@ -2,7 +2,7 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class SensorValuesExstensions
     {

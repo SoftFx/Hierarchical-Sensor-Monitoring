@@ -1,8 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Model;
 
-namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal sealed class SensorValuesFactory
     {
@@ -12,18 +16,24 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         internal SensorValuesFactory(DatabaseAdapterManager dbManager) =>
             _productKey = dbManager.TestProduct.Key;
 
+        internal SensorValuesFactory(string productKey) =>
+            _productKey = productKey;
+
 
         internal SensorValueBase BuildRandomSensorValue() =>
-            RandomValuesGenerator.GetRandomInt(min: 0, max: 8) switch
+            BuildSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8));
+
+        internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
+            sensorType switch
             {
-                0 => BuildBoolSensorValue(),
-                1 => BuildIntSensorValue(),
-                2 => BuildDoubleSensorValue(),
-                3 => BuildStringSensorValue(),
-                4 => BuildIntBarSensorValue(),
-                5 => BuildDoubleBarSensorValue(),
-                6 => BuildFileSensorBytesValue(),
-                7 => BuildFileSensorValue(),
+                SensorType.BooleanSensor => BuildBoolSensorValue(),
+                SensorType.IntSensor => BuildIntSensorValue(),
+                SensorType.DoubleSensor => BuildDoubleSensorValue(),
+                SensorType.StringSensor => BuildStringSensorValue(),
+                SensorType.IntegerBarSensor => BuildIntBarSensorValue(),
+                SensorType.DoubleBarSensor => BuildDoubleBarSensorValue(),
+                SensorType.FileSensorBytes => BuildFileSensorBytesValue(),
+                SensorType.FileSensor => BuildFileSensorValue(),
                 _ => null,
             };
 
@@ -118,6 +128,81 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
+
+        internal ExtendedBarSensorData BuildExtendedBarSensorData(SensorType type) =>
+            type switch
+            {
+                SensorType.IntegerBarSensor => BuildExtendedIntBarSensorData(),
+                SensorType.DoubleBarSensor => BuildExtendedDoubleBarSensorData(),
+                _ => null,
+            };
+
+        internal ExtendedBarSensorData BuildExtendedIntBarSensorData() =>
+            new()
+            {
+                Value = BuildIntBarSensorValue(),
+                ValueType = SensorType.IntegerBarSensor,
+                ProductName = _productKey,
+            };
+
+        internal ExtendedBarSensorData BuildExtendedDoubleBarSensorData() =>
+            new()
+            {
+                Value = BuildDoubleBarSensorValue(),
+                ValueType = SensorType.DoubleBarSensor,
+                ProductName = _productKey,
+            };
+
+        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType)
+        {
+            var sensorValue = new UnitedSensorValue
+            {
+                Type = sensorType,
+                Data = BuildUnitedValueData(sensorType)
+            };
+
+            return sensorValue.FillCommonSensorValueProperties(_productKey);
+        }
+
+
+        private static string BuildUnitedValueData(SensorType sensorType) =>
+            sensorType switch
+            {
+                SensorType.BooleanSensor => RandomValuesGenerator.GetRandomBool().ToString(),
+                SensorType.IntSensor => RandomValuesGenerator.GetRandomInt().ToString(),
+                SensorType.DoubleSensor => RandomValuesGenerator.GetRandomDouble().ToString(),
+                SensorType.StringSensor => RandomValuesGenerator.GetRandomString(),
+                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData()),
+                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData()),
+                _ => null,
+            };
+
+        private static IntBarData BuildIntBarData() =>
+            new()
+            {
+                LastValue = RandomValuesGenerator.GetRandomInt(),
+                Min = RandomValuesGenerator.GetRandomInt(),
+                Max = RandomValuesGenerator.GetRandomInt(),
+                Mean = RandomValuesGenerator.GetRandomInt(),
+                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                StartTime = DateTime.UtcNow.AddSeconds(-10),
+                EndTime = DateTime.UtcNow.AddSeconds(10),
+                Percentiles = GetPercentileValuesInt(),
+            };
+
+        private static DoubleBarData BuildDoubleBarData() =>
+            new()
+            {
+                LastValue = RandomValuesGenerator.GetRandomDouble(),
+                Min = RandomValuesGenerator.GetRandomDouble(),
+                Max = RandomValuesGenerator.GetRandomDouble(),
+                Mean = RandomValuesGenerator.GetRandomDouble(),
+                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                StartTime = DateTime.UtcNow.AddSeconds(-10),
+                EndTime = DateTime.UtcNow.AddSeconds(10),
+                Percentiles = GetPercentileValuesDouble(),
+            };
+
 
         private static List<PercentileValueInt> GetPercentileValuesInt(int size = 2)
         {

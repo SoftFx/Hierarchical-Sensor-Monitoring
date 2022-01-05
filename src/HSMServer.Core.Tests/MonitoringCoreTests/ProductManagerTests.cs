@@ -1,12 +1,10 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.MonitoringServerCore;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMServer.Core.Model;
 using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
-using HSMServer.Core.Tests.MonitoringDataReceiverTests;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -21,15 +19,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         public ProductManagerTests(ProductManagerFixture fixture)
         {
-            var converterLogger = CommonMoqs.CreateNullLogger<Converter>();
-            var converter = new Converter(converterLogger);
-
             _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, converter, productManagerLogger);
+            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
         }
 
         [Fact]
@@ -60,7 +55,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "OneUpdateExtraKey")]
-        public void UpdateExtraProductKeyTest()
+        public async Task UpdateExtraProductKeyTest()
         {
             var name = RandomValuesGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -71,7 +66,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.UpdateProduct(product);
 
-            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Theory]
@@ -100,7 +95,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [InlineData(500)]
         [InlineData(1000)]
         [Trait("Category", "SeveralUpdateExtraKeys")]
-        public void UpdateSeveralExtraProductKeysTest(int count)
+        public async Task UpdateSeveralExtraProductKeysTest(int count)
         {
             var name = RandomValuesGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -108,10 +103,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var extraKeyNames = GetRandomProductsNames(count);
             extraKeyNames.ForEach(product.AddExtraKey);
-            
+
             _productManager.UpdateProduct(product);
 
-            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Theory]
@@ -155,7 +150,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestRemoveProductNameByKey(key, getNameByKey);
         }
 
-        private async static void FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
+        private static async Task FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
             GetProduct getProductByKey)
         {
             await Task.Delay(100);

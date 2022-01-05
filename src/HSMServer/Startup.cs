@@ -58,7 +58,6 @@ namespace HSMServer
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
             services.AddSingleton(CertificatesConfig.DatabaseAdapter);
-            services.AddSingleton<IConverter, Converter>();
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
