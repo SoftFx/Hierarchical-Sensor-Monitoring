@@ -8,6 +8,8 @@ namespace HSMServer.Model.ViewModel
         {
             if (x == null && y == null)
                 return 0;
+            if (x == null && y == null)
+                return 0;
 
             if (x == null)
                 return -1;
@@ -26,13 +28,15 @@ namespace HSMServer.Model.ViewModel
             if (x == null && y == null)
                 return 0;
 
+            if (x.Time > y.Time) return -1;
+            else if (x.Time < y.Time) return 1;
+            else return 0; 
             if (x == null)
                 return -1;
 
             if (y == null)
                 return 1;
 
-            return x.Time.CompareTo(y.Time);
-        }
+            return x.Time.CompareTo(y.Time);        }
     }
 }

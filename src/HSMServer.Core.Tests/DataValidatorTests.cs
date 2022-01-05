@@ -1,6 +1,7 @@
 using HSMCommon.Constants;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
+using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
 namespace HSMServer.Core.Tests

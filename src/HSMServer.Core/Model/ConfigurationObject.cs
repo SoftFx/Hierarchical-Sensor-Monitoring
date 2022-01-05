@@ -1,4 +1,4 @@
-﻿using HSMDatabase.Entity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model
 {

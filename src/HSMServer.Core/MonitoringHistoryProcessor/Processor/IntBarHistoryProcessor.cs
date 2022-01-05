@@ -44,6 +44,8 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             bool addingCurrent = false;
             for (int i = 0; i < typedDatas.Count; ++i)
             {
+                //We must add current processed object if its period bigger than interval,
+                //or if current object is longer than than interval, or if we are processing the last object
                 if (typedDatas[i].EndTime - typedDatas[i].StartTime > compressionInterval ||
                     (processingCount > 0 && startDate + compressionInterval < typedDatas[i].EndTime
                                          && i == typedDatas.Count - 1))
@@ -51,13 +53,16 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                     needToAddCurrentAsSingle = true;
                 }
 
+                //Just process current bar as usual if it is not the last & in the interval
                 if (typedDatas[i].EndTime < startDate + compressionInterval && i == typedDatas.Count - 1)
                 {
                     AddDataToList(typedDatas[i]);
                     ProcessItem(typedDatas[i], currentItem);
                     addingCurrent = true;
                 }
-                //Finish bar if necessary
+
+                //Finish bar if necessary. We finish previous bar if we are adding current as single
+                //or if we are processing the last bar or if next bar is not in the interval
                 if (i > 0 && (startDate + compressionInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
                     || i == typedDatas.Count - 1))
                 {
@@ -73,6 +78,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                     }
                 }
 
+                //We add current bar to list if needed, and proceed to the next one
                 if (needToAddCurrentAsSingle)
                 {
                     result.Add(Convert(typedDatas[i]));
@@ -90,6 +96,8 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 //}
 
                 //Start new bar, might need this right after finished previous
+                //We start new bar if we finished previous and there are more objects in the list
+                //We continue after starting because we have already processed it
                 if (processingCount == 0 && i != typedDatas.Count - 1)
                 {
                     startDate = typedDatas[i].StartTime;
@@ -99,6 +107,8 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                     continue;
                 }
                 
+                //If we did not finish previous bar and did not add current, just add currently processed bar
+                // and continue
                 AddDataToList(typedDatas[i]);
                 ProcessItem(typedDatas[i], currentItem);
                 ++processingCount;
@@ -147,6 +157,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             return result;
         }
 
+        /// <summary>
+        /// This method applies possible changes to the current data item for fields, for which
+        /// collecting datas is not required
+        /// </summary>
+        /// <param name="data">Currently processed data item</param>
+        /// <param name="currentItem">Current summary item</param>
         private void ProcessItem(IntBarSensorData data, IntBarSensorData currentItem)
         {
             currentItem.Count += data.Count;
@@ -157,6 +173,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 currentItem.Min = data.Min;
         }
 
+        /// <summary>
+        /// Add all percentiles to united percentile list for later calculations of Q1, median and Q3
+        /// </summary>
+        /// <param name="data"></param>
         private void AddDataToList(IntBarSensorData data)
         {
             try
@@ -171,10 +191,15 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             }
         }
 
+        /// <summary>
+        /// Set fields, for which collecting lists of values is required
+        /// </summary>
+        /// <param name="currentItem"></param>
         private void AddDataFromLists(IntBarSensorData currentItem)
         {
             currentItem.Mean = CountMean(_MeanList);
             currentItem.Percentiles = new List<PercentileValueInt>();
+            //Just add values that "seem to be fine" if there is no more data
             if (_percentilesList.Count < 3)
             {
                 currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = currentItem.Mean });
@@ -184,6 +209,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             }
 
             _percentilesList.Sort();
+            //Special case where Q1 and Q3 calculations may fail
             if (_percentilesList.Count == 3)
             {
                 currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = _percentilesList[1] });
@@ -191,11 +217,18 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = _percentilesList[2] });
                 return;
             }
+
+            //Calculate all percentiles normally
             currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = CountMedian() });
             currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = CountQ1() });
             currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = CountQ3() });
         }
-
+        
+        /// <summary>
+        /// Count mean from the list of all means
+        /// </summary>
+        /// <param name="means"></param>
+        /// <returns></returns>
         private int CountMean(List<KeyValuePair<int, int>> means)
         {
             if (means.Count < 1)
@@ -214,6 +247,11 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
             return (int)(sum / commonCount);
         }
+
+        /// <summary>
+        /// Get median for the list of values, use average for odd index
+        /// </summary>
+        /// <returns>median from the percentiles list</returns>
         private int CountMedian()
         {
             if (_percentilesList.Count % 2 == 1)
@@ -225,6 +263,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             return (_percentilesList[ind - 1] + _percentilesList[ind]) / 2;
         }
 
+        /// <summary>
+        /// Get Q1 for the list of values, use average for odd index
+        /// </summary>
+        /// <returns>Q1 from the percentiles list</returns>
         private int CountQ1()
         {
             int middle = _percentilesList.Count % 2 == 0
@@ -238,28 +280,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             }
 
             return _percentilesList[(middle - 1) / 2];
-            //if (_percentilesList.Count % 2 == 0)
-            //{
-            //    int middle = _percentilesList.Count / 2;
-            //    if (middle % 2 == 0)
-            //    {
-            //        int quart = middle / 2;
-            //        return (_percentilesList[quart] + _percentilesList[quart - 1]) / 2;
-            //    }
-
-            //    return _percentilesList[(middle - 1) / 2];
-            //}
-
-            //int mid = (_percentilesList.Count + 1) / 2;
-            //if (mid % 2 == 0)
-            //{
-            //    int quar = mid / 2;
-            //    return (_percentilesList[quar] + _percentilesList[quar - 1]) / 2;
-            //}
-
-            //return _percentilesList[(mid - 1) / 2];
         }
 
+        /// <summary>
+        /// Get Q3 for the list of values, use average for odd index
+        /// </summary>
+        /// <returns>Q3 from the percentiles list</returns>
         private int CountQ3()
         {
             int middle = _percentilesList.Count % 2 == 0

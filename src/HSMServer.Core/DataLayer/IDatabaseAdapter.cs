@@ -1,4 +1,4 @@
-﻿using HSMDatabase.Entity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.DataLayer
 {
-    public interface IDatabaseAdapter
+    public interface IDatabaseAdapter : IDisposable
     {
         #region Size
 

@@ -1,9 +1,9 @@
-﻿using HSMDatabase.EnvironmentDatabase;
-using HSMDatabase.SensorsDatabase;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -12,19 +12,24 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly object _accessLock = new object();
         private readonly SortedSet<ISensorsDatabase> _sensorsDatabases;
         private readonly IEnvironmentDatabase _environmentDatabase;
-        private const string DatabaseFolderName = "MonitoringData";
-        public TimeDatabaseDictionary(IEnvironmentDatabase environmentDatabase)
+        private readonly IDatabaseSettings _databaseSettings;
+
+
+        public TimeDatabaseDictionary(IEnvironmentDatabase environmentDatabase, IDatabaseSettings dbSettings)
         {
+            _databaseSettings = dbSettings;
             _environmentDatabase = environmentDatabase;
             _sensorsDatabases = new SortedSet<ISensorsDatabase>(new SensorDatabaseComparer());
         }
+
+
         public bool TryGetDatabase(DateTime time, out ISensorsDatabase database)
         {
             long ticks = time.Ticks;
             ISensorsDatabase correspondingItem;
             lock (_accessLock)
             {
-                correspondingItem = _sensorsDatabases.FirstOrDefault(i => 
+                correspondingItem = _sensorsDatabases.FirstOrDefault(i =>
                     i.DatabaseMinTicks <= ticks && i.DatabaseMaxTicks >= ticks);
 
             }
@@ -53,8 +58,8 @@ namespace HSMDatabase.DatabaseWorkCore
                 DateTime minDateTime = DateTimeMethods.GetMinDateTime(time);
                 DateTime maxDateTime = DateTimeMethods.GetMaxDateTime(time);
                 string newDatabaseName = CreateSensorsDatabaseName(minDateTime, maxDateTime);
-                ISensorsDatabase newDatabase = new SensorsDatabaseWorker(
-                    $"{DatabaseCore.DatabaseParentFolder}/{newDatabaseName}", minDateTime, maxDateTime);
+                ISensorsDatabase newDatabase = LevelDBManager.GetSensorDatabaseInstance(
+                    _databaseSettings.GetPathToMonitoringDatabase(newDatabaseName), minDateTime, maxDateTime);
                 _sensorsDatabases.Add(newDatabase);
                 Task.Run(() => _environmentDatabase.AddMonitoringDatabaseToList(newDatabaseName));
                 return newDatabase;
@@ -80,7 +85,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string CreateSensorsDatabaseName(DateTime from, DateTime to)
         {
-            return $"{DatabaseFolderName}_{from.Ticks}_{to.Ticks}";
+            return $"{_databaseSettings.MonitoringDatabaseName}_{from.Ticks}_{to.Ticks}";
         }
         private class SensorDatabaseComparer : IComparer<ISensorsDatabase>
         {
@@ -96,8 +101,10 @@ namespace HSMDatabase.DatabaseWorkCore
                     return 1;
 
                 long longResult = x.DatabaseMinTicks - y.DatabaseMinTicks;
-                if (longResult < 0) return -1;
-                if (longResult > 0) return 1;
+                if (longResult < 0)
+                    return -1;
+                if (longResult > 0)
+                    return 1;
                 return 0;
             }
         }

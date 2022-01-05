@@ -1,55 +1,29 @@
-﻿using HSMDatabase.DatabaseInterface;
-using HSMDatabase.Entity;
-using HSMDatabase.EnvironmentDatabase;
-using HSMDatabase.SensorsDatabase;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    public class DatabaseCore : IDatabaseCore
+    public sealed class DatabaseCore
     {
-        #region Singleton
-
-        private static volatile DatabaseCore _instance;
-        private static readonly object _singletonLockObj = new object();
-        public static IDatabaseCore GetInstance()
-        {
-            return Instance;
-        }
-
-        private static DatabaseCore Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_singletonLockObj)
-                    {
-                        if (_instance == null)
-                        {
-                            _instance = new DatabaseCore();
-                        }
-                    }
-                }
-
-                return _instance;
-            }
-        }
-        #endregion
-
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
-        internal const string DatabaseParentFolder = "Databases";
-        private const string EnvironmentDatabaseName = "EnvironmentData";
-        private DatabaseCore()
+        private readonly IDatabaseSettings _databaseSettings;
+
+
+        public DatabaseCore(IDatabaseSettings dbSettings)
         {
-            _environmentDatabase = new EnvironmentDatabaseWorker($"{DatabaseParentFolder}/{EnvironmentDatabaseName}");
-            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase);
+            _databaseSettings = dbSettings;
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
+            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings);
+
             OpenAllExistingSensorDatabases();
         }
+
 
         private void OpenAllExistingSensorDatabases()
         {
@@ -59,7 +33,8 @@ namespace HSMDatabase.DatabaseWorkCore
                 GetDatesFromFolderName(databaseName, out DateTime from, out DateTime to);
                 if (from != DateTime.MinValue && to != DateTime.MinValue)
                 {
-                    ISensorsDatabase database = new SensorsDatabaseWorker($"{DatabaseParentFolder}/{databaseName}", from, to);
+                    ISensorsDatabase database = LevelDBManager.GetSensorDatabaseInstance(
+                        _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
             }
@@ -67,10 +42,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Database size
 
-
         public long GetDatabaseSize()
         {
-            DirectoryInfo databasesDir = new DirectoryInfo(DatabaseParentFolder);
+            DirectoryInfo databasesDir = new DirectoryInfo(_databaseSettings.DatabaseFolder);
             return GetDirectorySize(databasesDir);
         }
 
@@ -80,7 +54,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var databasesList = _environmentDatabase.GetMonitoringDatabases();
             foreach (var monitoringDB in databasesList)
             {
-                DirectoryInfo info = new DirectoryInfo($"{DatabaseParentFolder}/{monitoringDB}");
+                DirectoryInfo info = new DirectoryInfo(_databaseSettings.GetPathToMonitoringDatabase(monitoringDB));
                 size += GetDirectorySize(info);
             }
 
@@ -89,8 +63,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long GetEnvironmentDatabaseSize()
         {
-            DirectoryInfo environmentDatabaseDir = 
-                new DirectoryInfo($"{DatabaseParentFolder}/{EnvironmentDatabaseName}");
+            DirectoryInfo environmentDatabaseDir =
+                new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
             return GetDirectorySize(environmentDatabaseDir);
         }
 
@@ -104,8 +78,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 {
                     size += file.Length;
                 }
-                catch (Exception e)
-                { }
+                catch { }
             }
 
             DirectoryInfo[] directories = directory.GetDirectories();
@@ -145,7 +118,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     break;
             }
 
-            result.Sort((d1, d2) => 
+            result.Sort((d1, d2) =>
                 d1.TimeCollected.CompareTo(d2.TimeCollected));
             return result.TakeLast(n).ToList();
         }
@@ -178,7 +151,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     continue;
 
                 //Skip too new data
-                if(database.DatabaseMinTicks > to.Ticks)
+                if (database.DatabaseMinTicks > to.Ticks)
                     continue;
 
                 result.AddRange(database.GetSensorValuesBetween(productName, path, from, to));
@@ -220,7 +193,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return null;
         }
-        
+
         #endregion
 
         #region Environment database : Sensor
@@ -237,7 +210,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var path in sensorPaths)
             {
                 SensorEntity sensorEntity = _environmentDatabase.GetSensorInfo(productName, path);
-                if(sensorEntity != null)
+                if (sensorEntity != null)
                     sensors.Add(sensorEntity);
             }
 
@@ -246,9 +219,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemoveSensor(string productName, string path)
         {
-            //TODO: write this method
-            _environmentDatabase.RemoveSensor(productName, path);
-            _environmentDatabase.RemoveSensorFromList(productName, path);
+            //TAM-90: Do not delete metadata when delete sensors
+            //_environmentDatabase.RemoveSensor(productName, path);
+            //_environmentDatabase.RemoveSensorFromList(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
@@ -306,7 +279,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return products;
         }
-        
+
         #endregion
 
         #region Environment database : User
@@ -318,7 +291,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<UserEntity> ReadUsers()
         {
-            return _environmentDatabase.ReadUsers();
+            return _environmentDatabase.ReadUsers().ToList();
         }
 
         public void RemoveUser(UserEntity user)
@@ -328,7 +301,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<UserEntity> ReadUsersPage(int page, int pageSize)
         {
-            return _environmentDatabase.ReadUsersPage(page, pageSize);
+            return _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
         }
 
         #endregion
@@ -381,6 +354,13 @@ namespace HSMDatabase.DatabaseWorkCore
             bool success2 = long.TryParse(splitResults[2], out long toTicks);
             to = success2 ? new DateTime(toTicks) : DateTime.MinValue;
         }
+
         #endregion
+
+        public void Dispose()
+        {
+            _environmentDatabase.Dispose();
+            _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
+        }
     }
 }
