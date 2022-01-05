@@ -29,6 +29,7 @@ namespace hsm_wrapper
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
 		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads);
+		void InitializeOsMonitoring(bool is_updated);
 		void MonitoringServiceAlive();
 
 
@@ -52,7 +53,7 @@ namespace hsm_wrapper
 			no_params_func_sensor_impl->SetFunc(function);
 			auto delegate_wrapper = no_params_func_sensor_impl->GetDelegateWrapper();
 			auto no_params_func_sesnor = data_collector->CreateNoParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()),
-				gcnew Func<Type>(delegate_wrapper, &NoParamsFuncDelegateWrapper<T>::Call), interval.count());
+				gcnew Func<Type>(delegate_wrapper, &NoParamsFuncDelegateWrapper<T>::Call), TimeSpan::FromMilliseconds(static_cast<double>(interval.count())));
 			no_params_func_sensor_impl->SetParamsFuncSensor(no_params_func_sesnor);
 			return std::make_shared<HSMNoParamsFuncSensorImplWrapper<T>>(no_params_func_sensor_impl);
 		}
@@ -69,7 +70,7 @@ namespace hsm_wrapper
 			params_func_sensor_impl->SetFunc(function);
 			auto delegate_wrapper = params_func_sensor_impl->GetDelegateWrapper();
 			auto params_func_sensor = data_collector->CreateParamsFuncSensor(gcnew String(path.c_str()), gcnew String(description.c_str()), 
-				gcnew Func<List<ElementType>^, ResultType>(delegate_wrapper, &ParamsFuncDelegateWrapper<T, U>::Call), interval.count());
+				gcnew Func<List<ElementType>^, ResultType>(delegate_wrapper, &ParamsFuncDelegateWrapper<T, U>::Call), TimeSpan::FromMilliseconds(static_cast<double>(interval.count())));
 			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
 			return std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
 		}

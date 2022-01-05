@@ -141,6 +141,11 @@ namespace HSMDataCollector.Core
         {
             
         }
+        public void InitializeOsMonitoring(bool isUpdated)
+        {
+            if (isUpdated)
+                InitializeWindowsUpdateMonitoring(new TimeSpan(24,0,0), new TimeSpan(30,0,0,0));
+        }
 
         public void MonitorServiceAlive()
         {
@@ -578,5 +583,6 @@ namespace HSMDataCollector.Core
         {
             Stop();
         }
+
     }
 }

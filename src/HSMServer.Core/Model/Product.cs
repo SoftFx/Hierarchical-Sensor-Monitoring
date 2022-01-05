@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Attributes;
-using HSMDatabase.Entity;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model
             Name = product.Name;
             DateAdded = product.DateAdded;
             ExtraKeys = new List<ExtraProductKey>();
-            if (product.ExtraKeys != null && product.ExtraKeys.Any())
+            if (product.ExtraKeys != null && product.ExtraKeys.Count > 0)
                 ExtraKeys.AddRange(product.ExtraKeys);
         }
 
@@ -44,7 +44,7 @@ namespace HSMServer.Core.Model
             Name = entity.Name;
             DateAdded = entity.DateAdded;
             ExtraKeys = new List<ExtraProductKey>();
-            if (entity.ExtraKeys != null && entity.ExtraKeys.Any())
+            if (entity.ExtraKeys != null && entity.ExtraKeys.Count > 0)
             {
                 ExtraKeys.AddRange(entity.ExtraKeys.Select(e => new ExtraProductKey(e)));
             }
@@ -52,8 +52,10 @@ namespace HSMServer.Core.Model
 
         public void Update(Product product)
         {
+            if (this == product) return; 
+
             ExtraKeys = new List<ExtraProductKey>();
-            if (product.ExtraKeys != null && product.ExtraKeys.Any())
+            if (product.ExtraKeys != null && product.ExtraKeys.Count > 0)
             {
                 ExtraKeys.AddRange(product.ExtraKeys);
             }

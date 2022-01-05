@@ -1,9 +1,14 @@
-﻿using FluentValidation.AspNetCore;
+﻿using System;
+using System.IO;
+using System.Linq;
+using FluentValidation.AspNetCore;
+using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.DataLayer;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
@@ -23,25 +28,19 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
-using System;
-using System.IO;
-using System.Linq;
-using HSM.Core.Monitoring;
-using HSMServer.Core.Authentication.UserObserver;
-using HSMServer.Core.MonitoringCoreInterface;
 
 namespace HSMServer
 {
-    public class Startup
+    internal sealed class Startup
     {
-        private IServiceCollection services;
+        private IServiceCollection _services;
+
+
         public void ConfigureServices(IServiceCollection services)
-        { 
-            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(options =>
-                {
-                    options.LoginPath = new PathString("/Account/Index");
-                });
+        {
+            services
+                .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
 
             services.AddHsts(options =>
             {
@@ -50,20 +49,15 @@ namespace HSMServer
                 options.MaxAge = TimeSpan.FromDays(365);
             });
 
-            services.AddMvc().AddFluentValidation();
+            services.AddMvc();
+            services.AddFluentValidation();
             services.AddControllers();
             services.AddControllersWithViews();
 
-            services.AddSignalR(hubOptions =>
-            {
-                hubOptions.EnableDetailedErrors = true;
-            });
+            services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-            //Use singleton, created in DatabaseCore
-            //services.AddSingleton<IDatabaseCore, DatabaseCore>();
-            services.AddTransient<IDatabaseAdapter, DatabaseAdapter>();
-            services.AddSingleton<IConverter, Converter>();
+            services.AddSingleton(CertificatesConfig.DatabaseAdapter);
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
@@ -78,24 +72,18 @@ namespace HSMServer
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringCore>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<IMonitoringDataReceiver>
-                (x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<ISensorsInterface>
-                (x => x.GetRequiredService<MonitoringCore>());
+            services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
             services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
-
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
             services.AddHostedService<SensorsExpirationService>();
 
-            services.AddHttpsRedirection(configureOptions =>
-            {
-                configureOptions.HttpsPort = 44330;
-            });
+            services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
             services.AddSwaggerGen();
 
@@ -107,11 +95,11 @@ namespace HSMServer
                 options.DocumentFilter<SwaggerIgnoreFilter>();
             });
 
-            this.services = services;
-        }       
+            _services = services;
+        }
+
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            //env.EnvironmentName = "Production";
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -126,10 +114,7 @@ namespace HSMServer
 
             app.UseAuthentication();
             app.CountRequestStatistics();
-            app.UseSwagger(c =>
-            {
-                c.SerializeAsV2 = true;
-            });
+            app.UseSwagger(c => c.SerializeAsV2 = true);
 
             app.UseSwaggerUI(c =>
             {
@@ -148,10 +133,8 @@ namespace HSMServer
             app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<MonitoringDataHub>("/monitoring", options =>
-                    {
-                        options.Transports = HttpTransportType.ServerSentEvents; //only server can send messages
-                    });
+                endpoints.MapHub<MonitoringDataHub>("/monitoring",
+                    options => options.Transports = HttpTransportType.ServerSentEvents); //only server can send messages
 
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
@@ -161,7 +144,7 @@ namespace HSMServer
                 endpoints.MapControllerRoute(
                     name: "Account",
                     pattern: "{controller=Account}/{action}",
-                    defaults: new { controller = "Account"}
+                    defaults: new { controller = "Account" }
                 );
                 endpoints.MapControllerRoute(
                     name: "Home",
@@ -172,10 +155,10 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        public void OnShutdown(object state)
+        private void OnShutdown(object state)
         {
-            var serviceProvider = (IServiceProvider) state;
-            var objectToDispose = services
+            var serviceProvider = (IServiceProvider)state;
+            var objectToDispose = _services
                 .Where(s => s.Lifetime == ServiceLifetime.Singleton
                             && s.ImplementationInstance != null
                             && s.ServiceType.GetInterfaces().Contains(typeof(IMonitoringCore)))

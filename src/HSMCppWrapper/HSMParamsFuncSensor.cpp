@@ -25,7 +25,7 @@ std::chrono::milliseconds HSMParamsFuncSensorImpl<T, U>::GetInterval()
 template<class T, class U>
 void HSMParamsFuncSensorImpl<T, U>::RestartTimer(std::chrono::milliseconds time_interval)
 {
-	sensor->RestartTimer(TimeSpan::FromMilliseconds(time_interval.count()));
+	sensor->RestartTimer(TimeSpan::FromMilliseconds(static_cast<double>(time_interval.count())));
 }
 
 template<class T, class U>

@@ -344,18 +344,7 @@ namespace HSMServer.Core.Authentication
 
             return users;
         }
-        [Obsolete]
-        private void CreateDefaultUsersFile()
-        {
-            User defaultUser = new User("default.client")
-            {
-                CertificateFileName = "default.client.crt",
-                CertificateThumbprint = CommonConstants.DefaultClientCertificateThumbprint,
-            };
-            string content = GetUsersXml(new List<User>() { defaultUser });
-            FileManager.SafeCreateFile(_usersFilePath);
-            FileManager.SafeWriteText(_usersFilePath, content);
-        }
+
         [Obsolete]
         private User ParseUserNode(XmlNode node)
         {
@@ -396,88 +385,6 @@ namespace HSMServer.Core.Authentication
             return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
         }
 
-        [Obsolete]
-        private void SaveUsers()
-        {
-            try
-            {
-                List<User> usersCopy = new List<User>();
-                lock (_accessLock)
-                {
-                    usersCopy.AddRange(_users);
-                }
-
-                string xml = GetUsersXml(usersCopy);
-                FileManager.SafeDelete(_usersFilePath);
-                //using FileStream fs = new FileStream(_usersFilePath, FileMode.OpenOrCreate);
-                //fs.Write(Encoding.UTF8.GetBytes(xml));
-                FileManager.SafeWriteToNewFile(_usersFilePath, xml);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to save users file!");
-            }
-        }
-        [Obsolete]
-        private string GetUsersXml(List<User> users)
-        {
-            XmlDocument document = new XmlDocument();
-            XmlElement rootElement = document.CreateElement("users");
-            document.AppendChild(rootElement);
-            foreach (var user in users)
-            {
-                XmlNode node = UserToXml(document, user);
-                rootElement.AppendChild(node);
-            }
-
-            StringBuilder sb = new StringBuilder();
-            using (StringWriter sw = new StringWriter(sb))
-            {
-                document.Save(sw);
-            }
-
-            sb.Replace("encoding=\"utf-16\"", string.Empty);
-
-            return sb.ToString();
-        }
-        [Obsolete]
-        private XmlElement UserToXml(XmlDocument document, User user)
-        {
-            XmlElement rootElement = document.CreateElement("user");
-
-            XmlAttribute nameAttr = document.CreateAttribute("Name");
-            nameAttr.Value = user.UserName;
-            rootElement.Attributes.Append(nameAttr);
-
-            XmlAttribute certificateAttr = document.CreateAttribute("Certificate");
-            certificateAttr.Value = user.CertificateFileName;
-            rootElement.Attributes.Append(certificateAttr);
-
-            //TODO: serialize products when they will be needed
-            //if (user.UserPermissions.Count > 0)
-            //{
-            //    rootElement.AppendChild(UserPermissionsToXml(document, user.UserPermissions));
-            //}
-
-            return rootElement;
-        }
-        [Obsolete]
-        private XmlElement UserPermissionsToXml(XmlDocument document, List<PermissionItem> items)
-        {
-            XmlElement productsElement = document.CreateElement("products");
-
-            foreach (var item in items)
-            {
-                XmlElement element = document.CreateElement("product");
-                productsElement.AppendChild(element);
-
-                XmlAttribute nameAttr = document.CreateAttribute("Name");
-                nameAttr.Value = item.ProductName;
-                //TODO: add ignored sensors specification
-            }
-
-            return productsElement;
-        }
         #endregion
 
         public User Authenticate(string login, string password)
