@@ -174,42 +174,42 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 case BoolSensorValue boolSensorValue:
                     Assert.Equal(boolSensorValue.BoolValue.ToString(), actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, boolSensorValue.BoolValue), actual.StringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(timeCollected ?? actual.Time, expected.Comment, boolSensorValue.BoolValue), actual.StringValue);
                     break;
                 case IntSensorValue intSensorValue:
                     Assert.Equal(intSensorValue.IntValue.ToString(), actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, intSensorValue.IntValue), actual.StringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(timeCollected ?? actual.Time, expected.Comment, intSensorValue.IntValue), actual.StringValue);
                     break;
                 case DoubleSensorValue doubleSensorValue:
                     Assert.Equal(doubleSensorValue.DoubleValue.ToString(), actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, doubleSensorValue.DoubleValue), actual.StringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(timeCollected ?? actual.Time, expected.Comment, doubleSensorValue.DoubleValue), actual.StringValue);
                     break;
                 case StringSensorValue stringSensorValue:
                     Assert.Equal(stringSensorValue.StringValue, actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(expected.Time, expected.Comment, stringSensorValue.StringValue), actual.StringValue);
+                    Assert.Equal(SensorDataStringValuesFactory.GetSimpleSensorsString(timeCollected ?? actual.Time, expected.Comment, stringSensorValue.StringValue), actual.StringValue);
                     break;
                 case IntBarSensorValue intBarSensorValue:
                     Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
                         actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(timeCollected ?? actual.Time, expected.Comment, intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
                                  actual.StringValue);
                     break;
                 case DoubleBarSensorValue doubleBarSensorValue:
                     Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsShortString(doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
                           actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(expected.Time, expected.Comment, doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
+                    Assert.Equal(SensorDataStringValuesFactory.GetBarSensorsString(timeCollected ?? actual.Time, expected.Comment, doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
                                  actual.StringValue);
                     break;
                 case FileSensorBytesValue fileSensorBytesValue:
                     Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
                           actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(timeCollected ?? actual.Time, expected.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
                                  actual.StringValue);
                     break;
                 case FileSensorValue fileSensorValue:
                     Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                          actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.Time, expected.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
+                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(timeCollected ?? actual.Time, expected.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                                  actual.StringValue);
                     break;
                 case UnitedSensorValue unitedSensorValue:
