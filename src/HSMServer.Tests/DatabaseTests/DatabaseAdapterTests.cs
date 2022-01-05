@@ -210,7 +210,7 @@ namespace HSMServer.Tests.DatabaseTests
         }
 
         [Fact]
-        public void SensorMustBeRemoved()
+        public async Task SensorMustBeRemoved()
         {
             //Arrange
             var product = _databaseFixture.GetFirstTestProduct();
@@ -220,10 +220,15 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.RemoveSensor(product.Name, info.Path);
-            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+
+            await Task.Delay(100);
+
+            var infoFromEnvironmentDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+            var sensorFromMonitoringDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
 
             //Assert
-            Assert.Null(infoFromDB);
+            Assert.NotNull(infoFromEnvironmentDB);
+            Assert.Null(sensorFromMonitoringDB);
         }
 
         [Fact]
