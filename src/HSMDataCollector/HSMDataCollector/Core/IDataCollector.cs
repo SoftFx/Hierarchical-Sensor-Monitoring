@@ -50,6 +50,15 @@ namespace HSMDataCollector.Core
         /// <param name="isMemory">Specifies whether the sensor for the specified process RAM (in mb) is created</param>
         /// <param name="isThreads">Specifies whether the sensor for the specified process thread count is created</param>
         void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads);
+
+        /// <summary>
+        /// Creates and initializes sensors, which automatically monitor operational system properties. Update status is monitored.
+        /// Sensors will be placed at Product/System Monitoring node
+        /// </summary>
+        /// <param name="isUpdated">Specifies whether the sensor for the OS update status is created</param>
+        void InitializeOsMonitoring(bool isUpdated);
+
+
         /// <summary>
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>

@@ -135,6 +135,10 @@
         function (sensors) {
             if (sensors == undefined) return;
 
+            var node = $('#jstree').jstree().get_selected(true)[0];
+            if (node != undefined)
+                displayList(node);
+
             //update tree
             $.ajax({
                 type: 'POST',
@@ -265,6 +269,10 @@
     });
 
     function update() {
+        var node = $('#jstree').jstree().get_selected(true)[0];
+        if (node != undefined)
+            displayList(node);
+
         //update tree
         $.ajax({
             type: 'POST',
@@ -375,9 +383,8 @@
         if (selectedNode != undefined) {
             let nodeId = selectedNode.id;
             if (nodeId.startsWith("sensor_")) {
-                let path = nodeId.substring("sensor_".length);
-                let sensorDataId = '#sensorData_' + path;
-                selectedListId = $(sensorDataId)[0].parentNode.id;
+                //let path = nodeId.substring("sensor_".length);
+                selectedListId = 'list_' + selectedNode.parent;
             } else {
                 selectedListId = 'list_' + nodeId;
             }

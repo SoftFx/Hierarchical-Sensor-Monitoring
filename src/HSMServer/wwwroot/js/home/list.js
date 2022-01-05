@@ -4,15 +4,20 @@
     $('#noData').css('display', 'none');
     hideSensorInfoParentBlocks();
 
-    let id = data.node.id;
+    let id = data.node == undefined ? data.id : data.node.id;
+
     if (id.startsWith("sensor_")) {
         let path = id.substring("sensor_".length);
         let dataElement = $('#sensorData_' + path)[0];
         $('#sensorData_' + path).css('display', 'block');
         $('#sensorInfo_parent_' + path).css('display', 'block');
-        let parent = data.node.parent;
+
+        let parent = data.node == undefined ? data.parent : data.node.parent;
+
         $('#list_' + parent).css('display', 'block');
-        $('#' + path).click();
+
+        if ($('#' + path).attr('aria-expanded') == 'false')
+            $('#' + path).click();
     } else {
         hideSensorInfoParentBlocks();
         let path = id;
