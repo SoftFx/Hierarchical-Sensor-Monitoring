@@ -5,7 +5,7 @@ namespace HSMServer.Core.SensorsDataValidation
 {
     public interface ISensorsDataValidator
     {
-        ValidationResult ValidateValueWithoutType(SensorValueBase value, string productName, out string validationError);
+        ValidationResult ValidateValueWithoutType(SensorValueBase value, out string validationError);
         ValidationResult ValidateBoolean(bool value, string path, string productName, out string validationError);
         ValidationResult ValidateInteger(int value, string path, string productName, out string validationError);
         ValidationResult ValidateDouble(double value, string path, string productName, out string validationError);

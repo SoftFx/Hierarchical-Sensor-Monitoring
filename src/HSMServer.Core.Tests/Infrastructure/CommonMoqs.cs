@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataValidation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,10 +22,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             ILogger<ConfigurationProvider> configLogger = CreateNullLogger<ConfigurationProvider>();
             IConfigurationProvider config = new ConfigurationProvider(databaseMoq.Object, configLogger);
 
-            var productManagerMoq = new Mock<IProductManager>();
             ILogger<SensorsDataValidator> validatorLogger = CreateNullLogger<SensorsDataValidator>();
-            ISensorsDataValidator validator = new SensorsDataValidator(config, databaseMoq.Object,
-                productManagerMoq.Object, validatorLogger);
+            ISensorsDataValidator validator = new SensorsDataValidator(config, validatorLogger);
 
             return validator;
         }

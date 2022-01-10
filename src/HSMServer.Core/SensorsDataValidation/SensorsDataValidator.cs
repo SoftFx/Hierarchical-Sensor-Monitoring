@@ -1,32 +1,24 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.DataLayer;
-using HSMServer.Core.Products;
+using HSMServer.Core.Model;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Linq;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Core.SensorsDataValidation
 {
     public class SensorsDataValidator : ISensorsDataValidator
     {
         private readonly IConfigurationProvider _configurationProvider;
-        private readonly IDatabaseAdapter _databaseAdapter;
-        private readonly IProductManager _productManager;
         private readonly ILogger<SensorsDataValidator> _logger;
         private int _maxPathLength;
-        public SensorsDataValidator(IConfigurationProvider configurationProvider, IDatabaseAdapter databaseAdapter,
-            IProductManager productManager, ILogger<SensorsDataValidator> logger)
+        public SensorsDataValidator(IConfigurationProvider configurationProvider, ILogger<SensorsDataValidator> logger)
         {
             _configurationProvider = configurationProvider;
-            _databaseAdapter = databaseAdapter;
-            _productManager = productManager;          
             _logger = logger;
             InitializeCommonParameters();
         }
-       
+
         private void InitializeCommonParameters()
         {
             var pathLengthObject = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.MaxPathLength);
@@ -38,33 +30,17 @@ namespace HSMServer.Core.SensorsDataValidation
             {
                 _logger.LogError(ex, $"Failed to parse max path length!");
                 throw;
-            }           
+            }
         }
 
         public ValidationResult ValidateBoolean(bool value, string path, string productName, out string validationError)
         {
-            var sensorInfo = _productManager.GetSensorInfo(productName, path);
-            if (sensorInfo?.ValidationParameters == null || !sensorInfo.ValidationParameters.Any())
-            {
-                validationError = string.Empty;
-                return ValidationResult.Ok;
-            }
-            foreach (var parameter in sensorInfo.ValidationParameters)
-            {
-                bool validateValue = bool.Parse(parameter.ValidationValue);
-                if (validateValue == value)
-                {
-                    validationError = "Validation failed";
-                    return ValidationResult.Failed;
-                }
-            }
-
             validationError = string.Empty;
             return ValidationResult.Ok;
         }
 
-        public ValidationResult ValidateValueWithoutType(SensorValueBase value, string productName, out string validationError)
-        {          
+        public ValidationResult ValidateValueWithoutType(SensorValueBase value, out string validationError)
+        {
             var count = value.Path.Split('/').Length;
             if (count > _maxPathLength)
             {

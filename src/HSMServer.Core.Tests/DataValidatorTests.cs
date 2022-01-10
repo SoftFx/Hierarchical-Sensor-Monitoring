@@ -1,141 +1,126 @@
 using HSMCommon.Constants;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
+using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
+using System.Linq;
 using Xunit;
 
-namespace HSMServer.Core.Tests
+namespace HSMServer.Core.DataValidatorTests
 {
     public class DataValidatorTests
     {
-        [Fact]
-        //This method uses data object with path that is too long (path length is 10 by default)
-        public void ValidationMustReturnFalseResultForLongPath()
-        {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            UnitedSensorValue value = new UnitedSensorValue();
-            value.Path = string.Join('/',new [] {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"});
-            //Act
-            var result = validator.ValidateValueWithoutType(value, string.Empty, out var error);
+        private const string Path = Constants.SimpleNotEmptyPath;
+        private const string ProductName = Constants.SimpleNotEmptyProductName;
 
-            //Assert
+        private readonly ISensorsDataValidator _validator;
+
+
+        public DataValidatorTests()
+        {
+            _validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
+        }
+
+
+        [Fact]
+        public void LongPathValidationTest()
+        {
+            var unitedValue = BuildSensorValue(11);
+
+            var result = _validator.ValidateValueWithoutType(unitedValue, out var error);
+
             Assert.Equal(ValidationResult.Failed, result);
             Assert.Equal(ValidationConstants.PathTooLong, error);
         }
 
         [Fact]
-        //There is currently no validation for booleans because there are no parameters
-        public void ValidationResultMustBeOkForBoolean()
+        public void CorrectPathValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            bool value = true;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            var unitedValue = BuildSensorValue(10);
 
-            //Act
-            var result = validator.ValidateBoolean(value, path,productName, out var error);
+            var result = _validator.ValidateValueWithoutType(unitedValue, out var error);
 
-            //Assert
-            Assert.Equal(ValidationResult.Ok, result);
-            Assert.Equal(string.Empty, error);
+            TestCorrectData(result, error);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void BoolValidationtTest(bool value)
+        {
+            var result = _validator.ValidateBoolean(value, Path, ProductName, out var error);
+
+            TestCorrectData(result, error);
         }
 
         [Fact]
-        //There is currently no validation for int because validation method body does nothing
-        public void ValidationResultMustBeOkForInt()
+        public void IntValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            int value = int.MaxValue;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            int value = RandomValuesGenerator.GetRandomInt();
 
-            //Act
-            var result = validator.ValidateInteger(value, path, productName, out var error);
+            var result = _validator.ValidateInteger(value, Path, ProductName, out var error);
 
-            //Assert
-            Assert.Equal(ValidationResult.Ok, result);
-            Assert.Equal(string.Empty, error);
+            TestCorrectData(result, error);
         }
 
         [Fact]
         //There is currently no validation for double because validation method body does nothing
-        public void ValidationResultMustBeOkForDouble()
+        public void DoubleValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            double value = double.Epsilon;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            double value = RandomValuesGenerator.GetRandomDouble();
 
-            //Act
-            var result = validator.ValidateDouble(value, path, productName, out var error);
+            var result = _validator.ValidateDouble(value, Path, ProductName, out var error);
 
-            //Assert
-            Assert.Equal(ValidationResult.Ok, result);
-            Assert.Equal(string.Empty, error);
+            TestCorrectData(result, error);
         }
 
         [Fact]
-        //There is currently no validation for string because validation method body does nothing
-        public void ValidationResultMustBeOkForString()
+        public void StringValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            string value = string.Empty;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            string value = RandomValuesGenerator.GetRandomString();
 
-            //Act
-            var result = validator.ValidateString(value, path, productName, out var error);
+            var result = _validator.ValidateString(value, Path, ProductName, out var error);
 
-            //Assert
-            Assert.Equal(ValidationResult.Ok, result);
-            Assert.Equal(string.Empty, error);
+            TestCorrectData(result, error);
         }
 
         [Fact]
-        //There is currently no validation for IntBar because validation method body does nothing
-        public void ValidationResultMustBeOkForIntBar()
+        public void IntBarValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            int max = int.MaxValue;
-            int min = int.MinValue;
-            int mean = 0;
-            int count = 0;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            int max = RandomValuesGenerator.GetRandomInt();
+            int min = RandomValuesGenerator.GetRandomInt();
+            int mean = RandomValuesGenerator.GetRandomInt();
+            int count = RandomValuesGenerator.GetRandomInt(positive: true);
 
-            //Act
-            var result = validator.ValidateIntBar(max, min, mean, count, path, productName, out var error);
+            var result = _validator.ValidateIntBar(max, min, mean, count, Path, ProductName, out var error);
 
-            //Assert
-            Assert.Equal(ValidationResult.Ok, result);
-            Assert.Equal(string.Empty, error);
+            TestCorrectData(result, error);
         }
 
         [Fact]
-        //There is currently no validation for DoubleBar because validation method body does nothing
-        public void ValidationResultMustBeOkForDoubleBar()
+        public void DoubleBarValidationTest()
         {
-            //Arrange
-            var validator = CommonMoqs.CreateValidatorMockWithoutDatabase();
-            double max = double.MaxValue;
-            double min = double.MinValue;
-            double mean = 0.0;
-            int count = 0;
-            string path = Constants.SimpleNotEmptyPath;
-            string productName = Constants.SimpleNotEmptyProductName;
+            double max = RandomValuesGenerator.GetRandomDouble();
+            double min = RandomValuesGenerator.GetRandomDouble();
+            double mean = RandomValuesGenerator.GetRandomDouble();
+            int count = RandomValuesGenerator.GetRandomInt(positive: true);
 
-            //Act
-            var result = validator.ValidateDoubleBar(max, min, mean, count, path, productName, out var error);
+            var result = _validator.ValidateDoubleBar(max, min, mean, count, Path, ProductName, out var error);
 
-            //Assert
+            TestCorrectData(result, error);
+        }
+
+
+        private static void TestCorrectData(ValidationResult result, string error)
+        {
             Assert.Equal(ValidationResult.Ok, result);
             Assert.Equal(string.Empty, error);
         }
+
+        private static UnitedSensorValue BuildSensorValue(int pathParts) =>
+            new()
+            {
+                Path = string.Join('/', Enumerable.Range(0, pathParts)),
+            };
     }
 }

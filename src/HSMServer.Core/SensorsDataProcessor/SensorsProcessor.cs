@@ -349,7 +349,7 @@ namespace HSMServer.Core.SensorsDataProcessor
             }
 
             productName = _productManager.GetProductNameByKey(value.Key);
-            return _dataValidator.ValidateValueWithoutType(value, productName, out processingError);
+            return _dataValidator.ValidateValueWithoutType(value, out processingError);
         }
 
         /// <summary>

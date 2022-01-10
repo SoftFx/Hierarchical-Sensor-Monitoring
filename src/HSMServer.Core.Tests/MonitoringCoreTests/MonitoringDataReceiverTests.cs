@@ -59,8 +59,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
             var sensorDataValidatorLogger = CommonMoqs.CreateNullLogger<SensorsDataValidator>();
-            var sensorDataValidator = new SensorsDataValidator(configurationProvider, _databaseAdapterManager.DatabaseAdapter,
-                productManager, sensorDataValidatorLogger);
+            var sensorDataValidator = new SensorsDataValidator(configurationProvider, sensorDataValidatorLogger);
 
             var sensorsProcessorLogger = CommonMoqs.CreateNullLogger<SensorsProcessor>();
             var sensorsProcessor = new SensorsProcessor(sensorsProcessorLogger, sensorDataValidator, productManager);
