@@ -216,11 +216,11 @@ namespace HSMServer.Core.SensorsDataProcessor
             if (baseProcessingResult == ValidationResult.Failed)
                 return baseProcessingResult;
 
-            if (unitedValue.Data.Length > ValidationConstants.MAX_STRING_LENGTH)
+            if (unitedValue.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
             {
                 baseProcessingResult = ValidationResult.OkWithError;
                 processingError += ValidationConstants.SensorValueIsTooLong;
-                unitedValue.Data = unitedValue.Data.Substring(0, ValidationConstants.MAX_STRING_LENGTH);
+                unitedValue.Data = unitedValue.Data.Substring(0, ValidationConstants.MaxUnitedSensorDataLength);
             }
 
             var typedValidationResult =
