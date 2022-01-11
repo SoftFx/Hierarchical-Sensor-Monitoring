@@ -10,5 +10,6 @@
         public const string SensorValueOutdated = "Sensor value is older than ExpectedUpdateInterval!";
 
         public const int MAX_STRING_LENGTH = 150;
+        public const int MaxUnitedSensorDataLength = 1024;
     }
 }
