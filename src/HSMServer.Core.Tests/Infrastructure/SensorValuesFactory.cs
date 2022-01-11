@@ -23,6 +23,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal SensorValueBase BuildRandomSensorValue() =>
             BuildSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8));
 
+        internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
+            BuildUnitedSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 6));
+
         internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
             sensorType switch
             {
@@ -161,7 +164,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Data = BuildUnitedValueData(sensorType)
             };
 
-            return sensorValue.FillCommonSensorValueProperties(_productKey);
+            return sensorValue.FillCommonSensorValueProperties(_productKey, uniqPath: sensorType.ToString());
         }
 
 

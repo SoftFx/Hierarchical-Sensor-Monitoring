@@ -145,6 +145,47 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
 
+        [Theory]
+        [InlineData(SensorType.BooleanSensor)]
+        [InlineData(SensorType.IntSensor)]
+        [InlineData(SensorType.DoubleSensor)]
+        [InlineData(SensorType.StringSensor)]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "UnitedSensorValues One")]
+        public async Task AddUnitedSensorValueTest(SensorType sensorType)
+        {
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+
+            _monitoringCore.AddSensorsValues(new List<UnitedSensorValue>() { unitedValue });
+
+            await FullSeveralSensorValuesTestAsync(new List<SensorValueBase>() { unitedValue },
+                                                   _valuesCache.GetValues,
+                                                   _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                                   _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+
+        [Theory]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "UnitedSensorValues Several Random")]
+        public async Task AddRandomUnitedSensorValuesTest(int count)
+        {
+            var unitedValues = GetRandomSensorValues(count, isUnitedSensors: true);
+
+            _monitoringCore.AddSensorsValues(unitedValues.Select(value => (UnitedSensorValue)value).ToList());
+
+            await FullSeveralSensorValuesTestAsync(unitedValues,
+                                                   _valuesCache.GetValues,
+                                                   _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                                   _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
+        }
+
+
         private void MonitoringCoreAddSensorValue(SensorValueBase sensorValue)
         {
             switch (sensorValue)
@@ -252,11 +293,13 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                     _sensorValuesTester.TestSensorInfoFromDB(sensors.Value[i], infos[sensors.Key]);
         }
 
-        private List<SensorValueBase> GetRandomSensorValues(int size)
+        private List<SensorValueBase> GetRandomSensorValues(int size, bool isUnitedSensors = false)
         {
             var sensorValues = new List<SensorValueBase>(size);
             for (int i = 0; i < size; ++i)
-                sensorValues.Add(_sensorValuesFactory.BuildRandomSensorValue());
+                sensorValues.Add(isUnitedSensors
+                    ? _sensorValuesFactory.BuildRandomUnitedSensorValue()
+                    : _sensorValuesFactory.BuildRandomSensorValue());
 
             return sensorValues;
         }

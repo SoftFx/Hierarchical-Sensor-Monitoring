@@ -18,14 +18,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             return sensorValue.FillCommonSensorValueProperties(productKey);
         }
 
-        internal static T FillCommonSensorValueProperties<T>(this T sensorValue, string productKey)
+        internal static T FillCommonSensorValueProperties<T>(this T sensorValue, string productKey, string uniqPath = null)
         {
             if (sensorValue is SensorValueBase sensorValueBase)
             {
                 var sensorValueType = typeof(T);
 
                 sensorValueBase.Key = productKey;
-                sensorValueBase.Path = $"{sensorValueType}";
+                sensorValueBase.Path = $"{sensorValueType}{(string.IsNullOrEmpty(uniqPath) ? string.Empty : $"{uniqPath}")}";
                 sensorValueBase.Description = $"{sensorValueType} {nameof(SensorValueBase.Description)}";
                 sensorValueBase.Comment = $"{sensorValueType} {nameof(SensorValueBase.Comment)}";
                 sensorValueBase.Time = DateTime.UtcNow;
