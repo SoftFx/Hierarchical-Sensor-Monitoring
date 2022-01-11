@@ -3,6 +3,7 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
+using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
@@ -27,10 +28,10 @@ namespace HSMServer.Core.DataValidatorTests
         {
             var unitedValue = BuildSensorValue(11);
 
-            var result = _validator.ValidateValueWithoutType(unitedValue, out var error);
+            var result = unitedValue.Validate();
 
-            Assert.Equal(ValidationResult.Failed, result);
-            Assert.Equal(ValidationConstants.PathTooLong, error);
+            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(new List<string>() { ValidationConstants.PathTooLong }, result.Errors);
         }
 
         [Fact]
@@ -38,9 +39,7 @@ namespace HSMServer.Core.DataValidatorTests
         {
             var unitedValue = BuildSensorValue(10);
 
-            var result = _validator.ValidateValueWithoutType(unitedValue, out var error);
-
-            TestCorrectData(result, error);
+            TestCorrectData(unitedValue.Validate());
         }
 
         [Theory]
@@ -115,6 +114,12 @@ namespace HSMServer.Core.DataValidatorTests
         {
             Assert.Equal(ValidationResult.Ok, result);
             Assert.Equal(string.Empty, error);
+        }
+
+        private static void TestCorrectData<T>(ValidationResult<T> result)
+        {
+            Assert.Equal(ResultType.Ok, result.ResultType);
+            Assert.Equal(new List<string>(), result.Errors);
         }
 
         private static UnitedSensorValue BuildSensorValue(int pathParts) =>

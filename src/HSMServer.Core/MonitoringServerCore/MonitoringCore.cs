@@ -29,6 +29,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
+using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -66,6 +67,8 @@ namespace HSMServer.Core.MonitoringServerCore
             Thread.Sleep(5000);
             FillValuesCache();
             _logger.LogInformation("Monitoring core initialized");
+
+            SensorDataValidationExtensions.Initialize(configurationProvider);
         }
 
         //private void MigrateSensorsValuesToNewDatabase()

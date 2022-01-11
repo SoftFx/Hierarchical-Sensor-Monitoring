@@ -22,6 +22,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             ILogger<ConfigurationProvider> configLogger = CreateNullLogger<ConfigurationProvider>();
             IConfigurationProvider config = new ConfigurationProvider(databaseMoq.Object, configLogger);
 
+            SensorDataValidationExtensions.Initialize(config);
+
             ILogger<SensorsDataValidator> validatorLogger = CreateNullLogger<SensorsDataValidator>();
             ISensorsDataValidator validator = new SensorsDataValidator(config, validatorLogger);
 
