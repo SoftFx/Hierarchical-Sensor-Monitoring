@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace HSMServer.Core.DataValidatorTests
+namespace HSMServer.Core.ValidationTests
 {
     public class DataValidatorTests
     {
@@ -28,14 +28,25 @@ namespace HSMServer.Core.DataValidatorTests
         {
             var unitedValue = BuildSensorValue(11);
 
-            var result = unitedValue.Validate();
+            var result = unitedValue.ValidateSensorPath();
 
             Assert.Equal(ResultType.Failed, result.ResultType);
             Assert.Equal(new List<string>() { ValidationConstants.PathTooLong }, result.Errors);
         }
 
         [Fact]
-        public void CorrectPathValidationTest()
+        public void NullSensorValueValidationTest()
+        {
+            const SensorValueBase value = null;
+
+            var result = value.Validate();
+
+            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
+        }
+
+        [Fact]
+        public void SensorValueValidationTest()
         {
             var unitedValue = BuildSensorValue(10);
 
@@ -107,6 +118,13 @@ namespace HSMServer.Core.DataValidatorTests
             var result = _validator.ValidateDoubleBar(max, min, mean, count, Path, ProductName, out var error);
 
             TestCorrectData(result, error);
+        }
+
+
+        [Fact]
+        public void BoolSensorValidationTest()
+        {
+
         }
 
 

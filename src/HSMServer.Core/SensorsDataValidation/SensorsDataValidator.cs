@@ -11,27 +11,13 @@ namespace HSMServer.Core.SensorsDataValidation
     {
         private readonly IConfigurationProvider _configurationProvider;
         private readonly ILogger<SensorsDataValidator> _logger;
-        private int _maxPathLength;
+        private int _maxPathLength = 10;
         public SensorsDataValidator(IConfigurationProvider configurationProvider, ILogger<SensorsDataValidator> logger)
         {
             _configurationProvider = configurationProvider;
             _logger = logger;
-            InitializeCommonParameters();
         }
 
-        private void InitializeCommonParameters()
-        {
-            var pathLengthObject = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.MaxPathLength);
-            try
-            {
-                _maxPathLength = int.Parse(pathLengthObject.Value);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Failed to parse max path length!");
-                throw;
-            }
-        }
 
         public ValidationResult ValidateBoolean(bool value, string path, string productName, out string validationError)
         {

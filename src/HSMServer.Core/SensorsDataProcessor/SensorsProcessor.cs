@@ -223,9 +223,7 @@ namespace HSMServer.Core.SensorsDataProcessor
                 unitedValue.Data = unitedValue.Data.Substring(0, ValidationConstants.MaxUnitedSensorDataLength);
             }
 
-            var typedValidationResult =
-                ValidateUnitedValue(unitedValue.Data, unitedValue.Type, unitedValue.Path, productName,
-                    out var typedError);
+            var typedValidationResult = ValidateUnitedValue(unitedValue.Type, out var typedError);
             var worstResult = baseProcessingResult.GetWorst(typedValidationResult);
             processingError = CombineErrors(processingError, typedError);
             if (worstResult == ValidationResult.Failed)
@@ -244,55 +242,25 @@ namespace HSMServer.Core.SensorsDataProcessor
 
         #region Common methods
 
-        private ValidationResult ValidateUnitedValue(string data, SensorType sensorType, string path, string productName,
-            out string validationError)
+        private static ValidationResult ValidateUnitedValue(SensorType sensorType, out string validationError)
         {
             switch (sensorType)
             {
                 case SensorType.BooleanSensor:
-                {
-                    bool boolValue = bool.Parse(data);
-                    return _dataValidator.ValidateBoolean(boolValue, path, productName, out validationError);
-                }
                 case SensorType.IntSensor:
-                {
-                    int intValue = int.Parse(data);
-                    return _dataValidator.ValidateInteger(intValue, path, productName, out validationError);
-                }
                 case SensorType.DoubleSensor:
-                {
-                    double doubleValue = double.Parse(data);
-                    return _dataValidator.ValidateDouble(doubleValue, path, productName, out validationError);
-                }
                 case SensorType.StringSensor:
-                {
-                    return _dataValidator.ValidateString(data, path, productName, out validationError);
-                }
                 case SensorType.IntegerBarSensor:
-                {
-                    IntBarData intBarData = JsonSerializer.Deserialize<IntBarData>(data);
-                    return _dataValidator.ValidateIntBar(intBarData.Max, intBarData.Min, intBarData.Mean,
-                        intBarData.Count, path, productName, out validationError);
-                }
                 case SensorType.DoubleBarSensor:
-                {
-                    DoubleBarData doubleBarData = JsonSerializer.Deserialize<DoubleBarData>(data);
-                    return _dataValidator.ValidateDoubleBar(doubleBarData.Max, doubleBarData.Min, doubleBarData.Mean,
-                        doubleBarData.Count, path, productName, out validationError);
-                }
+                    validationError = string.Empty;
+                    return ValidationResult.Ok;
                 default:
-                {
                     validationError = ValidationConstants.FailedToParseType;
                     return ValidationResult.Failed;
-                }
             }
         }
 
 
-
-        #endregion
-
-        #region Typed validation
 
         #endregion
 

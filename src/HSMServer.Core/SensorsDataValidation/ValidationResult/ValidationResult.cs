@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using HSMSensorDataObjects;
+using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.SensorsDataValidation
 {
@@ -18,5 +20,18 @@ namespace HSMServer.Core.SensorsDataValidation
         public abstract List<string> Errors { get; }
 
         public abstract T Data { get; }
+
+
+        public string Error => string.Join(", ", Errors);
+
+        public SensorStatus SensorStatus =>
+            ResultType switch
+            {
+                ResultType.Unknown => SensorStatus.Unknown,
+                ResultType.Ok => SensorStatus.Ok,
+                ResultType.Warning => SensorStatus.Warning,
+                ResultType.Failed => SensorStatus.Error,
+                _ => throw new InvalidCastException($"Unknown validation result: {ResultType}"),
+            };
     }
 }

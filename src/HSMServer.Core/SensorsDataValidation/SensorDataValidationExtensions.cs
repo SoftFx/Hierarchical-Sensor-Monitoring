@@ -20,6 +20,14 @@ namespace HSMServer.Core.SensorsDataValidation
 
         public static ValidationResult<SensorValueBase> Validate(this SensorValueBase value)
         {
+            if (value == null)
+                return new InvalidResult<SensorValueBase>(ValidationConstants.ObjectIsNull);
+
+            return value.ValidateSensorPath();
+        }
+
+        public static ValidationResult<SensorValueBase> ValidateSensorPath(this SensorValueBase value)
+        {
             var pathLength = value.Path.Split(CommonConstants.SensorPathSeparator).Length;
 
             return pathLength > _maxPathLength

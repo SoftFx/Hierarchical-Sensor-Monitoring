@@ -334,42 +334,53 @@ namespace HSMServer.Core.MonitoringServerCore
                     RemoveSensor(product, key, path);
         }
 
+        private TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
+        {
+            var transactionType = TransactionType.Update;
+
+            if (!_productManager.IsSensorRegistered(productName, value.Path))
+            {
+                _productManager.AddSensor(productName, value);
+                transactionType = TransactionType.Add;
+            }
+
+            return transactionType;
+        }
+
+        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, ValidationResult<SensorValueBase> validationResult)
+        {
+            var productName = _productManager.GetProductNameByKey(value.Key);
+            var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
+
+            var sensorData = value.Convert(productName, timeCollected, transactionType);
+            sensorData.Status = validationResult.SensorStatus > sensorData.Status ? validationResult.SensorStatus : sensorData.Status;
+            sensorData.ValidationError = validationResult.Error;
+
+            return sensorData;
+        }
+
         public void AddSensorValue(BoolSensorValue value)
         {
             try
             {
                 DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
+
+                var validationResult = value.Validate();
+
+                if (validationResult.ResultType == ResultType.Failed)
                 {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
+                    _logger.LogError($"Sensor data validation error(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
                     return;
                 }
+                else if (validationResult.ResultType == ResultType.Warning)
+                    _logger.LogWarning($"Sensor data validated with non-critical error(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");               
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
+                var processedData = GetSensorData(value, timeCollected, validationResult);
 
                 _queueManager.AddSensorData(processedData);
                 _valuesCache.AddValue(processedData.Product, processedData);
                 SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
                 SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
             }
             catch (Exception e)
             {
