@@ -4,16 +4,17 @@ namespace HSMServer.Core.SensorsDataValidation
 {
     internal sealed class SuccessResult<T> : ValidationResult<T>
     {
-        private readonly T _data;
-
-
-        public SuccessResult(T data) => _data = data;
+        public SuccessResult(T data) => Data = data;
 
 
         public override ResultType ResultType => ResultType.Ok;
 
         public override List<string> Errors => new();
 
-        public override T Data => _data;
+        public override T Data { get; }
+
+
+        public override ValidationResult<T> Clone() =>
+            new SuccessResult<T>(Data);
     }
 }

@@ -22,7 +22,7 @@ namespace HSMServer.Core.SensorsDataValidation
         public abstract T Data { get; }
 
 
-        public string Error => string.Join(", ", Errors);
+        public string Error => string.Join(Environment.NewLine, Errors);
 
         public SensorStatus SensorStatus =>
             ResultType switch
@@ -33,5 +33,8 @@ namespace HSMServer.Core.SensorsDataValidation
                 ResultType.Failed => SensorStatus.Error,
                 _ => throw new InvalidCastException($"Unknown validation result: {ResultType}"),
             };
+
+
+        public abstract ValidationResult<T> Clone();
     }
 }

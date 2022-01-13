@@ -7,8 +7,7 @@ namespace HSMServer.Core.MonitoringServerCore
 {
     public interface IBarSensorsStorage : IDisposable
     {
-        void Add(IntBarSensorValue value, string product, DateTime timeCollected);
-        void Add(DoubleBarSensorValue value, string product, DateTime timeCollected);
+        public void Add<T>(T value, string product, DateTime timeCollected) where T : BarSensorValueBase;
         void Remove(string product, string path);
         ExtendedBarSensorData GetLastValue(string product, string path);
         List<ExtendedBarSensorData> GetAllLastValues();

@@ -22,30 +22,16 @@ namespace HSMServer.Core.MonitoringServerCore
             _checkOutdatedTimer = new Timer(CheckOutdatedCallback, null, timerSpan, timerSpan);
         }
 
-        public void Add(IntBarSensorValue value, string product, DateTime timeCollected)
+        public void Add<T>(T value, string product, DateTime timeCollected) where T: BarSensorValueBase
         {
-            ExtendedBarSensorData data = new ExtendedBarSensorData()
+            ExtendedBarSensorData data = new()
             {
                 ProductName = product,
                 TimeCollected = timeCollected,
-                ValueType = SensorType.IntegerBarSensor,
+                ValueType = GetSensorType(value),
                 Value = value
             };
-            lock (_syncObject)
-            {
-                _lastValues[(product, value.Path)] = data;
-            }
-        }
 
-        public void Add(DoubleBarSensorValue value, string product, DateTime timeCollected)
-        {
-            ExtendedBarSensorData data = new ExtendedBarSensorData()
-            {
-                ProductName = product,
-                TimeCollected = timeCollected,
-                ValueType = SensorType.DoubleBarSensor,
-                Value = value
-            };
             lock (_syncObject)
             {
                 _lastValues[(product, value.Path)] = data;
@@ -86,6 +72,14 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         public event EventHandler<ExtendedBarSensorData> IncompleteBarOutdated;
+
+        private static SensorType GetSensorType(BarSensorValueBase sensorValue) =>
+            sensorValue switch
+            {
+                IntBarSensorValue => SensorType.IntegerBarSensor,
+                DoubleBarSensorValue => SensorType.DoubleBarSensor,
+                _ => (SensorType)0,
+            };
 
         private void CheckOutdatedCallback(object state)
         {

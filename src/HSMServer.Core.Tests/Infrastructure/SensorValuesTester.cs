@@ -153,7 +153,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
-        private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
+        internal static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
            sensorValue switch
            {
                BoolSensorValue => SensorType.BooleanSensor,

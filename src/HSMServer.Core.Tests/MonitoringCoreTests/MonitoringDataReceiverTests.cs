@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
@@ -10,11 +7,12 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
-using HSMServer.Core.SensorsDataProcessor;
-using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
@@ -26,6 +24,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private readonly MonitoringCore _monitoringCore;
         private readonly DatabaseAdapterManager _databaseAdapterManager;
         private readonly ValuesCache _valuesCache;
+        private readonly BarSensorsStorage _barStorage;
 
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
@@ -50,7 +49,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             var userManager = new Mock<IUserManager>();
 
-            var barSensorsStorage = new BarSensorsStorage();
+            _barStorage = new BarSensorsStorage();
 
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
@@ -58,19 +57,12 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
-            var sensorDataValidatorLogger = CommonMoqs.CreateNullLogger<SensorsDataValidator>();
-            var sensorDataValidator = new SensorsDataValidator(configurationProvider, sensorDataValidatorLogger);
-
-            var sensorsProcessorLogger = CommonMoqs.CreateNullLogger<SensorsProcessor>();
-            var sensorsProcessor = new SensorsProcessor(sensorsProcessorLogger, sensorDataValidator, productManager);
-
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
                 userManager.Object,
-                barSensorsStorage,
+                _barStorage,
                 productManager,
-                sensorsProcessor,
                 configurationProvider,
                 _valuesCache,
                 monitoringLogger);
@@ -91,12 +83,30 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
-            MonitoringCoreAddSensorValue(sensorValue);
+            _monitoringCore.AddSensorValue(sensorValue);
 
             await FullSensorValueTestAsync(sensorValue,
                                            _valuesCache.GetValues,
                                            _databaseAdapterManager.DatabaseAdapter.GetOneValueSensorValue,
                                            _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+        }
+
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "One")]
+        public void AddBarSensorValueTest(SensorType type)
+        {
+            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+            (sensorValue as BarSensorValueBase).EndTime = System.DateTime.MinValue;
+
+            _monitoringCore.AddSensorValue(sensorValue);
+
+            var lastBarValue = _barStorage.GetLastValue(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+
+            Assert.Equal(_databaseAdapterManager.TestProduct.Name, lastBarValue.ProductName);
+            Assert.Equal(SensorValuesTester.GetSensorValueType(sensorValue), lastBarValue.ValueType);
+            Assert.Equal(sensorValue, lastBarValue.Value);
         }
 
 
@@ -116,7 +126,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 sensorValues.Add(_sensorValuesFactory.BuildSensorValue(type));
 
-            sensorValues.ForEach(MonitoringCoreAddSensorValue);
+            sensorValues.ForEach(value => _monitoringCore.AddSensorValue(value));
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetValues,
@@ -136,7 +146,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var sensorValues = GetRandomSensorValues(count);
 
-            sensorValues.ForEach(MonitoringCoreAddSensorValue);
+            sensorValues.ForEach(value => _monitoringCore.AddSensorValue(value));
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetValues,
@@ -165,6 +175,22 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                                    _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "UnitedBarSensorValues One")]
+        public void AddUnitedBarSensorValueTest(SensorType type)
+        {
+            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(type, isMinEndTime: true);
+
+            _monitoringCore.AddSensorsValues(new List<UnitedSensorValue>() { unitedValue });
+
+            var lastBarValue = _barStorage.GetLastValue(_databaseAdapterManager.TestProduct.Name, unitedValue.Path);
+
+            Assert.Equal(_databaseAdapterManager.TestProduct.Name, lastBarValue.ProductName);
+            Assert.Equal(SensorValuesTester.GetSensorValueType(unitedValue), lastBarValue.ValueType);
+            SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, lastBarValue.Value);
+        }
 
         [Theory]
         [InlineData(10)]
@@ -185,37 +211,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                                    _databaseAdapterManager.DatabaseAdapter.GetProductSensors);
         }
 
-
-        private void MonitoringCoreAddSensorValue(SensorValueBase sensorValue)
-        {
-            switch (sensorValue)
-            {
-                case BoolSensorValue boolSensorValue:
-                    _monitoringCore.AddSensorValue(boolSensorValue);
-                    break;
-                case IntSensorValue intSensorValue:
-                    _monitoringCore.AddSensorValue(intSensorValue);
-                    break;
-                case DoubleSensorValue doubleSensorValue:
-                    _monitoringCore.AddSensorValue(doubleSensorValue);
-                    break;
-                case StringSensorValue stringSensorValue:
-                    _monitoringCore.AddSensorValue(stringSensorValue);
-                    break;
-                case IntBarSensorValue intBarSensorValue:
-                    _monitoringCore.AddSensorValue(intBarSensorValue);
-                    break;
-                case DoubleBarSensorValue doubleBarSensorValue:
-                    _monitoringCore.AddSensorValue(doubleBarSensorValue);
-                    break;
-                case FileSensorBytesValue fileSensorBytesValue:
-                    _monitoringCore.AddSensorValue(fileSensorBytesValue);
-                    break;
-                case FileSensorValue fileSensorValue:
-                    _monitoringCore.AddSensorValue(fileSensorValue);
-                    break;
-            };
-        }
 
         private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
             GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)
