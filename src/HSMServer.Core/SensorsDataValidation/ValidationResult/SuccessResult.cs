@@ -2,19 +2,19 @@
 
 namespace HSMServer.Core.SensorsDataValidation
 {
-    internal sealed class SuccessResult<T> : ValidationResult<T>
+    internal readonly struct SuccessResult<T> : IValidationResult<T>
     {
         public SuccessResult(T data) => Data = data;
 
 
-        public override ResultType ResultType => ResultType.Ok;
+        public ResultType ResultType => ResultType.Ok;
 
-        public override List<string> Errors => new();
+        public HashSet<string> Errors => new();
 
-        public override T Data { get; }
+        public T Data { get; }
 
 
-        public override ValidationResult<T> Clone() =>
+        public IValidationResult<T> Clone() =>
             new SuccessResult<T>(Data);
     }
 }

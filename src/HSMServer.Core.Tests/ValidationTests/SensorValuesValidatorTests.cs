@@ -172,7 +172,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         }
 
 
-        private static void TestCorrectData<T>(ValidationResult<T> result)
+        private static void TestCorrectData<T>(IValidationResult<T> result)
         {
             Assert.Equal(ResultType.Ok, result.ResultType);
             Assert.Equal(new List<string>(), result.Errors);

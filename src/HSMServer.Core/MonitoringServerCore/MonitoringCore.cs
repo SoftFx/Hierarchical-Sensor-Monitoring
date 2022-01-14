@@ -321,7 +321,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return transactionType;
         }
 
-        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, ValidationResult<SensorValueBase> validationResult)
+        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, IValidationResult<SensorValueBase> validationResult)
         {
             var productName = _productManager.GetProductNameByKey(value.Key);
             var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);

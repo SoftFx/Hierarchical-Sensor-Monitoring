@@ -13,13 +13,13 @@ namespace HSMServer.Core.SensorsDataValidation
     }
 
 
-    public abstract class ValidationResult<T>
+    public interface IValidationResult<T>
     {
-        public abstract ResultType ResultType { get; }
+        public ResultType ResultType { get; }
 
-        public abstract List<string> Errors { get; }
+        public HashSet<string> Errors { get; }
 
-        public abstract T Data { get; }
+        public T Data { get; }
 
 
         public string Error => string.Join(Environment.NewLine, Errors);
@@ -35,6 +35,6 @@ namespace HSMServer.Core.SensorsDataValidation
             };
 
 
-        public abstract ValidationResult<T> Clone();
+        public IValidationResult<T> Clone();
     }
 }

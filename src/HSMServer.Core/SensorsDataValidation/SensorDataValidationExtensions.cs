@@ -20,7 +20,7 @@ namespace HSMServer.Core.SensorsDataValidation
         }
 
 
-        public static ValidationResult<SensorValueBase> Validate(this SensorValueBase value)
+        public static IValidationResult<SensorValueBase> Validate(this SensorValueBase value)
         {
             if (value == null)
                 return new InvalidResult<SensorValueBase>(ValidationConstants.ObjectIsNull);
@@ -29,7 +29,7 @@ namespace HSMServer.Core.SensorsDataValidation
         }
 
 
-        private static ValidationResult<T> CombineValidationResults<T>(params ValidationResult<T>[] validationResults)
+        private static IValidationResult<T> CombineValidationResults<T>(params IValidationResult<T>[] validationResults)
         {
             Array.Sort(validationResults, (result1, result2) => -result1.ResultType.CompareTo(result2.ResultType));
 
@@ -39,13 +39,14 @@ namespace HSMServer.Core.SensorsDataValidation
                 return worstValidationResult;
 
             foreach (var validationResult in validationResults)
-                if (!string.IsNullOrEmpty(validationResult.Error) && !worstValidationResult.Errors.Contains(validationResult.Error))
-                    worstValidationResult.Errors.Add(validationResult.Error);
+                if (!string.IsNullOrEmpty(validationResult.Error))
+                    foreach (var error in validationResult.Errors)
+                        worstValidationResult.Errors.Add(error);
 
             return worstValidationResult;
         }
 
-        private static ValidationResult<SensorValueBase> ValidateSensorPath(this SensorValueBase value)
+        private static IValidationResult<SensorValueBase> ValidateSensorPath(this SensorValueBase value)
         {
             var pathLength = value.Path.Split(CommonConstants.SensorPathSeparator).Length;
 
@@ -54,7 +55,7 @@ namespace HSMServer.Core.SensorsDataValidation
                 : new SuccessResult<SensorValueBase>(value);
         }
 
-        private static ValidationResult<SensorValueBase> TypedValidate(this SensorValueBase value) =>
+        private static IValidationResult<SensorValueBase> TypedValidate(this SensorValueBase value) =>
             value switch
             {
                 StringSensorValue stringSensorValue => stringSensorValue.Validate(),
@@ -62,7 +63,7 @@ namespace HSMServer.Core.SensorsDataValidation
                 _ => new SuccessResult<SensorValueBase>(value),
             };
 
-        private static ValidationResult<SensorValueBase> Validate(this StringSensorValue value)
+        private static IValidationResult<SensorValueBase> Validate(this StringSensorValue value)
         {
             if (value.StringValue.Length > ValidationConstants.MAX_STRING_LENGTH)
             {
@@ -73,7 +74,7 @@ namespace HSMServer.Core.SensorsDataValidation
             return new SuccessResult<SensorValueBase>(value);
         }
 
-        private static ValidationResult<SensorValueBase> ValidateUnitedSensorData(this UnitedSensorValue value)
+        private static IValidationResult<SensorValueBase> ValidateUnitedSensorData(this UnitedSensorValue value)
         {
             if (value.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
             {
@@ -84,7 +85,7 @@ namespace HSMServer.Core.SensorsDataValidation
             return new SuccessResult<SensorValueBase>(value);
         }
 
-        private static ValidationResult<SensorValueBase> ValidateUnitedSensorType(this UnitedSensorValue value) =>
+        private static IValidationResult<SensorValueBase> ValidateUnitedSensorType(this UnitedSensorValue value) =>
             value.Type switch
             {
                 SensorType.BooleanSensor or

@@ -2,20 +2,22 @@
 
 namespace HSMServer.Core.SensorsDataValidation
 {
-    internal sealed class InvalidResult<T> : ValidationResult<T>
+    internal readonly struct InvalidResult<T> : IValidationResult<T>
     {
         public InvalidResult(string error) =>
             Errors = new() { error ?? "The input was invalid." };
 
-
-        public override ResultType ResultType => ResultType.Failed;
-
-        public override List<string> Errors { get; }
-
-        public override T Data => default;
+        public InvalidResult(HashSet<string> errors) => Errors = new(errors);
 
 
-        public override ValidationResult<T> Clone() =>
-            new InvalidResult<T>(Error);
+        public ResultType ResultType => ResultType.Failed;
+
+        public HashSet<string> Errors { get; }
+
+        public T Data => default;
+
+
+        public IValidationResult<T> Clone() =>
+            new InvalidResult<T>(Errors);
     }
 }
