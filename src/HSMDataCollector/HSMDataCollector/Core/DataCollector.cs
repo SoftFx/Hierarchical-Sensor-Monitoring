@@ -176,6 +176,8 @@ namespace HSMDataCollector.Core
             return true;
         }
 
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path);
+
         #region Generic sensors functionality
 
         public IInstantValueSensor<bool> CreateBoolSensor(string path, string description)
