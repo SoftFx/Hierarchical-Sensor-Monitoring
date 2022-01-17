@@ -39,8 +39,6 @@ namespace HSMDataCollector.Core
         private NLog.Logger _logger;
         private bool _isStopped;
         private bool _isLogging;
-        internal static string ServiceAliveNode => 
-            $"{TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
@@ -127,37 +125,39 @@ namespace HSMDataCollector.Core
             _isStopped = true;
             _logger?.Info("DataCollector successfully stopped.");
         }
-        public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam)
+        public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
-            StartSystemMonitoring(isCPU, isFreeRam);
+            StartSystemMonitoring(isCPU, isFreeRam, specificPath);
         }
 
-        public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads)
+        public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
-            StartCurrentProcessMonitoring(isCPU, isMemory, isThreads);
+            StartCurrentProcessMonitoring(isCPU, isMemory, isThreads, specificPath);
         }
 
         public void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads)
         {
             
         }
-        public void InitializeOsMonitoring(bool isUpdated)
+        public void InitializeOsMonitoring(bool isUpdated, string specificPath = null)
         {
             if (isUpdated)
-                InitializeWindowsUpdateMonitoring(new TimeSpan(24,0,0), new TimeSpan(30,0,0,0));
+                InitializeWindowsUpdateMonitoring(new TimeSpan(24,0,0), new TimeSpan(30,0,0,0), specificPath);
         }
 
-        public void MonitorServiceAlive()
+        public void MonitorServiceAlive(string specificPath)
         {
-           _logger?.Info($"Initialize {ServiceAliveNode} sensor...");
+            var path = $"{specificPath ?? TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
 
-            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(ServiceAliveNode, 
+           _logger?.Info($"Initialize {path} sensor...");
+
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, 
                 _productKey, _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15),
                 SensorType.BooleanSensor, () => true,_isLogging);
-            AddNewSensor(aliveSensor, ServiceAliveNode);
+            AddNewSensor(aliveSensor, aliveSensor.Path);
         }
 
-        public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval)
+        public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null)
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -168,13 +168,15 @@ namespace HSMDataCollector.Core
 
             _logger?.Info($"Initialize windows update sensor...");
 
-            var updateSensor = new WindowsUpdateFuncSensor(WindowsUpdateFuncSensor.WindowsUpdateNode,
+            var updateSensor = new WindowsUpdateFuncSensor(specificPath,
                 _productKey, _dataQueue as IValuesQueue, string.Empty, sensorInterval,
                 SensorType.BooleanSensor, _isLogging, updateInterval);
 
-            AddNewSensor(updateSensor, WindowsUpdateFuncSensor.WindowsUpdateNode);
+            AddNewSensor(updateSensor, updateSensor.Path);
             return true;
         }
+
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path);
 
         #region Generic sensors functionality
 
@@ -429,40 +431,40 @@ namespace HSMDataCollector.Core
             return GetCount();
         }
 
-        private void StartSystemMonitoring(bool isCPU, bool isFreeRam)
+        private void StartSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath)
         {
             if (isCPU)
             {
-                TotalCPUSensor cpuSensor = new TotalCPUSensor(_productKey, _dataQueue as IValuesQueue);
+                TotalCPUSensor cpuSensor = new TotalCPUSensor(_productKey, _dataQueue as IValuesQueue, specificPath);
                 AddNewSensor(cpuSensor, cpuSensor.Path);
             }
 
             if (isFreeRam)
             {
-                FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_productKey, _dataQueue as IValuesQueue);
+                FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_productKey, _dataQueue as IValuesQueue, specificPath);
                 AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
             }
             //FreeDiskSpaceSensor freeDiskSpaceSensor = new FreeDiskSpaceSensor();
         }
 
-        private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads)
+        private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath)
         {
             Process currentProcess = Process.GetCurrentProcess();
             if (isCPU)
             {
-                ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
                 AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
             }
 
             if (isMemory)
             {
-                ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
                 AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
             }
 
             if (isThreads)
             {
-                ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName);
+                ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_productKey, _dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
                 AddNewSensor(currentThreadCount, currentThreadCount.Path);
             }
         }

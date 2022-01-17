@@ -14,12 +14,9 @@ namespace HSMDataCollector.CustomFuncSensor
         private readonly DateTime _windowsLastUpdate;
         private readonly string _windowsVersion;
 
-        internal static string WindowsUpdateNode =>
-            $"{TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}";
-
-        public WindowsUpdateFuncSensor(string path, string productKey, IValuesQueue queue,
+        public WindowsUpdateFuncSensor(string nodeName, string productKey, IValuesQueue queue,
             string description, TimeSpan timerSpan, SensorType type, bool isLogging, TimeSpan updateInterval) 
-            : base(path, productKey, queue, description, timerSpan, type)
+            : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}", productKey, queue, description, timerSpan, type)
         {
             _updateInterval = updateInterval;
 
