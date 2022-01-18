@@ -5,10 +5,13 @@ namespace HSMDataCollector.Base
 {
     public abstract class SensorBase : ISensor
     {
-        protected readonly string Path;
         protected readonly string ProductKey;
         protected readonly string Description;
         private readonly IValuesQueue _queue;
+
+        internal string Path { get; }
+
+
         protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
         {
             _queue = queue;

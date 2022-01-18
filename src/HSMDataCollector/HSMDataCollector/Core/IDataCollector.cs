@@ -27,20 +27,22 @@ namespace HSMDataCollector.Core
 
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor CPU and RAM usage of the current machine.
-        /// Sensors will be placed at Product/System Monitoring node
+        /// Sensors will be placed at Product/System Monitoring node or at Product/specificPath node
         /// Please note, that system monitoring is currently unavailable for non-windows operating systems (e.g. Linux)
         /// </summary>
         /// <param name="isCPU">Specifies whether the sensor for current CPU usage is created</param>
         /// <param name="isFreeRam">Specifies whether the sensor for current free RAM in mb is created</param>
-        void InitializeSystemMonitoring(bool isCPU, bool isFreeRam);
+        /// <param name="specificPath">Specifies where sensors are created</param>
+        void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null);
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor current working process. RAM and CPU usage, and threads amount are monitored.
-        /// Sensors will be placed at Product/System Monitoring node
+        /// Sensors will be placed at Product/CurrentProcess node or at Product/specificPath node
         /// </summary>
         /// <param name="isCPU">Specifies whether the sensor for current process CPU is created</param>
         /// <param name="isMemory">Specifies whether the sensor for current process RAM (in mb) is created</param>
         /// <param name="isThreads">Specifies whether the sensor for current process thread count is created</param>
-        void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads);
+        /// <param name="specificPath">Specifies where sensors are created</param>
+        void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null);
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor the specified process. RAM and CPU usage, and threads amount are monitored.
         /// Sensors will be placed at Product/System Monitoring node
@@ -53,22 +55,25 @@ namespace HSMDataCollector.Core
 
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor operational system properties. Update status is monitored.
-        /// Sensors will be placed at Product/System Monitoring node
+        /// Sensors will be placed at Product/System Monitoring node or at Product/specificPath node
         /// </summary>
         /// <param name="isUpdated">Specifies whether the sensor for the OS update status is created</param>
-        void InitializeOsMonitoring(bool isUpdated);
+        /// <param name="specificPath">Specifies where sensors are created</param>
+        void InitializeOsMonitoring(bool isUpdated, string specificPath = null);
 
 
         /// <summary>
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>
-        void MonitorServiceAlive();
+        /// <param name="specificPath">Specifies where sensors are created</param>
+        void MonitorServiceAlive(string specificPath);
         /// <summary>
         ///  Creates a sensor, which sends boolean value when since windows update date passed more time then <see cref="updateInterval"/>
         /// </summary>
         /// <param name="sensorInterval">The function is invoked every time the interval passes</param>
         /// <param name="updateInterval">Time interval for the version to become old</param>
-        bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval);
+        /// <param name="specificPath">Specifies where sensors are created</param>
+        bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null);
 
         #endregion
 

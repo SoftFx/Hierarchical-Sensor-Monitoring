@@ -11,11 +11,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     internal class ProcessCPUSensor : StandardPerformanceSensorBase<double>
     {
         private const string _sensorName = "Process CPU";
-        public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName,
-            string nodeName = TextConstants.CurrentProcessNodeName) 
-            : base($"{nodeName}/{_sensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
+        public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName, string nodeName) 
+            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
         {
-            InternalBar = new BarSensor<double>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.DoubleBarSensor);
+            InternalBar = new BarSensor<double>(Path, productKey, queue, SensorType.DoubleBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)

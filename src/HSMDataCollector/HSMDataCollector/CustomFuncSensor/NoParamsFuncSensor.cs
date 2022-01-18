@@ -12,7 +12,7 @@ namespace HSMDataCollector.CustomFuncSensor
         private readonly Func<T> _funcToInvoke;
         private readonly NLog.Logger _logger;
         public NoParamsFuncSensor(string path, string productKey, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type, Func<T> funcToInvoke,
-            bool isLogging) : base( path, productKey, queue, description, timerSpan, type)
+            bool isLogging) : base(path, productKey, queue, description, timerSpan, type)
         {
             _funcToInvoke = funcToInvoke;
             if (isLogging)

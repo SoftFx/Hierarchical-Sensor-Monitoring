@@ -12,11 +12,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     {
         private const int _mbDivisor = 1048576;
         private const string _sensorName = "Process memory MB";
-        public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName,
-            string nodeName = TextConstants.CurrentProcessNodeName)
-            : base($"{nodeName}/{_sensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
+        public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName, string nodeName)
+            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
         {
-            InternalBar = new BarSensor<int>($"{TextConstants.CurrentProcessNodeName}/{_sensorName}", productKey, queue, SensorType.IntegerBarSensor);
+            InternalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
         }
 
         protected override void OnMonitoringTimerTick(object state)
