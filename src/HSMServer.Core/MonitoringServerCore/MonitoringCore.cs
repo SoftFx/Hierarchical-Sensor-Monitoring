@@ -261,7 +261,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 var validationResult = value.Validate();
 
-                if (validationResult.ResultType == ResultType.Failed)
+                if (validationResult.ResultType == ResultType.Error)
                 {
                     _logger.LogError($"Sensor data validation error(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
                     return;
@@ -274,7 +274,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 _queueManager.AddSensorData(sensorData);
                 _valuesCache.AddValue(sensorData.Product, sensorData);
 
-                if (!ProcessBarSensorValue(value, sensorData.Product, timeCollected))
+                if (!ProcessBarSensorValue(value, sensorData))
                     return;
 
                 SensorDataEntity databaseObj = value.Convert(timeCollected, sensorData.Status);
@@ -286,25 +286,25 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        private bool ProcessBarSensorValue(SensorValueBase value, string product, DateTime timeCollected)
+        private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
         {
             if (value is BarSensorValueBase barSensorValue)
-                return ProcessBarSensorValue(barSensorValue, product, timeCollected);
+                return ProcessBarSensorValue(barSensorValue, sensorData);
             else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
-                return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
+                return ProcessBarSensorValue(unitedSensorValue.Convert(), sensorData);
 
             return true;
         }
 
-        private bool ProcessBarSensorValue(BarSensorValueBase value, string product, DateTime timeCollected)
+        private bool ProcessBarSensorValue(BarSensorValueBase value, SensorData sensorData)
         {
             if (value.EndTime == DateTime.MinValue)
             {
-                _barsStorage.Add(value, product, timeCollected);
+                _barsStorage.Add(value, sensorData);
                 return false;
             }
 
-            _barsStorage.Remove(product, value.Path);
+            _barsStorage.Remove(sensorData.Product, value.Path);
             return true;
         }
 
@@ -327,11 +327,21 @@ namespace HSMServer.Core.MonitoringServerCore
             var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
 
             var sensorData = value.Convert(productName, timeCollected, transactionType);
-            sensorData.Status = validationResult.SensorStatus > sensorData.Status ? validationResult.SensorStatus : sensorData.Status;
+            sensorData.Status = GetSensorStatus(validationResult) > sensorData.Status ? GetSensorStatus(validationResult) : sensorData.Status;
             sensorData.ValidationError = validationResult.Error;
 
             return sensorData;
         }
+
+        public static SensorStatus GetSensorStatus(IValidationResult<SensorValueBase> validationResult) =>
+            validationResult.ResultType switch
+            {
+                ResultType.Unknown => SensorStatus.Unknown,
+                ResultType.Ok => SensorStatus.Ok,
+                ResultType.Warning => SensorStatus.Warning,
+                ResultType.Error => SensorStatus.Error,
+                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
+            };
 
         #endregion
 

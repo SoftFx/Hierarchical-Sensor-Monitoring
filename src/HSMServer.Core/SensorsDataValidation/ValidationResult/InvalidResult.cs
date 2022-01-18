@@ -10,7 +10,7 @@ namespace HSMServer.Core.SensorsDataValidation
         public InvalidResult(HashSet<string> errors) => Errors = new(errors);
 
 
-        public ResultType ResultType => ResultType.Failed;
+        public ResultType ResultType => ResultType.Error;
 
         public HashSet<string> Errors { get; }
 

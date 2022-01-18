@@ -12,6 +12,16 @@ namespace HSMServer.Core.Tests.ValidationTests
 {
     public class SensorValuesValidatorTests : IClassFixture<ValidationFixture>
     {
+        private const int TooLongSensorValuesPathPartsCount = 11;
+        private const int MaxSensorValuesPathPartsCount = 10;
+
+        private const int TooLongStringSensorValueSize = 151;
+        private const int MaxStringSensorValueSize = 150;
+
+        private const int TooLongUnitedSensorValueDataSize = 1025;
+        private const int MaxUnitedSensorValueDataSize = 1024;
+
+
         private readonly SensorValuesFactory _sensorValuesFactory = new(DatabaseAdapterManager.ProductName);
 
 
@@ -19,11 +29,11 @@ namespace HSMServer.Core.Tests.ValidationTests
         [Trait("Category", "SensorValueBase")]
         public void LongPathValidationTest()
         {
-            var unitedValue = BuildUnitedSensorValue(11);
+            var unitedValue = BuildUnitedSensorValue(TooLongSensorValuesPathPartsCount);
 
             var result = unitedValue.Validate();
 
-            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.PathTooLong, result.Error);
         }
 
@@ -35,7 +45,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = value.Validate();
 
-            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
         }
 
@@ -43,7 +53,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         [Trait("Category", "SensorValueBase")]
         public void SensorValueValidationTest()
         {
-            var unitedValue = BuildUnitedSensorValue(10);
+            var unitedValue = BuildUnitedSensorValue(MaxSensorValuesPathPartsCount);
 
             TestCorrectData(unitedValue.Validate());
         }
@@ -53,7 +63,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueWarningValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(151);
+            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(TooLongStringSensorValueSize);
 
             var result = stringSensorValue.Validate();
 
@@ -66,8 +76,8 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueErrorValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(151);
-            stringSensorValue.Path = GetSensorPath(11);
+            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(TooLongStringSensorValueSize);
+            stringSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
             var result = stringSensorValue.Validate();
 
@@ -77,7 +87,7 @@ namespace HSMServer.Core.Tests.ValidationTests
                 ValidationConstants.SensorValueIsTooLong
             };
 
-            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
         }
 
@@ -86,7 +96,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(150);
+            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(MaxStringSensorValueSize);
 
             TestCorrectData(stringSensorValue.Validate());
         }
@@ -102,7 +112,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueWarningValidationTest(SensorType type)
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(1025);
+            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
 
             var result = unitedSensorValue.Validate();
 
@@ -121,7 +131,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = unitedSensorValue.Validate();
 
-            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.FailedToParseType, result.Error);
         }
 
@@ -130,8 +140,8 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueAllErrorsValidationTest()
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensor);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(1025);
-            unitedSensorValue.Path = GetSensorPath(11);
+            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
+            unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
             var result = unitedSensorValue.Validate();
 
@@ -142,7 +152,7 @@ namespace HSMServer.Core.Tests.ValidationTests
                 ValidationConstants.PathTooLong
             };
 
-            Assert.Equal(ResultType.Failed, result.ResultType);
+            Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
         }
 
@@ -157,7 +167,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueValidationTest(SensorType type)
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(1024);
+            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
 
             TestCorrectData(unitedSensorValue.Validate());
         }

@@ -126,7 +126,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             for (int i = 0; i < SeveralSensorValuesCount; ++i)
                 sensorValues.Add(_sensorValuesFactory.BuildSensorValue(type));
 
-            sensorValues.ForEach(value => _monitoringCore.AddSensorValue(value));
+            sensorValues.ForEach(_monitoringCore.AddSensorValue);
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetValues,
@@ -146,7 +146,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var sensorValues = GetRandomSensorValues(count);
 
-            sensorValues.ForEach(value => _monitoringCore.AddSensorValue(value));
+            sensorValues.ForEach(_monitoringCore.AddSensorValue);
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetValues,
@@ -201,9 +201,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         [Trait("Category", "UnitedSensorValues Several Random")]
         public async Task AddRandomUnitedSensorValuesTest(int count)
         {
-            var unitedValues = GetRandomSensorValues(count, isUnitedSensors: true);
+            var unitedValues = GetRandomUnitedSensors(count);
 
-            _monitoringCore.AddSensorsValues(unitedValues.Select(value => (UnitedSensorValue)value).ToList());
+            _monitoringCore.AddSensorsValues(unitedValues.Cast<UnitedSensorValue>().ToList());
 
             await FullSeveralSensorValuesTestAsync(unitedValues,
                                                    _valuesCache.GetValues,
@@ -288,13 +288,20 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                     _sensorValuesTester.TestSensorInfoFromDB(sensors.Value[i], infos[sensors.Key]);
         }
 
-        private List<SensorValueBase> GetRandomSensorValues(int size, bool isUnitedSensors = false)
+        private List<SensorValueBase> GetRandomSensorValues(int size)
         {
             var sensorValues = new List<SensorValueBase>(size);
             for (int i = 0; i < size; ++i)
-                sensorValues.Add(isUnitedSensors
-                    ? _sensorValuesFactory.BuildRandomUnitedSensorValue()
-                    : _sensorValuesFactory.BuildRandomSensorValue());
+                sensorValues.Add(_sensorValuesFactory.BuildRandomSensorValue());
+
+            return sensorValues;
+        }
+
+        private List<SensorValueBase> GetRandomUnitedSensors(int size)
+        {
+            var sensorValues = new List<SensorValueBase>(size);
+            for (int i = 0; i < size; ++i)
+                sensorValues.Add(_sensorValuesFactory.BuildRandomUnitedSensorValue());
 
             return sensorValues;
         }

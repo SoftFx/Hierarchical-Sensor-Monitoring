@@ -9,7 +9,7 @@ namespace HSMServer.Core.SensorsDataValidation
         Unknown = 0,
         Ok,
         Warning,
-        Failed,
+        Error,
     }
 
 
@@ -23,16 +23,6 @@ namespace HSMServer.Core.SensorsDataValidation
 
 
         public string Error => string.Join(Environment.NewLine, Errors);
-
-        public SensorStatus SensorStatus =>
-            ResultType switch
-            {
-                ResultType.Unknown => SensorStatus.Unknown,
-                ResultType.Ok => SensorStatus.Ok,
-                ResultType.Warning => SensorStatus.Warning,
-                ResultType.Failed => SensorStatus.Error,
-                _ => throw new InvalidCastException($"Unknown validation result: {ResultType}"),
-            };
 
 
         public IValidationResult<T> Clone();

@@ -214,7 +214,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     break;
                 case UnitedSensorValue unitedSensorValue:
                     Assert.Equal(GetUnitedSensorValueShortStringValue(unitedSensorValue), actual.ShortStringValue);
-                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue, timeCollected.HasValue ? timeCollected.Value : actual.Time), actual.StringValue);
+                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue, timeCollected ?? actual.Time), actual.StringValue);
                     break;
             }
         }

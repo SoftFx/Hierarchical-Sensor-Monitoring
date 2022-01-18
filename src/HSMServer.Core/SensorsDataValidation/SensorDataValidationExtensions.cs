@@ -8,7 +8,7 @@ namespace HSMServer.Core.SensorsDataValidation
 {
     public static class SensorDataValidationExtensions
     {
-        private static int _maxPathLength;
+        private static int _maxPathLength = ConfigurationConstants.DefaultMaxPathLength;
 
 
         public static void Initialize(IConfigurationProvider configurationProvider)
@@ -67,7 +67,7 @@ namespace HSMServer.Core.SensorsDataValidation
         {
             if (value.StringValue.Length > ValidationConstants.MAX_STRING_LENGTH)
             {
-                value.StringValue = value.StringValue.Substring(0, ValidationConstants.MAX_STRING_LENGTH);
+                value.StringValue = value.StringValue[0..ValidationConstants.MAX_STRING_LENGTH];
                 return new WarningResult<SensorValueBase>(value, ValidationConstants.SensorValueIsTooLong);
             }
 
@@ -78,7 +78,7 @@ namespace HSMServer.Core.SensorsDataValidation
         {
             if (value.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
             {
-                value.Data = value.Data.Substring(0, ValidationConstants.MaxUnitedSensorDataLength);
+                value.Data = value.Data[0..ValidationConstants.MaxUnitedSensorDataLength];
                 return new WarningResult<SensorValueBase>(value, ValidationConstants.SensorValueIsTooLong);
             }
 
