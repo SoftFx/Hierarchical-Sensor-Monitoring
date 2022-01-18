@@ -261,13 +261,13 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 var validationResult = value.Validate();
 
-                if (validationResult.ResultType == ResultType.Error)
+                if (validationResult.IsError)
                 {
-                    _logger.LogError($"Sensor data validation error(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
+                    _logger.LogError($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
                     return;
                 }
-                else if (validationResult.ResultType == ResultType.Warning)
-                    _logger.LogWarning($"Sensor data validated with non-critical error(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
+                else if (validationResult.IsWarning)
+                    _logger.LogWarning($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
 
                 var sensorData = GetSensorData(value, timeCollected, validationResult);
 
@@ -321,7 +321,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return transactionType;
         }
 
-        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, IValidationResult<SensorValueBase> validationResult)
+        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
         {
             var productName = _productManager.GetProductNameByKey(value.Key);
             var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
@@ -333,7 +333,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return sensorData;
         }
 
-        public static SensorStatus GetSensorStatus(IValidationResult<SensorValueBase> validationResult) =>
+        public static SensorStatus GetSensorStatus(SensorsDataValidation.ValidationResult validationResult) =>
             validationResult.ResultType switch
             {
                 ResultType.Unknown => SensorStatus.Unknown,

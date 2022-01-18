@@ -35,6 +35,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.PathTooLong, result.Error);
+            Assert.True(string.IsNullOrEmpty(result.Warning));
         }
 
         [Fact]
@@ -47,6 +48,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
+            Assert.True(string.IsNullOrEmpty(result.Warning));
         }
 
         [Fact]
@@ -68,7 +70,8 @@ namespace HSMServer.Core.Tests.ValidationTests
             var result = stringSensorValue.Validate();
 
             Assert.Equal(ResultType.Warning, result.ResultType);
-            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Error);
+            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
+            Assert.True(string.IsNullOrEmpty(result.Error));
         }
 
         [Fact]
@@ -81,14 +84,9 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = stringSensorValue.Validate();
 
-            var errors = new List<string>(2)
-            {
-                ValidationConstants.PathTooLong,
-                ValidationConstants.SensorValueIsTooLong
-            };
-
             Assert.Equal(ResultType.Error, result.ResultType);
-            Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
+            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
+            Assert.Equal(ValidationConstants.PathTooLong, result.Error);
         }
 
         [Fact]
@@ -117,7 +115,8 @@ namespace HSMServer.Core.Tests.ValidationTests
             var result = unitedSensorValue.Validate();
 
             Assert.Equal(ResultType.Warning, result.ResultType);
-            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Error);
+            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
+            Assert.True(string.IsNullOrEmpty(result.Error));
         }
 
         [Theory]
@@ -133,6 +132,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             Assert.Equal(ResultType.Error, result.ResultType);
             Assert.Equal(ValidationConstants.FailedToParseType, result.Error);
+            Assert.True(string.IsNullOrEmpty(result.Warning));
         }
 
         [Fact]
@@ -145,14 +145,14 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = unitedSensorValue.Validate();
 
-            var errors = new List<string>(3)
+            var errors = new List<string>(2)
             {
                 ValidationConstants.FailedToParseType,
-                ValidationConstants.SensorValueIsTooLong,
                 ValidationConstants.PathTooLong
             };
 
             Assert.Equal(ResultType.Error, result.ResultType);
+            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
             Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
         }
 
@@ -182,10 +182,12 @@ namespace HSMServer.Core.Tests.ValidationTests
         }
 
 
-        private static void TestCorrectData<T>(IValidationResult<T> result)
+        private static void TestCorrectData(ValidationResult result)
         {
             Assert.Equal(ResultType.Ok, result.ResultType);
-            Assert.Equal(new List<string>(), result.Errors);
+
+            Assert.True(string.IsNullOrEmpty(result.Warning));
+            Assert.True(string.IsNullOrEmpty(result.Error));
         }
 
         private static string GetSensorPath(int pathParts) =>
