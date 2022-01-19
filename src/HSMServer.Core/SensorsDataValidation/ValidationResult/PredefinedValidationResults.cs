@@ -3,7 +3,7 @@ using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMServer.Core.SensorsDataValidation
 {
-    internal static class TypicalValidationResults
+    internal static class PredefinedValidationResults
     {
         internal static ValidationResult NullObjectValidationResult { get; } =
             new(ValidationConstants.ObjectIsNull);

@@ -22,7 +22,7 @@ namespace HSMServer.Core.SensorsDataValidation
         public static ValidationResult Validate(this SensorValueBase value)
         {
             if (value == null)
-                return TypicalValidationResults.NullObjectValidationResult;
+                return PredefinedValidationResults.NullObjectValidationResult;
 
             return value.TypedValidate() + value.ValidateSensorPath();
         }
@@ -33,7 +33,7 @@ namespace HSMServer.Core.SensorsDataValidation
             var pathLength = value.Path.Split(CommonConstants.SensorPathSeparator).Length;
 
             return pathLength > _maxPathLength
-                ? TypicalValidationResults.TooLongPathValidationResult
+                ? PredefinedValidationResults.TooLongPathValidationResult
                 : new ValidationResult(value);
         }
 
@@ -50,7 +50,7 @@ namespace HSMServer.Core.SensorsDataValidation
             if (value.StringValue.Length > ValidationConstants.MAX_STRING_LENGTH)
             {
                 value.StringValue = value.StringValue[0..ValidationConstants.MAX_STRING_LENGTH];
-                return TypicalValidationResults.GetTooLongSensorValueValidationResult(value);
+                return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
             }
 
             return new ValidationResult(value);
@@ -61,7 +61,7 @@ namespace HSMServer.Core.SensorsDataValidation
             if (value.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
             {
                 value.Data = value.Data[0..ValidationConstants.MaxUnitedSensorDataLength];
-                return TypicalValidationResults.GetTooLongSensorValueValidationResult(value);
+                return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
             }
 
             return new ValidationResult(value);
@@ -76,7 +76,7 @@ namespace HSMServer.Core.SensorsDataValidation
                 SensorType.StringSensor or
                 SensorType.IntegerBarSensor or
                 SensorType.DoubleBarSensor => new ValidationResult(value),
-                _ => TypicalValidationResults.IncorrectTypeValidationResult,
+                _ => PredefinedValidationResults.IncorrectTypeValidationResult,
             };
     }
 }

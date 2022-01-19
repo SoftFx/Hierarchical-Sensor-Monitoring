@@ -60,8 +60,8 @@ namespace HSMServer.Core.SensorsDataValidation
 
         private ValidationResult(SensorValueBase data, HashSet<string> warnings, HashSet<string> errors) : this(data)
         {
-            _warnings = new HashSet<string>(warnings);
-            _errors = new HashSet<string>(errors);
+            _warnings = warnings;
+            _errors = errors;
 
             if (_errors.Count > 0)
                 ResultType = ResultType.Error;

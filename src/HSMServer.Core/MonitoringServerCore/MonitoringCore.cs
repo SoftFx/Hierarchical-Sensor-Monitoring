@@ -325,9 +325,10 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var productName = _productManager.GetProductNameByKey(value.Key);
             var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
+            var sensorStatus = GetSensorStatus(validationResult);
 
             var sensorData = value.Convert(productName, timeCollected, transactionType);
-            sensorData.Status = GetSensorStatus(validationResult) > sensorData.Status ? GetSensorStatus(validationResult) : sensorData.Status;
+            sensorData.Status = sensorStatus > sensorData.Status ? sensorStatus : sensorData.Status;
             sensorData.ValidationError = validationResult.Error;
 
             return sensorData;
