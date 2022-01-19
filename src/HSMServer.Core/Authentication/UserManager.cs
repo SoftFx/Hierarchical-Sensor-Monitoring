@@ -120,14 +120,6 @@ namespace HSMServer.Core.Authentication
             }
         }
 
-        public List<User> GetUsersPage(int page = 1, int pageSize = 1)
-        {
-            if (page < 1 || pageSize < 1)
-                return new List<User>();
-            
-            return _databaseAdapter.GetUsersPage(page, pageSize);
-        }
-
         public void AddUser(User user)
         {
             lock (_accessLock)
@@ -223,34 +215,6 @@ namespace HSMServer.Core.Authentication
         public List<User> GetUsersNotAdmin()
         {
             if (_users == null || !_users.Any()) return null;
-
-            List<User> result = new List<User>();
-            foreach(var user in _users)
-            {
-                if (user.IsAdmin) continue;
-                result.Add(user);
-            }
-
-            return result;
-        }
-
-        public List<User> GetAllViewers(string productKey)
-        {
-            if (_users == null || _users.Count == 0) return null;
-
-            List<User> result = new List<User>();
-            foreach(var user in _users)
-            {
-                if (ProductRoleHelper.IsViewer(productKey, user.ProductsRoles))
-                    result.Add(user);
-            }
-
-            return result;
-        }
-
-        public List<User> GetAllManagers()
-        {
-            if (_users == null || _users.Count == 0) return null;
 
             List<User> result = new List<User>();
             foreach(var user in _users)
