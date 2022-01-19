@@ -11,7 +11,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -40,7 +39,6 @@ namespace HSMServer.Core.Authentication
             _certificateManager = certificateManager;
             _users = new List<User>();
             _databaseAdapter = databaseAdapter;
-            //MigrateUsersToNewDatabase();
             _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
             if (File.Exists(_usersFilePath))
@@ -67,18 +65,6 @@ namespace HSMServer.Core.Authentication
 
             _logger.LogInformation("UserManager initialized");
         }
-
-        /// <summary>
-        /// This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
-        /// </summary>
-        //private void MigrateUsersToNewDatabase()
-        //{
-        //    var users = _databaseAdapter.GetUsersOld();
-        //    foreach (var user in users)
-        //    {
-        //        _databaseAdapter.AddUser(user);
-        //    }
-        //}
 
         #region Interface implementation
 
@@ -129,6 +115,7 @@ namespace HSMServer.Core.Authentication
 
             Task.Run(() => _databaseAdapter.AddUser(user));
         }
+
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
         {
@@ -162,6 +149,7 @@ namespace HSMServer.Core.Authentication
                 return users;
             }
         }
+
         public User GetUser(Guid id)
         {
             User result = default(User);
@@ -237,7 +225,6 @@ namespace HSMServer.Core.Authentication
             lock (_accessLock)
             {
                 _users.Clear();
-                //_users.AddRange(ParseUsersFile());
                 _users.AddRange(ReadUserFromDatabase());
                 _lastUsersUpdate = DateTime.Now;
                 count = _users.Count;
@@ -245,6 +232,7 @@ namespace HSMServer.Core.Authentication
 
             _logger.LogInformation($"Users read, users count = {count}");
         }
+
         private void AddDefaultUser()
         {
             AddUser(CommonConstants.DefaultUserUsername,
@@ -335,13 +323,6 @@ namespace HSMServer.Core.Authentication
                     {
                         permissionItem.ProductName = serverNodeAttr.Value;
                     }
-
-                    //temporarily disable ignore 
-                    //var ignoredSensorsAttr = serverNode.Attributes?["ignoredSensors"];
-                    //if (ignoredSensorsAttr != null)
-                    //{
-                    //    permissionItem.IgnoredSensors = ignoredSensorsAttr.Value.Split(new[] {';'}).ToList();
-                    //}
                 }
             }
 
@@ -355,29 +336,12 @@ namespace HSMServer.Core.Authentication
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);
             var existingUser = Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
-            //var existingUser = _userManager.Users.SingleOrDefault(u => u.UserName.Equals(login));
 
             return existingUser?.WithoutPassword();
         }
 
         public void UpdateUser(User user)
         {
-            //User existingUser = GetUserByUserName(user.UserName);
-
-            //if (existingUser != null)
-            //{
-            //    existingUser.Update(user);
-            //    lock (_accessLock)
-            //    {
-            //        var correspondingUser = _users.First(u => u.Id == existingUser.Id);
-            //        _users.Remove(correspondingUser);
-            //        _users.Add(existingUser);
-            //    }
-            //    Task.Run(() =>
-            //    {
-            //        _databaseAdapter.UpdateUser(existingUser);
-            //    });
-            //}
             User existingUser;
             lock (_accessLock)
             {
