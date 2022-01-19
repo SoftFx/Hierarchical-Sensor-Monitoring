@@ -8,7 +8,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 {
     internal sealed class DatabaseAdapterManager
     {
-        private const string ProductName = "TestProduct";
+        internal const string ProductName = "TestProduct";
 
         private static int _dbNumber;
 

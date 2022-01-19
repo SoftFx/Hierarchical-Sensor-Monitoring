@@ -23,6 +23,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal SensorValueBase BuildRandomSensorValue() =>
             BuildSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8));
 
+        // max: 6, because United sensor values don't exist for FileSensorValue and FileSensorBytesValue
+        internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
+            BuildUnitedSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 6));
+
         internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
             sensorType switch
             {
@@ -153,31 +157,31 @@ namespace HSMServer.Core.Tests.Infrastructure
                 ProductName = _productKey,
             };
 
-        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType)
+        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType, bool isMinEndTime = false)
         {
             var sensorValue = new UnitedSensorValue
             {
                 Type = sensorType,
-                Data = BuildUnitedValueData(sensorType)
+                Data = BuildUnitedValueData(sensorType, isMinEndTime),
             };
 
-            return sensorValue.FillCommonSensorValueProperties(_productKey);
+            return sensorValue.FillCommonSensorValueProperties(_productKey, uniqPath: sensorType.ToString());
         }
 
 
-        private static string BuildUnitedValueData(SensorType sensorType) =>
+        private static string BuildUnitedValueData(SensorType sensorType, bool isMinEndTime) =>
             sensorType switch
             {
                 SensorType.BooleanSensor => RandomValuesGenerator.GetRandomBool().ToString(),
                 SensorType.IntSensor => RandomValuesGenerator.GetRandomInt().ToString(),
                 SensorType.DoubleSensor => RandomValuesGenerator.GetRandomDouble().ToString(),
                 SensorType.StringSensor => RandomValuesGenerator.GetRandomString(),
-                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData()),
-                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData()),
+                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData(isMinEndTime)),
+                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData(isMinEndTime)),
                 _ => null,
             };
 
-        private static IntBarData BuildIntBarData() =>
+        private static IntBarData BuildIntBarData(bool isMinEndTime) =>
             new()
             {
                 LastValue = RandomValuesGenerator.GetRandomInt(),
@@ -186,11 +190,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Mean = RandomValuesGenerator.GetRandomInt(),
                 Count = RandomValuesGenerator.GetRandomInt(positive: true),
                 StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = DateTime.UtcNow.AddSeconds(10),
+                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
                 Percentiles = GetPercentileValuesInt(),
             };
 
-        private static DoubleBarData BuildDoubleBarData() =>
+        private static DoubleBarData BuildDoubleBarData(bool isMinEndTime) =>
             new()
             {
                 LastValue = RandomValuesGenerator.GetRandomDouble(),
@@ -199,7 +203,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Mean = RandomValuesGenerator.GetRandomDouble(),
                 Count = RandomValuesGenerator.GetRandomInt(positive: true),
                 StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = DateTime.UtcNow.AddSeconds(10),
+                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
                 Percentiles = GetPercentileValuesDouble(),
             };
 

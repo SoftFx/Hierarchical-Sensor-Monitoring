@@ -18,5 +18,7 @@
         public const string SelfMonitoringProductKey = "fdacff2027553772e6e641413af591";
         public const string ClientVersionFileName = "version.txt";
         public const string ClientAppFolderName = "Client";
+
+        public const char SensorPathSeparator = '/';
     }
 }

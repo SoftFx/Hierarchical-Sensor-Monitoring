@@ -10,13 +10,7 @@ namespace HSMServer.Core.MonitoringCoreInterface
         [Obsolete("08.07.2021. Use void AddSensorsValues(IEnumerable<CommonSensorValue> values)")]
         void AddSensorsValues(List<CommonSensorValue> values);
         void AddSensorsValues(List<UnitedSensorValue> values);
-        void AddSensorValue(BoolSensorValue value);
-        void AddSensorValue(IntSensorValue value);
-        void AddSensorValue(DoubleSensorValue value);
-        void AddSensorValue(StringSensorValue value);
-        void AddSensorValue(IntBarSensorValue value);
-        void AddSensorValue(DoubleBarSensorValue value);
-        void AddSensorValue(FileSensorValue value);
-        void AddSensorValue(FileSensorBytesValue value);
+
+        public void AddSensorValue<T>(T value) where T : SensorValueBase;
     }
 }

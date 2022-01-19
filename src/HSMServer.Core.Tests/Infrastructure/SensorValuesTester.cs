@@ -153,7 +153,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
-        private static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
+        internal static SensorType GetSensorValueType(SensorValueBase sensorValue) =>
            sensorValue switch
            {
                BoolSensorValue => SensorType.BooleanSensor,
@@ -214,7 +214,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     break;
                 case UnitedSensorValue unitedSensorValue:
                     Assert.Equal(GetUnitedSensorValueShortStringValue(unitedSensorValue), actual.ShortStringValue);
-                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue, timeCollected.Value), actual.StringValue);
+                    Assert.Equal(GetUnitedSensorValueStringValue(unitedSensorValue, timeCollected ?? actual.Time), actual.StringValue);
                     break;
             }
         }

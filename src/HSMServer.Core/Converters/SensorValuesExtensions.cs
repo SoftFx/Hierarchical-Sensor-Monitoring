@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text.Json;
+using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
@@ -11,9 +12,6 @@ namespace HSMServer.Core.Converters
 {
     public static class SensorValuesExtensions
     {
-        private const char SensorPathSeparator = '/';
-
-
         public static SensorData Convert(this SensorValueBase sensorValue, string productName,
             DateTime timeCollected, TransactionType transactionType) =>
             new()
@@ -63,7 +61,7 @@ namespace HSMServer.Core.Converters
             return (long)timeSpan.TotalSeconds;
         }
 
-        private static string ExtractSensor(string path) => path?.Split(SensorPathSeparator)?[^1];
+        private static string ExtractSensor(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
 
 
         private static BarSensorValueBase BuildBarSensorValue(UnitedSensorValue unitedSensorValue) =>

@@ -17,7 +17,6 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
-using HSMServer.Core.SensorsDataProcessor;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -29,6 +28,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using RSAParameters = System.Security.Cryptography.RSAParameters;
+using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -42,12 +42,11 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
         private readonly IConfigurationProvider _configurationProvider;
-        private readonly ISensorsProcessor _sensorsProcessor;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
 
         public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager, ISensorsProcessor sensorsProcessor, IConfigurationProvider configurationProvider, 
+            IProductManager productManager, IConfigurationProvider configurationProvider, 
             IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
@@ -60,12 +59,13 @@ namespace HSMServer.Core.MonitoringServerCore
             _queueManager = new MonitoringQueueManager(userManager);
             _productManager = productManager;
             _configurationProvider = configurationProvider;
-            _sensorsProcessor = sensorsProcessor;
             _valuesCache = valuesVCache;
             //MigrateSensorsValuesToNewDatabase();
             Thread.Sleep(5000);
             FillValuesCache();
             _logger.LogInformation("Monitoring core initialized");
+
+            SensorDataValidationExtensions.Initialize(configurationProvider);
         }
 
         //private void MigrateSensorsValuesToNewDatabase()
@@ -211,7 +211,7 @@ namespace HSMServer.Core.MonitoringServerCore
             {
                 try
                 {
-                    AddUnitedValue(value);
+                    AddSensorValue(value);
                 }
                 catch (Exception e)
                 {
@@ -220,85 +220,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 
             }
         }
-        private void AddUnitedValue(UnitedSensorValue value)
-        {
-            try
-            {
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //TransactionType type = TransactionType.Unknown;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    _productManager.AddSensor(productName, value);
-                //    type = TransactionType.Add;
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.ConvertUnitedValue(value, productName, timeCollected, type);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessUnitedData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                
-                bool isToDB = true;
-                if (value.IsBarSensor())
-                {
-                    isToDB = ProcessBarSensor(value, timeCollected, processedData.Product);
-                }
-
-                if (!isToDB)
-                    return;
-
-                SensorDataEntity dataObject = value.Convert(timeCollected);
-                SaveSensorValue(dataObject, processedData.Product);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor {value?.Path}");
-            }
-        }
-
-        private bool ProcessBarSensor(UnitedSensorValue value, DateTime timeCollected, string productName)
-        {
-            try
-            {
-                var bar = value.Convert();
-
-                if (bar.EndTime != DateTime.MinValue)
-                {
-                    _barsStorage.Remove(productName, value.Path);
-                    return true;
-                }
-
-                if (value.Type == SensorType.IntegerBarSensor)
-                {
-                    var intBar = (IntBarSensorValue) bar;
-                    _barsStorage.Add(intBar, productName, timeCollected);
-                    return false;
-                }
-
-                var doubleBar = (DoubleBarSensorValue) bar;
-                _barsStorage.Add(doubleBar, productName, timeCollected);
-                return false;
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to process bar sensor {value.Path}");
-            }
-
-            return true;
-        }
         #endregion
 
         public void RemoveSensor(string product, string key, string path)
@@ -331,84 +253,32 @@ namespace HSMServer.Core.MonitoringServerCore
                     RemoveSensor(product, key, path);
         }
 
-        public void AddSensorValue(BoolSensorValue value)
+        public void AddSensorValue<T>(T value) where T : SensorValueBase
         {
             try
             {
                 DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
+
+                var validationResult = value.Validate();
+
+                if (validationResult.IsError)
                 {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
+                    _logger.LogError($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
                     return;
                 }
+                else if (validationResult.IsWarning)
+                    _logger.LogWarning($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
+                var sensorData = GetSensorData(value, timeCollected, validationResult);
 
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
+                _queueManager.AddSensorData(sensorData);
+                _valuesCache.AddValue(sensorData.Product, sensorData);
 
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
-        }
-        public void AddSensorValue(IntSensorValue value)
-        {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
+                if (!ProcessBarSensorValue(value, sensorData))
                     return;
-                }
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
+                SensorDataEntity databaseObj = value.Convert(timeCollected, sensorData.Status);
+                SaveSensorValue(databaseObj, sensorData.Product);
             }
             catch (Exception e)
             {
@@ -416,278 +286,63 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        public void AddSensorValue(DoubleSensorValue value)
+        private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
         {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
+            if (value is BarSensorValueBase barSensorValue)
+                return ProcessBarSensorValue(barSensorValue, sensorData);
+            else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
+                return ProcessBarSensorValue(unitedSensorValue.Convert(), sensorData);
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
+            return true;
         }
 
-        public void AddSensorValue(StringSensorValue value)
+        private bool ProcessBarSensorValue(BarSensorValueBase value, SensorData sensorData)
         {
-            try
+            if (value.EndTime == DateTime.MinValue)
             {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
-
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
+                _barsStorage.Add(value, sensorData);
+                return false;
             }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
+
+            _barsStorage.Remove(sensorData.Product, value.Path);
+            return true;
         }
 
-        public void AddSensorValue(FileSensorValue value)
+        private TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
         {
-            try
+            var transactionType = TransactionType.Update;
+
+            if (!_productManager.IsSensorRegistered(productName, value.Path))
             {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
-
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
+                _productManager.AddSensor(productName, value);
+                transactionType = TransactionType.Add;
             }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
+
+            return transactionType;
         }
 
-        public void AddSensorValue(FileSensorBytesValue value)
+        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
         {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
+            var productName = _productManager.GetProductNameByKey(value.Key);
+            var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
+            var sensorStatus = GetSensorStatus(validationResult);
 
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
+            var sensorData = value.Convert(productName, timeCollected, transactionType);
+            sensorData.Status = sensorStatus > sensorData.Status ? sensorStatus : sensorData.Status;
+            sensorData.ValidationError = validationResult.Error;
 
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
-        }
-        public void AddSensorValue(IntBarSensorValue value)
-        {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
-
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //Skip 
-                if (value.EndTime == DateTime.MinValue)
-                {
-                    _barsStorage.Add(value, processedData.Product, timeCollected);
-                    return;
-                }
-                
-                _barsStorage.Remove(processedData.Product, value.Path);
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
+            return sensorData;
         }
 
-        public void AddSensorValue(DoubleBarSensorValue value)
-        {
-            try
+        public static SensorStatus GetSensorStatus(SensorsDataValidation.ValidationResult validationResult) =>
+            validationResult.ResultType switch
             {
-                DateTime timeCollected = DateTime.UtcNow;
-                var processingResult = _sensorsProcessor.ProcessData(value, timeCollected, out var processedData, out var error);
-                if (processingResult == ValidationResult.Failed)
-                {
-                    _logger.LogError($"Sensor data processing error. Sensor: '{value?.Path}', error: '{error}'");
-                    return;
-                }
-
-                if (processingResult == ValidationResult.OkWithError)
-                {
-                    _logger.LogWarning($"Sensor data processed with non-critical errors. Sensor: '{value?.Path}', error: '{error}'");
-                }
-
-                _queueManager.AddSensorData(processedData);
-                _valuesCache.AddValue(processedData.Product, processedData);
-                if (value.EndTime == DateTime.MinValue)
-                {
-                    _barsStorage.Add(value, processedData.Product, timeCollected);
-                    return;
-                }
-
-                _barsStorage.Remove(processedData.Product, value.Path);
-                SensorDataEntity databaseObj = value.Convert(timeCollected, processedData.Status);
-                SaveSensorValue(databaseObj, processedData.Product);
-                //string productName = _productManager.GetProductNameByKey(value.Key);
-                //bool isNew = false;
-                //if (!_productManager.IsSensorRegistered(productName, value.Path))
-                //{
-                //    isNew = true;
-                //    _productManager.AddSensor(productName, value);
-                //}
-                //DateTime timeCollected = DateTime.UtcNow;
-                //SensorData updateMessage = _converter.Convert(value, productName, timeCollected, isNew ? TransactionType.Add : TransactionType.Update);
-                //_queueManager.AddSensorData(updateMessage);
-                //_valuesCache.AddValue(productName, updateMessage);
-
-                //if (value.EndTime == DateTime.MinValue)
-                //{
-                //    _barsStorage.Add(value, updateMessage.Product, timeCollected);
-                //    return;
-                //}
-
-                //_barsStorage.Remove(productName, value.Path);
-                //SensorDataEntity dataObject = _converter.ConvertToDatabase(value, timeCollected);
-                //Task.Run(() => SaveSensorValue(dataObject, productName));
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
-        }
+                ResultType.Unknown => SensorStatus.Unknown,
+                ResultType.Ok => SensorStatus.Ok,
+                ResultType.Warning => SensorStatus.Warning,
+                ResultType.Error => SensorStatus.Error,
+                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
+            };
 
         #endregion
 
