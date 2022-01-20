@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private const int SeveralSensorValuesCount = 3;
 
         private readonly MonitoringCore _monitoringCore;
-        private readonly DatabaseAdapterManager _databaseAdapterManager;
+        private readonly DatabaseAdapterProductsManager _databaseAdapterManager;
         private readonly ValuesCache _valuesCache;
         private readonly BarSensorsStorage _barStorage;
 
@@ -40,7 +40,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             _valuesCache = new ValuesCache();
 
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
+            _databaseAdapterManager = new DatabaseAdapterProductsManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 

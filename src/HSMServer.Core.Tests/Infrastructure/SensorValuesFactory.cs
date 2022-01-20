@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private readonly string _productKey;
 
 
-        internal SensorValuesFactory(DatabaseAdapterManager dbManager) =>
+        internal SensorValuesFactory(DatabaseAdapterProductsManager dbManager) =>
             _productKey = dbManager.TestProduct.Key;
 
         internal SensorValuesFactory(string productKey) =>

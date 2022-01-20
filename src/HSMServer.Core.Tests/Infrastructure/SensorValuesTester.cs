@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -17,7 +17,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private readonly string _productName;
 
 
-        internal SensorValuesTester(DatabaseAdapterManager dbManager) =>
+        internal SensorValuesTester(DatabaseAdapterProductsManager dbManager) =>
             _productName = dbManager.TestProduct.Name;
 
         internal SensorValuesTester(string productName) =>

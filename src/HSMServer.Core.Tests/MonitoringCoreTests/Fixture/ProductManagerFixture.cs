@@ -2,7 +2,7 @@
 {
     public class ProductManagerFixture : DatabaseFixture
     {
-        public override string DatabaseFolder => nameof(ProductManagerTests);
-        public override int DatabaseCount => 1 << 5;
+        protected override string DatabaseFolder => nameof(ProductManagerTests);
+        protected override int DatabaseCount => 1 << 5;
     }
 }

@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -12,14 +12,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     public class ProductManagerTests : IClassFixture<ProductManagerFixture>
     {
         private readonly IProductManager _productManager;
-        private readonly DatabaseAdapterManager _databaseAdapterManager;
+        private readonly DatabaseAdapterProductsManager _databaseAdapterManager;
 
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
 
         public ProductManagerTests(ProductManagerFixture fixture)
         {
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
+            _databaseAdapterManager = new DatabaseAdapterProductsManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
             fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
