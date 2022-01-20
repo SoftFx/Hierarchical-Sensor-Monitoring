@@ -26,28 +26,16 @@ namespace HSMServer.Core.Authentication
         private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(60);
         private DateTime _lastUsersUpdate = DateTime.MinValue;
         private readonly object _accessLock = new object();
-        private readonly CertificateManager _certificateManager;
         private readonly IDatabaseAdapter _databaseAdapter;
-        private readonly string _usersFileName = "users.xml";
-        private readonly string _usersFilePath;
 
         #endregion
 
-        public UserManager(CertificateManager certificateManager, IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
+        public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
         {
             _logger = logger;
-            _certificateManager = certificateManager;
             _users = new List<User>();
             _databaseAdapter = databaseAdapter;
-            _usersFilePath = Path.Combine(CertificatesConfig.ConfigFolderPath, _usersFileName);
             List<User> dataBaseUsers = ReadUserFromDatabase();
-            if (File.Exists(_usersFilePath))
-            {
-                Thread.Sleep(300); 
-                MigrateUsersToDatabase();
-                File.Delete(_usersFilePath);
-                _logger.LogInformation("Users file deleted");
-            }
 
             int count = dataBaseUsers.Count;
             lock (_accessLock)
@@ -106,14 +94,15 @@ namespace HSMServer.Core.Authentication
             }
         }
 
-        public void AddUser(User user)
+        private void AddUser(User user)
         {
             lock (_accessLock)
             {
                 _users.Add(user);
             }
 
-            Task.Run(() => _databaseAdapter.AddUser(user));
+            //Task.Run(() => _databaseAdapter.AddUser(user));
+            _databaseAdapter.AddUser(user);
         }
 
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
@@ -245,92 +234,6 @@ namespace HSMServer.Core.Authentication
         {
             return _databaseAdapter.GetUsers();
         }
-
-        private void MigrateUsersToDatabase()
-        {
-            List<User> usersFromFile = ParseUsersFile();
-            foreach (var user in usersFromFile)
-            {
-                if (user.UserName.Equals("default"))
-                    user.IsAdmin = true;
-
-                if (string.IsNullOrEmpty(user.Password))
-                {
-                    AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, 
-                        HashComputer.ComputePasswordHash(user.UserName), user.IsAdmin);
-                }
-            }
-
-            _logger.LogInformation($"{usersFromFile.Count} successfully migrated from file to database");
-        }
-
-        #region File work
-
-        [Obsolete]
-        private List<User> ParseUsersFile()
-        {
-            List<User> users = new List<User>();
-            try
-            {
-                XmlDocument document = new XmlDocument();
-                document.Load(_usersFilePath);
-
-                XmlNodeList nodes = document.SelectNodes("//users/user");
-
-                if (nodes == null)
-                    return users;
-
-                foreach (XmlNode node in nodes)
-                {
-                    var user = ParseUserNode(node);
-                    if (user != null)
-                    {
-                        users.Add(user);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to parse users file!");
-            }
-
-            return users;
-        }
-
-        [Obsolete]
-        private User ParseUserNode(XmlNode node)
-        {
-            User user;
-            var nameAttr = node.Attributes?["Name"];
-            if (nameAttr == null)
-                return null;
-
-            user = new User(nameAttr.Value);
-            var certAttr = node.Attributes?["Certificate"];
-            if (certAttr != null)
-            {
-                user.CertificateFileName = certAttr.Value;
-            }
-
-            XmlNodeList products = node.SelectNodes("//products/product");
-            if (products != null)
-            {
-                foreach (XmlNode serverNode in products)
-                {
-                    PermissionItem permissionItem = new PermissionItem();
-                    var serverNodeAttr = serverNode.Attributes?["Name"];
-                    if (serverNodeAttr != null)
-                    {
-                        permissionItem.ProductName = serverNodeAttr.Value;
-                    }
-                }
-            }
-
-            user.CertificateThumbprint = _certificateManager.GetCertificateByFileName(user.CertificateFileName)?.Thumbprint;
-            return string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CertificateThumbprint) ? null : user;
-        }
-
-        #endregion
 
         public User Authenticate(string login, string password)
         {
