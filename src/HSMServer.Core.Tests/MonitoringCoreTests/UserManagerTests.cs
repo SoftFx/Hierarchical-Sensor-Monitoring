@@ -18,7 +18,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private readonly DatabaseAdapterUsersManager _databaseAdapterManager;
         private readonly UserManager _userManager;
 
-        private delegate User GetUserByThumbprint(string thumbprint);
         private delegate User GetUserByUserName(string username);
         private delegate User GetUser(Guid id);
         private delegate List<User> GetAllUsersFromDB();
@@ -44,7 +43,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             Assert.Single(usersFromDB);
             TestUser(_defaultUser, usersFromDB[0]);
-            TestCachedUser(_defaultUser, _userManager.GetUserByCertificateThumbprint, _userManager.GetUserByUserName);
+            TestUserByName(_defaultUser, _userManager.GetUserByUserName);
         }
 
         [Fact]
@@ -56,7 +55,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _testUser.IsAdmin, _testUser.ProductsRoles);
 
             await FullTestUserAsync(_testUser,
-                                    _userManager.GetUserByCertificateThumbprint,
                                     _userManager.GetUserByUserName,
                                     _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
@@ -83,7 +81,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestUpdatedUserAsync(updatedUser,
                                            defaultUserFromDB,
                                            _userManager.GetUser,
-                                           _userManager.GetUserByCertificateThumbprint,
                                            _userManager.GetUserByUserName,
                                            _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
@@ -95,24 +92,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _userManager.UpdateUser(_testUser);
 
             await FullTestUserAsync(_testUser,
-                                    _userManager.GetUserByCertificateThumbprint,
                                     _userManager.GetUserByUserName,
                                     _databaseAdapterManager.DatabaseAdapter.GetUsers);
-        }
-
-        [Fact]
-        [Trait("Category", "One")]
-        public async Task RemoveUserTest()
-        {
-            var defaultUserFromDB = await GetDefaultUserFromDB();
-
-            _userManager.RemoveUser(defaultUserFromDB);
-
-            await FullTestRemovedDefaultUserAsync(defaultUserFromDB,
-                                                  _userManager.GetUser,
-                                                  _userManager.GetUserByCertificateThumbprint,
-                                                  _userManager.GetUserByUserName,
-                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
 
         [Fact]
@@ -125,31 +106,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestRemovedDefaultUserAsync(defaultUserFromDB,
                                                   _userManager.GetUser,
-                                                  _userManager.GetUserByCertificateThumbprint,
                                                   _userManager.GetUserByUserName,
                                                   _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
 
 
-        private static void TestCachedUser(User expected, GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName)
-        {
-            TestUserByThumbprint(expected, getUserByThumbprint);
-            TestUserByName(expected, getUserByName);
-        }
-
-
-        private static async Task FullTestUserAsync(User expected, GetUserByThumbprint getUserByThumbprint,
+        private static async Task FullTestUserAsync(User expected,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
-            TestUserByThumbprint(expected, getUserByThumbprint);
             TestUserByName(expected, getUserByName);
             TestUserFromDB(expected, getUsersFromDB);
         }
-
-        private static void TestUserByThumbprint(User expected, GetUserByThumbprint getUserByThumbprint) =>
-            TestUser(expected, getUserByThumbprint(expected.CertificateThumbprint));
 
         private static void TestUserByName(User expected, GetUserByUserName getUserByName) =>
             TestUser(expected, getUserByName(expected.UserName));
@@ -159,22 +128,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         private static async Task FullTestUpdatedUserAsync(User expected, User userBeforeUpdate, GetUser getUser,
-            GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+            GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
             TestUserByGuid(expected, userBeforeUpdate, getUser);
-            TestUserByThumbprint(expected, userBeforeUpdate, getUserByThumbprint);
             TestUserByName(expected, userBeforeUpdate, getUserByName);
             TestUserFromDB(expected, userBeforeUpdate, getUsersFromDB);
-        }
-
-        private static void TestUserByThumbprint(User expected, User userBeforeUpdate, GetUserByThumbprint getUserByThumbprint)
-        {
-            var userByThumbprint = getUserByThumbprint(userBeforeUpdate.CertificateThumbprint);
-
-            TestChangeableUserSettings(expected, userByThumbprint);
-            TestNotChangeableUserSettings(userBeforeUpdate, userByThumbprint);
         }
 
         private static void TestUserByName(User expected, User userBeforeUpdate, GetUserByUserName getUserByName)
@@ -203,18 +163,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         private static async Task FullTestRemovedDefaultUserAsync(User removed, GetUser getUser,
-            GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+            GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
-            TestRemovedUser(removed, getUserByThumbprint);
             TestRemovedUser(removed, getUserByName);
             TestRemovedUser(removed, getUser);
             TestRemovedUser(removed, getUsersFromDB);
         }
-
-        private static void TestRemovedUser(User removedUser, GetUserByThumbprint getUserByThumbprint) =>
-            Assert.Null(getUserByThumbprint(removedUser.CertificateThumbprint));
 
         private static void TestRemovedUser(User removedUser, GetUserByUserName getUserByName) =>
             Assert.Null(getUserByName(removedUser.UserName));
