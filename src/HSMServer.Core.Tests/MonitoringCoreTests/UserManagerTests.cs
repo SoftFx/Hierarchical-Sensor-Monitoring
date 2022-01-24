@@ -37,11 +37,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         [Fact]
+        [Trait("Category", "Default user")]
         public async Task DefaultUserTest()
         {
-            await Task.Delay(1000);
-
-            var usersFromDB = _databaseAdapterManager.DatabaseAdapter.GetUsers();
+            var usersFromDB = await GetUsersFromDB();
 
             Assert.Single(usersFromDB);
             TestUser(_defaultUser, usersFromDB[0]);
@@ -49,6 +48,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public async Task AddUserTest()
         {
             _userManager.AddUser(_testUser.UserName, _testUser.CertificateThumbprint,
@@ -62,11 +62,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public async Task UpdateUserTest()
         {
-            await Task.Delay(1000);
-
-            var defaultUserFromDB = _databaseAdapterManager.DatabaseAdapter.GetUsers()[0];
+            var defaultUserFromDB = await GetDefaultUserFromDB();
 
             var updatedUser = new User()
             {
@@ -90,6 +89,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "One")]
         public async Task UpdateNonExistingUserTest()
         {
             _userManager.UpdateUser(_testUser);
@@ -98,6 +98,43 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                     _userManager.GetUserByCertificateThumbprint,
                                     _userManager.GetUserByUserName,
                                     _databaseAdapterManager.DatabaseAdapter.GetUsers);
+        }
+
+        [Fact]
+        [Trait("Category", "One")]
+        public async Task RemoveUserTest()
+        {
+            var defaultUserFromDB = await GetDefaultUserFromDB();
+
+            _userManager.RemoveUser(defaultUserFromDB);
+
+            await FullTestRemovedDefaultUserAsync(defaultUserFromDB,
+                                                  _userManager.GetUser,
+                                                  _userManager.GetUserByCertificateThumbprint,
+                                                  _userManager.GetUserByUserName,
+                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+        }
+
+        [Fact]
+        [Trait("Category", "One")]
+        public async Task RemoveUserByNameTest()
+        {
+            var defaultUserFromDB = await GetDefaultUserFromDB();
+
+            _userManager.RemoveUser(defaultUserFromDB.UserName);
+
+            await FullTestRemovedDefaultUserAsync(defaultUserFromDB,
+                                                  _userManager.GetUser,
+                                                  _userManager.GetUserByCertificateThumbprint,
+                                                  _userManager.GetUserByUserName,
+                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+        }
+
+
+        private static void TestCachedUser(User expected, GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName)
+        {
+            TestUserByThumbprint(expected, getUserByThumbprint);
+            TestUserByName(expected, getUserByName);
         }
 
 
@@ -111,6 +148,16 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestUserFromDB(expected, getUsersFromDB);
         }
 
+        private static void TestUserByThumbprint(User expected, GetUserByThumbprint getUserByThumbprint) =>
+            TestUser(expected, getUserByThumbprint(expected.CertificateThumbprint));
+
+        private static void TestUserByName(User expected, GetUserByUserName getUserByName) =>
+            TestUser(expected, getUserByName(expected.UserName));
+
+        private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
+            TestUser(expected, getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName));
+
+
         private static async Task FullTestUpdatedUserAsync(User expected, User userBeforeUpdate, GetUser getUser,
             GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
         {
@@ -121,25 +168,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestUserByName(expected, userBeforeUpdate, getUserByName);
             TestUserFromDB(expected, userBeforeUpdate, getUsersFromDB);
         }
-
-        private static void TestCachedUser(User expected, GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName)
-        {
-            TestUserByThumbprint(expected, getUserByThumbprint);
-            TestUserByName(expected, getUserByName);
-        }
-
-
-        private static void TestUserByThumbprint(User expected, GetUserByThumbprint getUserByThumbprint) =>
-            TestUser(expected, getUserByThumbprint(expected.CertificateThumbprint));
-
-        private static void TestUserByName(User expected, GetUserByUserName getUserByName) =>
-            TestUser(expected, getUserByName(expected.UserName));
-
-        private static void TestUserByGuid(User expected, GetUser getUser) =>
-            TestUser(expected, getUser(expected.Id));
-
-        private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
-            TestUser(expected, getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName));
 
         private static void TestUserByThumbprint(User expected, User userBeforeUpdate, GetUserByThumbprint getUserByThumbprint)
         {
@@ -174,10 +202,34 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
+        private static async Task FullTestRemovedDefaultUserAsync(User removed, GetUser getUser,
+            GetUserByThumbprint getUserByThumbprint, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+        {
+            await Task.Delay(100);
+
+            TestRemovedUser(removed, getUserByThumbprint);
+            TestRemovedUser(removed, getUserByName);
+            TestRemovedUser(removed, getUser);
+            TestRemovedUser(removed, getUsersFromDB);
+        }
+
+        private static void TestRemovedUser(User removedUser, GetUserByThumbprint getUserByThumbprint) =>
+            Assert.Null(getUserByThumbprint(removedUser.CertificateThumbprint));
+
+        private static void TestRemovedUser(User removedUser, GetUserByUserName getUserByName) =>
+            Assert.Null(getUserByName(removedUser.UserName));
+
+        private static void TestRemovedUser(User removedUser, GetUser getUser) =>
+            TestUser(new User((User)null), getUser(removedUser.Id));
+
+        private static void TestRemovedUser(User removedUser, GetAllUsersFromDB getUsersFromDB) =>
+            Assert.Null(getUsersFromDB().FirstOrDefault(u => u.Id == removedUser.Id));
+
+
         private static void TestUser(User expected, User actual)
         {
             TestChangeableUserSettings(expected, actual);
-            TestNotChangeableUserSettings(expected, actual);            
+            TestNotChangeableUserSettings(expected, actual);
         }
 
         private static void TestChangeableUserSettings(User expected, User actual)
@@ -186,13 +238,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(expected.Password, actual.Password);
             Assert.Equal(expected.IsAdmin, actual.IsAdmin);
 
-            foreach (var productRole in expected.ProductsRoles)
-            {
-                var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Key == productRole.Key);
+            if (expected.ProductsRoles != null)
+                foreach (var productRole in expected.ProductsRoles)
+                {
+                    var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Key == productRole.Key);
 
-                Assert.Equal(productRole.Key, actualRole.Key);
-                Assert.Equal(productRole.Value, actualRole.Value);
-            }
+                    Assert.Equal(productRole.Key, actualRole.Key);
+                    Assert.Equal(productRole.Value, actualRole.Value);
+                }
         }
 
         private static void TestNotChangeableUserSettings(User expected, User actual)
@@ -202,6 +255,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
         }
 
+
+        private async Task<User> GetDefaultUserFromDB()
+        {
+            var result = await GetUsersFromDB();
+
+            return result[0];
+        }
+
+        private async Task<List<User>> GetUsersFromDB()
+        {
+            await Task.Delay(1000);
+
+            return _databaseAdapterManager.DatabaseAdapter.GetUsers();
+        }
 
         private static string GetUpdatedProperty(object property) => $"{property}-updated";
     }
