@@ -221,7 +221,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private async Task<List<User>> GetUsersFromDB()
         {
-            await Task.Delay(1000);
+            await Task.Delay(200);
 
             return _databaseAdapterManager.DatabaseAdapter.GetUsers();
         }

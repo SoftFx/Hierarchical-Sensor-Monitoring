@@ -7,7 +7,7 @@ namespace HSMServer.Core.Authentication
 {
     public interface IUserManager : IUserObservable
     {
-        List<User> Users { get; }
+        ICollection<User> Users { get; }
 
         /// <summary>
         /// Add new user with the specified parameters
@@ -26,11 +26,6 @@ namespace HSMServer.Core.Authentication
         void UpdateUser(User user);
 
         /// <summary>
-        /// Removes user 
-        /// </summary>
-        /// <param name="user"></param>
-        void RemoveUser(User user);
-        /// <summary>
         /// Remove user with the specified userName
         /// </summary>
         /// <param name="userName">Name of the user to remove.</param>
@@ -38,7 +33,6 @@ namespace HSMServer.Core.Authentication
 
         User Authenticate(string login, string password);
 
-        User GetUserByCertificateThumbprint(string thumbprint);
         User GetUser(Guid id);
         User GetUserByUserName(string username);
 

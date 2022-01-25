@@ -7,89 +7,55 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.Authentication
 {
     public class UserManager : UserObservableImpl, IUserManager
     {
-        private readonly List<User> _users;
-        private readonly ILogger<UserManager> _logger;
-        private readonly TimeSpan _usersUpdateTimeSpan = TimeSpan.FromSeconds(60);
-        private DateTime _lastUsersUpdate = DateTime.MinValue;
-        private readonly object _accessLock = new object();
+        private const int MaxAttemptsCount = 3;
+
+        private readonly ConcurrentDictionary<Guid, User> _users;
+        private readonly ConcurrentDictionary<string, Guid> _userNames;
+
         private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly ILogger<UserManager> _logger;
 
-        public List<User> Users
-        {
-            get
-            {
-                CheckUsersUpToDate();
-                List<User> users = new List<User>();
-                lock (_accessLock)
-                {
-                    users.AddRange(_users);
-                }
-
-                return users;
-            }
-        }
+        public ICollection<User> Users => _users.Values;
 
 
         public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
         {
-            _logger = logger;
-            _users = new List<User>();
             _databaseAdapter = databaseAdapter;
-            List<User> dataBaseUsers = ReadUserFromDatabase();
+            _logger = logger;
 
-            int count = dataBaseUsers.Count;
-            lock (_accessLock)
-            {
-                count += _users.Count;
-            }
+            _users = new ConcurrentDictionary<Guid, User>();
+            _userNames = new ConcurrentDictionary<string, Guid>();
 
-            if (count == 0)
-            {
-                AddDefaultUser();
-                _logger.LogInformation("Default user added");
-            }
-
-            CheckUsersUpToDate();
+            InitializeUsers();
 
             _logger.LogInformation("UserManager initialized");
         }
 
 
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
-            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
-        {
-            User user = new User(userName)
-            {
-                CertificateThumbprint = certificateThumbprint,
-                CertificateFileName = certificateFileName,
-                Password = passwordHash,
-                IsAdmin = isAdmin
-            };
-
-            if (productRoles != null && productRoles.Any())
-            {
-                user.ProductsRoles = productRoles;
-            }
-
-            AddUser(user);
-        }
+            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null) =>
+            AddUser(
+                new(userName)
+                {
+                    CertificateThumbprint = certificateThumbprint,
+                    CertificateFileName = certificateFileName,
+                    Password = passwordHash,
+                    IsAdmin = isAdmin,
+                    ProductsRoles = (productRoles?.Count ?? 0) > 0 ? productRoles : null,
+                });
 
         public void UpdateUser(User user)
         {
-            User existingUser;
-            lock (_accessLock)
-            {
-                existingUser = _users.FirstOrDefault(u => u.Id == user.Id);
-            }
-
-            if (existingUser == null)
+            if (!_users.TryGetValue(user.Id, out var existingUser))
             {
                 AddUser(user);
                 return;
@@ -100,29 +66,18 @@ namespace HSMServer.Core.Authentication
             _databaseAdapter.UpdateUser(existingUser);
         }
 
-        public void RemoveUser(User user)
-        {
-            lock (_accessLock)
-            {
-                var existingUser = _users.First(x => x.Id == user.Id);
-                _users.Remove(existingUser);
-
-                _databaseAdapter.RemoveUser(existingUser);
-            }
-        }
-
         public void RemoveUser(string userName)
         {
-            User correspondingUser = default(User);
-            lock (_accessLock)
+            if (!_userNames.TryGetValue(userName, out var userId) ||
+                !_users.TryGetValue(userId, out var user))
             {
-                correspondingUser = _users.FirstOrDefault(u => u.UserName == userName);
+                _logger.LogWarning($"There are no users with name={userName} to remove");
+                return;
             }
 
-            if (correspondingUser != null)
-            {
-                RemoveUser(correspondingUser);
-            }
+            TryUserAction(() => _users.TryRemove(user.Id, out var _),
+                          () => _userNames.TryRemove(user.UserName, out var _),
+                          () => _databaseAdapter.RemoveUser(user));
         }
 
         public User Authenticate(string login, string password)
@@ -133,50 +88,30 @@ namespace HSMServer.Core.Authentication
             return existingUser?.WithoutPassword();
         }
 
-        public User GetUserByCertificateThumbprint(string thumbprint)
+
+        public User GetUser(Guid id) => new(_users.TryGetValue(id, out var user) ? user : null);
+
+        public User GetUserByUserName(string userName)
         {
-            CheckUsersUpToDate();
-            User user = null;
-            lock (_accessLock)
-            {
-                user = _users.FirstOrDefault(u => u.CertificateThumbprint != null
-                    && u.CertificateThumbprint.Equals(thumbprint, StringComparison.InvariantCultureIgnoreCase));
-            }
+            if (!_userNames.TryGetValue(userName, out var userId) ||
+                !_users.TryGetValue(userId, out var user))
+                return null;
 
-            return user;
-        }
-
-        public User GetUser(Guid id)
-        {
-            User result = default(User);
-            lock (_accessLock)
-            {
-                result = _users.FirstOrDefault(u => u.Id == id);
-            }
-            return new User(result);
-        }
-
-        public User GetUserByUserName(string username)
-        {
-            User result = default(User);
-            lock (_accessLock)
-            {
-                result = _users.FirstOrDefault(u => u.UserName == username);
-            }
-
-            return result == null ? result : new User(result);
+            return new User(user);
         }
 
         public List<User> GetViewers(string productKey)
         {
-            if (_users == null || !_users.Any()) return null;
+            var result = new List<User>();
 
-            List<User> result = new List<User>();
+            if ((_users?.Count ?? 0) == 0)
+                return result;
+
             foreach (var user in _users)
             {
-                var pair = user.ProductsRoles?.FirstOrDefault(x => x.Key.Equals(productKey));
-                if (pair.Value.Key != null)
-                    result.Add(user);
+                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Key.Equals(productKey));
+                if (pair != null && pair.Value.Key != null)
+                    result.Add(user.Value);
             }
 
             return result;
@@ -184,70 +119,77 @@ namespace HSMServer.Core.Authentication
 
         public List<User> GetManagers(string productKey)
         {
-            if (_users == null || !_users.Any()) return null;
+            var result = new List<User>();
 
-            List<User> result = new List<User>();
+            if ((_users?.Count ?? 0) == 0)
+                return result;
+
             foreach (var user in _users)
-            {
-                if (ProductRoleHelper.IsManager(productKey, user.ProductsRoles))
-                    result.Add(user);
-            }
+                if (ProductRoleHelper.IsManager(productKey, user.Value.ProductsRoles))
+                    result.Add(user.Value);
 
             return result;
         }
 
         public List<User> GetUsersNotAdmin()
         {
-            if (_users == null || !_users.Any()) return null;
+            if ((_users?.Count ?? 0) == 0)
+                return null;
 
-            List<User> result = new List<User>();
+            var result = new List<User>();
+
             foreach (var user in _users)
-            {
-                if (user.IsAdmin) continue;
-                result.Add(user);
-            }
+                if (!user.Value.IsAdmin)
+                    result.Add(user.Value);
 
             return result;
         }
 
-        private void AddUser(User user)
+        private void AddUser(User user) =>
+            TryUserAction(() => _users.TryAdd(user.Id, user),
+                          () => _userNames.TryAdd(user.UserName, user.Id),
+                          () => _databaseAdapter.AddUser(user));
+
+        private void InitializeUsers()
         {
-            lock (_accessLock)
+            var usersFromDB = _databaseAdapter.GetUsers();
+
+            if (usersFromDB.Count == 0)
             {
-                _users.Add(user);
+                AddDefaultUser();
+                _logger.LogInformation("Added default user.");
             }
 
-            _databaseAdapter.AddUser(user);
+            foreach (var user in usersFromDB)
+                TryUserAction(() => _users.TryAdd(user.Id, user),
+                              () => _userNames.TryAdd(user.UserName, user.Id));
+
+            _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
         }
 
-        private void CheckUsersUpToDate()
-        {
-            if (DateTime.Now - _lastUsersUpdate <= _usersUpdateTimeSpan)
-                return;
-
-            int count = -1;
-            lock (_accessLock)
-            {
-                _users.Clear();
-                _users.AddRange(ReadUserFromDatabase());
-                _lastUsersUpdate = DateTime.Now;
-                count = _users.Count;
-            }
-
-            _logger.LogInformation($"Users read, users count = {count}");
-        }
-
-        private void AddDefaultUser()
-        {
+        private void AddDefaultUser() =>
             AddUser(CommonConstants.DefaultUserUsername,
-                CommonConstants.DefaultClientCertificateThumbprint,
-                CommonConstants.DefaultClientCrtCertificateName,
-                HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername), true);
-        }
+                    CommonConstants.DefaultClientCertificateThumbprint,
+                    CommonConstants.DefaultClientCrtCertificateName,
+                    HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
+                    true);
 
-        private List<User> ReadUserFromDatabase()
+        private static async void TryUserAction(Func<bool> tryUsersFunc, Func<bool> tryUserNamesFunc, Action dbAction = null)
         {
-            return _databaseAdapter.GetUsers();
+            int count = 0;
+            while (count < MaxAttemptsCount)
+            {
+                ++count;
+
+                if (!tryUsersFunc())
+                {
+                    await Task.Yield();
+                    continue;
+                }
+
+                tryUserNamesFunc();
+                dbAction?.Invoke();
+            }
         }
     }
 }
