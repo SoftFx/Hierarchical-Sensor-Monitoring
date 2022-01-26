@@ -7,8 +7,6 @@ namespace HSMServer.Core.Authentication
 {
     public interface IUserManager : IUserObservable
     {
-        ICollection<User> Users { get; }
-
         /// <summary>
         /// Add new user with the specified parameters
         /// </summary>
@@ -31,6 +29,8 @@ namespace HSMServer.Core.Authentication
         /// <param name="userName">Name of the user to remove.</param>
         void RemoveUser(string userName);
 
+        void RemoveProductFromUsers(string productKey);
+
         User Authenticate(string login, string password);
 
         User GetUser(Guid id);
@@ -39,5 +39,6 @@ namespace HSMServer.Core.Authentication
         List<User> GetViewers(string productKey);
         List<User> GetManagers(string productKey);
         List<User> GetUsersNotAdmin();
+        IEnumerable<User> GetUsersSortedByName();
     }
 }

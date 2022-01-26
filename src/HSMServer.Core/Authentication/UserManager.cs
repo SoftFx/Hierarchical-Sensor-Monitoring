@@ -25,8 +25,6 @@ namespace HSMServer.Core.Authentication
         private readonly RemoveUserActionHandler _removeUserActionHandler;
         private readonly UpdateUserActionHandler _updateUserActionHandler;
 
-        public ICollection<User> Users => _users.Values;
-
 
         public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
         {
@@ -74,6 +72,23 @@ namespace HSMServer.Core.Authentication
                 await _removeUserActionHandler.Call(user);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
+        }
+
+        public void RemoveProductFromUsers(string productKey)
+        {
+            var updatedUsers = new List<User>(1 << 2);
+
+            foreach (var user in _users)
+            {
+                var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == productKey);
+                if (removedRolesCount == 0)
+                    continue;
+
+                updatedUsers.Add(user.Value);
+            }
+
+            foreach (var userToEdt in updatedUsers)
+                _databaseAdapter.UpdateUser(userToEdt);
         }
 
         public User Authenticate(string login, string password)
@@ -143,6 +158,9 @@ namespace HSMServer.Core.Authentication
 
             return result;
         }
+
+        public IEnumerable<User> GetUsersSortedByName() =>
+            _users.Values.OrderBy(x => x.UserName);
 
         // TODO: wait for async Task
         private async void AddUser(User user) =>

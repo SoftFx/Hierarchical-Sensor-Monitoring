@@ -568,7 +568,7 @@ namespace HSMServer.Core.MonitoringServerCore
             {
                 var product = _productManager.GetProductByKey(productKey);
                 productName = product?.Name;
-                RemoveProductFromUsers(product);
+                _userManager.RemoveProductFromUsers(product.Key);
                 _productManager.RemoveProduct(productName);
                 _valuesCache.RemoveProduct(productName);
 
@@ -598,7 +598,7 @@ namespace HSMServer.Core.MonitoringServerCore
             error = string.Empty;
             try
             {
-                RemoveProductFromUsers(product);
+                _userManager.RemoveProductFromUsers(product.Key);
                 _productManager.RemoveProduct(product.Name);
                 _valuesCache.RemoveProduct(product.Name);
 
@@ -644,24 +644,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
             }
             return result;
-        }
-
-        private void RemoveProductFromUsers(Product product)
-        {
-            var usersToEdit = new List<User>();
-            foreach (var user in _userManager.Users)
-            {
-                var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
-                if (count == 0)
-                    continue;
-
-                usersToEdit.Add(user);
-            }
-
-            foreach (var userToEdt in usersToEdit)
-            {
-                _userManager.UpdateUser(userToEdt);
-            }
         }
 
         public void UpdateProduct(User user, Product product)
