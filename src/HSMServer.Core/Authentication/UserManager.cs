@@ -10,19 +10,20 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace HSMServer.Core.Authentication
 {
-    public class UserManager : UserObservableImpl, IUserManager
+    public partial class UserManager : UserObservableImpl, IUserManager
     {
-        private const int MaxAttemptsCount = 3;
-
         private readonly ConcurrentDictionary<Guid, User> _users;
         private readonly ConcurrentDictionary<string, Guid> _userNames;
 
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<UserManager> _logger;
+
+        private readonly AddUserActionHandler _addUserActionHandler;
+        private readonly RemoveUserActionHandler _removeUserActionHandler;
+        private readonly UpdateUserActionHandler _updateUserActionHandler;
 
         public ICollection<User> Users => _users.Values;
 
@@ -34,6 +35,10 @@ namespace HSMServer.Core.Authentication
 
             _users = new ConcurrentDictionary<Guid, User>();
             _userNames = new ConcurrentDictionary<string, Guid>();
+
+            _addUserActionHandler = new AddUserActionHandler(this);
+            _removeUserActionHandler = new RemoveUserActionHandler(this);
+            _updateUserActionHandler = new UpdateUserActionHandler(this);
 
             InitializeUsers();
 
@@ -50,61 +55,55 @@ namespace HSMServer.Core.Authentication
                     CertificateFileName = certificateFileName,
                     Password = passwordHash,
                     IsAdmin = isAdmin,
-                    ProductsRoles = (productRoles?.Count ?? 0) > 0 ? productRoles : null,
+                    ProductsRoles = productRoles,
                 });
 
-        public void UpdateUser(User user)
+        // TODO: wait for async Task
+        public async void UpdateUser(User user)
         {
-            if (!_users.TryGetValue(user.Id, out var existingUser))
-            {
+            if (_users.ContainsKey(user.Id))
+                await _updateUserActionHandler.Call(user);
+            else
                 AddUser(user);
-                return;
-            }
-
-            existingUser.Update(user);
-            FireUserChanged(existingUser);
-            _databaseAdapter.UpdateUser(existingUser);
         }
 
-        public void RemoveUser(string userName)
+        // TODO: wait for async Task
+        public async void RemoveUser(string userName)
         {
-            if (!_userNames.TryGetValue(userName, out var userId) ||
-                !_users.TryGetValue(userId, out var user))
-            {
+            if (_userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user))
+                await _removeUserActionHandler.Call(user);
+            else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
-                return;
-            }
-
-            TryUserAction(() => _users.TryRemove(user.Id, out var _),
-                          () => _userNames.TryRemove(user.UserName, out var _),
-                          () => _databaseAdapter.RemoveUser(user));
         }
 
         public User Authenticate(string login, string password)
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);
-            var existingUser = Users.SingleOrDefault(u => u.UserName.Equals(login) && !string.IsNullOrEmpty(u.Password) && u.Password.Equals(passwordHash));
 
-            return existingUser?.WithoutPassword();
+            bool IsAskedUser(KeyValuePair<Guid, User> userPair)
+            {
+                var user = userPair.Value;
+                return user.UserName.Equals(login) && !string.IsNullOrEmpty(user.Password) && user.Password.Equals(passwordHash);
+            }
+
+            var existingUser = _users.SingleOrDefault(IsAskedUser);
+
+            return existingUser.Value?.WithoutPassword();
         }
 
+        // TODO remove copy object
+        public User GetUser(Guid id) => new(_users.GetValueOrDefault(id));
 
-        public User GetUser(Guid id) => new(_users.TryGetValue(id, out var user) ? user : null);
-
-        public User GetUserByUserName(string userName)
-        {
-            if (!_userNames.TryGetValue(userName, out var userId) ||
-                !_users.TryGetValue(userId, out var user))
-                return null;
-
-            return new User(user);
-        }
+        public User GetUserByUserName(string userName) =>
+            _userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user)
+                ? new User(user)
+                : null;
 
         public List<User> GetViewers(string productKey)
         {
-            var result = new List<User>();
+            var result = new List<User>(1 << 2);
 
-            if ((_users?.Count ?? 0) == 0)
+            if (_users.IsEmpty)
                 return result;
 
             foreach (var user in _users)
@@ -119,9 +118,9 @@ namespace HSMServer.Core.Authentication
 
         public List<User> GetManagers(string productKey)
         {
-            var result = new List<User>();
+            var result = new List<User>(1 << 2);
 
-            if ((_users?.Count ?? 0) == 0)
+            if (_users.IsEmpty)
                 return result;
 
             foreach (var user in _users)
@@ -133,10 +132,10 @@ namespace HSMServer.Core.Authentication
 
         public List<User> GetUsersNotAdmin()
         {
-            if ((_users?.Count ?? 0) == 0)
+            if (_users.IsEmpty)
                 return null;
 
-            var result = new List<User>();
+            var result = new List<User>(1 << 2);
 
             foreach (var user in _users)
                 if (!user.Value.IsAdmin)
@@ -145,24 +144,22 @@ namespace HSMServer.Core.Authentication
             return result;
         }
 
-        private void AddUser(User user) =>
-            TryUserAction(() => _users.TryAdd(user.Id, user),
-                          () => _userNames.TryAdd(user.UserName, user.Id),
-                          () => _databaseAdapter.AddUser(user));
+        // TODO: wait for async Task
+        private async void AddUser(User user) =>
+            await _addUserActionHandler.Call(user);
 
-        private void InitializeUsers()
+        private async void InitializeUsers()
         {
             var usersFromDB = _databaseAdapter.GetUsers();
 
             if (usersFromDB.Count == 0)
             {
                 AddDefaultUser();
-                _logger.LogInformation("Added default user.");
+                _logger.LogInformation("Default user has been added.");
             }
 
             foreach (var user in usersFromDB)
-                TryUserAction(() => _users.TryAdd(user.Id, user),
-                              () => _userNames.TryAdd(user.UserName, user.Id));
+                await _addUserActionHandler.Call(user, false);
 
             _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
         }
@@ -173,23 +170,5 @@ namespace HSMServer.Core.Authentication
                     CommonConstants.DefaultClientCrtCertificateName,
                     HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
                     true);
-
-        private static async void TryUserAction(Func<bool> tryUsersFunc, Func<bool> tryUserNamesFunc, Action dbAction = null)
-        {
-            int count = 0;
-            while (count < MaxAttemptsCount)
-            {
-                ++count;
-
-                if (!tryUsersFunc())
-                {
-                    await Task.Yield();
-                    continue;
-                }
-
-                tryUserNamesFunc();
-                dbAction?.Invoke();
-            }
-        }
     }
 }
