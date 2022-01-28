@@ -11,7 +11,6 @@ namespace HSMServer.Core.MonitoringCoreInterface
         void RemoveSensor(string product, string key, string path);
         void RemoveSensors(string product, string key, IEnumerable<string> paths);
         bool HideProduct(Product product, out string error);
-        List<SensorInfo> GetAllAvailableSensorInfos(User user);
         List<SensorData> GetSensorUpdates(User user);
         List<SensorData> GetSensorsTree(User user);
         List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n);

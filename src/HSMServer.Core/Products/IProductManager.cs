@@ -14,12 +14,11 @@ namespace HSMServer.Core.Products
         Product GetProductByName(string name);
         Product GetProductByKey(string key);
         List<SensorInfo> GetProductSensors(string productName);
-        List<SensorInfo> GetAllExistingSensorInfos();
+
         SensorInfo GetSensorInfo(string productName, string path);
         void UpdateSensorInfo(SensorInfo newInfo);
         bool IsSensorRegistered(string productName, string path);
         void AddSensor(string productName, SensorValueBase sensorValue);
-        void AddSensorIfNotRegistered(string productName, SensorValueBase sensorValue);
         void RemoveSensor(string productName, string path);
         void UpdateProduct(Product product);
     }

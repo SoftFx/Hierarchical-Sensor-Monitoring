@@ -346,35 +346,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        public List<SensorInfo> GetAllAvailableSensorInfos(User user)
-        {
-            if (user.IsAdmin)
-            {
-                return GetAllExistingSensorInfos();
-            }
-
-            return GetAvailableSensorInfos(user);
-        }
-
-        private List<SensorInfo> GetAllExistingSensorInfos()
-        {
-            return _productManager.GetAllExistingSensorInfos();
-        }
-
-        private List<SensorInfo> GetAvailableSensorInfos(User user)
-        {
-            List<SensorInfo> result = new List<SensorInfo>();
-            foreach (var productRole in user.ProductsRoles)
-            {
-                if (productRole.Value == ProductRoleEnum.ProductManager)
-                {
-                    var product = _productManager.GetProductByKey(productRole.Key);
-                    result.AddRange(_productManager.GetProductSensors(product.Name));
-                }
-            }
-
-            return result;
-        }
         public List<SensorData> GetSensorUpdates(User user)
         {
             return _queueManager.GetUserUpdates(user);
