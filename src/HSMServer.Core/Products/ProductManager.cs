@@ -7,6 +7,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,36 +17,24 @@ namespace HSMServer.Core.Products
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly ILogger<ProductManager> _logger;
-        private readonly List<Product> _products;
-        private readonly object _productsLock = new object();
+        private readonly ConcurrentDictionary<string, Product> _products;
 
         public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;
-            _products = new List<Product>();
+            _products = new ConcurrentDictionary<string, Product>();
 
             InitializeProducts();
         }
 
         public List<Product> Products
         {
-            get
-            {
-                lock (_productsLock)
-                {
-                    return _products.ToList();
-                }
-            }
+            get => _products.Values.ToList();
         }
 
-        private Product GetProduct(string name)
-        {
-            lock (_productsLock)
-            {
-                return _products.FirstOrDefault(p => p.Name.Equals(name));
-            }
-        }
+        private Product GetProduct(string name) => 
+            _products.ContainsKey(name) ? _products[name] : null;
             
         private void InitializeProducts()
         {
@@ -54,10 +43,7 @@ namespace HSMServer.Core.Products
             var existingProducts = _databaseAdapter.GetProducts();
             foreach (var product in existingProducts)
             {
-                lock (_productsLock)
-                {
-                    _products.Add(product);
-                }
+                _products[product.Name] = product;
 
                 var sensors = _databaseAdapter.GetProductSensors(product);
                 product.InitializeSensors(sensors);
@@ -71,11 +57,7 @@ namespace HSMServer.Core.Products
                 AddSelfMonitoringProduct();
             }
 
-            lock (_productsLock)
-            {
-                _logger.LogInformation($"{_products.Count} products read, ProductManager initialized");
-            }
-
+            _logger.LogInformation($"{_products.Count} products read, ProductManager initialized");
         }
 
         private void AddSelfMonitoringProduct()
@@ -95,10 +77,7 @@ namespace HSMServer.Core.Products
                 var product = GetProductByName(name);
                 if (product != null)
                 {
-                    lock (_productsLock)
-                    {
-                        _products.Remove(product);
-                    }
+                    _products.Remove(name, out var removedProduct);
                 }
             }
             catch (Exception e)
@@ -123,10 +102,7 @@ namespace HSMServer.Core.Products
             {
                 _databaseAdapter.AddProduct(product);
 
-                lock (_productsLock)
-                {
-                    _products.Add(product);
-                }
+                _products[product.Name] = product;
             }
             catch (Exception e)
             {
@@ -136,12 +112,7 @@ namespace HSMServer.Core.Products
 
         public void UpdateProduct(Product product)
         {
-            Product currentProduct;
-            lock (_productsLock)
-            {
-                currentProduct = _products.FirstOrDefault(p => p.Key.Equals(product.Key)
-                && p.Name.Equals(product.Name, StringComparison.InvariantCultureIgnoreCase));
-            }
+            Product currentProduct = _products[product.Name];
 
             if (currentProduct == null)
             {
@@ -187,15 +158,6 @@ namespace HSMServer.Core.Products
             }
         }      
 
-        public void AddSensor(SensorInfo sensorInfo)
-        {
-            var product = GetProduct(sensorInfo.ProductName);
-            if (product == null) return;
-
-            product.AddOrUpdateSensor(sensorInfo);
-            _databaseAdapter.AddSensor(sensorInfo);
-        }
-
         public void RemoveSensor(string productName, string path)
         {
             var product = GetProduct(productName);
@@ -212,26 +174,10 @@ namespace HSMServer.Core.Products
             }
 
         }
-        public string GetProductKeyByName(string name)
-        {
-            Product product = null;
-
-            lock (_productsLock)
-            {
-                product = GetProduct(name);
-            }
-
-            return product?.Key;
-        }
 
         public string GetProductNameByKey(string key)
         {
-            Product product = null;
-
-            lock (_productsLock)
-            {
-                product = _products.FirstOrDefault(p => p.Key.Equals(key));
-            }
+            Product product = _products.Values.FirstOrDefault(p => p.Key.Equals(key));
 
             return product?.Name;
         }
@@ -240,12 +186,7 @@ namespace HSMServer.Core.Products
 
         public Product GetProductByKey(string key)
         {
-            Product product = default(Product);
-
-            lock (_productsLock)
-            {
-                product = _products.FirstOrDefault(p => p.Key.Equals(key));
-            }
+            Product product = _products.Values.FirstOrDefault(p => p.Key.Equals(key));
 
             return product;
         }
