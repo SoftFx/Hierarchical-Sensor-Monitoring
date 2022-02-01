@@ -129,20 +129,13 @@ namespace HSMServer.Core.Products
             var existingInfo = GetSensorInfo(newInfo.ProductName, newInfo.Path);
             existingInfo.Update(newInfo);
 
-            var product = GetProduct(newInfo.ProductName);
-            if (product != null)
-                product.AddOrUpdateSensor(newInfo);
+            GetProduct(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
 
-        public bool IsSensorRegistered(string productName, string path)
-        {
-            var product = GetProduct(productName);
-            if (product == null) return false;
-
-            return product.Sensors.ContainsKey(path);
-        }
+        public bool IsSensorRegistered(string productName, string path) => 
+            GetProduct(productName)?.Sensors.ContainsKey(path) ?? false;
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
@@ -151,12 +144,9 @@ namespace HSMServer.Core.Products
 
             var newSensor = sensorValue.Convert(productName);
 
-            if (!product.Sensors.ContainsKey(newSensor.Path))
-            {
-                product.AddOrUpdateSensor(newSensor);
-                _databaseAdapter.AddSensor(newSensor);
-            }
-        }      
+            product.AddOrUpdateSensor(newSensor);
+            _databaseAdapter.AddSensor(newSensor);
+        }
 
         public void RemoveSensor(string productName, string path)
         {
@@ -172,40 +162,24 @@ namespace HSMServer.Core.Products
             {
                 _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
             }
-
         }
 
-        public string GetProductNameByKey(string key)
-        {
-            Product product = _products.Values.FirstOrDefault(p => p.Key.Equals(key));
-
-            return product?.Name;
-        }
-
+        public string GetProductNameByKey(string key) =>
+            _products.Values.FirstOrDefault(p => p.Key.Equals(key))?.Name;
+        
         public Product GetProductByName(string name) => GetProduct(name);
 
-        public Product GetProductByKey(string key)
-        {
-            Product product = _products.Values.FirstOrDefault(p => p.Key.Equals(key));
+        public Product GetProductByKey(string key) =>
+            _products.Values.FirstOrDefault(p => p.Key.Equals(key));
 
-            return product;
-        }
-
-        public List<SensorInfo> GetProductSensors(string productName)
-        {
-            var product = GetProduct(productName);
-
-            return product == null ? null : product.Sensors.Values.ToList();
-        }
-
+        public List<SensorInfo> GetProductSensors(string productName) =>
+            GetProduct(productName)?.Sensors.Values.ToList();
+        
         public SensorInfo GetSensorInfo(string productName, string path)
         {
-            var product = GetProduct(productName);
+            SensorInfo value = null;
 
-            if (product == null) return null;
-
-            product.Sensors.TryGetValue(path, out var value);
-            return value;
+            return GetProduct(productName)?.Sensors.TryGetValue(path, out value) ?? false ? value : null;
         }
     }
 }
