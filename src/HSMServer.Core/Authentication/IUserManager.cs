@@ -38,7 +38,7 @@ namespace HSMServer.Core.Authentication
 
         User Authenticate(string login, string password);
 
-        //User GetUserByCertificateThumbprint(string thumbprint);
+        User GetUserByCertificateThumbprint(string thumbprint);
         User GetUser(Guid id);
         User GetUserByUserName(string username);
 
