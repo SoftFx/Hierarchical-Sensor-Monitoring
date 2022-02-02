@@ -37,9 +37,7 @@ namespace HSMServer.Core.Model
             Key = product.Key;
             Name = product.Name;
             DateAdded = product.DateAdded;
-
-            if (product.ExtraKeys != null && product.ExtraKeys.Count > 0)
-                ExtraKeys.AddRange(product.ExtraKeys);
+            AddExtraKeys(product.ExtraKeys);
         }
 
         public Product(ProductEntity entity) : this()
@@ -61,10 +59,7 @@ namespace HSMServer.Core.Model
             if (this == product) return; 
 
             ExtraKeys = new List<ExtraProductKey>();
-            if (product.ExtraKeys != null && product.ExtraKeys.Count > 0)
-            {
-                ExtraKeys.AddRange(product.ExtraKeys);
-            }
+            AddExtraKeys(product.ExtraKeys);
         }
 
         public void InitializeSensors(List<SensorInfo> sensors) =>
@@ -75,5 +70,11 @@ namespace HSMServer.Core.Model
 
         public bool RemoveSensor(string path) =>
             Sensors.TryRemove(path, out _);
+
+        public void AddExtraKeys(List<ExtraProductKey> keys)
+        {
+            if (keys != null && keys.Count > 0)
+                ExtraKeys.AddRange(keys);
+        }
     }
 }

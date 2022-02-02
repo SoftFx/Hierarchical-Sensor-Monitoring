@@ -28,13 +28,10 @@ namespace HSMServer.Core.Products
             InitializeProducts();
         }
 
-        public List<Product> Products
-        {
-            get => _products.Values.ToList();
-        }
+        public List<Product> Products => _products.Values.ToList();
 
-        private Product GetProduct(string name) => 
-            _products.ContainsKey(name) ? _products[name] : null;
+        public Product GetProductByName(string name) =>
+            _products.GetValueOrDefault(name);
             
         private void InitializeProducts()
         {
@@ -62,7 +59,7 @@ namespace HSMServer.Core.Products
 
         private void AddSelfMonitoringProduct()
         {
-            Product product = new Product(CommonConstants.SelfMonitoringProductKey,
+            Product product = new (CommonConstants.SelfMonitoringProductKey,
                 CommonConstants.SelfMonitoringProductName, DateTime.Now);
 
             AddProduct(product);
@@ -74,10 +71,9 @@ namespace HSMServer.Core.Products
             {
                 _databaseAdapter.RemoveProduct(name);
 
-                var product = GetProductByName(name);
-                if (product != null)
+                if (GetProductByName(name) != null)
                 {
-                    _products.Remove(name, out var removedProduct);
+                    _products.Remove(name, out _);
                 }
             }
             catch (Exception e)
@@ -92,7 +88,7 @@ namespace HSMServer.Core.Products
 
             _logger.LogInformation($"Created product key = '{key}' for product = '{name}'");
 
-            Product product = new Product(key, name, DateTime.Now);
+            Product product = new (key, name, DateTime.Now);
             AddProduct(product);
         }
 
@@ -129,17 +125,17 @@ namespace HSMServer.Core.Products
             var existingInfo = GetSensorInfo(newInfo.ProductName, newInfo.Path);
             existingInfo.Update(newInfo);
 
-            GetProduct(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
+            GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
 
         public bool IsSensorRegistered(string productName, string path) => 
-            GetProduct(productName)?.Sensors.ContainsKey(path) ?? false;
+            GetProductByName(productName)?.Sensors.ContainsKey(path) ?? false;
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
-            var product = GetProduct(productName);
+            var product = GetProductByName(productName);
             if (product == null) return;
 
             var newSensor = sensorValue.Convert(productName);
@@ -150,7 +146,7 @@ namespace HSMServer.Core.Products
 
         public void RemoveSensor(string productName, string path)
         {
-            var product = GetProduct(productName);
+            var product = GetProductByName(productName);
             if (product == null) return;
 
             try
@@ -165,21 +161,27 @@ namespace HSMServer.Core.Products
         }
 
         public string GetProductNameByKey(string key) =>
-            _products.Values.FirstOrDefault(p => p.Key.Equals(key))?.Name;
-        
-        public Product GetProductByName(string name) => GetProduct(name);
+            GetProductByKey(key)?.Name;
 
-        public Product GetProductByKey(string key) =>
-            _products.Values.FirstOrDefault(p => p.Key.Equals(key));
+        public Product GetProductByKey(string key)
+        {
+            foreach (var (_, product) in _products)
+            {
+                if (product.Key.Equals(key)) return product;
+            }
+
+            return null;
+        }
 
         public List<SensorInfo> GetProductSensors(string productName) =>
-            GetProduct(productName)?.Sensors.Values.ToList();
+            GetProductByName(productName)?.Sensors.Values.ToList();
         
         public SensorInfo GetSensorInfo(string productName, string path)
         {
             SensorInfo value = null;
 
-            return GetProduct(productName)?.Sensors.TryGetValue(path, out value) ?? false ? value : null;
+            return GetProductByName(productName)?.Sensors.TryGetValue(path, out value) 
+                ?? false ? value : null;
         }
     }
 }
