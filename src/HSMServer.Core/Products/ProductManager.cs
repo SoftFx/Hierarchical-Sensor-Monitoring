@@ -1,10 +1,7 @@
 ﻿using HSMCommon.Constants;
-using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensor;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
@@ -120,46 +117,6 @@ namespace HSMServer.Core.Products
             _databaseAdapter.UpdateProduct(currentProduct);
         }
 
-        public void UpdateSensorInfo(SensorInfo newInfo)
-        {
-            var existingInfo = GetSensorInfo(newInfo.ProductName, newInfo.Path);
-            existingInfo.Update(newInfo);
-
-            GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
-
-            _databaseAdapter.UpdateSensor(existingInfo);
-        }
-
-        public bool IsSensorRegistered(string productName, string path) => 
-            GetProductByName(productName)?.Sensors.ContainsKey(path) ?? false;
-
-        public void AddSensor(string productName, SensorValueBase sensorValue)
-        {
-            var product = GetProductByName(productName);
-            if (product == null) return;
-
-            var newSensor = sensorValue.Convert(productName);
-
-            product.AddOrUpdateSensor(newSensor);
-            _databaseAdapter.AddSensor(newSensor);
-        }
-
-        public void RemoveSensor(string productName, string path)
-        {
-            var product = GetProductByName(productName);
-            if (product == null) return;
-
-            try
-            {
-                product.RemoveSensor(path);
-               _databaseAdapter.RemoveSensor(productName, path);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
-            }
-        }
-
         public string GetProductNameByKey(string key) =>
             GetProductByKey(key)?.Name;
 
@@ -171,17 +128,6 @@ namespace HSMServer.Core.Products
             }
 
             return null;
-        }
-
-        public List<SensorInfo> GetProductSensors(string productName) =>
-            GetProductByName(productName)?.Sensors.Values.ToList();
-        
-        public SensorInfo GetSensorInfo(string productName, string path)
-        {
-            SensorInfo value = null;
-
-            return GetProductByName(productName)?.Sensors.TryGetValue(path, out value) 
-                ?? false ? value : null;
         }
     }
 }
