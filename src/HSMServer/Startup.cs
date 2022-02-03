@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using FluentValidation.AspNetCore;
+﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
@@ -26,6 +23,8 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
+using System;
+using System.IO;
 
 namespace HSMServer
 {
@@ -67,7 +66,6 @@ namespace HSMServer
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<IMonitoringCore>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
@@ -106,7 +104,7 @@ namespace HSMServer
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices);
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -151,16 +149,11 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        private void OnShutdown(object state)
+        private void OnShutdown(object service)
         {
-            var serviceProvider = (IServiceProvider)state;
-            var objectToDispose = _services
-                .Where(s => s.Lifetime == ServiceLifetime.Singleton
-                            && s.ImplementationInstance != null
-                            && s.ServiceType.GetInterfaces().Contains(typeof(IMonitoringCore)))
-                .Select(s => s.ImplementationInstance as IMonitoringCore).First();
+            if (service is MonitoringCore monitoringCore)
+                monitoringCore.Dispose();
 
-            objectToDispose.Dispose();
             System.Diagnostics.Process.GetCurrentProcess().Kill();
         }
     }
