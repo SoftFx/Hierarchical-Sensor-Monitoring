@@ -10,16 +10,11 @@
 
   <ItemGroup>
     <PackageReference Include="NLog" Version="4.7.10" />
+    <PackageReference Include="SoftFX.LevelDB.Standard" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="LevelDB.NET">
-      <HintPath>..\LevelDB\LevelDB.NET.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
 </Project>
