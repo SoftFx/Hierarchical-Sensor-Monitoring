@@ -37,30 +37,30 @@ void DataCollectorImpl::Stop()
 	data_collector->Stop();
 }
 
-void DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
+void hsm_wrapper::DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path)
 {
-	data_collector->InitializeSystemMonitoring(is_cpu, is_free_ram);
+	data_collector->InitializeSystemMonitoring(is_cpu, is_free_ram, !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr);
 }
 
-void DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path)
 {
-	data_collector->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
+	data_collector->InitializeProcessMonitoring(is_cpu, is_memory, is_threads, !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr);
 }
 
-void DataCollectorImpl::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorImpl::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path)
 {
-	data_collector->InitializeProcessMonitoring(gcnew String(process_name.c_str()), is_cpu, is_memory, is_threads);
+	data_collector->InitializeProcessMonitoring(gcnew String(process_name.c_str()), is_cpu, is_memory, is_threads, !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr);
 }
 
-void DataCollectorImpl::InitializeOsMonitoring(bool is_updated)
+void DataCollectorImpl::InitializeOsMonitoring(bool is_updated, const std::string& specific_path)
 {
-	data_collector->InitializeOsMonitoring(is_updated);
+	data_collector->InitializeOsMonitoring(is_updated, !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr);
 }
 
 
-void DataCollectorImpl::MonitoringServiceAlive()
+void DataCollectorImpl::MonitoringServiceAlive(const std::string& specific_path)
 {
-	data_collector->MonitorServiceAlive();
+	data_collector->MonitorServiceAlive(!specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr);
 }
 
 HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
@@ -158,11 +158,11 @@ void DataCollectorImplWrapper::Stop()
 	}
 }
 
-void DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const string& specific_path)
 {
 	try
 	{
-		impl->InitializeSystemMonitoring(is_cpu, is_free_ram);
+		impl->InitializeSystemMonitoring(is_cpu, is_free_ram, specific_path);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -170,11 +170,11 @@ void DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_f
 	}
 }
 
-void DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
 {
 	try
 	{
-		impl->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
+		impl->InitializeProcessMonitoring(is_cpu, is_memory, is_threads, specific_path);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -182,24 +182,11 @@ void DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_
 	}
 }
 
-void DataCollectorImplWrapper::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorImplWrapper::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
 {
 	try
 	{
-		impl->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads);
-	}
-	catch (System::Exception^ ex)
-	{
-		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
-	}
-}
-
-
-void DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated)
-{
-	try
-	{
-		impl->InitializeOsMonitoring(is_updated);
+		impl->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads, specific_path);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -208,12 +195,25 @@ void DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated)
 }
 
 
-
-void DataCollectorImplWrapper::MonitoringServiceAlive()
+void DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated, const string& specific_path)
 {
 	try
 	{
-		impl->MonitoringServiceAlive();
+		impl->InitializeOsMonitoring(is_updated, specific_path);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+
+
+void DataCollectorImplWrapper::MonitoringServiceAlive(const string& specific_path)
+{
+	try
+	{
+		impl->MonitoringServiceAlive(specific_path);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -384,30 +384,30 @@ void DataCollectorProxy::Stop()
 	impl_wrapper->Stop();
 }
 
-void DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
+void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const string& specific_path)
 {
-	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
+	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram, specific_path);
 }
 
-void DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
 {
-	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
+	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads, specific_path);
 }
 
-void DataCollectorProxy::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads)
+void DataCollectorProxy::InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
 {
-	impl_wrapper->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads);
+	impl_wrapper->InitializeProcessMonitoring(process_name, is_cpu, is_memory, is_threads, specific_path);
 }
 
-void DataCollectorProxy::InitializeOsMonitoring(bool is_updated)
+void DataCollectorProxy::InitializeOsMonitoring(bool is_updated, const string& specific_path)
 {
-	impl_wrapper->InitializeOsMonitoring(is_updated);
+	impl_wrapper->InitializeOsMonitoring(is_updated, specific_path);
 }
 
 
-void DataCollectorProxy::MonitoringServiceAlive()
+void DataCollectorProxy::MonitoringServiceAlive(const string& specific_path)
 {
-	impl_wrapper->MonitoringServiceAlive();
+	impl_wrapper->MonitoringServiceAlive(specific_path);
 }
 
 
