@@ -66,6 +66,7 @@ namespace HSMServer.Core.Configuration
                 _lastUpdate = DateTime.Now;
             }
         }
+
         public List<CertificateDescriptor> GetUserCertificates()
         {
             UpdateCertificates();
@@ -91,38 +92,6 @@ namespace HSMServer.Core.Configuration
             }
 
             return result;
-        }
-
-        private List<X509Certificate2> GetCertificatesFromStore()
-        {
-            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            return store.Certificates.Cast<X509Certificate2>().ToList();
-        }
-
-        public void SaveClientCertificate(X509Certificate2 certificate, string fileName)
-        {
-            string certPath = Path.Combine(CertificatesConfig.CertificatesFolderPath, fileName);
-            byte[] certBytes = certificate.Export(X509ContentType.Cert);
-
-            FileStream fs = new FileStream(certPath, FileMode.CreateNew);
-            fs.Write(certBytes, 0, certBytes.Length);
-            fs.Flush();
-            fs.Close();
-        }
-
-        public void InstallClientCertificate(X509Certificate2 certificate)
-        {
-            X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            store.Open(OpenFlags.ReadWrite);
-            store.Add(certificate);
-            store.Close();
-        }
-
-        public X509Certificate2 GetCrtCertificateFromPfx(X509Certificate2 pfxCert)
-        {
-            byte[] bytes = pfxCert.Export(X509ContentType.Cert, "");
-            X509Certificate2 crtCert = new X509Certificate2(bytes);
-            return crtCert;
         }
     }
 }
