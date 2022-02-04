@@ -154,6 +154,7 @@ namespace HSMServer
             if (service is MonitoringCore monitoringCore)
                 monitoringCore.Dispose();
 
+            // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();
         }
     }
