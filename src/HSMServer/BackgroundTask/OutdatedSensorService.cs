@@ -3,6 +3,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,13 +22,17 @@ namespace HSMServer.BackgroundTask
         private DateTime _lastChecked;
         private readonly TimeSpan _checkInterval = new TimeSpan(1, 0 , 0,0);
         private readonly IConfigurationProvider _configurationProvider;
+        private readonly ISensorsInterface _sensorsInterface;
         private readonly IValuesCache _cache;
         private readonly ILogger<OutdatedSensorService> _logger;
+
         public OutdatedSensorService(IDatabaseAdapter databaseAdapter, IProductManager productManager, IConfigurationProvider configurationProvider,
-            IValuesCache cache, ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
+            ISensorsInterface sensorsInterface, IValuesCache cache,
+            ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
         {
             _configurationProvider = configurationProvider;
             _cache = cache;
+            _sensorsInterface = sensorsInterface;
             _logger = logger;
             _lastChecked = DateTime.MinValue;
         }
@@ -48,7 +53,7 @@ namespace HSMServer.BackgroundTask
                     var products = _productManager.Products;
                     foreach (var product in products)
                     {
-                        var sensors = _productManager.GetProductSensors(product.Name);
+                        var sensors = _sensorsInterface.GetProductSensors(product.Name);
                         foreach (var sensor in sensors)
                         {
                             //var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
@@ -65,7 +70,7 @@ namespace HSMServer.BackgroundTask
 
                     foreach (var sensorToRemove in sensorsToRemove)
                     {
-                        _productManager.RemoveSensor(sensorToRemove.Item1, sensorToRemove.Item2);
+                        _sensorsInterface.RemoveSensor(sensorToRemove.Item1, sensorToRemove.Item2);
                         _cache.RemoveSensorValue(sensorToRemove.Item1, sensorToRemove.Item2);
                     }
 
