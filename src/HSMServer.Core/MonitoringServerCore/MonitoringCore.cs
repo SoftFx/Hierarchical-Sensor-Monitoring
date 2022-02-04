@@ -283,6 +283,8 @@ namespace HSMServer.Core.MonitoringServerCore
         public void UpdateSensorInfo(SensorInfo newInfo)
         {
             var existingInfo = GetSensorInfo(newInfo.ProductName, newInfo.Path);
+            if (existingInfo == null) return;
+
             existingInfo.Update(newInfo);
 
             _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
