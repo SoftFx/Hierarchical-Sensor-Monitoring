@@ -278,7 +278,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             existingInfo.Update(newInfo);
 
-            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
+            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(existingInfo);
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
