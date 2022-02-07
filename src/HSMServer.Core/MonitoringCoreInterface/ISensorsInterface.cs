@@ -14,7 +14,6 @@ namespace HSMServer.Core.MonitoringCoreInterface
         void UpdateSensorInfo(SensorInfo newInfo);
 
         void RemoveSensor(string productName, string path);
-        void RemoveSensor(string product, string key, string path);
         void RemoveSensors(string product, string key, IEnumerable<string> paths);
 
         bool IsSensorRegistered(string productName, string path);

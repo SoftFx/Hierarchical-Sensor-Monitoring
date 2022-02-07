@@ -23,10 +23,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private readonly MonitoringCore _monitoringCore;
         private readonly ProductManager _productManager;
+        private readonly ValuesCache _valuesCache;
 
         private readonly DatabaseAdapterManager _databaseAdapterManager;
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;
+
+        private delegate bool IsSensorRegistered(string productName, string path);
+        private delegate SensorInfo GetSensorInfo(string productName, string path);
+        private delegate ICollection<SensorInfo> GetProductSensors(string productName);
+        private delegate List<SensorData> GetQueueValues(List<string> products);
+        private delegate SensorInfo GetSensorInfoFromDB(string productName, string path);
 
 
         public SensorsTests(SensorsFixture fixture)
@@ -38,11 +45,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
             _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
 
-            var userManager = new Mock<IUserManager>();
+            _valuesCache = new ValuesCache();
 
+            var userManager = new Mock<IUserManager>();
             var barStorage = new Mock<IBarSensorsStorage>();
             var configurationProvider = new Mock<IConfigurationProvider>();
-            var valuesCache = new Mock<IValuesCache>();
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
@@ -54,7 +61,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 barStorage.Object,
                 _productManager,
                 configurationProvider.Object,
-                valuesCache.Object,
+                _valuesCache,
                 monitoringLogger);
         }
 
@@ -146,9 +153,63 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                           _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
         }
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [Trait("Category", "Remove Sensor(s)")]
+        public void RemoveSensorsTest(int count)
+        {
+            List<SensorValueBase> sensorValues = new(count);
 
-        private static void FullTestNonExistingSensorInfo(string productName, string sensorPath, Func<string, string, bool> isSensorReqistered,
-            Func<string, string, SensorInfo> getSensorInfo, Func<string, ICollection<SensorInfo>> getProductSensors, Func<string, string, SensorInfo> getSensorInfoFromDB)
+            for (int i = 0; i < count; ++i)
+            {
+                var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+                sensorValue.Path = $"{sensorValue.Path}{i}";
+
+                _monitoringCore.AddSensorValue(sensorValue);
+                sensorValues.Add(sensorValue);
+            }
+
+            _monitoringCore.RemoveSensors(_testProductName, _databaseAdapterManager.TestProduct.Key, sensorValues.Select(s => s.Path));
+
+            foreach (var sensorValue in sensorValues)
+                FullTestRemovedSensor(_testProductName,
+                                      sensorValue,
+                                      _monitoringCore.IsSensorRegistered,
+                                      _monitoringCore.GetSensorInfo,
+                                      _monitoringCore.GetProductSensors,
+                                      _valuesCache.GetValues,
+                                      _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                      _sensorValuesTester);
+        }
+
+        [Fact]
+        [Trait("Category", "Remove Sensor (without values)")]
+        public void RemoveSensors_WithoutValues_Test()
+        {
+            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+
+            _monitoringCore.AddSensor(_testProductName, sensorValue);
+
+            _monitoringCore.RemoveSensors(_testProductName, _databaseAdapterManager.TestProduct.Key, new List<string>() { sensorValue.Path });
+
+            FullTestRemovedSensor(_testProductName,
+                                  sensorValue,
+                                  _monitoringCore.IsSensorRegistered,
+                                  _monitoringCore.GetSensorInfo,
+                                  _monitoringCore.GetProductSensors,
+                                  _valuesCache.GetValues,
+                                  _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                  _sensorValuesTester);
+        }
+
+
+        private static void FullTestNonExistingSensorInfo(string productName, string sensorPath, IsSensorRegistered isSensorReqistered,
+            GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorInfoFromDB)
         {
             Assert.False(isSensorReqistered(productName, sensorPath));
             Assert.Null(getSensorInfo(productName, sensorPath));
@@ -169,6 +230,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.NotEqual(expected.SensorName, actual.SensorName);
             Assert.NotEqual(expected.SensorType, actual.SensorType);
             Assert.Empty(actual.ValidationParameters);
+        }
+
+        private static void FullTestRemovedSensor(string productName, SensorValueBase sensorValue,
+            IsSensorRegistered isSensorRegistered, GetSensorInfo getSensorInfo, GetProductSensors getProductSensors,
+            GetQueueValues getQueueValues, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
+        {
+            string sensorValuePath = sensorValue.Path;
+
+            Assert.False(isSensorRegistered(productName, sensorValuePath));
+            Assert.Null(getSensorInfo(productName, sensorValuePath));
+            Assert.Null(getProductSensors(productName).FirstOrDefault(s => s.Path == sensorValuePath));
+            Assert.Empty(getQueueValues(new List<string>() { productName }));
+            tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
         }
 
 

@@ -241,7 +241,7 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        public void RemoveSensor(string product, string key, string path)
+        private void RemoveSensor(string product, string key, string path)
         {
             try
             {
