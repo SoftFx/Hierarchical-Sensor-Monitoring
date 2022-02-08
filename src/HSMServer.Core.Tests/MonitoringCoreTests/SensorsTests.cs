@@ -245,6 +245,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                _sensorValuesTester);
         }
 
+        [Fact]
+        [Trait("Category", "Is sensor registered")]
+        public void IsSensorRegistered_NonExistingProduct_Test() =>
+            Assert.False(_monitoringCore.IsSensorRegistered(RandomValuesGenerator.GetRandomString(), RandomValuesGenerator.GetRandomString()));
+
+        [Fact]
+        [Trait("Category", "Get sensor info")]
+        public void GetSensorInfo_NonExistingProduct_Test() =>
+            Assert.Null(_monitoringCore.GetSensorInfo(RandomValuesGenerator.GetRandomString(), RandomValuesGenerator.GetRandomString()));
+
+        [Fact]
+        [Trait("Category", "Get product sensors")]
+        public void GetProductSensors_NonExistingProduct_Test() =>
+            Assert.Null(_monitoringCore.GetProductSensors(RandomValuesGenerator.GetRandomString()));
+
 
         private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
             GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
