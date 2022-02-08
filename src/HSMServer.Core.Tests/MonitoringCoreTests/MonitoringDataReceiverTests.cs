@@ -6,7 +6,6 @@ using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
@@ -17,17 +16,11 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
-    public class MonitoringDataReceiverTests : IClassFixture<MonitoringDataReceiverFixture>
+    public class MonitoringDataReceiverTests : BaseFixture<MonitoringDataReceiverFixture>
     {
         private const int SeveralSensorValuesCount = 3;
 
-        private readonly MonitoringCore _monitoringCore;
-        private readonly DatabaseAdapterManager _databaseAdapterManager;
-        private readonly ValuesCache _valuesCache;
         private readonly BarSensorsStorage _barStorage;
-
-        private readonly SensorValuesFactory _sensorValuesFactory;
-        private readonly SensorValuesTester _sensorValuesTester;
 
         private delegate List<SensorData> GetValuesFromCache(List<string> products);
         private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
@@ -36,33 +29,21 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private delegate List<SensorInfo> GetAllSensorInfo(Product product);
 
 
-        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture)
+        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture) : base(fixture)
         {
-            _valuesCache = new ValuesCache();
-
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
-
-            _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
-            _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
+            _barStorage = new BarSensorsStorage();
 
             var userManager = new Mock<IUserManager>();
 
-            _barStorage = new BarSensorsStorage();
-
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
-
-            var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
                 userManager.Object,
                 _barStorage,
-                productManager,
+                _productManager,
                 configurationProvider,
                 _valuesCache,
                 monitoringLogger);

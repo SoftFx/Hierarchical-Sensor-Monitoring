@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorName = nameof(SensorInfo),
                 Description = $"{nameof(SensorInfo)} {nameof(SensorInfo.Description)}",
                 SensorType = (SensorType)sensorType,
-                Unit = RandomValuesGenerator.GetRandomString(),
+                Unit = RandomGenerator.GetRandomString(),
             };
     }
 }

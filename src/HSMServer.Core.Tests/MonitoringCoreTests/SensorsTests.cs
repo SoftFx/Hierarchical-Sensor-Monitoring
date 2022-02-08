@@ -6,7 +6,6 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
@@ -17,18 +16,11 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class SensorsTests : IClassFixture<SensorsFixture>
+    public class SensorsTests : BaseFixture<SensorsFixture>
     {
         private readonly string _testProductName = DatabaseAdapterManager.ProductName;
 
-        private readonly MonitoringCore _monitoringCore;
-        private readonly ProductManager _productManager;
-        private readonly ValuesCache _valuesCache;
-
-        private readonly DatabaseAdapterManager _databaseAdapterManager;
-        private readonly SensorValuesFactory _sensorValuesFactory;
-        private readonly SensorValuesTester _sensorValuesTester;
-
+        private delegate void AddSensor(string productName, SensorValueBase sensorValue);
         private delegate bool IsSensorRegistered(string productName, string path);
         private delegate SensorInfo GetSensorInfo(string productName, string path);
         private delegate ICollection<SensorInfo> GetProductSensors(string productName);
@@ -37,23 +29,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
 
 
-        public SensorsTests(SensorsFixture fixture)
+        public SensorsTests(SensorsFixture fixture) : base(fixture)
         {
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
-
-            _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
-            _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
-
-            _valuesCache = new ValuesCache();
-
             var userManager = new Mock<IUserManager>();
             var barStorage = new Mock<IBarSensorsStorage>();
             var configurationProvider = new Mock<IConfigurationProvider>();
-
-            var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
@@ -78,10 +58,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             for (int i = 0; i < sensorsCount; ++i)
             {
-                var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
-                var sensorValuePath = sensorValue.Path;
-
-                _monitoringCore.AddSensor(_testProductName, sensorValue);
+                var sensorValue = AddAndGetRandomSensor(_monitoringCore.AddSensor);
 
                 FullTestSensorInfo(_testProductName,
                                    sensorValue,
@@ -97,12 +74,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Add Sensor(s)")]
         public void AddSensor_NonExistingProduct_Test()
         {
-            var productName = RandomValuesGenerator.GetRandomString();
-
-            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
-            var sensorValuePath = sensorValue.Path;
-
-            _monitoringCore.AddSensor(productName, sensorValue);
+            var sensorValue = AddAndGetRandomSensor(_monitoringCore.AddSensor, RandomGenerator.GetRandomString());
 
             FullTestNonExistingSensorInfo(_testProductName,
                                           sensorValue.Path,
@@ -143,7 +115,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update Sensor(s)")]
         public void UpdateSensorInfo_NonExistingProduct_Test()
         {
-            var sensorInfo = SensorInfoFactory.BuildSensorInfo(_testProductName, (byte)GetRandomSensorType());
+            var sensorInfo = SensorInfoFactory.BuildSensorInfo(_testProductName, RandomGenerator.GetRandomByte());
 
             _monitoringCore.UpdateSensorInfo(sensorInfo);
 
@@ -234,7 +206,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var sensorValue = AddAndGetRandomSensor();
 
-            _monitoringCore.RemoveSensor(RandomValuesGenerator.GetRandomString(), sensorValue.Path);
+            _monitoringCore.RemoveSensor(RandomGenerator.GetRandomString(), sensorValue.Path);
 
             FullTestSensorInfo(_testProductName,
                                sensorValue,
@@ -248,17 +220,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Fact]
         [Trait("Category", "Is sensor registered")]
         public void IsSensorRegistered_NonExistingProduct_Test() =>
-            Assert.False(_monitoringCore.IsSensorRegistered(RandomValuesGenerator.GetRandomString(), RandomValuesGenerator.GetRandomString()));
+            Assert.False(_monitoringCore.IsSensorRegistered(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString()));
 
         [Fact]
         [Trait("Category", "Get sensor info")]
         public void GetSensorInfo_NonExistingProduct_Test() =>
-            Assert.Null(_monitoringCore.GetSensorInfo(RandomValuesGenerator.GetRandomString(), RandomValuesGenerator.GetRandomString()));
+            Assert.Null(_monitoringCore.GetSensorInfo(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString()));
 
         [Fact]
         [Trait("Category", "Get product sensors")]
         public void GetProductSensors_NonExistingProduct_Test() =>
-            Assert.Null(_monitoringCore.GetProductSensors(RandomValuesGenerator.GetRandomString()));
+            Assert.Null(_monitoringCore.GetProductSensors(RandomGenerator.GetRandomString()));
 
 
         private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
@@ -312,17 +284,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
-        private SensorValueBase AddAndGetRandomSensor()
+        private SensorValueBase AddAndGetRandomSensor(AddSensor addSensor = null, string productName = null)
         {
             var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
 
-            _monitoringCore.AddSensor(_testProductName, sensorValue);
+            (addSensor ?? _monitoringCore.AddSensor)?.Invoke(productName ?? _testProductName, sensorValue);
 
             return sensorValue;
         }
 
-        private static SensorInfo GetUpdatedSensorInfo(SensorInfo existingSensorInfo, int iteration) =>
-            new()
+        private static SensorInfo GetUpdatedSensorInfo(SensorInfo existingSensorInfo, int iteration)
+        {
+            string GetUpdatedString(string value, int iteration) => $"{value}-updated{iteration}";
+
+            return new()
             {
                 ProductName = existingSensorInfo.ProductName,
                 Path = existingSensorInfo.Path,
@@ -331,32 +306,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 SensorName = GetUpdatedString(existingSensorInfo.SensorName, iteration),
                 SensorType = GetAnotherRandomSensorType(existingSensorInfo.SensorType),
                 Unit = GetUpdatedString(existingSensorInfo.Unit, iteration),
-                ValidationParameters =
-                new List<SensorValidationParameter>()
+                ValidationParameters = new List<SensorValidationParameter>()
                 {
                     new SensorValidationParameter(
                         new ValidationParameterEntity()
                         {
                             ValidationValue = GetUpdatedString(null, iteration),
-                            ParameterType = RandomValuesGenerator.GetRandomInt(min: 0, max: 6),
+                            ParameterType = RandomGenerator.GetRandomInt(min: 0, max: 6),
                         })
                 },
             };
-
-        private static SensorType GetAnotherRandomSensorType(SensorType originalType)
-        {
-            SensorType anotherType;
-
-            do
-            {
-                anotherType = GetRandomSensorType();
-            } while (anotherType == originalType);
-
-            return anotherType;
         }
 
-        private static string GetUpdatedString(string value, int iteration) => $"{value}-updated{iteration}";
-
-        private static SensorType GetRandomSensorType() => (SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8);
+        private static SensorType GetAnotherRandomSensorType(SensorType originalType) =>
+            (SensorType)(((int)originalType + RandomGenerator.GetRandomInt(min: 1, max: 8)) % 8);
     }
 }

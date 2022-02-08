@@ -21,11 +21,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
 
         internal SensorValueBase BuildRandomSensorValue() =>
-            BuildSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 8));
+            BuildSensorValue((SensorType)RandomGenerator.GetRandomByte());
 
         // max: 6, because United sensor values don't exist for FileSensorValue and FileSensorBytesValue
         internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
-            BuildUnitedSensorValue((SensorType)RandomValuesGenerator.GetRandomInt(min: 0, max: 6));
+            BuildUnitedSensorValue((SensorType)RandomGenerator.GetRandomByte(max: 6));
 
         internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
             sensorType switch
@@ -45,7 +45,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var boolSensorValue = new BoolSensorValue()
             {
-                BoolValue = RandomValuesGenerator.GetRandomBool(),
+                BoolValue = RandomGenerator.GetRandomBool(),
             };
 
             return boolSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var intSensorValue = new IntSensorValue()
             {
-                IntValue = RandomValuesGenerator.GetRandomInt(),
+                IntValue = RandomGenerator.GetRandomInt(),
             };
 
             return intSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -65,7 +65,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var doubleSensorValue = new DoubleSensorValue()
             {
-                DoubleValue = RandomValuesGenerator.GetRandomDouble(),
+                DoubleValue = RandomGenerator.GetRandomDouble(),
             };
 
             return doubleSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -75,7 +75,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var stringSensorValue = new StringSensorValue()
             {
-                StringValue = RandomValuesGenerator.GetRandomString(),
+                StringValue = RandomGenerator.GetRandomString(),
             };
 
             return stringSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -85,10 +85,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var intBarSensorValue = new IntBarSensorValue()
             {
-                LastValue = RandomValuesGenerator.GetRandomInt(),
-                Min = RandomValuesGenerator.GetRandomInt(),
-                Max = RandomValuesGenerator.GetRandomInt(),
-                Mean = RandomValuesGenerator.GetRandomInt(),
+                LastValue = RandomGenerator.GetRandomInt(),
+                Min = RandomGenerator.GetRandomInt(),
+                Max = RandomGenerator.GetRandomInt(),
+                Mean = RandomGenerator.GetRandomInt(),
                 Percentiles = GetPercentileValuesInt(),
             };
 
@@ -99,10 +99,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var doubleBarSensorValue = new DoubleBarSensorValue()
             {
-                LastValue = RandomValuesGenerator.GetRandomDouble(),
-                Min = RandomValuesGenerator.GetRandomDouble(),
-                Max = RandomValuesGenerator.GetRandomDouble(),
-                Mean = RandomValuesGenerator.GetRandomDouble(),
+                LastValue = RandomGenerator.GetRandomDouble(),
+                Min = RandomGenerator.GetRandomDouble(),
+                Max = RandomGenerator.GetRandomDouble(),
+                Mean = RandomGenerator.GetRandomDouble(),
                 Percentiles = GetPercentileValuesDouble(),
             };
 
@@ -113,8 +113,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var fileSensorBytesValue = new FileSensorBytesValue()
             {
-                Extension = RandomValuesGenerator.GetRandomString(3),
-                FileContent = RandomValuesGenerator.GetRandomBytes(),
+                Extension = RandomGenerator.GetRandomString(3),
+                FileContent = RandomGenerator.GetRandomBytes(),
                 FileName = nameof(FileSensorBytesValue),
             };
 
@@ -125,8 +125,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var fileSensorValue = new FileSensorValue()
             {
-                Extension = RandomValuesGenerator.GetRandomString(3),
-                FileContent = RandomValuesGenerator.GetRandomString(),
+                Extension = RandomGenerator.GetRandomString(3),
+                FileContent = RandomGenerator.GetRandomString(),
                 FileName = nameof(FileSensorValue),
             };
 
@@ -172,10 +172,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static string BuildUnitedValueData(SensorType sensorType, bool isMinEndTime) =>
             sensorType switch
             {
-                SensorType.BooleanSensor => RandomValuesGenerator.GetRandomBool().ToString(),
-                SensorType.IntSensor => RandomValuesGenerator.GetRandomInt().ToString(),
-                SensorType.DoubleSensor => RandomValuesGenerator.GetRandomDouble().ToString(),
-                SensorType.StringSensor => RandomValuesGenerator.GetRandomString(),
+                SensorType.BooleanSensor => RandomGenerator.GetRandomBool().ToString(),
+                SensorType.IntSensor => RandomGenerator.GetRandomInt().ToString(),
+                SensorType.DoubleSensor => RandomGenerator.GetRandomDouble().ToString(),
+                SensorType.StringSensor => RandomGenerator.GetRandomString(),
                 SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData(isMinEndTime)),
                 SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData(isMinEndTime)),
                 _ => null,
@@ -184,11 +184,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static IntBarData BuildIntBarData(bool isMinEndTime) =>
             new()
             {
-                LastValue = RandomValuesGenerator.GetRandomInt(),
-                Min = RandomValuesGenerator.GetRandomInt(),
-                Max = RandomValuesGenerator.GetRandomInt(),
-                Mean = RandomValuesGenerator.GetRandomInt(),
-                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                LastValue = RandomGenerator.GetRandomInt(),
+                Min = RandomGenerator.GetRandomInt(),
+                Max = RandomGenerator.GetRandomInt(),
+                Mean = RandomGenerator.GetRandomInt(),
+                Count = RandomGenerator.GetRandomInt(positive: true),
                 StartTime = DateTime.UtcNow.AddSeconds(-10),
                 EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
                 Percentiles = GetPercentileValuesInt(),
@@ -197,11 +197,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static DoubleBarData BuildDoubleBarData(bool isMinEndTime) =>
             new()
             {
-                LastValue = RandomValuesGenerator.GetRandomDouble(),
-                Min = RandomValuesGenerator.GetRandomDouble(),
-                Max = RandomValuesGenerator.GetRandomDouble(),
-                Mean = RandomValuesGenerator.GetRandomDouble(),
-                Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                LastValue = RandomGenerator.GetRandomDouble(),
+                Min = RandomGenerator.GetRandomDouble(),
+                Max = RandomGenerator.GetRandomDouble(),
+                Mean = RandomGenerator.GetRandomDouble(),
+                Count = RandomGenerator.GetRandomInt(positive: true),
                 StartTime = DateTime.UtcNow.AddSeconds(-10),
                 EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
                 Percentiles = GetPercentileValuesDouble(),
@@ -213,7 +213,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             var percentiles = new List<PercentileValueInt>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueInt(RandomValuesGenerator.GetRandomInt(), RandomValuesGenerator.GetRandomDouble()));
+                percentiles.Add(new PercentileValueInt(RandomGenerator.GetRandomInt(), RandomGenerator.GetRandomDouble()));
 
             return percentiles;
         }
@@ -223,7 +223,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             var percentiles = new List<PercentileValueDouble>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueDouble(RandomValuesGenerator.GetRandomDouble(), RandomValuesGenerator.GetRandomDouble()));
+                percentiles.Add(new PercentileValueDouble(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomDouble()));
 
             return percentiles;
         }

@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 barSensorValue.StartTime = DateTime.UtcNow.AddSeconds(-10);
                 barSensorValue.EndTime = DateTime.UtcNow.AddSeconds(10);
-                barSensorValue.Count = RandomValuesGenerator.GetRandomInt(positive: true);
+                barSensorValue.Count = RandomGenerator.GetRandomInt(positive: true);
             }
 
             return sensorValue.FillCommonSensorValueProperties(productKey);
