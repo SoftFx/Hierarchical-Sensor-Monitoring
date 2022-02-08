@@ -34,6 +34,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate ICollection<SensorInfo> GetProductSensors(string productName);
         private delegate List<SensorData> GetQueueValues(List<string> products);
         private delegate SensorInfo GetSensorInfoFromDB(string productName, string path);
+        private delegate List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
 
 
         public SensorsTests(SensorsFixture fixture)
@@ -82,15 +83,18 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
                 _monitoringCore.AddSensor(_testProductName, sensorValue);
 
-                Assert.True(_monitoringCore.IsSensorRegistered(_testProductName, sensorValuePath));
-                _sensorValuesTester.TestSensorInfoFromDB(sensorValue, _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_testProductName, sensorValuePath));
-                _sensorValuesTester.TestSensorInfoFromDB(sensorValue, _monitoringCore.GetSensorInfo(_testProductName, sensorValuePath));
-                _sensorValuesTester.TestSensorInfoFromDB(sensorValue, _monitoringCore.GetProductSensors(_testProductName).FirstOrDefault(s => s.Path == sensorValuePath));
+                FullTestSensorInfo(_testProductName,
+                                   sensorValue,
+                                   _monitoringCore.IsSensorRegistered,
+                                   _monitoringCore.GetSensorInfo,
+                                   _monitoringCore.GetProductSensors,
+                                   _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                   _sensorValuesTester);
             }
         }
 
         [Fact]
-        [Trait("Category", "Add Sensor (non-existing product)")]
+        [Trait("Category", "Add Sensor(s)")]
         public void AddSensor_NonExistingProduct_Test()
         {
             var productName = RandomValuesGenerator.GetRandomString();
@@ -117,10 +121,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update Sensor(s)")]
         public void UpdateSensorInfoTest(int count)
         {
-            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+            var sensorValue = AddAndGetRandomSensor();
             var sensorValuePath = sensorValue.Path;
-
-            _monitoringCore.AddSensor(_testProductName, sensorValue);
 
             var sensorInfo = _monitoringCore.GetSensorInfo(_testProductName, sensorValuePath);
 
@@ -138,8 +140,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        [Trait("Category", "Update Sensor (non-existing product)")]
-        public void UpdateSensorInfo_NonExisting_Test()
+        [Trait("Category", "Update Sensor(s)")]
+        public void UpdateSensorInfo_NonExistingProduct_Test()
         {
             var sensorInfo = SensorInfoFactory.BuildSensorInfo(_testProductName, (byte)GetRandomSensorType());
 
@@ -183,17 +185,16 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                       _monitoringCore.GetSensorInfo,
                                       _monitoringCore.GetProductSensors,
                                       _valuesCache.GetValues,
+                                      _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
                                       _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
                                       _sensorValuesTester);
         }
 
         [Fact]
-        [Trait("Category", "Remove Sensor (without values)")]
+        [Trait("Category", "Remove Sensor(s)")]
         public void RemoveSensors_WithoutValues_Test()
         {
-            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
-
-            _monitoringCore.AddSensor(_testProductName, sensorValue);
+            var sensorValue = AddAndGetRandomSensor();
 
             _monitoringCore.RemoveSensors(_testProductName, _databaseAdapterManager.TestProduct.Key, new List<string>() { sensorValue.Path });
 
@@ -203,10 +204,58 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                   _monitoringCore.GetSensorInfo,
                                   _monitoringCore.GetProductSensors,
                                   _valuesCache.GetValues,
+                                  _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
                                   _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
                                   _sensorValuesTester);
         }
 
+        [Fact]
+        [Trait("Category", "Remove Sensor")]
+        public void RemoveSensorTest()
+        {
+            var sensorValue = AddAndGetRandomSensor();
+
+            _monitoringCore.RemoveSensor(_testProductName, sensorValue.Path);
+
+            FullTestRemovedSensor(_testProductName,
+                                  sensorValue,
+                                  _monitoringCore.IsSensorRegistered,
+                                  _monitoringCore.GetSensorInfo,
+                                  _monitoringCore.GetProductSensors,
+                                  _valuesCache.GetValues,
+                                  _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
+                                  _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                  _sensorValuesTester);
+        }
+
+        [Fact]
+        [Trait("Category", "Remove Sensor")]
+        public void RemoveSensor_NonExistingProduct_Test()
+        {
+            var sensorValue = AddAndGetRandomSensor();
+
+            _monitoringCore.RemoveSensor(RandomValuesGenerator.GetRandomString(), sensorValue.Path);
+
+            FullTestSensorInfo(_testProductName,
+                               sensorValue,
+                               _monitoringCore.IsSensorRegistered,
+                               _monitoringCore.GetSensorInfo,
+                               _monitoringCore.GetProductSensors,
+                               _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                               _sensorValuesTester);
+        }
+
+
+        private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
+            GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
+        {
+            var sensorValuePath = sensorValue.Path;
+
+            Assert.True(isSensorRegistered(productName, sensorValuePath));
+            tester.TestSensorInfoFromDB(sensorValue, getSensorInfo(productName, sensorValuePath));
+            tester.TestSensorInfoFromDB(sensorValue, getProductSensors(productName).FirstOrDefault(s => s.Path == sensorValuePath));
+            tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
+        }
 
         private static void FullTestNonExistingSensorInfo(string productName, string sensorPath, IsSensorRegistered isSensorReqistered,
             GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorInfoFromDB)
@@ -234,7 +283,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void FullTestRemovedSensor(string productName, SensorValueBase sensorValue,
             IsSensorRegistered isSensorRegistered, GetSensorInfo getSensorInfo, GetProductSensors getProductSensors,
-            GetQueueValues getQueueValues, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
+            GetQueueValues getQueueValues, GetAllSensorHistory getAllSensorHistory,
+            GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
         {
             string sensorValuePath = sensorValue.Path;
 
@@ -242,9 +292,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Null(getSensorInfo(productName, sensorValuePath));
             Assert.Null(getProductSensors(productName).FirstOrDefault(s => s.Path == sensorValuePath));
             Assert.Empty(getQueueValues(new List<string>() { productName }));
+            Assert.Empty(getAllSensorHistory(productName, sensorValuePath));
             tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
         }
 
+
+        private SensorValueBase AddAndGetRandomSensor()
+        {
+            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+
+            _monitoringCore.AddSensor(_testProductName, sensorValue);
+
+            return sensorValue;
+        }
 
         private static SensorInfo GetUpdatedSensorInfo(SensorInfo existingSensorInfo, int iteration) =>
             new()
