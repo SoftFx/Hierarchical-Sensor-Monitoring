@@ -12,10 +12,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
         private protected SensorValuesFactory _sensorValuesFactory;
         private protected SensorValuesTester _sensorValuesTester;
 
-        protected MonitoringCore _monitoringCore;
-        protected ProductManager _productManager;
-        protected ValuesCache _valuesCache;
+        protected readonly ProductManager _productManager;
+        protected readonly ValuesCache _valuesCache;
 
+        protected MonitoringCore _monitoringCore;
 
         protected BaseFixture(DatabaseFixture fixture)
         {
