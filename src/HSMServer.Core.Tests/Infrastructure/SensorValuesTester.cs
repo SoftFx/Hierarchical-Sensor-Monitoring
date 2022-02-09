@@ -49,6 +49,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(type, actual.TransactionType);
         }
 
+        // TODO Rename TestSensorInfoFromDB to TestSensorInfo
         internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
         {
             Assert.NotNull(actual);

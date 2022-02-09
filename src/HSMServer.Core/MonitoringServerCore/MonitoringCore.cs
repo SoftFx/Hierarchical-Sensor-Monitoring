@@ -241,7 +241,7 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        public void RemoveSensor(string product, string key, string path)
+        private void RemoveSensor(string product, string key, string path)
         {
             try
             {
@@ -278,7 +278,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             existingInfo.Update(newInfo);
 
-            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
+            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(existingInfo);
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
@@ -411,8 +411,8 @@ namespace HSMServer.Core.MonitoringServerCore
             return result;
         }
 
-        public List<SensorInfo> GetProductSensors(string productName) =>
-            _productManager.GetProductByName(productName)?.Sensors.Values.ToList();
+        public ICollection<SensorInfo> GetProductSensors(string productName) =>
+            _productManager.GetProductByName(productName)?.Sensors.Values;
 
         #region Sensors History
 
@@ -454,19 +454,6 @@ namespace HSMServer.Core.MonitoringServerCore
             }
 
             return historyList;
-        }
-
-        public string GetFileSensorValue(User user, string product, string path)
-        {
-            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
-            if (typedData != null)
-            {
-                return typedData.FileContent;
-            }
-
-
-            return string.Empty;
         }
 
         public byte[] GetFileSensorValueBytes(User user, string product, string path)

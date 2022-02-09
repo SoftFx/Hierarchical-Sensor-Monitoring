@@ -1,37 +1,27 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMServer.Core.Model;
-using HSMServer.Core.Products;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class ProductManagerTests : IClassFixture<ProductManagerFixture>
+    public class ProductManagerTests : BaseFixture<ProductManagerFixture>
     {
-        private readonly IProductManager _productManager;
-        private readonly DatabaseAdapterManager _databaseAdapterManager;
-
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
 
-        public ProductManagerTests(ProductManagerFixture fixture)
-        {
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
-            var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
-        }
+        public ProductManagerTests(ProductManagerFixture fixture) : base(fixture) { }
+
 
         [Fact]
         [Trait("Category", "One")]
         public void AddProductTest()
         {
-            var name = RandomValuesGenerator.GetRandomString();
+            var name = RandomGenerator.GetRandomString();
 
             _productManager.AddProduct(name);
 
@@ -43,7 +33,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "OneRemove")]
         public void RemoveProductTest()
         {
-            var name = RandomValuesGenerator.GetRandomString();
+            var name = RandomGenerator.GetRandomString();
 
             _productManager.AddProduct(name);
             var key = _productManager.GetProductByName(name).Key;
@@ -57,11 +47,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "OneUpdateExtraKey")]
         public async Task UpdateExtraProductKeyTest()
         {
-            var name = RandomValuesGenerator.GetRandomString();
+            var name = RandomGenerator.GetRandomString();
             _productManager.AddProduct(name);
             var product = _productManager.GetProductByName(name);
 
-            var extraKeyName = RandomValuesGenerator.GetRandomString();
+            var extraKeyName = RandomGenerator.GetRandomString();
             product.AddExtraKey(extraKeyName);
 
             _productManager.UpdateProduct(product);
@@ -97,7 +87,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "SeveralUpdateExtraKeys")]
         public async Task UpdateSeveralExtraProductKeysTest(int count)
         {
-            var name = RandomValuesGenerator.GetRandomString();
+            var name = RandomGenerator.GetRandomString();
             _productManager.AddProduct(name);
             var product = _productManager.GetProductByName(name);
 
@@ -257,7 +247,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var names = new List<string>(count);
             for (int i = 0; i < count; ++i)
-                names.Add(RandomValuesGenerator.GetRandomString());
+                names.Add(RandomGenerator.GetRandomString());
 
             return names;
         }

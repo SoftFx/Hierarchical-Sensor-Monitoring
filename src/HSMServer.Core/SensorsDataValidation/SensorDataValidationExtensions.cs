@@ -14,7 +14,7 @@ namespace HSMServer.Core.SensorsDataValidation
         {
             var pathLengthObject = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.MaxPathLength);
 
-            if (int.TryParse(pathLengthObject.Value, out var maxPathLength))
+            if (int.TryParse(pathLengthObject?.Value, out var maxPathLength))
                 _maxPathLength = maxPathLength;
         }
 
