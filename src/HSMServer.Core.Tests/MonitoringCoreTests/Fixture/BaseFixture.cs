@@ -8,9 +8,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 {
     public abstract class BaseFixture<T> : IClassFixture<T> where T : DatabaseFixture
     {
-        private protected DatabaseAdapterManager _databaseAdapterManager;
-        private protected SensorValuesFactory _sensorValuesFactory;
-        private protected SensorValuesTester _sensorValuesTester;
+        private protected readonly DatabaseAdapterManager _databaseAdapterManager;
+        private protected readonly SensorValuesFactory _sensorValuesFactory;
+        private protected readonly SensorValuesTester _sensorValuesTester;
 
         protected readonly ProductManager _productManager;
         protected readonly ValuesCache _valuesCache;
