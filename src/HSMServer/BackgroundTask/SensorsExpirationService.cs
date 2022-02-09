@@ -30,13 +30,17 @@ namespace HSMServer.BackgroundTask
 
         private readonly IValuesCache _cache;
         private readonly IProductManager _productManager;
+        private readonly ISensorsInterface _sensorsInterface;
         private readonly IMonitoringUpdatesReceiver _updatesReceiver;
         private readonly ILogger<SensorsExpirationService> _logger;
+
         public SensorsExpirationService(IValuesCache valuesCache, IProductManager productManager,
-            IMonitoringUpdatesReceiver updatesReceiver, ILogger<SensorsExpirationService> logger)
+            ISensorsInterface sensorsInterface, IMonitoringUpdatesReceiver updatesReceiver,
+            ILogger<SensorsExpirationService> logger)
         {
             _cache = valuesCache;
             _productManager = productManager;
+            _sensorsInterface = sensorsInterface;
             _updatesReceiver = updatesReceiver;
             _logger = logger;
         }
@@ -55,7 +59,7 @@ namespace HSMServer.BackgroundTask
                     if (lastUpdateInterval < _minimumUpdateInterval)
                         continue;
 
-                    SensorInfo info = _productManager.GetSensorInfo(cachedValue.Product, cachedValue.Path);
+                    SensorInfo info = _sensorsInterface.GetSensorInfo(cachedValue.Product, cachedValue.Path);
                     if (info.ExpectedUpdateInterval == TimeSpan.Zero)
                         continue;
 

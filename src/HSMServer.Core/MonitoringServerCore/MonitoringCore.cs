@@ -1,6 +1,4 @@
-﻿using HSMCommon;
-using HSMCommon.Certificates;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
@@ -21,27 +19,22 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using RSAParameters = System.Security.Cryptography.RSAParameters;
 using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore, IMonitoringDataReceiver, IProductsInterface,
-        ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver
+    public class MonitoringCore : IMonitoringDataReceiver, IProductsInterface,
+        ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver, IDisposable
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
-        private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
 
@@ -53,12 +46,10 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseAdapter = databaseAdapter;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
-            _certificateManager = new CertificateManager();
             _userManager = userManager;
             userManager.AddObserver(this);
             _queueManager = new MonitoringQueueManager(userManager);
             _productManager = productManager;
-            _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
             //MigrateSensorsValuesToNewDatabase();
             Thread.Sleep(5000);
@@ -89,7 +80,7 @@ namespace HSMServer.Core.MonitoringServerCore
             var productsList = _productManager.Products;
             foreach (var product in productsList)
             {
-                var sensors = _productManager.GetProductSensors(product.Name);
+                var sensors = GetProductSensors(product.Name);
                 foreach (var sensor in sensors)
                 {
                     //var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
@@ -150,6 +141,17 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             //Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
             Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+        }
+
+        public void AddSensor(string productName, SensorValueBase sensorValue)
+        {
+            var product = _productManager.GetProductByName(productName);
+            if (product == null) return;
+
+            var newSensor = sensorValue.Convert(productName);
+
+            product.AddOrUpdateSensor(newSensor);
+            _databaseAdapter.AddSensor(newSensor);
         }
 
         public void AddSensorsValues(List<CommonSensorValue> values)
@@ -223,7 +225,23 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        public void RemoveSensor(string product, string key, string path)
+        public void RemoveSensor(string productName, string path)
+        {
+            var product = _productManager.GetProductByName(productName);
+            if (product == null) return;
+
+            try
+            {
+                product.RemoveSensor(path);
+                _databaseAdapter.RemoveSensor(productName, path);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Error while removing sensor {path} for {productName}");
+            }
+        }
+
+        private void RemoveSensor(string product, string key, string path)
         {
             try
             {
@@ -237,7 +255,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 updateMessage.Time = timeCollected;
 
                 _queueManager.AddSensorData(updateMessage);
-                _productManager.RemoveSensor(product, path);
+                RemoveSensor(product, path);
                 _valuesCache.RemoveSensorValue(product, path);
             }
             catch (Exception e)
@@ -252,6 +270,21 @@ namespace HSMServer.Core.MonitoringServerCore
                 foreach (var path in paths)
                     RemoveSensor(product, key, path);
         }
+
+        public void UpdateSensorInfo(SensorInfo newInfo)
+        {
+            var existingInfo = GetSensorInfo(newInfo.ProductName, newInfo.Path);
+            if (existingInfo == null) return;
+
+            existingInfo.Update(newInfo);
+
+            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(existingInfo);
+
+            _databaseAdapter.UpdateSensor(existingInfo);
+        }
+
+        public bool IsSensorRegistered(string productName, string path) =>
+            _productManager.GetProductByName(productName)?.Sensors.ContainsKey(path) ?? false;
 
         public void AddSensorValue<T>(T value) where T : SensorValueBase
         {
@@ -286,6 +319,14 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
+        public SensorInfo GetSensorInfo(string productName, string path)
+        {
+            SensorInfo value = null;
+
+            return _productManager.GetProductByName(productName)?.Sensors.TryGetValue(path, out value)
+                ?? false ? value : null;
+        }
+
         private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
         {
             if (value is BarSensorValueBase barSensorValue)
@@ -312,9 +353,9 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var transactionType = TransactionType.Update;
 
-            if (!_productManager.IsSensorRegistered(productName, value.Path))
+            if (!IsSensorRegistered(productName, value.Path))
             {
-                _productManager.AddSensor(productName, value);
+                AddSensor(productName, value);
                 transactionType = TransactionType.Add;
             }
 
@@ -346,35 +387,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        public List<SensorInfo> GetAllAvailableSensorInfos(User user)
-        {
-            if (user.IsAdmin)
-            {
-                return GetAllExistingSensorInfos();
-            }
-
-            return GetAvailableSensorInfos(user);
-        }
-
-        private List<SensorInfo> GetAllExistingSensorInfos()
-        {
-            return _productManager.GetAllExistingSensorInfos();
-        }
-
-        private List<SensorInfo> GetAvailableSensorInfos(User user)
-        {
-            List<SensorInfo> result = new List<SensorInfo>();
-            foreach (var productRole in user.ProductsRoles)
-            {
-                if (productRole.Value == ProductRoleEnum.ProductManager)
-                {
-                    var product = _productManager.GetProductByKey(productRole.Key);
-                    result.AddRange(_productManager.GetProductSensors(product.Name));
-                }
-            }
-
-            return result;
-        }
         public List<SensorData> GetSensorUpdates(User user)
         {
             return _queueManager.GetUserUpdates(user);
@@ -398,6 +410,9 @@ namespace HSMServer.Core.MonitoringServerCore
 
             return result;
         }
+
+        public ICollection<SensorInfo> GetProductSensors(string productName) =>
+            _productManager.GetProductByName(productName)?.Sensors.Values;
 
         #region Sensors History
 
@@ -439,19 +454,6 @@ namespace HSMServer.Core.MonitoringServerCore
             }
 
             return historyList;
-        }
-
-        public string GetFileSensorValue(User user, string product, string path)
-        {
-            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
-            if (typedData != null)
-            {
-                return typedData.FileContent;
-            }
-
-
-            return string.Empty;
         }
 
         public byte[] GetFileSensorValueBytes(User user, string product, string path)
@@ -681,30 +683,6 @@ namespace HSMServer.Core.MonitoringServerCore
         public void AddUpdate(SensorData update)
         {
             _queueManager.AddSensorData(update);
-        }
-
-        public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
-            RSAParameters rsaParameters)
-        {
-            (X509Certificate2, X509Certificate2) result;
-            var rsa = RSA.Create(rsaParameters);
-
-            X509Certificate2 clientCert =
-                CertificatesProcessor.CreateAndSignCertificate(subject, rsa, CertificatesConfig.CACertificate);
-
-            string fileName = $"{commonName}.crt";
-            _certificateManager.InstallClientCertificate(clientCert);
-            _certificateManager.SaveClientCertificate(clientCert, fileName);
-            _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), true);
-            result.Item1 = clientCert;
-            result.Item2 = CertificatesConfig.CACertificate;
-            return result;
-        }
-
-        public ClientVersionModel GetLastAvailableClientVersion()
-        {
-            return _configurationProvider.ClientVersion;
         }
 
         public void Dispose()

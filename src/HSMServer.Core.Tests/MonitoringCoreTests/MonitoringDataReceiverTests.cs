@@ -1,12 +1,10 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
@@ -17,17 +15,12 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
-    public class MonitoringDataReceiverTests : IClassFixture<MonitoringDataReceiverFixture>
+    public class MonitoringDataReceiverTests : BaseFixture<MonitoringDataReceiverFixture>
     {
         private const int SeveralSensorValuesCount = 3;
 
-        private readonly MonitoringCore _monitoringCore;
-        private readonly DatabaseAdapterProductsManager _databaseAdapterManager;
-        private readonly ValuesCache _valuesCache;
+        private readonly string _testProductName = TestProductsManager.TestProduct.Name;
         private readonly BarSensorsStorage _barStorage;
-
-        private readonly SensorValuesFactory _sensorValuesFactory;
-        private readonly SensorValuesTester _sensorValuesTester;
 
         private delegate List<SensorData> GetValuesFromCache(List<string> products);
         private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
@@ -36,33 +29,21 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private delegate List<SensorInfo> GetAllSensorInfo(Product product);
 
 
-        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture)
+        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture) : base(fixture)
         {
-            _valuesCache = new ValuesCache();
-
-            _databaseAdapterManager = new DatabaseAdapterProductsManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
-
-            _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
-            _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
+            _barStorage = new BarSensorsStorage();
 
             var userManager = new Mock<IUserManager>();
 
-            _barStorage = new BarSensorsStorage();
-
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
-
-            var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            var productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
                 userManager.Object,
                 _barStorage,
-                productManager,
+                _productManager,
                 configurationProvider,
                 _valuesCache,
                 monitoringLogger);
@@ -102,9 +83,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorValue(sensorValue);
 
-            var lastBarValue = _barStorage.GetLastValue(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+            var lastBarValue = _barStorage.GetLastValue(_testProductName, sensorValue.Path);
 
-            Assert.Equal(_databaseAdapterManager.TestProduct.Name, lastBarValue.ProductName);
+            Assert.Equal(_testProductName, lastBarValue.ProductName);
             Assert.Equal(SensorValuesTester.GetSensorValueType(sensorValue), lastBarValue.ValueType);
             Assert.Equal(sensorValue, lastBarValue.Value);
         }
@@ -185,9 +166,9 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _monitoringCore.AddSensorsValues(new List<UnitedSensorValue>() { unitedValue });
 
-            var lastBarValue = _barStorage.GetLastValue(_databaseAdapterManager.TestProduct.Name, unitedValue.Path);
+            var lastBarValue = _barStorage.GetLastValue(_testProductName, unitedValue.Path);
 
-            Assert.Equal(_databaseAdapterManager.TestProduct.Name, lastBarValue.ProductName);
+            Assert.Equal(_testProductName, lastBarValue.ProductName);
             Assert.Equal(SensorValuesTester.GetSensorValueType(unitedValue), lastBarValue.ValueType);
             SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, lastBarValue.Value);
         }
@@ -237,7 +218,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
         private void TestSensorDataFromCache(SensorValueBase sensorValue, GetValuesFromCache getCachedValues)
         {
-            var sensorDataFromCache = getCachedValues?.Invoke(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
+            var sensorDataFromCache = getCachedValues?.Invoke(new List<string>(1) { _testProductName })
                                                      ?.FirstOrDefault(s => s.Path == sensorValue.Path);
 
             _sensorValuesTester.TestSensorDataFromCache(sensorValue, sensorDataFromCache);
@@ -245,14 +226,14 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
         private void TestSensorHistoryDataFromDB(SensorValueBase sensorValue, GetSensorHistoryData getSensorHistoryData)
         {
-            var sensorHistoryDataFromDB = getSensorHistoryData?.Invoke(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+            var sensorHistoryDataFromDB = getSensorHistoryData?.Invoke(_testProductName, sensorValue.Path);
 
             SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue, sensorHistoryDataFromDB);
         }
 
         private void TestSensorInfoFromDB(SensorValueBase sensorValue, GetSensorInfo getSensorInfo)
         {
-            var sensorInfoFromDB = getSensorInfo?.Invoke(_databaseAdapterManager.TestProduct.Name, sensorValue.Path);
+            var sensorInfoFromDB = getSensorInfo?.Invoke(_testProductName, sensorValue.Path);
 
             _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfoFromDB);
         }
@@ -260,7 +241,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private void TestSeveralSensorDataFromCache(Dictionary<string, List<SensorValueBase>> sensorValues,
             GetValuesFromCache getValuesFromCache)
         {
-            var cache = getValuesFromCache?.Invoke(new List<string>(1) { _databaseAdapterManager.TestProduct.Name })
+            var cache = getValuesFromCache?.Invoke(new List<string>(1) { _testProductName })
                                           ?.ToDictionary(s => s.Path);
 
             foreach (var sensors in sensorValues)
@@ -272,7 +253,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             foreach (var sensors in sensorValues)
             {
-                var datas = getAllSensorHistoryData?.Invoke(_databaseAdapterManager.TestProduct.Name, sensors.Key);
+                var datas = getAllSensorHistoryData?.Invoke(_testProductName, sensors.Key);
                 for (int i = 0; i < sensors.Value.Count; ++i)
                     SensorValuesTester.TestSensorHistoryDataFromDB(sensors.Value[i], datas[i]);
             }
@@ -281,7 +262,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private void TestSeveralSensorInfoFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
             GetAllSensorInfo getAllSensorInfo)
         {
-            var infos = getAllSensorInfo(_databaseAdapterManager.TestProduct).ToDictionary(s => s.Path);
+            var infos = getAllSensorInfo(TestProductsManager.TestProduct).ToDictionary(s => s.Path);
 
             foreach (var sensors in sensorValues)
                 for (int i = 0; i < sensors.Value.Count; ++i)

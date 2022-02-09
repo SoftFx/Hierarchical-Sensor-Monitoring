@@ -24,11 +24,11 @@ namespace hsm_wrapper
 
 		void Initialize(bool use_logging, const std::string& folder_path, const std::string& file_name_format);
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool is_updated);
-		void MonitoringServiceAlive();
+		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path = "");
+		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
+		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
+		void InitializeOsMonitoring(bool is_updated, const std::string& specific_path = "");
+		void MonitoringServiceAlive(const std::string& specific_path = "");
 
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
@@ -58,11 +58,11 @@ namespace hsm_wrapper
 
 		void Initialize(bool use_logging = true, const std::string& folder_path = {}, const std::string& file_name_format = {});
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool is_updated);
-		void MonitoringServiceAlive();
+		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path = "");
+		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
+		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
+		void InitializeOsMonitoring(bool is_updated, const std::string& specific_path = "");
+		void MonitoringServiceAlive(const std::string& specific_path = "");
 
 		BoolSensor CreateBoolSensor(const std::string& path, const std::string& description = {});
 		IntSensor CreateIntSensor(const std::string& path, const std::string& description = {});

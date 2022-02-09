@@ -17,9 +17,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         private readonly string _productName;
 
 
-        internal SensorValuesTester(DatabaseAdapterProductsManager dbManager) =>
-            _productName = dbManager.TestProduct.Name;
-
         internal SensorValuesTester(string productName) =>
             _productName = productName;
 
@@ -49,6 +46,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(type, actual.TransactionType);
         }
 
+        // TODO Rename TestSensorInfoFromDB to TestSensorInfo
         internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
         {
             Assert.NotNull(actual);

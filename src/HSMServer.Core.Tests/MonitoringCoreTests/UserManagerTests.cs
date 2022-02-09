@@ -10,12 +10,11 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class UserManagerTests : IClassFixture<UserManagerFixture>
+    public class UserManagerTests : BaseFixture<UserManagerFixture>
     {
-        private readonly User _defaultUser;
-        private readonly User _testUser;
+        private readonly User _defaultUser = TestUsersManager.DefaultUser;
+        private readonly User _testUser = TestUsersManager.TestUser;
 
-        private readonly DatabaseAdapterUsersManager _databaseAdapterManager;
         private readonly UserManager _userManager;
 
         private delegate User GetUserByUserName(string username);
@@ -23,16 +22,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<User> GetAllUsersFromDB();
 
 
-        public UserManagerTests(UserManagerFixture fixture)
-        {
-            _databaseAdapterManager = new DatabaseAdapterUsersManager(fixture.DatabasePath);
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
-
-            _defaultUser = _databaseAdapterManager.DefaultUser;
-            _testUser = _databaseAdapterManager.TestUser;
-
+        public UserManagerTests(UserManagerFixture fixture) : base(fixture) =>
             _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
-        }
 
 
         [Fact]
@@ -126,7 +117,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "One")]
         public void AuthenticateUnregisteredUserTest()
         {
-            var UnregisteredUser = new User() { UserName = RandomValuesGenerator.GetRandomString(), Password = RandomValuesGenerator.GetRandomString()};
+            var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
 
             var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
 

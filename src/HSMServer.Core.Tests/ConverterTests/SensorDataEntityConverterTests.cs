@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class SensorDataEntityConverterTests
     {
-        private static readonly string _productName = EntitiesConverterFixture.ProductKey;
+        private static readonly string _productName = EntitiesConverterFixture.ProductName;
 
 
         [Theory]
@@ -166,20 +166,9 @@ namespace HSMServer.Core.Tests.ConverterTests
         private static (SensorDataEntity, SensorInfo) BuildDatasForTests(SensorType sensorType, bool withComment = true)
         {
             var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(sensorType, withComment);
-            var sensorInfo = BuildSensorInfo(sensorDataEntity.DataType);
+            var sensorInfo = SensorInfoFactory.BuildSensorInfo(_productName, sensorDataEntity.DataType);
 
             return (sensorDataEntity, sensorInfo);
         }
-
-        private static SensorInfo BuildSensorInfo(byte sensorType) =>
-            new()
-            {
-                Path = nameof(SensorInfo),
-                ProductName = _productName,
-                SensorName = nameof(SensorInfo),
-                Description = $"{nameof(SensorInfo)} {nameof(SensorInfo.Description)}",
-                SensorType = (SensorType)sensorType,
-                Unit = RandomValuesGenerator.GetRandomString(),
-            };
     }
 }

@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Model;
+﻿using HSMServer.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -16,11 +15,10 @@ namespace HSMServer.Controllers
     public class ValuesController : ControllerBase
     {
         private readonly ILogger<ValuesController> _logger;
-        private readonly IMonitoringCore _monitoringCore;
-        public ValuesController(IMonitoringCore monitoringCore, ILogger<ValuesController> logger)
+
+        public ValuesController(ILogger<ValuesController> logger)
         {
             _logger = logger;
-            _monitoringCore = monitoringCore;
         }
 
         [HttpGet]
