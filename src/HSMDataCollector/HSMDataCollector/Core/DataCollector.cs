@@ -135,7 +135,7 @@ namespace HSMDataCollector.Core
             StartCurrentProcessMonitoring(isCPU, isMemory, isThreads, specificPath);
         }
 
-        public void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads)
+        public void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
             
         }
