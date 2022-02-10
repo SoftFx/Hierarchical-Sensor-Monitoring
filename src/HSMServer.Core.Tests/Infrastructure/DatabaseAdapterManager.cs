@@ -85,7 +85,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Password = HashComputer.ComputePasswordHash(TestUserName),
                 ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.ProductName, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
                 },
             };
     }

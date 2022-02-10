@@ -233,6 +233,38 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Null(_monitoringCore.GetProductSensors(RandomGenerator.GetRandomString()));
 
 
+        [Fact]
+        [Trait("Category", "Get sensors data")]
+        public void GetSensorUpdates()
+        {
+            // initialize queueManager
+            _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
+
+            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+            _monitoringCore.AddSensorValue(sensorValue);
+            _monitoringCore.RemoveSensors(TestProductsManager.ProductName, sensorValue.Key, new List<string>() { sensorValue.Path });
+
+            var result = _monitoringCore.GetSensorUpdates(TestUsersManager.TestUser);
+
+            Assert.Equal(2, result.Count);
+            _sensorValuesTester.TestSensorDataFromCache(sensorValue, result[0]);
+            TestRemovedSensorData(sensorValue, TestProductsManager.ProductName, result[1]);
+        }
+
+        [Fact]
+        [Trait("Category", "Get sensors data")]
+        public void GetSensorsTreeTest()
+        {
+            var sensorsLastValues = AddRandomSensorValuesAndGetTheirLastValues(10);
+
+            var result = _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
+
+            Assert.Equal(sensorsLastValues.Count, result.Count);
+            foreach (var sensorData in result)
+                _sensorValuesTester.TestSensorDataFromCache(sensorsLastValues[sensorData.Path], sensorData);
+        }
+
+
         private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
             GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
         {
@@ -283,6 +315,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
         }
 
+        private static void TestRemovedSensorData(SensorValueBase expected, string expectedProductName, SensorData actual)
+        {
+            Assert.Equal(expectedProductName, actual.Product);
+            Assert.Equal(expected.Key, actual.Key);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(TransactionType.Delete, actual.TransactionType);
+            Assert.True(DateTime.UtcNow > actual.Time);
+        }
+
 
         private SensorValueBase AddAndGetRandomSensor(AddSensor addSensor = null, string productName = null)
         {
@@ -291,6 +332,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             (addSensor ?? _monitoringCore.AddSensor)?.Invoke(productName ?? _testProductName, sensorValue);
 
             return sensorValue;
+        }
+
+        private Dictionary<string, SensorValueBase> AddRandomSensorValuesAndGetTheirLastValues(int count)
+        {
+            var sensorsLastValues = new Dictionary<string, SensorValueBase>();
+            for (int i = 0; i < count; ++i)
+            {
+                var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+
+                _monitoringCore.AddSensorValue(sensorValue);
+                sensorsLastValues[sensorValue.Path] = sensorValue;
+            }
+
+            return sensorsLastValues;
         }
 
         private static SensorInfo GetUpdatedSensorInfo(SensorInfo existingSensorInfo, int iteration)

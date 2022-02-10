@@ -21,8 +21,6 @@ namespace HSMServer.Core.MonitoringCoreInterface
         SensorInfo GetSensorInfo(string productName, string path);
         ICollection<SensorInfo> GetProductSensors(string productName);
 
-        List<SensorData> GetSensorUpdates(User user);
-        List<SensorData> GetSensorsTree(User user);
         List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n);
         List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path);
@@ -32,5 +30,8 @@ namespace HSMServer.Core.MonitoringCoreInterface
 
         //ToDo: move
         bool HideProduct(Product product, out string error);
+
+        List<SensorData> GetSensorUpdates(User user);
+        List<SensorData> GetSensorsTree(User user);
     }
 }
