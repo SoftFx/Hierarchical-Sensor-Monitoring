@@ -532,7 +532,7 @@ namespace HSMServer.Controllers
         public HtmlString GetSensorInfo([FromQuery(Name = "Path")] string encodedPath)
         {
             ParseProductAndPath(encodedPath, out string product, out string path);
-            var info = _productManager.GetSensorInfo(product, path);
+            var info = _sensorsInterface.GetSensorInfo(product, path);
             if (info == null)
                 return new HtmlString(string.Empty);
 
@@ -544,11 +544,11 @@ namespace HSMServer.Controllers
         public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
         {
             ParseProductAndPath(updateModel.EncodedPath, out var product, out var path);
-            var info = _productManager.GetSensorInfo(product, path);
+            var info = _sensorsInterface.GetSensorInfo(product, path);
             SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
             viewModel.Update(updateModel);
             var infoFromViewModel = CreateModelFromViewModel(viewModel);
-            _productManager.UpdateSensorInfo(infoFromViewModel);
+            _sensorsInterface.UpdateSensorInfo(infoFromViewModel);
         }
 
         #endregion

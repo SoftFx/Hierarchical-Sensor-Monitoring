@@ -48,7 +48,7 @@ namespace HSMServer.Core.Cache
                     }
                 }
             }
-            
+
             return result;
         }
 
@@ -56,18 +56,9 @@ namespace HSMServer.Core.Cache
         {
             lock (_syncRoot)
             {
-                var productsList = _productSensorDictionary[productName];
-                productsList.Remove(path);
+                if (_productSensorDictionary.TryGetValue(productName, out var productsList))
+                    productsList.Remove(path);
             }
-            //bool res = _productSensorDictionary.TryGetValue(productName, out var dict);
-            //if (res)
-            //{
-            //    bool removeRes = dict.TryRemove(path, out var data);
-            //    if (!removeRes)
-            //    {
-            //        //TODO: throw exception
-            //    }
-            //}
         }
 
         public void RemoveProduct(string productName)

@@ -10,12 +10,11 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class UserManagerTests : IClassFixture<UserManagerFixture>
+    public class UserManagerTests : MonitoringCoreTestsBase<UserManagerFixture>
     {
-        private readonly User _defaultUser;
-        private readonly User _testUser;
+        private readonly User _defaultUser = TestUsersManager.DefaultUser;
+        private readonly User _testUser = TestUsersManager.TestUser;
 
-        private readonly DatabaseAdapterUsersManager _databaseAdapterManager;
         private readonly UserManager _userManager;
 
         private delegate User GetUserByUserName(string username);
@@ -23,16 +22,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<User> GetAllUsersFromDB();
 
 
-        public UserManagerTests(UserManagerFixture fixture)
-        {
-            _databaseAdapterManager = new DatabaseAdapterUsersManager(fixture.DatabasePath);
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
-
-            _defaultUser = _databaseAdapterManager.DefaultUser;
-            _testUser = _databaseAdapterManager.TestUser;
-
+        public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture) =>
             _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
-        }
 
 
         [Fact]
@@ -110,6 +102,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                                   _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
 
+        [Fact]
+        [Trait("Category", "One")]
+        public async Task AuthenticateUserTest()
+        {
+            var defaultUserFromDB = await GetDefaultUserFromDB();
+
+            var actual = _userManager.Authenticate(defaultUserFromDB.UserName, defaultUserFromDB.UserName);
+
+            TestAuthenticateUser(defaultUserFromDB, actual);
+
+        }
+
+        [Fact]
+        [Trait("Category", "One")]
+        public void AuthenticateUnregisteredUserTest()
+        {
+            var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
+
+            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+
+            Assert.Null(actual);
+
+        }
 
         private static async Task FullTestUserAsync(User expected,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
@@ -227,5 +242,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         private static string GetUpdatedProperty(object property) => $"{property}-updated";
+
+        private static void TestAuthenticateUser(User expected, User actual)
+        {
+            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
+            Assert.Null(actual.Password);
+            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
+            Assert.Equal(expected.CertificateThumbprint, actual.CertificateThumbprint);
+            Assert.Equal(expected.IsAdmin, actual.IsAdmin);
+            Assert.Equal(expected.ProductsRoles, actual.ProductsRoles);
+        }
     }
 }

@@ -30,8 +30,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new BoolSensorData()
                 {
-                    BoolValue = RandomValuesGenerator.GetRandomBool(),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    BoolValue = RandomGenerator.GetRandomBool(),
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -45,8 +45,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new IntSensorData()
                 {
-                    IntValue = RandomValuesGenerator.GetRandomInt(),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    IntValue = RandomGenerator.GetRandomInt(),
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -60,8 +60,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new DoubleSensorData()
                 {
-                    DoubleValue = RandomValuesGenerator.GetRandomDouble(),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    DoubleValue = RandomGenerator.GetRandomDouble(),
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -75,8 +75,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new StringSensorData()
                 {
-                    StringValue = RandomValuesGenerator.GetRandomString(),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    StringValue = RandomGenerator.GetRandomString(),
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -90,14 +90,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new IntBarSensorData()
                 {
-                    Min = RandomValuesGenerator.GetRandomInt(),
-                    Max = RandomValuesGenerator.GetRandomInt(),
-                    Mean = RandomValuesGenerator.GetRandomInt(),
-                    LastValue = RandomValuesGenerator.GetRandomInt(),
-                    Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                    Min = RandomGenerator.GetRandomInt(),
+                    Max = RandomGenerator.GetRandomInt(),
+                    Mean = RandomGenerator.GetRandomInt(),
+                    LastValue = RandomGenerator.GetRandomInt(),
+                    Count = RandomGenerator.GetRandomInt(positive: true),
                     StartTime = DateTime.UtcNow.AddMinutes(-5),
                     EndTime = DateTime.UtcNow.AddMinutes(5),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -111,14 +111,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new DoubleBarSensorData()
                 {
-                    Min = RandomValuesGenerator.GetRandomDouble(),
-                    Max = RandomValuesGenerator.GetRandomDouble(),
-                    Mean = RandomValuesGenerator.GetRandomDouble(),
-                    LastValue = RandomValuesGenerator.GetRandomDouble(),
-                    Count = RandomValuesGenerator.GetRandomInt(positive: true),
+                    Min = RandomGenerator.GetRandomDouble(),
+                    Max = RandomGenerator.GetRandomDouble(),
+                    Mean = RandomGenerator.GetRandomDouble(),
+                    LastValue = RandomGenerator.GetRandomDouble(),
+                    Count = RandomGenerator.GetRandomInt(positive: true),
                     StartTime = DateTime.UtcNow.AddMinutes(-5),
                     EndTime = DateTime.UtcNow.AddMinutes(5),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -132,10 +132,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new FileSensorBytesData()
                 {
-                    Extension = RandomValuesGenerator.GetRandomString(3),
-                    FileContent = RandomValuesGenerator.GetRandomBytes(),
+                    Extension = RandomGenerator.GetRandomString(3),
+                    FileContent = RandomGenerator.GetRandomBytes(),
                     FileName = nameof(FileSensorBytesData),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -149,10 +149,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             dataEntity.TypedData = JsonSerializer.Serialize(
                 new FileSensorData()
                 {
-                    Extension = RandomValuesGenerator.GetRandomString(3),
-                    FileContent = RandomValuesGenerator.GetRandomString(),
+                    Extension = RandomGenerator.GetRandomString(3),
+                    FileContent = RandomGenerator.GetRandomString(),
                     FileName = nameof(FileSensorData),
-                    Comment = withComment ? RandomValuesGenerator.GetRandomString() : null,
+                    Comment = withComment ? RandomGenerator.GetRandomString() : null,
                 });
 
             return dataEntity;
@@ -165,7 +165,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Timestamp = GetTimestamp(dateTime),
                 Path = nameof(SensorDataEntity),
                 TimeCollected = dateTime,
-                Status = (byte)RandomValuesGenerator.GetRandomInt(0, 4),
+                Status = RandomGenerator.GetRandomByte(max: 4),
             };
 
         private static long GetTimestamp(DateTime dateTime)

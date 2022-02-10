@@ -20,7 +20,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             _sensorValuesFactory = converterFixture.SensorValuesFactory;
             _sensorValuesTester = converterFixture.SensorValuesTester;
-            _productName = EntitiesConverterFixture.ProductKey;
+            _productName = EntitiesConverterFixture.ProductName;
 
             _timeCollected = DateTime.UtcNow;
         }

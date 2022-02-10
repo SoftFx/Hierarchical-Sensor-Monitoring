@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal static class RandomValuesGenerator
+    internal static class RandomGenerator
     {
         private const string PossibleChars =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -14,6 +14,9 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static int GetRandomInt(int min = -100, int max = 100, bool positive = false) =>
             _random.Next(positive ? 0 : min, max);
+
+        internal static byte GetRandomByte(byte min = 0, byte max = 8) =>
+            (byte)_random.Next(min, max);
 
         internal static double GetRandomDouble() =>
             _random.NextDouble() * (GetRandomBool() ? -100 : 100);
