@@ -8,13 +8,14 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class ProductManagerTests : BaseFixture<ProductManagerFixture>
+    public class ProductManagerTests : MonitoringCoreTestsBase<ProductManagerFixture>
     {
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
 
 
-        public ProductManagerTests(ProductManagerFixture fixture) : base(fixture) { }
+        public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture) { }
 
 
         [Fact]

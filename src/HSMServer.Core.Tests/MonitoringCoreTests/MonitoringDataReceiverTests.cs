@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
 using System.Collections.Generic;
@@ -15,7 +16,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
-    public class MonitoringDataReceiverTests : BaseFixture<MonitoringDataReceiverFixture>
+    public class MonitoringDataReceiverTests : MonitoringCoreTestsBase<MonitoringDataReceiverFixture>
     {
         private const int SeveralSensorValuesCount = 3;
 
@@ -29,7 +30,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private delegate List<SensorInfo> GetAllSensorInfo(Product product);
 
 
-        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture) : base(fixture)
+        public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture)
         {
             _barStorage = new BarSensorsStorage();
 

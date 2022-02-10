@@ -10,7 +10,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class UserManagerTests : BaseFixture<UserManagerFixture>
+    public class UserManagerTests : MonitoringCoreTestsBase<UserManagerFixture>
     {
         private readonly User _defaultUser = TestUsersManager.DefaultUser;
         private readonly User _testUser = TestUsersManager.TestUser;
@@ -22,7 +22,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<User> GetAllUsersFromDB();
 
 
-        public UserManagerTests(UserManagerFixture fixture) : base(fixture) =>
+        public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture) =>
             _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
 
 

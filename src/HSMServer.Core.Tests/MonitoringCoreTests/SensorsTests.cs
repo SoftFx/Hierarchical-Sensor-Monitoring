@@ -15,7 +15,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class SensorsTests : BaseFixture<SensorsFixture>
+    public class SensorsTests : MonitoringCoreTestsBase<SensorsFixture>
     {
         private readonly string _testProductName = TestProductsManager.ProductName;
 
@@ -28,7 +28,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
 
 
-        public SensorsTests(SensorsFixture fixture) : base(fixture)
+        public SensorsTests(SensorsFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture)
         {
             var userManager = new Mock<IUserManager>();
             var barStorage = new Mock<IBarSensorsStorage>();

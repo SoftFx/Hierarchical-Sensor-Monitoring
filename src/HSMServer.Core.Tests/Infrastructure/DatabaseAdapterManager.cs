@@ -12,6 +12,9 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         private static int _dbNumber;
 
+
+        public string DatabaseFolder { get; }
+
         public DatabaseAdapter DatabaseAdapter { get; private set; }
 
 
@@ -19,6 +22,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             ++_dbNumber;
 
+            DatabaseFolder = databaseFolder;
             DatabaseAdapter = new DatabaseAdapter(
                 new DatabaseSettings()
                 {
