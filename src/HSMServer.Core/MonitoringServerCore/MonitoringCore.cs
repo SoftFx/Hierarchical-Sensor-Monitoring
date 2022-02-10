@@ -1,6 +1,4 @@
-﻿using HSMCommon;
-using HSMCommon.Certificates;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
@@ -21,27 +19,22 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using RSAParameters = System.Security.Cryptography.RSAParameters;
 using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringCore, IMonitoringDataReceiver, IProductsInterface,
-        ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver
+    public class MonitoringCore : IMonitoringDataReceiver, IProductsInterface,
+        ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver, IDisposable
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
-        private readonly CertificateManager _certificateManager;
         private readonly IProductManager _productManager;
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
 
@@ -53,12 +46,10 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseAdapter = databaseAdapter;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
-            _certificateManager = new CertificateManager();
             _userManager = userManager;
             userManager.AddObserver(this);
             _queueManager = new MonitoringQueueManager(userManager);
             _productManager = productManager;
-            _configurationProvider = configurationProvider;
             _valuesCache = valuesVCache;
             //MigrateSensorsValuesToNewDatabase();
             Thread.Sleep(5000);
@@ -465,19 +456,6 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyList;
         }
 
-        public string GetFileSensorValue(User user, string product, string path)
-        {
-            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
-            if (typedData != null)
-            {
-                return typedData.FileContent;
-            }
-
-
-            return string.Empty;
-        }
-
         public byte[] GetFileSensorValueBytes(User user, string product, string path)
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
@@ -705,30 +683,6 @@ namespace HSMServer.Core.MonitoringServerCore
         public void AddUpdate(SensorData update)
         {
             _queueManager.AddSensorData(update);
-        }
-
-        public (X509Certificate2, X509Certificate2) SignClientCertificate(User user, string subject, string commonName,
-            RSAParameters rsaParameters)
-        {
-            (X509Certificate2, X509Certificate2) result;
-            var rsa = RSA.Create(rsaParameters);
-
-            X509Certificate2 clientCert =
-                CertificatesProcessor.CreateAndSignCertificate(subject, rsa, CertificatesConfig.CACertificate);
-
-            string fileName = $"{commonName}.crt";
-            _certificateManager.InstallClientCertificate(clientCert);
-            _certificateManager.SaveClientCertificate(clientCert, fileName);
-            _userManager.AddUser(commonName, clientCert.Thumbprint, fileName,
-                HashComputer.ComputePasswordHash(commonName), true);
-            result.Item1 = clientCert;
-            result.Item2 = CertificatesConfig.CACertificate;
-            return result;
-        }
-
-        public ClientVersionModel GetLastAvailableClientVersion()
-        {
-            return _configurationProvider.ClientVersion;
         }
 
         public void Dispose()

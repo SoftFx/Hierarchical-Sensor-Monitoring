@@ -1,15 +1,15 @@
-﻿using System;
+﻿using HSMCommon;
+using HSMCommon.Certificates;
+using HSMCommon.Constants;
+using HSMServer.Core.DataLayer;
+using NLog;
+using System;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
-using HSMCommon;
-using HSMCommon.Certificates;
-using HSMCommon.Constants;
-using HSMServer.Core.DataLayer;
-using NLog;
 
 namespace HSMServer.Core.Configuration
 {
@@ -32,7 +32,6 @@ namespace HSMServer.Core.Configuration
         private static string _serverCertificatePath;
 
         private static X509Certificate2 _serverCertificate;
-        private static X509Certificate2 _caCertificate;
 
         private static string ServerCertName
         {
@@ -52,16 +51,10 @@ namespace HSMServer.Core.Configuration
             }
         }
 
-        private static string CACertificatePath =>
-            Path.Combine(_caFolderPath, CaCertificateFileName);
-
         public static IDatabaseAdapter DatabaseAdapter { get; private set; }
 
         public static X509Certificate2 ServerCertificate =>
             _serverCertificate ??= ReadServerCertificate();
-
-        public static X509Certificate2 CACertificate =>
-            _caCertificate ??= ReadCACertificate();
 
         public static string CAKeyFilePath { get; private set; }
 
@@ -190,9 +183,6 @@ namespace HSMServer.Core.Configuration
 
             return serverCert;
         }
-
-        private static X509Certificate2 ReadCACertificate() =>
-            CertificatesProcessor.ReadCertificate(CACertificatePath, CAKeyFilePath);
 
         private static void ReadConfig()
         {

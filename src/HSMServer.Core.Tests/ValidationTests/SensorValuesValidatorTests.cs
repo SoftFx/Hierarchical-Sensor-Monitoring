@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         private const int MaxUnitedSensorValueDataSize = 1024;
 
 
-        private readonly SensorValuesFactory _sensorValuesFactory = new(DatabaseAdapterManager.ProductName);
+        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Key);
 
 
         [Fact]
@@ -65,7 +65,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueWarningValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(TooLongStringSensorValueSize);
+            stringSensorValue.StringValue = RandomGenerator.GetRandomString(TooLongStringSensorValueSize);
 
             var result = stringSensorValue.Validate();
 
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueErrorValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(TooLongStringSensorValueSize);
+            stringSensorValue.StringValue = RandomGenerator.GetRandomString(TooLongStringSensorValueSize);
             stringSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
             var result = stringSensorValue.Validate();
@@ -94,7 +94,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void StringSensorValueValidationTest()
         {
             var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-            stringSensorValue.StringValue = RandomValuesGenerator.GetRandomString(MaxStringSensorValueSize);
+            stringSensorValue.StringValue = RandomGenerator.GetRandomString(MaxStringSensorValueSize);
 
             TestCorrectData(stringSensorValue.Validate());
         }
@@ -110,7 +110,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueWarningValidationTest(SensorType type)
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
+            unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
 
             var result = unitedSensorValue.Validate();
 
@@ -140,7 +140,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueAllErrorsValidationTest()
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensor);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
+            unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
             unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
             var result = unitedSensorValue.Validate();
@@ -167,7 +167,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         public void UnitedSensorValueValidationTest(SensorType type)
         {
             var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomValuesGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
+            unitedSensorValue.Data = RandomGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
 
             TestCorrectData(unitedSensorValue.Validate());
         }

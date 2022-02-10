@@ -10,7 +10,7 @@ namespace HSMServer.Core.Tests.ConverterTests
     {
         private const char SensorPathSeparator = '/';
 
-        private readonly string _productName = EntitiesConverterFixture.ProductKey;
+        private readonly string _productName = EntitiesConverterFixture.ProductName;
 
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;

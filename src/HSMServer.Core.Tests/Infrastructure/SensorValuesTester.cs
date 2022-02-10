@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -16,9 +16,6 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         private readonly string _productName;
 
-
-        internal SensorValuesTester(DatabaseAdapterManager dbManager) =>
-            _productName = dbManager.TestProduct.Name;
 
         internal SensorValuesTester(string productName) =>
             _productName = productName;
@@ -49,6 +46,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(type, actual.TransactionType);
         }
 
+        // TODO Rename TestSensorInfoFromDB to TestSensorInfo
         internal void TestSensorInfoFromDB(SensorValueBase expected, SensorInfo actual)
         {
             Assert.NotNull(actual);
