@@ -54,7 +54,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "OneUpdateExtraKey")]
-        public async Task UpdateExtraProductKeyTest()
+        public void UpdateExtraProductKeyTest()
         {
             var name = RandomGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -65,7 +65,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.UpdateProduct(product);
 
-            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [InlineData(500)]
         [InlineData(1000)]
         [Trait("Category", "GetSeveralNotAdmin")]
-        public async Task GetSeveralNotAdminProductsTest(int count)
+        public void GetSeveralNotAdminProductsTest(int count)
         {
             var names = GetRandomProductsNames(count);
             var total = 0;
@@ -146,8 +146,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _userManager.UpdateUser(_notAdminUser);
 
-            await Task.Delay(100);
-
             var products = _productManager.GetProducts(_notAdminUser);
             Assert.Equal(total, products.Count);
 
@@ -162,7 +160,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [InlineData(500)]
         [InlineData(1000)]
         [Trait("Category", "SeveralUpdateExtraKeys")]
-        public async Task UpdateSeveralExtraProductKeysTest(int count)
+        public void UpdateSeveralExtraProductKeysTest(int count)
         {
             var name = RandomGenerator.GetRandomString();
             _productManager.AddProduct(name);
@@ -173,7 +171,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _productManager.UpdateProduct(product);
 
-            await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
         [Theory]
@@ -205,6 +203,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
             var product = TestProductByName(name, getProductByName);
+
             TestProductByKey(name, product.Key, getProductByKey);
             TestProductNameByKey(product.Name, product.Key, getNameByKey);
         }
@@ -212,16 +211,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void FullRemoveProductTest(string name, string key, GetProduct getProductByName,
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            TestRemoveProductByName(name, getProductByName);
-            TestRemoveProductByKey(key, getProductByKey);
-            TestRemoveProductNameByKey(key, getNameByKey);
+            var product = getProductByName?.Invoke(name);
+            Assert.Null(product);
+
+            product = getProductByKey?.Invoke(key);
+            Assert.Null(product);
+
+            name = getNameByKey?.Invoke(key);
+            Assert.Null(name);
         }
 
-        private static async Task FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
+        private static void FullUpdateExtraProductKeyTest(Product product, GetProduct getProductByName,
             GetProduct getProductByKey)
         {
-            await Task.Delay(100);
-
             TestExtraProductKeyByName(product, getProductByName);
             TestExtraProductKeyByKey(product, getProductByKey);
         }
@@ -229,21 +231,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void FullSeveralProductsTest(List<string> names, GetProduct getProductByName,
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            for (int i = 0; i < names.Count; i++)
-                FullProductTest(names[i], getProductByName, getProductByKey, getNameByKey);
+            foreach(var name in names)
+                FullProductTest(name, getProductByName, getProductByKey, getNameByKey);
         }
 
         private static void FullGetSeveralProductsTest(List<Product> products, GetProduct getProductByKey)
         {
-            for (int i = 0; i < products.Count; i++)
-                TestGetProductCopy(products[i], getProductByKey);
+            foreach(var product in products)
+                TestGetProductCopy(product, getProductByKey);
         }
 
         private static void FullSeveralRemoveProductsTest(List<(string name, string key)> tuples,
             GetProduct getProductByName, GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            for (int i = 0; i < tuples.Count; i++)
-                FullRemoveProductTest(tuples[i].name, tuples[i].key, getProductByName, getProductByKey, getNameByKey);
+            foreach(var pair in tuples)
+                FullRemoveProductTest(pair.name, pair.key, getProductByName, getProductByKey, getNameByKey);
         }
 
         private static Product TestProductByName(string name, GetProduct getProductByName)
@@ -254,13 +256,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(name, product.Name);
 
             return product;
-        }
-
-        private static void TestRemoveProductByName(string name, GetProduct getProductByName)
-        {
-            var product = getProductByName?.Invoke(name);
-
-            Assert.Null(product);
         }
 
         private static void TestExtraProductKeyByName(Product product, GetProduct getProductByName)
@@ -302,8 +297,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             Assert.Equal(product.ExtraKeys.Count, updatedProduct.ExtraKeys.Count);
 
-            product.ExtraKeys.OrderBy(ek => ek.Name);
-            updatedProduct.ExtraKeys.OrderBy(ek => ek.Name);
+            product.ExtraKeys = product.ExtraKeys.OrderBy(ek => ek.Name).ToList();
+            updatedProduct.ExtraKeys = updatedProduct.ExtraKeys.OrderBy(ek => ek.Name).ToList();
 
             for (int i = 0; i < updatedProduct.ExtraKeys.Count; i++)
             {
@@ -316,26 +311,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }
         }
 
-        private static void TestRemoveProductByKey(string key, GetProduct getProductByKey)
-        {
-            var product = getProductByKey?.Invoke(key);
-
-            Assert.Null(product);
-        }
-
         private static void TestProductNameByKey(string productName, string key, GetProductNameByKey getProductNameByKey)
         {
             var name = getProductNameByKey?.Invoke(key);
 
             Assert.NotNull(name);
             Assert.Equal(productName, name);
-        }
-
-        private static void TestRemoveProductNameByKey(string key, GetProductNameByKey getProductNameByKey)
-        {
-            var name = getProductNameByKey?.Invoke(key);
-
-            Assert.Null(name);
         }
 
         private static List<string> GetRandomProductsNames(int count)

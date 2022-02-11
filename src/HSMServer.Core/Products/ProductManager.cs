@@ -18,8 +18,6 @@ namespace HSMServer.Core.Products
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
-        public event Action<string> RemovedProduct;
-
         public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
@@ -30,6 +28,7 @@ namespace HSMServer.Core.Products
         }
 
         public List<Product> Products => _products.Values.ToList();
+        public event Action<string> RemovedProduct;
 
         public Product GetProductByName(string name) =>
             _products.GetValueOrDefault(name);
@@ -40,13 +39,11 @@ namespace HSMServer.Core.Products
             if (product == null)
                 _logger.LogError($"Failed to find the product with key {key}");
 
-            return product == null ? null : new Product(product);
+            return new Product(product);
         }
 
         private void InitializeProducts()
         {
-            int count = 0;
-
             var existingProducts = _databaseAdapter.GetProducts();
             foreach (var product in existingProducts)
             {
@@ -54,12 +51,10 @@ namespace HSMServer.Core.Products
 
                 var sensors = _databaseAdapter.GetProductSensors(product);
                 product.InitializeSensors(sensors);
-
-                ++count;
             }
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
-            if (count < 1 || monitoringProduct == null)
+            if (existingProducts.Count < 1 || monitoringProduct == null)
             {
                 AddSelfMonitoringProduct();
             }
@@ -117,12 +112,11 @@ namespace HSMServer.Core.Products
         {
             try
             {
-                _databaseAdapter.RemoveProduct(name);
+                if (GetProductByName(name) == null) 
+                    return;
 
-                if (GetProductByName(name) != null)
-                {
-                    _products.Remove(name, out _);
-                }
+                _databaseAdapter.RemoveProduct(name);
+                _products.Remove(name, out _);
 
                 RemovedProduct?.Invoke(name);
             }
@@ -139,7 +133,8 @@ namespace HSMServer.Core.Products
         {
             foreach (var (_, product) in _products)
             {
-                if (product.Key.Equals(key)) return product;
+                if (product.Key.Equals(key)) 
+                    return product;
             }
 
             return null;
@@ -147,7 +142,8 @@ namespace HSMServer.Core.Products
 
         public List<Product> GetProducts(User user)
         {
-            if (user.IsAdmin) return Products;
+            if (user.IsAdmin) 
+                return Products;
 
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return null;
