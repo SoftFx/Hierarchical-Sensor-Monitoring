@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.MonitoringCoreInterface;
+using HSMServer.Core.Products;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 
@@ -12,19 +12,19 @@ namespace HSMServer.ApiControllers
     [Route("api/[controller]")]
     public class ViewController : Controller
     {
-        private readonly IProductsInterface _productsInterface;
+        private readonly IProductManager _productManager;
         private readonly IUserManager _userManager;
 
-        public ViewController(IProductsInterface productsInterface, IUserManager userManager)
+        public ViewController(IProductManager productManager, IUserManager userManager)
         {
-            _productsInterface = productsInterface;
+            _productManager = productManager;
             _userManager = userManager;
         }
 
         [HttpGet(nameof(GetAllProducts))]
         public ActionResult<List<Product>> GetAllProducts()
         {
-            return _productsInterface.GetAllProducts();
+            return _productManager.Products;
         }
 
         [HttpGet(nameof(GetUsersNotAdmin))]

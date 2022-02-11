@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
-using HSMServer.Core.MonitoringCoreInterface;
+using HSMServer.Core.Products;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -9,10 +9,10 @@ namespace HSMServer.Model.Validators
 {
     public class NewProductNameValidator : AbstractValidator<string>
     {
-        private readonly IProductsInterface _productsInterface;
-        public NewProductNameValidator(IProductsInterface productsInterface)
+        private readonly IProductManager _productManager;
+        public NewProductNameValidator(IProductManager productManager)
         {
-            _productsInterface = productsInterface;
+            _productManager = productManager;
 
             RuleFor(x => x)
                 .NotNull()
@@ -25,7 +25,7 @@ namespace HSMServer.Model.Validators
 
         private bool IsUniqueName(string name)
         {
-            var products = _productsInterface.GetAllProducts();
+            var products = _productManager.Products;
 
             return products?.FirstOrDefault(x =>
                 x.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;

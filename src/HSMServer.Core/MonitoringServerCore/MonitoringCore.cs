@@ -27,8 +27,7 @@ using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringDataReceiver, IProductsInterface,
-        ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver, IDisposable
+    public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver, IDisposable
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
@@ -49,31 +48,19 @@ namespace HSMServer.Core.MonitoringServerCore
             _userManager = userManager;
             userManager.AddObserver(this);
             _queueManager = new MonitoringQueueManager(userManager);
+            
             _productManager = productManager;
+            _productManager.RemovedProduct += RemoveProductHandler;            
+            
             _valuesCache = valuesVCache;
-            //MigrateSensorsValuesToNewDatabase();
+
             Thread.Sleep(5000);
             FillValuesCache();
+
             _logger.LogInformation("Monitoring core initialized");
 
             SensorDataValidationExtensions.Initialize(configurationProvider);
         }
-
-        //private void MigrateSensorsValuesToNewDatabase()
-        //{
-        //    foreach (var product in _productManager.Products)
-        //    {
-        //        var sensors = _productManager.GetProductSensors(product.Name);
-        //        foreach (var sensor in sensors)
-        //        {
-        //            var history = _databaseAdapter.GetAllSensorDataOld(product.Name, sensor.Path);
-        //            foreach (var historyItem in history)
-        //            {
-        //                _databaseAdapter.PutSensorData(historyItem, product.Name);
-        //            }
-        //        }
-        //    }
-        //}
 
         private void FillValuesCache()
         {
@@ -497,131 +484,18 @@ namespace HSMServer.Core.MonitoringServerCore
 
 
         #region Product
-
-        public Product GetProduct(string productKey)
+    
+        private void RemoveProductHandler(string productName)
         {
-            var product = _productManager.Products.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (product == null)
-                _logger.LogError($"Failed to find the product with key {productKey}");
-            return product == null ? null : new Product(product);
-        }
+            DateTime timeCollected = DateTime.UtcNow;
+            SensorData updateMessage = new SensorData();
+            updateMessage.Product = productName;
+            updateMessage.Path = string.Empty;
+            updateMessage.TransactionType = TransactionType.Delete;
+            updateMessage.Time = timeCollected;
 
-        public List<Product> GetProducts(User user)
-        {
-            if (user.ProductsRoles == null || !user.ProductsRoles.Any()) return null;
-
-            return _productManager.Products.Where(p =>
-                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
-        }
-
-        public List<Product> GetAllProducts()
-        {
-            return _productManager.Products;
-        }
-
-        public bool AddProduct(User user, string productName, out Product product, out string error)
-        {
-            product = default(Product);
-            error = string.Empty;
-            bool result;
-            try
-            {
-                _productManager.AddProduct(productName);
-                product = _productManager.GetProductByName(productName);
-                result = true;
-            }
-            catch (Exception e)
-            {
-                result = false;
-                error = e.Message;
-                _logger.LogError(e, $"Failed to add new product name = {productName}, user = {user.UserName}");
-            }
-
-            return result;
-        }
-
-        public bool RemoveProduct(User user, string productName, out Product product, out string error)
-        {
-            product = default(Product);
-            error = string.Empty;
-            bool result;
-            try
-            {
-                product = _productManager.GetProductByName(productName);
-                _productManager.RemoveProduct(productName);
-                result = true;
-            }
-            catch (Exception e)
-            {
-                result = false;
-                error = e.Message;
-                _logger.LogError(e, $"Failed to remove product name = {productName}, user = {user.UserName}");
-            }
-
-            return result;
-        }
-
-        public bool RemoveProduct(string productKey, out string error)
-        {
-            bool result = false;
-            error = string.Empty;
-            string productName = string.Empty;
-            try
-            {
-                var product = _productManager.GetProductByKey(productKey);
-                productName = product?.Name;
-                RemoveProductFromUsers(product);
-                _productManager.RemoveProduct(productName);
-                _valuesCache.RemoveProduct(productName);
-
-                DateTime timeCollected = DateTime.UtcNow;
-                SensorData updateMessage = new SensorData();
-                updateMessage.Product = productName;
-                updateMessage.Path = string.Empty;
-                updateMessage.TransactionType = TransactionType.Delete;
-                updateMessage.Time = timeCollected;
-
-                _queueManager.AddSensorData(updateMessage);
-
-                result = true;
-            }
-            catch (Exception ex)
-            {
-                result = false;
-                error = ex.Message;
-                _logger.LogError(ex, $"Failed to remove product, name = {productName}");
-            }
-            return result;
-        }
-
-        public bool RemoveProduct(Product product, out string error)
-        {
-            bool result = false;
-            error = string.Empty;
-            try
-            {
-                RemoveProductFromUsers(product);
-                _productManager.RemoveProduct(product.Name);
-                _valuesCache.RemoveProduct(product.Name);
-
-                DateTime timeCollected = DateTime.UtcNow;
-                SensorData updateMessage = new SensorData();
-                updateMessage.Product = product.Name;
-                updateMessage.TransactionType = TransactionType.Delete;
-                updateMessage.Time = timeCollected;
-
-                _queueManager.AddSensorData(updateMessage);
-
-                result = true;
-            }
-            catch(Exception ex)
-            {
-                result = false;
-                error = ex.Message;
-                _logger.LogError(ex, $"Failed to remove product, name = {product.Name}");
-            }
-            return result;
-        }
+            _queueManager.AddSensorData(updateMessage);
+        }     
 
         public bool HideProduct(Product product, out string error)
         {
@@ -666,11 +540,6 @@ namespace HSMServer.Core.MonitoringServerCore
             }
         }
 
-        public void UpdateProduct(User user, Product product)
-        {
-            _productManager.UpdateProduct(product);
-        }
-
         #endregion
         
         public void UserUpdated(User user)
@@ -692,6 +561,10 @@ namespace HSMServer.Core.MonitoringServerCore
             {
                 ProcessExtendedBarData(lastBarValue);
             }
+
+            if (_productManager != null)
+                _productManager.RemovedProduct -= RemoveProductHandler;
+
             _barsStorage?.Dispose();
         }
     }

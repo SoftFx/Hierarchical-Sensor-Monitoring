@@ -66,6 +66,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private const string DefaultUserCertificateThumbprint = "a563183e1fec784f45bc8f3aa47c40eba1a26df9";
 
         private const string TestUserName = "TestUserName";
+        private const string NotAdminUserName = "NotAdimUserName";
 
         internal static User DefaultUser { get; } =
             new(DefaultUserName)
@@ -87,6 +88,15 @@ namespace HSMServer.Core.Tests.Infrastructure
                 {
                     new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.ProductName, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
                 },
+            };
+
+        internal static User NotAdmin { get; } =
+            new(NotAdminUserName)
+            {
+                CertificateFileName = RandomGenerator.GetRandomString(),
+                CertificateThumbprint = RandomGenerator.GetRandomString(40),
+                IsAdmin = false,
+                Password = HashComputer.ComputePasswordHash(NotAdminUserName),
             };
     }
 }

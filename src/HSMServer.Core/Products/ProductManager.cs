@@ -1,7 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
@@ -16,6 +18,8 @@ namespace HSMServer.Core.Products
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
+        public event Action<string> RemovedProduct;
+
         public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
@@ -29,7 +33,16 @@ namespace HSMServer.Core.Products
 
         public Product GetProductByName(string name) =>
             _products.GetValueOrDefault(name);
-            
+
+        public Product GetProductCopyByKey(string key)
+        {
+            var product = GetProductByKey(key);
+            if (product == null)
+                _logger.LogError($"Failed to find the product with key {key}");
+
+            return product == null ? null : new Product(product);
+        }
+
         private void InitializeProducts()
         {
             int count = 0;
@@ -60,23 +73,6 @@ namespace HSMServer.Core.Products
                 CommonConstants.SelfMonitoringProductName, DateTime.Now);
 
             AddProduct(product);
-        }
-
-        public void RemoveProduct(string name)
-        {
-            try
-            {
-                _databaseAdapter.RemoveProduct(name);
-
-                if (GetProductByName(name) != null)
-                {
-                    _products.Remove(name, out _);
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to remove product, name = {name}");
-            }
         }
 
         public void AddProduct(string name)
@@ -117,6 +113,25 @@ namespace HSMServer.Core.Products
             _databaseAdapter.UpdateProduct(currentProduct);
         }
 
+        public void RemoveProduct(string name)
+        {
+            try
+            {
+                _databaseAdapter.RemoveProduct(name);
+
+                if (GetProductByName(name) != null)
+                {
+                    _products.Remove(name, out _);
+                }
+
+                RemovedProduct?.Invoke(name);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to remove product, name = {name}");
+            }
+        }
+
         public string GetProductNameByKey(string key) =>
             GetProductByKey(key)?.Name;
 
@@ -128,6 +143,17 @@ namespace HSMServer.Core.Products
             }
 
             return null;
+        }
+
+        public List<Product> GetProducts(User user)
+        {
+            if (user.IsAdmin) return Products;
+
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                return null;
+
+            return Products.Where(p =>
+                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
         }
     }
 }

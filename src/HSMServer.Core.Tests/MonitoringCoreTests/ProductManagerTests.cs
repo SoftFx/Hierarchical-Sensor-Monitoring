@@ -1,4 +1,7 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System.Collections.Generic;
@@ -12,10 +15,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     {
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
+        private readonly UserManager _userManager;
 
+        private readonly User _defaultUser = TestUsersManager.DefaultUser;
+        private readonly User _notAdminUser = TestUsersManager.NotAdmin;
 
         public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture) { }
+            : base(fixture, registerFixture) {
+            _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+        }
 
 
         [Fact]
@@ -60,6 +68,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
         }
 
+        [Fact]
+        [Trait("Category", "GetCopy")]
+        public void GetCopyProductTest()
+        {
+            var name = RandomGenerator.GetRandomString();
+            _productManager.AddProduct(name);
+            var product = _productManager.GetProductByName(name);
+
+            TestGetProductCopy(product, _productManager.GetProductCopyByKey);
+        }
+
         [Theory]
         [InlineData(3)]
         [InlineData(10)]
@@ -76,6 +95,63 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             FullSeveralProductsTest(names, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "GetSeveralAdmin")]
+        public void GetSeveralAdminProductsTest(int count)
+        {
+            var names = GetRandomProductsNames(count);
+            names.ForEach(_productManager.AddProduct);
+            
+            var products = _productManager.GetProducts(_defaultUser);
+            names.Add(CommonConstants.SelfMonitoringProductName);
+            names.Add(TestProductsManager.ProductName);
+
+            Assert.Equal(names.Count, products.Count);
+
+            FullGetSeveralProductsTest(products, _productManager.GetProductCopyByKey);
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "GetSeveralNotAdmin")]
+        public async Task GetSeveralNotAdminProductsTest(int count)
+        {
+            var names = GetRandomProductsNames(count);
+            var total = 0;
+
+            for (int i = 0; i< names.Count; i++)
+            {
+                _productManager.AddProduct(names[i]);
+                if (i % 2 == 1) continue;
+
+                var product = _productManager.GetProductByName(names[i]);
+                _notAdminUser.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key,
+                    (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2)));
+
+                total++;
+            }
+
+            _userManager.UpdateUser(_notAdminUser);
+
+            await Task.Delay(100);
+
+            var products = _productManager.GetProducts(_notAdminUser);
+            Assert.Equal(total, products.Count);
+
+            FullGetSeveralProductsTest(products, _productManager.GetProductCopyByKey);
         }
 
         [Theory]
@@ -157,6 +233,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 FullProductTest(names[i], getProductByName, getProductByKey, getNameByKey);
         }
 
+        private static void FullGetSeveralProductsTest(List<Product> products, GetProduct getProductByKey)
+        {
+            for (int i = 0; i < products.Count; i++)
+                TestGetProductCopy(products[i], getProductByKey);
+        }
+
         private static void FullSeveralRemoveProductsTest(List<(string name, string key)> tuples,
             GetProduct getProductByName, GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
@@ -186,6 +268,18 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var updatedProduct = getProductByName?.Invoke(product.Name);
 
             TestExtraKeys(product, updatedProduct);
+        }
+
+        private static void TestGetProductCopy(Product product, GetProduct getProductByKey)
+        {
+            var copy = getProductByKey?.Invoke(product.Key);
+
+            Assert.NotNull(copy);
+            Assert.Equal(product.Name, copy.Name);
+            Assert.Equal(product.Key, copy.Key);
+            Assert.Equal(product.ExtraKeys.Count, copy.ExtraKeys.Count);
+            Assert.Equal(product.DateAdded, copy.DateAdded);
+            Assert.Equal(product.Sensors.Count, copy.Sensors.Count);
         }
 
         private static void TestProductByKey(string name, string key, GetProduct getProductByKey)
