@@ -88,5 +88,31 @@ namespace HSMServer.Core.Tests.Infrastructure
                     new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.ProductName, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
                 },
             };
+
+        internal static User TestUserViewer { get; } =
+            new(TestUserName)
+            {
+                CertificateFileName = RandomGenerator.GetRandomString(),
+                CertificateThumbprint = RandomGenerator.GetRandomString(40),
+                IsAdmin = RandomGenerator.GetRandomBool(),
+                Password = HashComputer.ComputePasswordHash(TestUserName),
+                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+                {
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, ProductRoleEnum.ProductViewer)
+                },
+            };
+
+        internal static User TestUserManager { get; } =
+            new(TestUserName)
+            {
+                CertificateFileName = RandomGenerator.GetRandomString(),
+                CertificateThumbprint = RandomGenerator.GetRandomString(40),
+                IsAdmin = RandomGenerator.GetRandomBool(),
+                Password = HashComputer.ComputePasswordHash(TestUserName),
+                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+                {
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, ProductRoleEnum.ProductManager)
+                },
+            };
     }
 }

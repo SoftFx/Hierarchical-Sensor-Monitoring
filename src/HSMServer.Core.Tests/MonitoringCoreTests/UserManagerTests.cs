@@ -126,6 +126,42 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         }
 
+        [Fact]
+        [Trait("Category", "One")]
+        public void GetViewiersTest()
+        {
+            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
+
+            foreach(var user in expected)
+                _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
+
+            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
+
+            Assert.Equal(expected.Count, actual.Count);
+
+            for (int i = 0; i < actual.Count; i++)
+                TestUser(expected[i], actual[i]);
+        }
+
+        [Fact]
+        [Trait("Category", "One")]
+        public void GetManagersTest()
+        {
+            var users = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+
+            foreach (var user in users)
+                _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
+
+            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
+
+            var expected = new List<User> { TestUsersManager.TestUserManager };
+
+            Assert.Equal(expected.Count, actual.Count);
+
+            for (int i = 0; i < actual.Count; i++)
+                TestUser(expected[i], actual[i]);
+        }
+
         private static async Task FullTestUserAsync(User expected,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
         {
