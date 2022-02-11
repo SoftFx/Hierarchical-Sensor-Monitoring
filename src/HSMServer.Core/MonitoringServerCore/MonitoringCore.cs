@@ -460,6 +460,9 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
 
+            if (dataObject == null)
+                return Array.Empty<byte>();
+
             try
             {
                 var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
@@ -467,7 +470,7 @@ namespace HSMServer.Core.MonitoringServerCore
             }
             catch { }
 
-
+            // сюда никогда не дойдёт.
             var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
@@ -479,6 +482,10 @@ namespace HSMServer.Core.MonitoringServerCore
         public string GetFileSensorValueExtension(string product, string path)
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+
+            if (dataObject == null)
+                return string.Empty;
+
             var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {

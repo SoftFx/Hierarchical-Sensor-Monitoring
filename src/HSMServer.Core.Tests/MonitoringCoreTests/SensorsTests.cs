@@ -11,6 +11,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -349,6 +350,57 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         [Fact]
+        [Trait("Category", "Get FileSensor content")]
+        public void GetFileSensorValueBytesTest()
+        {
+            var bytes = _monitoringCore.GetFileSensorValueBytes(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+
+            Assert.Empty(bytes);
+        }
+
+        [Theory]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "Get FileSensor content")]
+        public void GetFileSensorContentTest(SensorType type)
+        {
+            var sensorValue = AddAndGetSensorValue(type);
+            var expectedContent = sensorValue is FileSensorValue fileSensor
+                ? Encoding.Default.GetBytes(fileSensor.FileContent)
+                : (sensorValue as FileSensorBytesValue).FileContent;
+
+            var actualContent = _monitoringCore.GetFileSensorValueBytes(TestProductsManager.ProductName, sensorValue.Path);
+
+            Assert.Equal(expectedContent, actualContent);
+        }
+
+        [Fact]
+        [Trait("Category", "Get FileSensor extension")]
+        public void GetFileSensorValueExtensionTest()
+        {
+            var extension = _monitoringCore.GetFileSensorValueExtension(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+
+            Assert.Empty(extension);
+        }
+
+        [Theory]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "Get FileSensor extension")]
+        public void GetFileSensorExtensionTest(SensorType type)
+        {
+            var sensorValue = AddAndGetSensorValue(type);
+            var expectedExtension = sensorValue is FileSensorValue fileSensor
+                ? fileSensor.Extension
+                : (sensorValue as FileSensorBytesValue).Extension;
+
+            var eactualEtension = _monitoringCore.GetFileSensorValueExtension(TestProductsManager.ProductName, sensorValue.Path);
+
+            Assert.Equal(expectedExtension, eactualEtension);
+        }
+
+
+        [Fact]
         [Trait("Category", "Get sensors data")]
         public void GetSensorUpdates()
         {
@@ -438,6 +490,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.True(DateTime.UtcNow > actual.Time);
         }
 
+
+        private SensorValueBase AddAndGetSensorValue(SensorType type)
+        {
+            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+
+            _monitoringCore.AddSensorValue(sensorValue);
+
+            return sensorValue;
+        }
 
         private SensorValueBase AddAndGetRandomSensor(AddSensor addSensor = null, string productName = null)
         {
