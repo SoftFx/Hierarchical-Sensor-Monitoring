@@ -275,16 +275,7 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Product GetModelFromViewModel(ProductViewModel productViewModel)
-        {
-            Product existingProduct = _productManager.GetProductCopyByKey(productViewModel.Key);
-
-            Product product = new Product(productViewModel.Key, productViewModel.Name, productViewModel.CreationDate)
-            {
-                ExtraKeys = existingProduct.ExtraKeys
-            };
-
-            return product;
-        }
+        private Product GetModelFromViewModel(ProductViewModel productViewModel) =>
+            _productManager.GetProductCopyByKey(productViewModel.Key);
     }
 }

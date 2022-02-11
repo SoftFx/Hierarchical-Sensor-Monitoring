@@ -484,15 +484,16 @@ namespace HSMServer.Core.MonitoringServerCore
 
 
         #region Product
-    
+
         private void RemoveProductHandler(string productName)
         {
-            DateTime timeCollected = DateTime.UtcNow;
-            SensorData updateMessage = new SensorData();
-            updateMessage.Product = productName;
-            updateMessage.Path = string.Empty;
-            updateMessage.TransactionType = TransactionType.Delete;
-            updateMessage.Time = timeCollected;
+            var updateMessage = new SensorData
+            {
+                Product = productName,
+                Path = string.Empty,
+                TransactionType = TransactionType.Delete,
+                Time = DateTime.UtcNow
+            };
 
             _queueManager.AddSensorData(updateMessage);
         }     
@@ -520,24 +521,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
             }
             return result;
-        }
-
-        private void RemoveProductFromUsers(Product product)
-        {
-            var usersToEdit = new List<User>();
-            foreach (var user in _userManager.Users)
-            {
-                var count = user.ProductsRoles.RemoveAll(role => role.Key == product.Key);
-                if (count == 0)
-                    continue;
-
-                usersToEdit.Add(user);
-            }
-
-            foreach (var userToEdt in usersToEdit)
-            {
-                _userManager.UpdateUser(userToEdt);
-            }
         }
 
         #endregion

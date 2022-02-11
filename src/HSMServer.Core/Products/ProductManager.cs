@@ -64,20 +64,21 @@ namespace HSMServer.Core.Products
 
         private void AddSelfMonitoringProduct()
         {
-            Product product = new (CommonConstants.SelfMonitoringProductKey,
-                CommonConstants.SelfMonitoringProductName, DateTime.Now);
+            Product product = new (CommonConstants.SelfMonitoringProductKey, CommonConstants.SelfMonitoringProductName);
 
             AddProduct(product);
         }
 
-        public void AddProduct(string name)
+        public Product AddProduct(string name)
         {
             string key = KeyGenerator.GenerateProductKey(name);
 
             _logger.LogInformation($"Created product key = '{key}' for product = '{name}'");
 
-            Product product = new (key, name, DateTime.Now);
+            Product product = new (key, name);
             AddProduct(product);
+
+            return product;
         }
 
         private void AddProduct(Product product)

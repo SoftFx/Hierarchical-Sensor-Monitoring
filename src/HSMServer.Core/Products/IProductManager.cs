@@ -7,9 +7,10 @@ namespace HSMServer.Core.Products
 {
     public interface IProductManager
     {
+        //ToDo: change to GetProducts(User)
         List<Product> Products { get; }
-        event Action<string> RemovedProduct;
-        void AddProduct(string name);
+        event Action<string> RemovedProduct
+        Product AddProduct(string name);
         void RemoveProduct(string name);
         void UpdateProduct(Product product);
         string GetProductNameByKey(string key);
