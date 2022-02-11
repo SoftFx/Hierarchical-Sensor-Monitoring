@@ -6,16 +6,15 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
     public class ProductManagerTests : MonitoringCoreTestsBase<ProductManagerFixture>
     {
-        private readonly UserManager _userManager;
         private readonly User _defaultUser = TestUsersManager.DefaultUser;
         private readonly User _notAdminUser = TestUsersManager.NotAdmin;
+        private readonly UserManager _userManager;
 
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
@@ -31,11 +30,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "One")]
         public void AddProductTest()
         {
-            var name = RandomGenerator.GetRandomString();
+            var product = CreateProduct(_productManager.AddProduct);
 
-            _productManager.AddProduct(name);
-
-            FullProductTest(name, _productManager.GetProductByName, _productManager.GetProductByKey,
+            FullProductTest(product.Name, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
         }
 
@@ -43,9 +40,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "OneRemove")]
         public void RemoveProductTest()
         {
-            var name = RandomGenerator.GetRandomString();
-
-            var product = _productManager.AddProduct(name);
+            var product = CreateProduct(_productManager.AddProduct);
+            var name = product.Name;
             var key = product.Key;
             _productManager.RemoveProduct(name);
 
@@ -57,8 +53,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "OneUpdateExtraKey")]
         public void UpdateExtraProductKeyTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var product = _productManager.AddProduct(name);
+            var product = CreateProduct(_productManager.AddProduct);
 
             var extraKeyName = RandomGenerator.GetRandomString();
             product.AddExtraKey(extraKeyName);
@@ -72,8 +67,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "GetCopy")]
         public void GetCopyProductTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var product = _productManager.AddProduct(name);
+            var product = CreateProduct(_productManager.AddProduct);
 
             TestGetProductCopy(product, _productManager.GetProductCopyByKey);
         }
@@ -88,9 +82,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Several")]
         public void AddSeveralProductsTest(int count)
         {
-            var names = GetRandomProductsNames(count);
-
-            names.ForEach(n => _productManager.AddProduct(n));
+            var names = CreateProducts(count, _productManager.AddProduct);
 
             FullSeveralProductsTest(names, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
@@ -106,9 +98,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "GetSeveralAdmin")]
         public void GetSeveralAdminProductsTest(int count)
         {
-            var names = GetRandomProductsNames(count);
-            names.ForEach(n => _productManager.AddProduct(n));
-            
+            var names = CreateProducts(count, _productManager.AddProduct);
+
             var products = _productManager.GetProducts(_defaultUser);
             names.Add(CommonConstants.SelfMonitoringProductName);
             names.Add(TestProductsManager.ProductName);
@@ -158,8 +149,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "SeveralUpdateExtraKeys")]
         public void UpdateSeveralExtraProductKeysTest(int count)
         {
-            var name = RandomGenerator.GetRandomString();
-            var product = _productManager.AddProduct(name);
+            var product = CreateProduct(_productManager.AddProduct);
 
             var extraKeyNames = GetRandomProductsNames(count);
             extraKeyNames.ForEach(product.AddExtraKey);
@@ -179,8 +169,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "RemoveSeveral")]
         public void RemoveSeveralProductsTest(int count)
         {
-            var names = GetRandomProductsNames(count);
-            names.ForEach(n => _productManager.AddProduct(n));
+            var names = CreateProducts(count, _productManager.AddProduct);
 
             var tuples = new List<(string name, string key)>(count);
             foreach (var name in names)
@@ -193,6 +182,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         #region [Private methods]
+
+        private static Product CreateProduct(GetProduct addProduct)
+        {
+            var name = RandomGenerator.GetRandomString();
+
+            return addProduct?.Invoke(name);
+        }
+
+        private static List<string> CreateProducts(int count, GetProduct addProduct)
+        {
+            var names = GetRandomProductsNames(count);
+            names.ForEach(n => addProduct?.Invoke(n));
+
+            return names;
+        }
 
         private static void FullProductTest(string name, GetProduct getProductByName,
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
