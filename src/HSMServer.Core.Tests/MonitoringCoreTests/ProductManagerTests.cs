@@ -121,7 +121,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var names = GetRandomProductsNames(count);
 
-            for (int i = 0; i< names.Count; i++)
+            for (int i = 0; i < names.Count; i++)
             {
                 var product = _productManager.AddProduct(names[i]);
                 if (i % 2 == 1) 
@@ -134,7 +134,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _userManager.UpdateUser(_notAdminUser);
 
             var products = _productManager.GetProducts(_notAdminUser);
-            Assert.Equal(names.Count / 2, products.Count);
+            Assert.Equal((names.Count + 1) / 2, products.Count);
 
             FullGetSeveralProductsTest(products, _productManager.GetProductCopyByKey);
         }
