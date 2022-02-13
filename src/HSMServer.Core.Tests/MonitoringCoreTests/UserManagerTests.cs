@@ -23,8 +23,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture) =>
+            : base(fixture, registerFixture)
+        {
             _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+        }
 
 
         [Fact]
@@ -132,7 +134,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
 
-            foreach(var user in expected)
+            foreach (var user in expected)
                 _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
 
             var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();

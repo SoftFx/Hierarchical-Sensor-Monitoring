@@ -12,8 +12,10 @@ namespace HSMServer.Core.Authentication
             protected readonly UserManager _userManager;
 
 
-            protected UserActionsHandler(UserManager userManager) =>
+            protected UserActionsHandler(UserManager userManager)
+            {
                 _userManager = userManager;
+            }
 
 
             internal async Task Call(User user, bool callDatabaseAction = true)

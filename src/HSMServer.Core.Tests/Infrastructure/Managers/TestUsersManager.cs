@@ -1,64 +1,9 @@
 ﻿using HSMCommon;
-using HSMServer.Core.DataLayer;
-using HSMServer.Core.Keys;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal class DatabaseAdapterManager
-    {
-        private static int _dbNumber;
-
-
-        public string DatabaseFolder { get; }
-
-        public DatabaseAdapter DatabaseAdapter { get; private set; }
-
-
-        public DatabaseAdapterManager(string databaseFolder)
-        {
-            ++_dbNumber;
-
-            DatabaseFolder = databaseFolder;
-            DatabaseAdapter = new DatabaseAdapter(
-                new DatabaseSettings()
-                {
-                    DatabaseFolder = databaseFolder,
-                    EnvironmentDatabaseName = $"EnvironmentData{_dbNumber}",
-                    MonitoringDatabaseName = $"MonitoringData{_dbNumber}",
-                });
-        }
-
-
-        internal void ClearDatabase()
-        {
-            DatabaseAdapter.Dispose();
-            DatabaseAdapter = null;
-        }
-
-        internal void AddTestProduct() =>
-            DatabaseAdapter.AddProduct(TestProductsManager.TestProduct);
-    }
-
-
-    internal static class TestProductsManager
-    {
-        internal const string ProductName = "TestProduct";
-
-        internal static Product TestProduct { get; } =
-            new()
-            {
-                Name = ProductName,
-                DateAdded = DateTime.UtcNow,
-                Key = KeyGenerator.GenerateProductKey(ProductName),
-                ExtraKeys = new List<ExtraProductKey>(),
-            };
-    }
-
-
     internal static class TestUsersManager
     {
         private const string DefaultUserName = "default";
@@ -85,7 +30,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Password = HashComputer.ComputePasswordHash(TestUserName),
                 ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.ProductName, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
                 },
             };
 
