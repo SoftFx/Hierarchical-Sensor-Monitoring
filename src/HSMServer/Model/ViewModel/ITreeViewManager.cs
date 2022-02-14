@@ -1,8 +1,9 @@
 ﻿using HSMServer.Core.Model.Authentication;
+using System;
 
 namespace HSMServer.Model.ViewModel
 {
-    public interface ITreeViewManager
+    public interface ITreeViewManager : IDisposable
     {
         public TreeViewModel GetTreeViewModel(User user);
         public void RemoveViewModel(User user);

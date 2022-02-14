@@ -1,13 +1,12 @@
-﻿using HSMServer.Core.Authentication.UserObserver;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Authentication
 {
-    public interface IUserManager : IUserObservable
+    public interface IUserManager
     {
-        List<User> Users { get; }
+        public event Action<User> UpdateUserEvent;
 
         /// <summary>
         /// Add new user with the specified parameters
@@ -18,6 +17,7 @@ namespace HSMServer.Core.Authentication
         /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
+        public void AddUser(User user);
 
         /// <summary>
         /// New user object
@@ -26,24 +26,20 @@ namespace HSMServer.Core.Authentication
         void UpdateUser(User user);
 
         /// <summary>
-        /// Removes user 
-        /// </summary>
-        /// <param name="user"></param>
-        void RemoveUser(User user);
-        /// <summary>
         /// Remove user with the specified userName
         /// </summary>
         /// <param name="userName">Name of the user to remove.</param>
         void RemoveUser(string userName);
 
+        void RemoveProductFromUsers(string productKey);
+
         User Authenticate(string login, string password);
 
-        User GetUserByCertificateThumbprint(string thumbprint);
         User GetUser(Guid id);
         User GetUserByUserName(string username);
 
         List<User> GetViewers(string productKey);
         List<User> GetManagers(string productKey);
-        List<User> GetUsersNotAdmin();
+        IEnumerable<User> GetUsers(Func<User, bool> filter = null);
     }
 }

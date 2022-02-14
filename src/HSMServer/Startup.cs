@@ -2,7 +2,6 @@
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.MonitoringCoreInterface;
@@ -58,7 +57,6 @@ namespace HSMServer
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
-            services.AddSingleton<IUserObservable>(x => x.GetRequiredService<IUserManager>());
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
@@ -67,7 +65,6 @@ namespace HSMServer
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<IProductsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
@@ -104,7 +101,7 @@ namespace HSMServer
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, (app.ApplicationServices.GetService<MonitoringCore>(), app.ApplicationServices.GetService<ITreeViewManager>()));
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -149,10 +146,13 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        private void OnShutdown(object service)
+        private void OnShutdown(object services)
         {
-            if (service is MonitoringCore monitoringCore)
+            if (services is (MonitoringCore monitoringCore, ITreeViewManager treeViewManager))
+            {
                 monitoringCore.Dispose();
+                treeViewManager.Dispose();
+            }
 
             // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();
