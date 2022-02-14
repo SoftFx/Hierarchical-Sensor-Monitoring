@@ -1,10 +1,11 @@
 ﻿using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    internal interface IMonitoringQueueManager
+    internal interface IMonitoringQueueManager : IDisposable
     {
         #region Common queue
 

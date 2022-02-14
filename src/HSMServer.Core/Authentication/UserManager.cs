@@ -1,6 +1,5 @@
 ﻿using HSMCommon;
 using HSMCommon.Constants;
-using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
@@ -13,7 +12,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Authentication
 {
-    public partial class UserManager : UserObservableImpl, IUserManager
+    public partial class UserManager : IUserManager
     {
         private readonly ConcurrentDictionary<Guid, User> _users;
         private readonly ConcurrentDictionary<string, Guid> _userNames;
@@ -24,6 +23,8 @@ namespace HSMServer.Core.Authentication
         private readonly AddUserActionHandler _addUserActionHandler;
         private readonly RemoveUserActionHandler _removeUserActionHandler;
         private readonly UpdateUserActionHandler _updateUserActionHandler;
+
+        public event Action<User> UpdateUserEvent;
 
 
         public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)

@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
@@ -11,7 +10,7 @@ using System.Linq;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    internal class MonitoringQueueManager : IMonitoringQueueManager, IUserObserver,  IDisposable
+    internal class MonitoringQueueManager : IMonitoringQueueManager
     {
         #region IDisposable implementation
 
@@ -40,6 +39,8 @@ namespace HSMServer.Core.MonitoringServerCore
 
             if (!_disposed)
             {
+                _userManager.UpdateUserEvent -= UpdateUserEventHandler;
+
                 if (disposingManagedResources)
                 {
                     lock (_accessLock)
@@ -49,7 +50,7 @@ namespace HSMServer.Core.MonitoringServerCore
                             sessionPair.Value.Clear();
                             _currentSessions.Remove(sessionPair.Key);
                         }
-                    }   
+                    }
                 }
 
                 // Mark as disposed.
@@ -69,7 +70,9 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        public MonitoringQueueManager(IUserObservable userObservable)
+        private readonly IUserManager _userManager;
+
+        public MonitoringQueueManager(IUserManager userManager)
         {
             _logger = LogManager.GetCurrentClassLogger();
             lock (_accessLock)
@@ -77,7 +80,8 @@ namespace HSMServer.Core.MonitoringServerCore
                 _currentSessions = new Dictionary<User, ClientMonitoringQueue>(new UsersComparer());
             }
 
-            userObservable.AddObserver(this);
+            _userManager = userManager;
+            _userManager.UpdateUserEvent += UpdateUserEventHandler;
             _logger.Info("Monitoring queue manager initialized");
         }
 
@@ -196,23 +200,16 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        #region User observable implementation
-
-        public void UserUpdated(User user)
+        private void UpdateUserEventHandler(User user)
         {
             lock (_accessLock)
             {
-                var correspondingPair = _currentSessions
-                    .FirstOrDefault(p => p.Key.IsSame(user));
+                var correspondingPair = _currentSessions.FirstOrDefault(p => p.Key.IsSame(user));
 
                 if (correspondingPair.Value != null)
-                {
                     correspondingPair.Key?.Update(user);
-                }
             }
         }
-
-        #endregion
 
         private ClientMonitoringQueue GetUserQueue(User user)
         {
