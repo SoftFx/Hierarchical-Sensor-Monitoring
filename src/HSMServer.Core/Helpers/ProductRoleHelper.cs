@@ -34,7 +34,7 @@ namespace HSMServer.Core.Helpers
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
             var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductManager)
+            if (pair != null && pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductManager)
                 return true;
 
             return false;

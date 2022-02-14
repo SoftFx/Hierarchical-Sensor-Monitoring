@@ -10,16 +10,6 @@ namespace HSMServer.Core.Extensions
             return ProductRoleHelper.IsAvailable(key, user.ProductsRoles);
         }
 
-        //public static bool IsProductAvailable(this User user, string server)
-        //{
-        //    return user.UserPermissions.FirstOrDefault(p => p.ProductName == server) != null;
-        //}
-
-        //public static IEnumerable<string> GetAvailableServers(this User user)
-        //{
-        //    return user.UserPermissions.Select(p => p.ProductName);
-        //}
-
         public static bool IsSame(this User user, User comparedUser)
         {
             if (user == null && comparedUser == null)
@@ -39,8 +29,9 @@ namespace HSMServer.Core.Extensions
         public static User WithoutPassword(this User user)
         {
             User copy = new User();
-            copy.CertificateFileName = user.CertificateFileName;
+            copy.UserName = user.UserName;
             copy.Password = null;
+            copy.CertificateFileName = user.CertificateFileName;
             copy.CertificateThumbprint = user.CertificateThumbprint;
             copy.IsAdmin = user.IsAdmin;
             copy.ProductsRoles = user.ProductsRoles;

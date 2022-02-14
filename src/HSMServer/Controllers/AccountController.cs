@@ -152,8 +152,7 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin(true)]
         public IActionResult Users()
         {
-            var users = _userManager.Users.OrderBy(x => x.UserName).ToList();
-
+            var users = _userManager.GetUsers().OrderBy(x => x.UserName);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
@@ -178,7 +177,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager.Users.First(x => x.UserName.Equals(userViewModel.Username));
+            var currentUser = _userManager.GetUserByUserName(userViewModel.Username);
             userViewModel.Password = currentUser.Password;
             userViewModel.UserId = currentUser.Id.ToString();
 
