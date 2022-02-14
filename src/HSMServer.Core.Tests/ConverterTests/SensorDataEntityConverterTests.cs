@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class SensorDataEntityConverterTests
     {
-        private static readonly string _productName = EntitiesConverterFixture.ProductKey;
+        private static readonly string _productName = EntitiesConverterFixture.ProductName;
 
 
         [Theory]

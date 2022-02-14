@@ -15,6 +15,8 @@ namespace HSMServer.Core.Authentication.UserObserver
         {
             _observers = new List<IUserObserver>();
         }
+
+
         public void AddObserver(IUserObserver observer)
         {
             lock (_observersSync)

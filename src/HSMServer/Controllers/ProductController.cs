@@ -8,7 +8,7 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.MonitoringCoreInterface;
+using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
@@ -28,16 +28,16 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : Controller
     {
-        private readonly IProductsInterface _productsInterface;
+        private readonly IProductManager _productManager;
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ILogger<ProductController> _logger;
 
-        public ProductController(IProductsInterface productsInterface, IUserManager userManager,
-            IConfigurationProvider configurationProvider, IRegistrationTicketManager ticketManager, ILogger<ProductController> logger)
+        public ProductController(IProductManager productManager, IUserManager userManager, IConfigurationProvider configurationProvider,
+            IRegistrationTicketManager ticketManager, ILogger<ProductController> logger)
         {
-            _productsInterface = productsInterface;
+            _productManager = productManager;
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
@@ -51,9 +51,9 @@ namespace HSMServer.Controllers
 
             List<Product> products = null;
             if (UserRoleHelper.IsProductCRUDAllowed(user))
-                products = _productsInterface.GetAllProducts();
+                products = _productManager.Products;
             else
-                products = _productsInterface.GetProducts(user);
+                products = _productManager.GetProducts(user);
 
             products = products?.OrderBy(x => x.Name).ToList();
 
@@ -65,7 +65,7 @@ namespace HSMServer.Controllers
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
-            NewProductNameValidator validator = new NewProductNameValidator(_productsInterface);
+            NewProductNameValidator validator = new NewProductNameValidator(_productManager);
             var results = validator.Validate(productName);
             if (!results.IsValid)
             {
@@ -74,20 +74,21 @@ namespace HSMServer.Controllers
             }
 
             TempData.Remove(TextConstants.TempDataErrorText);
-            _productsInterface.AddProduct(HttpContext.User as User, productName,
-                out Product newProduct, out string error);
+            _productManager.AddProduct(productName);
         }
 
         public void RemoveProduct([FromQuery(Name = "Product")] string productKey)
         {
-            _productsInterface.RemoveProduct(productKey, out string error);
+            var name = _productManager.GetProductNameByKey(productKey);
+            _productManager.RemoveProduct(name);
         }
 
         [HttpPost]
         public void UpdateProduct([FromBody] ProductViewModel model)
         {
             Product product = GetModelFromViewModel(model);
-            _productsInterface.UpdateProduct(HttpContext.User as User, product);
+
+            _productManager.UpdateProduct(product);
         }
 
         #endregion
@@ -97,7 +98,7 @@ namespace HSMServer.Controllers
         [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
         {
-            var product = _productsInterface.GetProduct(productKey);
+            var product = _productManager.GetProductCopyByKey(productKey);
             var users = _userManager.GetViewers(productKey);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
@@ -114,7 +115,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void AddExtraKey([FromBody] ExtraKeyViewModel model)
         {
-            ExtraKeyValidator validator = new ExtraKeyValidator(_productsInterface);
+            ExtraKeyValidator validator = new ExtraKeyValidator(_productManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -122,7 +123,7 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            Product product = _productsInterface.GetProduct(model.ProductKey);
+            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
             model.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
                 product.Name, model.ExtraKeyName);
 
@@ -132,16 +133,16 @@ namespace HSMServer.Controllers
             else
                 product.ExtraKeys.Add(extraProduct);
 
-            _productsInterface.UpdateProduct(HttpContext.User as User, product);
+            _productManager.UpdateProduct(product);
         }
 
         [HttpPost]
         public void RemoveExtraKey([FromBody] ExtraKeyViewModel model)
         {
-            Product product = _productsInterface.GetProduct(model.ProductKey);
+            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
             product.ExtraKeys.Remove(product.ExtraKeys.First(x => x.Key.Equals(model.ExtraProductKey)));
 
-            _productsInterface.UpdateProduct(HttpContext.User as User, product);
+            _productManager.UpdateProduct(product);
         }
 
         [HttpPost]
@@ -274,16 +275,7 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Product GetModelFromViewModel(ProductViewModel productViewModel)
-        {
-            Product existingProduct = _productsInterface.GetProduct(productViewModel.Key);
-
-            Product product = new Product(productViewModel.Key, productViewModel.Name, productViewModel.CreationDate)
-            {
-                ExtraKeys = existingProduct.ExtraKeys
-            };
-
-            return product;
-        }
+        private Product GetModelFromViewModel(ProductViewModel productViewModel) =>
+            _productManager.GetProductCopyByKey(productViewModel.Key);
     }
 }

@@ -2,7 +2,6 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
@@ -16,9 +15,9 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public class SensorsTests : BaseFixture<SensorsFixture>
+    public class SensorsTests : MonitoringCoreTestsBase<SensorsFixture>
     {
-        private readonly string _testProductName = DatabaseAdapterManager.ProductName;
+        private readonly string _testProductName = TestProductsManager.ProductName;
 
         private delegate void AddSensor(string productName, SensorValueBase sensorValue);
         private delegate bool IsSensorRegistered(string productName, string path);
@@ -29,7 +28,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
 
 
-        public SensorsTests(SensorsFixture fixture) : base(fixture)
+        public SensorsTests(SensorsFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture)
         {
             var userManager = new Mock<IUserManager>();
             var barStorage = new Mock<IBarSensorsStorage>();
@@ -148,7 +148,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 sensorValues.Add(sensorValue);
             }
 
-            _monitoringCore.RemoveSensors(_testProductName, _databaseAdapterManager.TestProduct.Key, sensorValues.Select(s => s.Path));
+            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Key, sensorValues.Select(s => s.Path));
 
             foreach (var sensorValue in sensorValues)
                 FullTestRemovedSensor(_testProductName,
@@ -168,7 +168,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var sensorValue = AddAndGetRandomSensor();
 
-            _monitoringCore.RemoveSensors(_testProductName, _databaseAdapterManager.TestProduct.Key, new List<string>() { sensorValue.Path });
+            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Key, new List<string>() { sensorValue.Path });
 
             FullTestRemovedSensor(_testProductName,
                                   sensorValue,

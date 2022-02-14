@@ -19,15 +19,15 @@ namespace HSMServer.Core.Model
 
         public Product()
         {
+            DateAdded = DateTime.UtcNow;
             ExtraKeys = new List<ExtraProductKey>();
             Sensors = new ConcurrentDictionary<string, SensorInfo>();
         }
 
-        public Product(string key, string name, DateTime dateAdded) : this()
+        public Product(string key, string name) : this()
         {
             Key = key;
             Name = name;
-            DateAdded = dateAdded;
         }
 
         public Product(Product product) : this()

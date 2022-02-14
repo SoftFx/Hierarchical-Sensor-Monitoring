@@ -9,7 +9,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class UnitedValuesConverterTests : IClassFixture<EntitiesConverterFixture>
     {
-        private const string ProductName = EntitiesConverterFixture.ProductKey;
+        private const string ProductName = EntitiesConverterFixture.ProductName;
 
         private readonly SensorValuesFactory _sensorValuesFactory;
         private readonly SensorValuesTester _sensorValuesTester;

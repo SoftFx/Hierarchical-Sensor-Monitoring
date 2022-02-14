@@ -2,11 +2,13 @@
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Xunit;
 
-namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
+namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    public abstract class BaseFixture<T> : IClassFixture<T> where T : DatabaseFixture
+    [Collection("Database collection")]
+    public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
         private protected readonly DatabaseAdapterManager _databaseAdapterManager;
         private protected readonly SensorValuesFactory _sensorValuesFactory;
@@ -17,14 +19,16 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 
         protected MonitoringCore _monitoringCore;
 
-        protected BaseFixture(DatabaseFixture fixture)
+
+        protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {
             _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
             _databaseAdapterManager.AddTestProduct();
-            fixture.CreatedDatabases.Add(_databaseAdapterManager);
 
-            _sensorValuesFactory = new SensorValuesFactory(_databaseAdapterManager);
-            _sensorValuesTester = new SensorValuesTester(_databaseAdapterManager);
+            dbRegisterFixture.RegisterDatabase(_databaseAdapterManager);
+
+            _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Key);
+            _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.Name);
 
             _valuesCache = new ValuesCache();
 
