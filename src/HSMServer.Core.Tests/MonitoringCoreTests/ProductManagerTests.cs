@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     public class ProductManagerTests : MonitoringCoreTestsBase<ProductManagerFixture>
     {
         private readonly User _defaultUser = TestUsersManager.DefaultUser;
-        private readonly User _notAdminUser = TestUsersManager.TestUserViewer;
+        private readonly User _notAdminUser = TestUsersManager.NotAdmin;
         private readonly UserManager _userManager;
 
         private delegate string GetProductNameByKey(string key);
@@ -21,7 +21,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture) { }
+            : base(fixture, registerFixture) 
+        {
+            _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+        }
 
 
         [Fact]

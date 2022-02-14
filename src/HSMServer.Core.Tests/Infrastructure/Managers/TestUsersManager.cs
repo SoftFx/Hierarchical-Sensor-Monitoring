@@ -13,6 +13,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private const string TestUserName = "TestUserName";
         private const string TestUserViewerName = "TestUserViewer";
         private const string TestUserManagerName = "TestUserManager";
+        private const string TestUserNotAdminName = "TestUserNotAdmin";
 
         internal static User DefaultUser { get; } =
             new(DefaultUserName)
@@ -31,6 +32,15 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static User TestUserManager { get; } =
             BuildUser(ProductRoleEnum.ProductManager, name: TestUserManagerName);
+
+        internal static User NotAdmin { get; } =
+            new(TestUserNotAdminName)
+            {
+                CertificateFileName = RandomGenerator.GetRandomString(),
+                CertificateThumbprint = RandomGenerator.GetRandomString(40),
+                IsAdmin = false,
+                Password = HashComputer.ComputePasswordHash(TestUserNotAdminName),
+            };
 
 
         private static User BuildUser(ProductRoleEnum productRole, string name = TestUserName) =>
