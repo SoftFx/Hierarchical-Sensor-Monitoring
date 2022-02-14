@@ -4,6 +4,7 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.MonitoringCoreInterface;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.ApiControllers
 {
@@ -30,7 +31,7 @@ namespace HSMServer.ApiControllers
         [HttpGet(nameof(GetUsersNotAdmin))]
         public ActionResult<List<User>> GetUsersNotAdmin()
         {
-            return _userManager.GetUsersNotAdmin();
+            return _userManager.GetUsers(u => !u.IsAdmin).ToList();
         }
     }
 }

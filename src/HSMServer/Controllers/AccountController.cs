@@ -152,7 +152,7 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin(true)]
         public IActionResult Users()
         {
-            var users = _userManager.GetUsersSortedByName();
+            var users = _userManager.GetUsers().OrderBy(x => x.UserName);
 
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }

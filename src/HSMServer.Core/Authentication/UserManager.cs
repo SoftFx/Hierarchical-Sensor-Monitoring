@@ -45,16 +45,25 @@ namespace HSMServer.Core.Authentication
 
 
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
-            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null) =>
-            AddUser(
-                new(userName)
-                {
-                    CertificateThumbprint = certificateThumbprint,
-                    CertificateFileName = certificateFileName,
-                    Password = passwordHash,
-                    IsAdmin = isAdmin,
-                    ProductsRoles = productRoles,
-                });
+            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
+        {
+            User user = new(userName)
+            {
+                CertificateThumbprint = certificateThumbprint,
+                CertificateFileName = certificateFileName,
+                Password = passwordHash,
+                IsAdmin = isAdmin,
+            };
+
+            if (productRoles != null && productRoles.Count > 0)
+                user.ProductsRoles = productRoles;
+
+            AddUser(user);
+        }
+
+        // TODO: wait for async Task
+        public async void AddUser(User user) =>
+            await _addUserActionHandler.Call(user);
 
         // TODO: wait for async Task
         public async void UpdateUser(User user)
@@ -145,26 +154,12 @@ namespace HSMServer.Core.Authentication
             return result;
         }
 
-        public List<User> GetUsersNotAdmin()
+        public IEnumerable<User> GetUsers(Func<User, bool> filter = null)
         {
-            if (_users.IsEmpty)
-                return null;
+            var users = _users.Values;
 
-            var result = new List<User>(1 << 2);
-
-            foreach (var user in _users)
-                if (!user.Value.IsAdmin)
-                    result.Add(user.Value);
-
-            return result;
+            return filter != null ? users.Where(filter) : users;
         }
-
-        public IEnumerable<User> GetUsersSortedByName() =>
-            _users.Values.OrderBy(x => x.UserName);
-
-        // TODO: wait for async Task
-        private async void AddUser(User user) =>
-            await _addUserActionHandler.Call(user);
 
         private async void InitializeUsers()
         {

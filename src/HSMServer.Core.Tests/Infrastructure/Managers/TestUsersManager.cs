@@ -11,6 +11,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         private const string DefaultUserCertificateThumbprint = "a563183e1fec784f45bc8f3aa47c40eba1a26df9";
 
         private const string TestUserName = "TestUserName";
+        private const string TestUserViewerName = "TestUserViewer";
+        private const string TestUserManagerName = "TestUserManager";
 
         internal static User DefaultUser { get; } =
             new(DefaultUserName)
@@ -22,41 +24,25 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
         internal static User TestUser { get; } =
-            new(TestUserName)
-            {
-                CertificateFileName = RandomGenerator.GetRandomString(),
-                CertificateThumbprint = RandomGenerator.GetRandomString(40),
-                IsAdmin = RandomGenerator.GetRandomBool(),
-                Password = HashComputer.ComputePasswordHash(TestUserName),
-                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
-                {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2))
-                },
-            };
+            BuildUser((ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2));
 
         internal static User TestUserViewer { get; } =
-            new(TestUserName)
-            {
-                CertificateFileName = RandomGenerator.GetRandomString(),
-                CertificateThumbprint = RandomGenerator.GetRandomString(40),
-                IsAdmin = RandomGenerator.GetRandomBool(),
-                Password = HashComputer.ComputePasswordHash(TestUserName),
-                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
-                {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, ProductRoleEnum.ProductViewer)
-                },
-            };
+            BuildUser(ProductRoleEnum.ProductViewer, name: TestUserViewerName);
 
         internal static User TestUserManager { get; } =
-            new(TestUserName)
+            BuildUser(ProductRoleEnum.ProductManager, name: TestUserManagerName);
+
+
+        private static User BuildUser(ProductRoleEnum productRole, string name = TestUserName) =>
+            new(name)
             {
                 CertificateFileName = RandomGenerator.GetRandomString(),
                 CertificateThumbprint = RandomGenerator.GetRandomString(40),
                 IsAdmin = RandomGenerator.GetRandomBool(),
-                Password = HashComputer.ComputePasswordHash(TestUserName),
+                Password = HashComputer.ComputePasswordHash(name),
                 ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, ProductRoleEnum.ProductManager)
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, productRole)
                 },
             };
     }

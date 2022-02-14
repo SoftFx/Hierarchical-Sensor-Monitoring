@@ -105,7 +105,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        [Trait("Category", "One")]
+        [Trait("Category", "Authenticate")]
         public async Task AuthenticateUserTest()
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
@@ -113,11 +113,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var actual = _userManager.Authenticate(defaultUserFromDB.UserName, defaultUserFromDB.UserName);
 
             TestAuthenticateUser(defaultUserFromDB, actual);
-
         }
 
         [Fact]
-        [Trait("Category", "One")]
+        [Trait("Category", "Authenticate")]
         public void AuthenticateUnregisteredUserTest()
         {
             var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
@@ -125,17 +124,16 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
 
             Assert.Null(actual);
-
         }
 
         [Fact]
-        [Trait("Category", "One")]
+        [Trait("Category", "Get users")]
         public void GetViewiersTest()
         {
             var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
 
             foreach (var user in expected)
-                _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
+                _userManager.AddUser(user);
 
             var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
 
@@ -146,13 +144,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        [Trait("Category", "One")]
+        [Trait("Category", "Get users")]
         public void GetManagersTest()
         {
             var users = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             foreach (var user in users)
-                _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
+                _userManager.AddUser(user);
 
             var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
 
@@ -163,6 +161,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             for (int i = 0; i < actual.Count; i++)
                 TestUser(expected[i], actual[i]);
         }
+
 
         private static async Task FullTestUserAsync(User expected,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
@@ -178,7 +177,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
             TestUser(expected, getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName));
-
 
         private static async Task FullTestUpdatedUserAsync(User expected, User userBeforeUpdate, GetUser getUser,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
@@ -241,6 +239,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestNotChangeableUserSettings(expected, actual);
         }
 
+        private static void TestAuthenticateUser(User expected, User actual)
+        {
+            Assert.Null(actual.Password);
+            Assert.Equal(expected.IsAdmin, actual.IsAdmin);
+            Assert.Equal(expected.ProductsRoles, actual.ProductsRoles);
+            TestNotChangeableUserSettings(expected, actual);
+        }
+
         private static void TestChangeableUserSettings(User expected, User actual)
         {
             Assert.NotNull(actual);
@@ -280,15 +286,5 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         private static string GetUpdatedProperty(object property) => $"{property}-updated";
-
-        private static void TestAuthenticateUser(User expected, User actual)
-        {
-            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
-            Assert.Null(actual.Password);
-            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
-            Assert.Equal(expected.CertificateThumbprint, actual.CertificateThumbprint);
-            Assert.Equal(expected.IsAdmin, actual.IsAdmin);
-            Assert.Equal(expected.ProductsRoles, actual.ProductsRoles);
-        }
     }
 }
