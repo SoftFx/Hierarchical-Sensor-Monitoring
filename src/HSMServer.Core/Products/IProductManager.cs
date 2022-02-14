@@ -9,7 +9,7 @@ namespace HSMServer.Core.Products
     {
         //ToDo: change to GetProducts(User)
         List<Product> Products { get; }
-        event Action<string> RemovedProduct;
+        event Action<Product> RemovedProduct;
         Product AddProduct(string name);
         void RemoveProduct(string name);
         void UpdateProduct(Product product);
