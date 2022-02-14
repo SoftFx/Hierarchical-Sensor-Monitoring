@@ -1,10 +1,8 @@
-﻿using HSMCommon.Model;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Authentication.UserObserver;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
@@ -27,7 +25,7 @@ using HSMServer.Core.SensorsDataValidation;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IUserObserver, IMonitoringUpdatesReceiver, IDisposable
+    public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IMonitoringUpdatesReceiver, IDisposable
     {
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
@@ -45,8 +43,10 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseAdapter = databaseAdapter;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
+
             _userManager = userManager;
-            userManager.AddObserver(this);
+            _userManager.UpdateUserEvent += UpdateUserEventHandler;
+
             _queueManager = new MonitoringQueueManager(userManager);
             
             _productManager = productManager;
@@ -524,13 +524,9 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         #endregion
-        
-        public void UserUpdated(User user)
-        {
-            SensorData message = new SensorData();
-            message.TransactionType = TransactionType.UpdateTree;
-            _queueManager.AddSensorDataForUser(user, message);
-        }
+
+        private void UpdateUserEventHandler(object _, User user) =>
+            _queueManager.AddSensorDataForUser(user, new() { TransactionType = TransactionType.UpdateTree });
 
         public void AddUpdate(SensorData update)
         {
@@ -541,14 +537,16 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var lastBarsValues = _barsStorage.GetAllLastValues();
             foreach (var lastBarValue in lastBarsValues)
-            {
                 ProcessExtendedBarData(lastBarValue);
-            }
+
+            _barsStorage?.Dispose();
+            _queueManager?.Dispose();
 
             if (_productManager != null)
                 _productManager.RemovedProduct -= RemoveProductHandler;
 
-            _barsStorage?.Dispose();
+            if (_userManager != null)
+                _userManager.UpdateUserEvent -= UpdateUserEventHandler;         
         }
     }
 }

@@ -1,18 +1,24 @@
-﻿using HSMServer.Core.Authentication.UserObserver;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Authentication
 {
-    public interface IUserManager : IUserObservable
-    {/// <summary>
-     /// Add new user with the specified parameters
-     /// </summary>
-     /// <param name="userName">Login of the new user, must be unique and not empty</param>
-     /// <param name="certificateThumbprint">Can be empty for website users</param>
-     /// <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
-     /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
+    public interface IUserEvents
+    {
+        public event EventHandler<User> UpdateUserEvent;
+    }
+
+
+    public interface IUserManager : IUserEvents
+    {
+        /// <summary>
+        /// Add new user with the specified parameters
+        /// </summary>
+        /// <param name="userName">Login of the new user, must be unique and not empty</param>
+        /// <param name="certificateThumbprint">Can be empty for website users</param>
+        /// <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
+        /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
         public void AddUser(User user);
