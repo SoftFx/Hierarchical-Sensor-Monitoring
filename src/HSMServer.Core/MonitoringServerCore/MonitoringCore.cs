@@ -525,7 +525,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        private void UpdateUserEventHandler(object _, User user) =>
+        private void UpdateUserEventHandler(User user) =>
             _queueManager.AddSensorDataForUser(user, new() { TransactionType = TransactionType.UpdateTree });
 
         public void AddUpdate(SensorData update)

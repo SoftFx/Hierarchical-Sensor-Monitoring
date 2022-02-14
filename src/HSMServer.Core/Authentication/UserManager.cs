@@ -24,7 +24,7 @@ namespace HSMServer.Core.Authentication
         private readonly RemoveUserActionHandler _removeUserActionHandler;
         private readonly UpdateUserActionHandler _updateUserActionHandler;
 
-        public event EventHandler<User> UpdateUserEvent;
+        public event Action<User> UpdateUserEvent;
 
 
         public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)

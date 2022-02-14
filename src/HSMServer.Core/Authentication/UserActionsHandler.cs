@@ -92,7 +92,7 @@ namespace HSMServer.Core.Authentication
                     return false;
 
                 existingUser.Update(user);
-                _userManager.UpdateUserEvent?.Invoke(this, existingUser);
+                _userManager.UpdateUserEvent?.Invoke(existingUser);
 
                 return true;
             }

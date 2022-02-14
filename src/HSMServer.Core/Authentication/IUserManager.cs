@@ -4,14 +4,10 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.Authentication
 {
-    public interface IUserEvents
+    public interface IUserManager
     {
-        public event EventHandler<User> UpdateUserEvent;
-    }
+        public event Action<User> UpdateUserEvent;
 
-
-    public interface IUserManager : IUserEvents
-    {
         /// <summary>
         /// Add new user with the specified parameters
         /// </summary>

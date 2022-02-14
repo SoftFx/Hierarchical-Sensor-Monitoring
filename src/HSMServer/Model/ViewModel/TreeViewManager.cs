@@ -11,15 +11,15 @@ namespace HSMServer.Model.ViewModel
         private readonly Dictionary<string, TreeViewModel> _treeModels;
         private readonly object _lockObj = new object();
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly IUserEvents _userEvents;
+        private readonly IUserManager _userManager;
 
-        public TreeViewManager(IUserEvents userEvents, ISensorsInterface sensorsInterface)
+        public TreeViewManager(IUserManager userManager, ISensorsInterface sensorsInterface)
         {
             _treeModels = new Dictionary<string, TreeViewModel>();
             _sensorsInterface = sensorsInterface;
             
-            _userEvents = userEvents;
-            _userEvents.UpdateUserEvent += UpdateUserEventHandler;
+            _userManager = userManager;
+            _userManager.UpdateUserEvent += UpdateUserEventHandler;
         }
 
         public TreeViewModel GetTreeViewModel(User user)
@@ -55,7 +55,7 @@ namespace HSMServer.Model.ViewModel
             }
         }
 
-        private void UpdateUserEventHandler(object _, User user)
+        private void UpdateUserEventHandler(User user)
         {
             lock (_lockObj)
             {
@@ -64,6 +64,6 @@ namespace HSMServer.Model.ViewModel
         }
 
         public void Dispose() =>
-            _userEvents.UpdateUserEvent -= UpdateUserEventHandler;
+            _userManager.UpdateUserEvent -= UpdateUserEventHandler;
     }
 }

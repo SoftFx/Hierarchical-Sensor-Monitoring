@@ -57,7 +57,6 @@ namespace HSMServer
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
-            services.AddSingleton<IUserEvents>(x => x.GetRequiredService<IUserManager>());
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
