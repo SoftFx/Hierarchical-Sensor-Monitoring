@@ -18,6 +18,10 @@ namespace HSMServer.Core.Products
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
+        public List<Product> Products => _products.Values.ToList();
+
+        public event Action<Product> RemovedProduct;
+
         public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
@@ -26,9 +30,6 @@ namespace HSMServer.Core.Products
 
             InitializeProducts();
         }
-
-        public List<Product> Products => _products.Values.ToList();
-        public event Action<string> RemovedProduct;
 
         public Product GetProductByName(string name) =>
             _products.GetValueOrDefault(name);
@@ -117,9 +118,9 @@ namespace HSMServer.Core.Products
                     return;
 
                 _databaseAdapter.RemoveProduct(name);
-                _products.Remove(name, out _);
+                _products.Remove(name, out var product);
 
-                RemovedProduct?.Invoke(name);
+                RemovedProduct?.Invoke(product);
             }
             catch (Exception e)
             {

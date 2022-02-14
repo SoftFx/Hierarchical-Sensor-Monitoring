@@ -265,7 +265,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             existingInfo.Update(newInfo);
 
-            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(newInfo);
+            _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(existingInfo);
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
@@ -485,19 +485,21 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #region Product
 
-        private void RemoveProductHandler(string productName)
+        private void RemoveProductHandler(Product product)
         {
             var updateMessage = new SensorData
             {
-                Product = productName,
+                Product = product.Name,
                 Path = string.Empty,
                 TransactionType = TransactionType.Delete,
                 Time = DateTime.UtcNow
             };
 
+            _userManager.RemoveProductFromUsers(product.Key);
             _queueManager.AddSensorData(updateMessage);
-        }     
-
+            _valuesCache.RemoveProduct(product.Name);
+        }
+      
         public bool HideProduct(Product product, out string error)
         {
             bool result = false;
