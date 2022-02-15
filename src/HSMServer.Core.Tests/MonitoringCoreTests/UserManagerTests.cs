@@ -162,6 +162,25 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 TestUser(expected[i], actual[i]);
         }
 
+        [Fact]
+        [Trait("Category", "One")]
+        public void RemoveProductFromUsersTest()
+        {
+            var users = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+
+            foreach (var user in users)
+                _userManager.AddUser(user.UserName, user.CertificateThumbprint, user.CertificateFileName, user.Password, user.IsAdmin, user.ProductsRoles);
+
+            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Key);
+
+            var result = _userManager.GetUsersSortedByName();
+
+            for (int i = 1; i < result.Count(); i++)
+            {
+                var actual = users[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Key);
+                Assert.Equal(default, actual);
+            }
+        }
 
         private static async Task FullTestUserAsync(User expected,
             GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
