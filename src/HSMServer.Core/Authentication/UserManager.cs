@@ -120,7 +120,7 @@ namespace HSMServer.Core.Authentication
         public User GetUser(Guid id) => new(_users.GetValueOrDefault(id));
 
         public User GetUserByUserName(string userName) =>
-            _userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user)
+            !string.IsNullOrEmpty(userName) && _userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user)
                 ? new User(user)
                 : null;
 
