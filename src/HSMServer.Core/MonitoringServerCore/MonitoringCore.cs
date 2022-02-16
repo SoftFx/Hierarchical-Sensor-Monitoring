@@ -398,8 +398,8 @@ namespace HSMServer.Core.MonitoringServerCore
             return result;
         }
 
-        public ICollection<SensorInfo> GetProductSensors(string productName) =>
-            _productManager.GetProductByName(productName)?.Sensors.Values;
+        public List<SensorInfo> GetProductSensors(string productName) =>
+            _productManager.GetProductByName(productName)?.Sensors.Values.ToList();
 
         #region Sensors History
 

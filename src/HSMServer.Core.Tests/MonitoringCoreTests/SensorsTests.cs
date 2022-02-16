@@ -253,17 +253,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get Sensors History Data")]
         public void GetAllSensorsHistoryData_WithBarValues_Test(SensorType type)
         {
-            const int expectedCount = 11;
+            const int sensorValuesCount = 10;
 
-            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
+            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
 
             var history = _monitoringCore.GetAllSensorHistory(_testProductName, barSensorValues[0].Path);
 
-            Assert.Equal(expectedCount, history.Count);
-            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), history[expectedCount - 1].TypedData);
-
-            for (int i = 0; i < expectedCount - 1; ++i)
-                SensorValuesTester.TestSensorHistoryDataFromDB(barSensorValues[i], history[i]);
+            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
         }
 
         [Theory]
@@ -293,21 +290,18 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get Sensors History Data")]
         public void GetSensorsHistoryDataFromTo_WithBarValues_Test(SensorType type)
         {
-            const int expectedCount = 11;
+            const int sensorValuesCount = 10;
 
             DateTime from = DateTime.UtcNow;
 
-            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
+            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
 
             DateTime to = DateTime.UtcNow;
 
             var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, from, to);
 
-            Assert.Equal(expectedCount, history.Count);
-            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), history[expectedCount - 1].TypedData);
-
-            for (int i = 0; i < expectedCount - 1; ++i)
-                SensorValuesTester.TestSensorHistoryDataFromDB(barSensorValues[i], history[i]);
+            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
         }
 
         [Theory]
@@ -338,15 +332,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             const int expectedCount = 101;
             const int specificCount = 5;
 
-            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type).TakeLast(specificCount).ToList();
+            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+            barSensorValues = barSensorValues.TakeLast(specificCount).ToList();
 
             var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, specificCount);
 
-            Assert.Equal(specificCount, history.Count);
-            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), history[specificCount - 1].TypedData);
-
-            for (int i = 0; i < specificCount - 1; ++i)
-                SensorValuesTester.TestSensorHistoryDataFromDB(barSensorValues[i], history[i]);
+            TestBarSensorsHistoryData(barSensorValues, history, specificCount - 1);
         }
 
 
@@ -491,6 +483,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.True(DateTime.UtcNow > actual.Time);
         }
 
+        private static void TestBarSensorsHistoryData(List<SensorValueBase> expected, List<SensorHistoryData> actual, int sensorValuesCount)
+        {
+            Assert.Equal(expected.Count, actual.Count);
+            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), actual[sensorValuesCount].TypedData);
+
+            for (int i = 0; i < sensorValuesCount; ++i)
+                SensorValuesTester.TestSensorHistoryDataFromDB(expected[i], actual[i]);
+        }
+
 
         private SensorValueBase AddAndGetSensorValue(SensorType type)
         {
@@ -552,21 +553,24 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var barSensorValues = new List<SensorValueBase>(count);
 
-            for (int i = 0; i < count - 1; ++i)
+            for (int i = 0; i < count; ++i)
             {
                 var unaccountedSensorValueWithMinEndTime = _sensorValuesFactory.BuildUnitedSensorValue(type, true);
                 _monitoringCore.AddSensorValue(unaccountedSensorValueWithMinEndTime);
 
-                var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-                _monitoringCore.AddSensorValue(sensorValue);
-                barSensorValues.Add(sensorValue);
+                barSensorValues.Add(AddAndGetUnitedSensorValue(type));
             }
 
-            var sensorValueWithMinEndTime = _sensorValuesFactory.BuildUnitedSensorValue(type, true);
-            _monitoringCore.AddSensorValue(sensorValueWithMinEndTime);
-            barSensorValues.Add(sensorValueWithMinEndTime);
-
             return barSensorValues;
+        }
+
+        private UnitedSensorValue AddAndGetUnitedSensorValue(SensorType type, bool useMinEndTime = false)
+        {
+            var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type, useMinEndTime);
+
+            _monitoringCore.AddSensorValue(sensorValue);
+
+            return sensorValue;
         }
 
         private static SensorInfo GetUpdatedSensorInfo(SensorInfo existingSensorInfo, int iteration)

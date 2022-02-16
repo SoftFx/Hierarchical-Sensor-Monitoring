@@ -16,7 +16,7 @@ namespace HSMServer.Core.MonitoringCoreInterface
         void UpdateSensorInfo(SensorInfo newInfo);
         bool IsSensorRegistered(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
-        ICollection<SensorInfo> GetProductSensors(string productName);
+        List<SensorInfo> GetProductSensors(string productName);
 
         List<SensorHistoryData> GetSensorHistory(string product, string path, int n);
         List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to);
