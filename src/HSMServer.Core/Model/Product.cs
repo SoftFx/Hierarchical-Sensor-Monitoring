@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -15,6 +16,7 @@ namespace HSMServer.Core.Model
         public string Name { get; set; }
         public DateTime DateAdded { get; set; }
         public List<ExtraProductKey> ExtraKeys { get; set; }
+        [JsonIgnore]
         public ConcurrentDictionary<string, SensorInfo> Sensors { get; }
 
         public Product()
