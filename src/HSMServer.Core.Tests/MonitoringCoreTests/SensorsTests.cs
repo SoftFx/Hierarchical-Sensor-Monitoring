@@ -11,6 +11,8 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -32,14 +34,15 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             : base(fixture, registerFixture)
         {
             var userManager = new Mock<IUserManager>();
-            var barStorage = new Mock<IBarSensorsStorage>();
             var configurationProvider = new Mock<IConfigurationProvider>();
+
+            var barStorage = new BarSensorsStorage();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
                 userManager.Object,
-                barStorage.Object,
+                barStorage,
                 _productManager,
                 configurationProvider.Object,
                 _valuesCache,
@@ -140,13 +143,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             List<SensorValueBase> sensorValues = new(count);
 
             for (int i = 0; i < count; ++i)
-            {
-                var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
-                sensorValue.Path = $"{sensorValue.Path}{i}";
-
-                _monitoringCore.AddSensorValue(sensorValue);
-                sensorValues.Add(sensorValue);
-            }
+                sensorValues.Add(AddAndGetRandomSensorValue(i.ToString()));
 
             _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Key, sensorValues.Select(s => s.Path));
 
@@ -233,6 +230,200 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Null(_monitoringCore.GetProductSensors(RandomGenerator.GetRandomString()));
 
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(100)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetAllSensorsHistoryDataTest(int count)
+        {
+            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
+
+            foreach (var sensorValue in sensorValues)
+            {
+                var history = _monitoringCore.GetAllSensorHistory(_testProductName, sensorValue.Key);
+
+                for (int i = 0; i < sensorValue.Value.Count; ++i)
+                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+            }
+        }
+
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetAllSensorsHistoryData_WithBarValues_Test(SensorType type)
+        {
+            const int sensorValuesCount = 10;
+
+            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+
+            var history = _monitoringCore.GetAllSensorHistory(_testProductName, barSensorValues[0].Path);
+
+            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(100)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetSensorsHistoryDataFromToTest(int count)
+        {
+            DateTime from = DateTime.UtcNow;
+
+            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
+
+            DateTime to = DateTime.UtcNow;
+
+            foreach (var sensorValue in sensorValues)
+            {
+                var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, from, to);
+
+                for (int i = 0; i < sensorValue.Value.Count; ++i)
+                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+            }
+        }
+
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetSensorsHistoryDataFromTo_WithBarValues_Test(SensorType type)
+        {
+            const int sensorValuesCount = 10;
+
+            DateTime from = DateTime.UtcNow;
+
+            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+
+            DateTime to = DateTime.UtcNow;
+
+            var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, from, to);
+
+            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(100)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetSensorsHistoryDataSpecificCountTest(int count)
+        {
+            const int specificCount = 5;
+
+            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count, specificCount);
+
+            foreach (var sensorValue in sensorValues)
+            {
+                var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, specificCount);
+
+                for (int i = 0; i < sensorValue.Value.Count; ++i)
+                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+            }
+        }
+
+        [Theory]
+        [InlineData(SensorType.IntegerBarSensor)]
+        [InlineData(SensorType.DoubleBarSensor)]
+        [Trait("Category", "Get Sensors History Data")]
+        public void GetSensorsHistoryDataSpecificCount_WithBarValues_Test(SensorType type)
+        {
+            const int expectedCount = 101;
+            const int specificCount = 5;
+
+            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
+            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+            barSensorValues = barSensorValues.TakeLast(specificCount).ToList();
+
+            var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, specificCount);
+
+            TestBarSensorsHistoryData(barSensorValues, history, specificCount - 1);
+        }
+
+
+        [Fact]
+        [Trait("Category", "Get FileSensor content")]
+        public void GetFileSensorValueBytesTest()
+        {
+            var bytes = _monitoringCore.GetFileSensorValueBytes(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+
+            Assert.Empty(bytes);
+        }
+
+        [Theory(Skip = "TODO fix GetFileSensorValueBytes")]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "Get FileSensor content")]
+        public void GetFileSensorContentTest(SensorType type)
+        {
+            var sensorValue = AddAndGetSensorValue(type);
+            var expectedContent = sensorValue is FileSensorValue fileSensor
+                ? Encoding.Default.GetBytes(fileSensor.FileContent)
+                : (sensorValue as FileSensorBytesValue).FileContent;
+
+            var actualContent = _monitoringCore.GetFileSensorValueBytes(TestProductsManager.ProductName, sensorValue.Path);
+
+            Assert.Equal(expectedContent, actualContent);
+        }
+
+        [Fact]
+        [Trait("Category", "Get FileSensor extension")]
+        public void GetFileSensorValueExtensionTest()
+        {
+            var extension = _monitoringCore.GetFileSensorValueExtension(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+
+            Assert.Empty(extension);
+        }
+
+        [Theory]
+        [InlineData(SensorType.FileSensor)]
+        [InlineData(SensorType.FileSensorBytes)]
+        [Trait("Category", "Get FileSensor extension")]
+        public void GetFileSensorExtensionTest(SensorType type)
+        {
+            var sensorValue = AddAndGetSensorValue(type);
+            var expectedExtension = sensorValue is FileSensorValue fileSensor
+                ? fileSensor.Extension
+                : (sensorValue as FileSensorBytesValue).Extension;
+
+            var eactualEtension = _monitoringCore.GetFileSensorValueExtension(TestProductsManager.ProductName, sensorValue.Path);
+
+            Assert.Equal(expectedExtension, eactualEtension);
+        }
+
+
+        [Fact]
+        [Trait("Category", "Get sensors data")]
+        public void GetSensorUpdates()
+        {
+            // initialize queueManager
+            _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
+
+            var sensorValue = AddAndGetRandomSensorValue();
+            _monitoringCore.RemoveSensors(TestProductsManager.ProductName, sensorValue.Key, new List<string>() { sensorValue.Path });
+
+            var result = _monitoringCore.GetSensorUpdates(TestUsersManager.TestUser);
+
+            Assert.Equal(2, result.Count);
+            _sensorValuesTester.TestSensorDataFromCache(sensorValue, result[0]);
+            TestRemovedSensorData(sensorValue, TestProductsManager.ProductName, result[1]);
+        }
+
+        [Fact]
+        [Trait("Category", "Get sensors data")]
+        public void GetSensorsTreeTest()
+        {
+            var sensorsLastValues = AddRandomSensorValuesAndGetTheirLastValues(10);
+
+            var result = _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
+
+            Assert.Equal(sensorsLastValues.Count, result.Count);
+            foreach (var sensorData in result)
+                _sensorValuesTester.TestSensorDataFromCache(sensorsLastValues[sensorData.Path], sensorData);
+        }
+
+
         private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
             GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
         {
@@ -283,12 +474,101 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
         }
 
+        private static void TestRemovedSensorData(SensorValueBase expected, string expectedProductName, SensorData actual)
+        {
+            Assert.Equal(expectedProductName, actual.Product);
+            Assert.Equal(expected.Key, actual.Key);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(TransactionType.Delete, actual.TransactionType);
+            Assert.True(DateTime.UtcNow > actual.Time);
+        }
+
+        private static void TestBarSensorsHistoryData(List<SensorValueBase> expected, List<SensorHistoryData> actual, int sensorValuesCount)
+        {
+            Assert.Equal(expected.Count, actual.Count);
+            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), actual[sensorValuesCount].TypedData);
+
+            for (int i = 0; i < sensorValuesCount; ++i)
+                SensorValuesTester.TestSensorHistoryDataFromDB(expected[i], actual[i]);
+        }
+
+
+        private SensorValueBase AddAndGetSensorValue(SensorType type)
+        {
+            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+
+            _monitoringCore.AddSensorValue(sensorValue);
+
+            return sensorValue;
+        }
 
         private SensorValueBase AddAndGetRandomSensor(AddSensor addSensor = null, string productName = null)
         {
             var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
 
             (addSensor ?? _monitoringCore.AddSensor)?.Invoke(productName ?? _testProductName, sensorValue);
+
+            return sensorValue;
+        }
+
+        private SensorValueBase AddAndGetRandomSensorValue(string specificPathPart = null)
+        {
+            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+
+            if (!string.IsNullOrEmpty(specificPathPart))
+                sensorValue.Path = $"{sensorValue.Path}{specificPathPart}";
+
+            _monitoringCore.AddSensorValue(sensorValue);
+
+            return sensorValue;
+        }
+
+        private Dictionary<string, SensorValueBase> AddRandomSensorValuesAndGetTheirLastValues(int count)
+        {
+            var sensorsLastValues = new Dictionary<string, SensorValueBase>();
+            for (int i = 0; i < count; ++i)
+            {
+                var sensorValue = AddAndGetRandomSensorValue();
+                sensorsLastValues[sensorValue.Path] = sensorValue;
+            }
+
+            return sensorsLastValues;
+        }
+
+        private Dictionary<string, List<SensorValueBase>> AddRandomSensorValuesAndGetTheirValues(int countToAdd, int? specificCount = null)
+        {
+            if (!specificCount.HasValue)
+                specificCount = countToAdd;
+
+            var sensorValues = new List<SensorValueBase>();
+
+            for (int i = 0; i < countToAdd; ++i)
+                sensorValues.Add(AddAndGetRandomSensorValue());
+
+            return sensorValues.GroupBy(s => s.Path)
+                               .ToDictionary(s => s.Key, s => s.TakeLast(specificCount.Value).ToList());
+        }
+
+        private List<SensorValueBase> AddAndGetBarSensorValues(int count, SensorType type)
+        {
+            var barSensorValues = new List<SensorValueBase>(count);
+
+            for (int i = 0; i < count; ++i)
+            {
+                var unaccountedSensorValueWithMinEndTime = _sensorValuesFactory.BuildUnitedSensorValue(type, true);
+                _monitoringCore.AddSensorValue(unaccountedSensorValueWithMinEndTime);
+
+                barSensorValues.Add(AddAndGetUnitedSensorValue(type));
+            }
+
+            return barSensorValues;
+        }
+
+        private UnitedSensorValue AddAndGetUnitedSensorValue(SensorType type, bool useMinEndTime = false)
+        {
+            var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type, useMinEndTime);
+
+            _monitoringCore.AddSensorValue(sensorValue);
 
             return sensorValue;
         }

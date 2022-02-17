@@ -403,7 +403,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #region Sensors History
 
-        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, DateTime from, DateTime to)
+        public List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to)
         {
             var historyValues = _databaseAdapter.GetSensorHistory(product, path, 
                 from, to);
@@ -415,7 +415,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyValues;
         }
 
-        public List<SensorHistoryData> GetAllSensorHistory(User user, string product, string path)
+        public List<SensorHistoryData> GetAllSensorHistory(string product, string path)
         {
             var allValues = _databaseAdapter.GetAllSensorHistory(product, path);
             var lastValue = _barsStorage.GetLastValue(product, path);
@@ -426,7 +426,7 @@ namespace HSMServer.Core.MonitoringServerCore
             return allValues;
         }
 
-        public List<SensorHistoryData> GetSensorHistory(User user, string product, string path, int n)
+        public List<SensorHistoryData> GetSensorHistory(string product, string path, int n)
         {
             List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistory(product, path, n);
             var lastValue = _barsStorage.GetLastValue(product, path);
@@ -443,9 +443,12 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyList;
         }
 
-        public byte[] GetFileSensorValueBytes(User user, string product, string path)
+        public byte[] GetFileSensorValueBytes(string product, string path)
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+
+            if (dataObject == null)
+                return Array.Empty<byte>();
 
             try
             {
@@ -453,7 +456,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 return typedData2?.FileContent;
             }
             catch { }
-
 
             var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
@@ -463,9 +465,13 @@ namespace HSMServer.Core.MonitoringServerCore
 
             return new byte[1];
         }
-        public string GetFileSensorValueExtension(User user, string product, string path)
+        public string GetFileSensorValueExtension(string product, string path)
         {
             var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+
+            if (dataObject == null)
+                return string.Empty;
+
             var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
             if (typedData != null)
             {
