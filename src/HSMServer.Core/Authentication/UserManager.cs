@@ -64,13 +64,13 @@ namespace HSMServer.Core.Authentication
 
         // TODO: wait for async Task
         public async void AddUser(User user) =>
-            await _addUserActionHandler.Call(user);
+            await _addUserActionHandler.Apply(user);
 
         // TODO: wait for async Task
         public async void UpdateUser(User user)
         {
             if (_users.ContainsKey(user.Id))
-                await _updateUserActionHandler.Call(user);
+                await _updateUserActionHandler.Apply(user);
             else
                 AddUser(user);
         }
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Authentication
         public async void RemoveUser(string userName)
         {
             if (_userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user))
-                await _removeUserActionHandler.Call(user);
+                await _removeUserActionHandler.Apply(user);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
         }
@@ -173,7 +173,7 @@ namespace HSMServer.Core.Authentication
             }
 
             foreach (var user in usersFromDB)
-                await _addUserActionHandler.Call(user, false);
+                await _addUserActionHandler.Apply(user, false);
 
             _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
         }

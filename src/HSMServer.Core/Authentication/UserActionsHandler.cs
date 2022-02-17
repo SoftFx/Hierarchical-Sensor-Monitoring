@@ -18,7 +18,7 @@ namespace HSMServer.Core.Authentication
             }
 
 
-            internal async Task Call(User user, bool callDatabaseAction = true)
+            internal async Task Apply(User user, bool callDatabaseAction = true)
             {
                 int count = 0;
                 while (count++ < MaxAttemptsCount)
