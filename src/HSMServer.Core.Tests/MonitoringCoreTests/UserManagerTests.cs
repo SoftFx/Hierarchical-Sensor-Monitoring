@@ -84,14 +84,35 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUsersTest(int count)
         {
-            int updatesCount = 0;
-            void UpdateUserEvent(User obj) => updatesCount++;
+            var users = BuildAddAndGetRandomUsers(count - 1); // there is default user in db
 
-
-            var users = BuildAddAndGetRandomUsers(count);
-
-            var updatedUsers = new List<User>(count + 1);
+            var updatedUsers = new List<User>(count);
             foreach (var user in users)
+                updatedUsers.Add(BuildUpdatedUser(user));
+
+            updatedUsers.ForEach(_userManager.UpdateUser);
+
+            await FullTestUpdatedUserAsync(updatedUsers,
+                                           users,
+                                           _userManager.GetUser,
+                                           _userManager.GetUserByUserName,
+                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(100)]
+        [InlineData(1000)]
+        [Trait("Category", "Update user(s)")]
+        public async Task UpdateUserEventTest(int count)
+        {
+            List<User> actualUpdatedUsers = new List<User>(count);
+            void UpdateUserEvent(User user) => actualUpdatedUsers.Add(user);
+
+
+            var updatedUsers = new List<User>(count);
+            foreach (var user in BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
                 updatedUsers.Add(BuildUpdatedUser(user));
 
             _userManager.UpdateUserEvent += UpdateUserEvent;
@@ -100,9 +121,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _userManager.UpdateUserEvent -= UpdateUserEvent;
 
-            Assert.Equal(count + 1, updatesCount);
+            Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
-                                           users,
+                                           actualUpdatedUsers,
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
                                            _databaseAdapterManager.DatabaseAdapter.GetUsers);
@@ -441,8 +462,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return users;
         }
 
-        private static User BuildUpdatedUser(User source) =>
-            new()
+        private static User BuildUpdatedUser(User source)
+        {
+            var productRoles = new List<KeyValuePair<string, ProductRoleEnum>>(source.ProductsRoles.Count);
+            foreach (var role in source.ProductsRoles)
+                productRoles.Add(new KeyValuePair<string, ProductRoleEnum>(GetUpdatedProperty(role.Key), role.Value));
+
+            return new()
             {
                 Id = source.Id,
                 UserName = GetUpdatedProperty(source.UserName),
@@ -450,8 +476,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 CertificateThumbprint = GetUpdatedProperty(source.CertificateThumbprint),
                 IsAdmin = !source.IsAdmin,
                 Password = GetUpdatedProperty(source.Password),
-                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(source.ProductsRoles),
+                ProductsRoles = productRoles,
             };
+        }
 
         private static string GetUpdatedProperty(object property) => $"{property}-updated";
     }
