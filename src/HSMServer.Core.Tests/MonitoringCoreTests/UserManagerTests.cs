@@ -149,14 +149,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
+            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
 
-            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
+            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
-            Assert.Equal(expected.Count, actual.Count);
-
-            for (int i = 0; i < actual.Count; i++)
-                TestUser(expected[i], actual[i]);
+            CompareUserLists(expected, actual);
         }
 
         [Fact]
@@ -165,84 +162,82 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key).OrderBy(e => e.UserName).ToList();
+            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
 
             var expected = new List<User> { TestUsersManager.TestUserManager };
 
-            Assert.Equal(expected.Count, actual.Count);
-
-            for (int i = 0; i < actual.Count; i++)
-                TestUser(expected[i], actual[i]);
+            CompareUserLists(expected, actual);
         }
 
         [Fact]
         [Trait("Category", "Get users")]
         public void GetOnlyAdminUsersTest()
         {
+            bool IsAdmin(User user) => user.IsAdmin;
+
+
             AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
-            bool IsAdmin(User user)
-            {
-                return user.IsAdmin;
-            }
+            var actual = _userManager.GetUsers(IsAdmin);
 
-            var actual = _userManager.GetUsers(IsAdmin).OrderBy(e => e.UserName).ToList();
+            var expected = new List<User> { TestUsersManager.DefaultUser, TestUsersManager.Admin };
 
-            var expected = new List<User> { TestUsersManager.DefaultUser, TestUsersManager.Admin }.OrderBy(e => e.UserName).ToList();
-
-            Assert.Equal(expected.Count, actual.Count);
-
-            for (int i = 0; i < actual.Count; i++)
-                TestUser(expected[i], actual[i]);
+            CompareUserLists(expected, actual);
         }
 
         [Fact]
         [Trait("Category", "Get users")]
         public void GetUsersWithProductRoleTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
-
             bool IsProductRole(User user) => user.ProductsRoles.Count > 0;
 
-            var actual = _userManager.GetUsers(IsProductRole).OrderBy(e => e.UserName).ToList();
 
-            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
+            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            Assert.Equal(expected.Count, actual.Count);
+            var actual = _userManager.GetUsers(IsProductRole);
 
-            for (int i = 0; i < actual.Count; i++)
-                TestUser(expected[i], actual[i]); ;
+            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+
+            CompareUserLists(expected, actual);
         }
 
         [Fact]
         [Trait("Category", "Get users")]
         public void GetUsersWithNameTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
-
             bool IsProductRole(User user) => user.UserName == TestUsersManager.TestUserViewer.UserName;
 
-            var actual = _userManager.GetUsers(IsProductRole).OrderBy(e => e.UserName).ToList();
 
-            var expected = new List<User> { TestUsersManager.TestUserViewer }.OrderBy(e => e.UserName).ToList();
+            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            Assert.Equal(expected.Count, actual.Count);
+            var actual = _userManager.GetUsers(IsProductRole);
 
-            for (int i = 0; i < actual.Count; i++)
-                TestUser(expected[i], actual[i]); ;
+            var expected = new List<User> { TestUsersManager.TestUserViewer };
+
+            CompareUserLists(expected, actual);
         }
 
         [Fact]
         [Trait("Category", "Get users")]
         public void GetUsersOfProductTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
-
             bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Key);
 
-            var actual = _userManager.GetUsers(IsProductRole).OrderBy(e => e.UserName).ToList();
 
-            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager }.OrderBy(e => e.UserName).ToList();
+            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
+
+            var actual = _userManager.GetUsers(IsProductRole);
+
+            var expected = new List<User> { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+
+            CompareUserLists(expected, actual);
+        }
+
+        private void CompareUserLists(IEnumerable<User> expectedInput, IEnumerable<User> actualInput)
+        {
+            var expected = expectedInput.OrderBy(e => e.UserName).ToList();
+
+            var actual = actualInput.OrderBy(e => e.UserName).ToList();
 
             Assert.Equal(expected.Count, actual.Count);
 
