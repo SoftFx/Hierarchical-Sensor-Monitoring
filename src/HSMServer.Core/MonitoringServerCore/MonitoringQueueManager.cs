@@ -39,8 +39,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
             if (!_disposed)
             {
-                _userManager.UpdateUserEvent -= UpdateUserEventHandler;
-
                 if (disposingManagedResources)
                 {
                     lock (_accessLock)
@@ -70,9 +68,8 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly Dictionary<User, ClientMonitoringQueue> _currentSessions;
         private readonly Logger _logger;
         private readonly object _accessLock = new object();
-        private readonly IUserManager _userManager;
 
-        public MonitoringQueueManager(IUserManager userManager)
+        public MonitoringQueueManager()
         {
             _logger = LogManager.GetCurrentClassLogger();
             lock (_accessLock)
@@ -80,8 +77,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 _currentSessions = new Dictionary<User, ClientMonitoringQueue>(new UsersComparer());
             }
 
-            _userManager = userManager;
-            _userManager.UpdateUserEvent += UpdateUserEventHandler;
             _logger.Info("Monitoring queue manager initialized");
         }
 
@@ -199,17 +194,6 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         #endregion
-
-        private void UpdateUserEventHandler(User user)
-        {
-            lock (_accessLock)
-            {
-                var correspondingPair = _currentSessions.FirstOrDefault(p => p.Key.IsSame(user));
-
-                if (correspondingPair.Value != null)
-                    correspondingPair.Key?.Update(user);
-            }
-        }
 
         private ClientMonitoringQueue GetUserQueue(User user)
         {

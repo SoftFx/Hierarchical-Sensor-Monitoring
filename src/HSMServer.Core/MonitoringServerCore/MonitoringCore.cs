@@ -47,7 +47,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _userManager = userManager;
             _userManager.UpdateUserEvent += UpdateUserEventHandler;
 
-            _queueManager = new MonitoringQueueManager(userManager);
+            _queueManager = new MonitoringQueueManager();
             
             _productManager = productManager;
             _productManager.RemovedProduct += RemoveProductHandler;            
