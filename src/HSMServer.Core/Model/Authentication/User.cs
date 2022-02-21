@@ -82,5 +82,12 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
             }
         }
+
+        public User Copy()
+        {
+            var copy = this.MemberwiseClone() as User;
+            copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
+            return copy;
+        }
     }
 }

@@ -23,7 +23,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 
         public void Dispose()
         {
-            var folders = _createdDatabases.Select(u => u.DatabaseFolder);
+            var folders = _createdDatabases.Select(u => u.DatabaseFolder).Distinct();
 
             _createdDatabases.ForEach(db => db.ClearDatabase());
 
