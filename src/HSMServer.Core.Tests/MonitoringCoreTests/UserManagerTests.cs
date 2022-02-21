@@ -107,7 +107,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUserEventTest(int count)
         {
-            List<User> actualUpdatedUsers = new List<User>(count);
+            List<User> actualUpdatedUsers = new(count);
             void UpdateUserEvent(User user) => actualUpdatedUsers.Add(user);
 
 
@@ -218,7 +218,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
-            var expected = new List<User> (2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+            var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
         }
@@ -230,7 +230,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
-            var expected = new List<User> (1) { TestUsersManager.TestUserManager };
+            var expected = new List<User>(1) { TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
         }
@@ -245,7 +245,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
             var actual = _userManager.GetUsers(IsAdmin);
-            var expected = new List<User> (2) { TestUsersManager.DefaultUser, TestUsersManager.Admin };
+            var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.Admin };
 
             CompareUserLists(expected, actual);
         }
@@ -260,7 +260,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
-            var expected = new List<User> (2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+            var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
         }
@@ -275,7 +275,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
-            var expected = new List<User> (1) { TestUsersManager.TestUserViewer };
+            var expected = new List<User>(1) { TestUsersManager.TestUserViewer };
 
             CompareUserLists(expected, actual);
         }
@@ -372,7 +372,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void TestRemovedUser(User removedUser, GetAllUsersFromDB getUsersFromDB) =>
             Assert.Null(getUsersFromDB().FirstOrDefault(u => u.Id == removedUser.Id));
-
 
         private static void TestUser(User expected, User actual)
         {
