@@ -4,7 +4,6 @@ using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace HSMServer.HtmlHelpers
@@ -16,9 +15,10 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateFullLists(TreeViewModel model)
         {
-            if (model == null) return string.Empty;
+            if (model == null) 
+                return string.Empty;
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
 
             result.Append("<div class='col' id='list'>" +
                 "<div id='list_sensors_header' style='display: none;'>" +
@@ -39,15 +39,17 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateNotSelectedLists(string selectedPath, TreeViewModel model)
         {
-            if (model == null) return string.Empty;
+            if (model == null) 
+                return string.Empty;
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
 
             foreach(var path in model.Paths)
             {
                 string formattedPath = SensorPathHelper.Encode(path);
                 if (!string.IsNullOrEmpty(selectedPath) 
-                    && selectedPath.Equals(formattedPath)) continue;
+                    && selectedPath.Equals(formattedPath)) 
+                    continue;
 
                 result.Append(CreateList(path, path, model));
             }
@@ -57,40 +59,28 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateList(string path, string fullPath, TreeViewModel model)
         {
-            if (path == null) return string.Empty;
+            if (path == null) 
+                return string.Empty;
 
             var nodes = path.Split('/');
-            var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
+            var existingNode = model.Nodes[nodes[0]];
             NodeViewModel node = existingNode;
             if (nodes[0].Length < path.Length)
             {
-                //Remove last node name because it is sensor
-                //if (nodes.Length > 2)
-                //{
-                //    path = path.Substring(nodes[0].Length + 1,
-                //        path.Length - nodes[0].Length - 1 - nodes.Last().Length - 1);
-                //    node = GetNodeRecursion(path, existingNode);
-                //}
                 path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
                 node = GetNodeRecursion(path, existingNode);
             }
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
             string formattedNodePath = SensorPathHelper.Encode(fullPath);
 
             result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
-            //if (node.Sensors != null)
-            //    foreach (var sensor in node.Sensors)
-            //    {
-            //        result.Append(CreateSensor(fullPath, sensor));
-            //    }
-            //result.Append("</div>");
-            //string shortedPath = fullPath.Substring(0, fullPath.LastIndexOf('/'));
-            if (node.Sensors != null && node.Sensors.Any())
+
+            if (node.Sensors != null && !node.Sensors.IsEmpty)
             {
-                foreach (var sensor in node.Sensors)
+                foreach (var (name, sensor) in node.Sensors)
                 {
-                    string sensorPath = $"{fullPath}/{sensor.Name}";
+                    string sensorPath = $"{fullPath}/{name}";
                     string formattedPath = SensorPathHelper.Encode(sensorPath);
                     result.Append($"<div id='sensorInfo_parent_{formattedPath}' style='display: none'>");
                     result.Append(CreateSensorInfoLink(formattedPath));
@@ -109,11 +99,11 @@ namespace HSMServer.HtmlHelpers
         {
             return $"<a tabindex='0' class='link-primary info-link' id='sensorInfo_link_{formattedPath}'>Show meta info</a>";
         }
+
         public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
-            StringBuilder result = new StringBuilder();
-            //string name = SensorPathHelper.Encode($"{path}/{sensor.Name}");
-            //string formattedPath = SensorPathHelper.Encode(path);
+            var result = new StringBuilder();
+
             string name = formattedPath;
 
             result.Append("<div class='accordion-item'>" +
@@ -338,9 +328,10 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateHistoryList(List<SensorHistoryData> sensors)
         {
-            if (sensors == null) return string.Empty;
+            if (sensors == null) 
+                return string.Empty;
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
             result.Append("<div class='col-xxl' style='margin: 10px 0px'><ul class='list-group'>");
 
             foreach(var sensor in sensors)
@@ -359,10 +350,10 @@ namespace HSMServer.HtmlHelpers
             var nodes = path.Split('/');
 
             if (nodes[0].Length == path.Length)
-                return model.Nodes.First(x => x.Name.Equals(nodes[0]));
+                return model.Nodes[nodes[0]];
 
             path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
-            var existingNode = model.Nodes.First(x => x.Name.Equals(nodes[0]));
+            var existingNode = model.Nodes[nodes[0]];
 
             return GetNodeRecursion(path, existingNode);
         }

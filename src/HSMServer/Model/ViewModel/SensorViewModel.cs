@@ -15,6 +15,7 @@ namespace HSMServer.Model.ViewModel
         public string ShortStringValue { get; set; }
         public TransactionType TransactionType { get; set; }
         public string ValidationError { get; set; }
+
         public SensorViewModel(string name, SensorData sensor)
         {
             Name = name;

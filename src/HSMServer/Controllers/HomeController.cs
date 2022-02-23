@@ -111,9 +111,10 @@ namespace HSMServer.Controllers
             {
                 //remove product
                 var productEntity = _productManager.GetProductByName(decodedPath);
-                if (productEntity == null) return;
+                if (productEntity == null) 
+                    return;
 
-                _sensorsInterface.HideProduct(productEntity, out var error);
+                _sensorsInterface.HideProduct(productEntity, out _);
             }
         }
 
@@ -121,12 +122,12 @@ namespace HSMServer.Controllers
         {
             var path = node.Path.Substring(node.Path.IndexOf('/') + 1);
 
-            if (node.Sensors != null && node.Sensors.Count > 0)
-                foreach (var sensor in node.Sensors)
-                    paths.Add($"{path}/{sensor.Name}");
+            if (node.Sensors != null && !node.Sensors.IsEmpty)
+                foreach (var (name, _) in node.Sensors)
+                    paths.Add($"{path}/{name}");
 
-            if (node.Nodes != null && node.Nodes.Count > 0)
-                foreach (var child in node.Nodes)
+            if (node.Nodes != null && !node.Nodes.IsEmpty)
+                foreach (var (_, child) in node.Nodes)
                     GetSensorsPaths(child, paths);
         }
 
@@ -137,9 +138,9 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.SortByName();
+            //var model = oldModel.SortByName();
 
-            _treeManager.AddOrCreate(user, model);
+            _treeManager.AddOrCreate(user, oldModel);
         }
 
         [HttpPost]
@@ -147,9 +148,9 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
             var oldModel = _treeManager.GetTreeViewModel(user);
-            var model = oldModel.SortByTime();
+            //var model = oldModel.SortByName();//oldModel.SortByTime();
 
-            _treeManager.AddOrCreate(user, model);
+            _treeManager.AddOrCreate(user, oldModel);
         }
 
         [HttpPost]
@@ -161,26 +162,7 @@ namespace HSMServer.Controllers
             if (oldModel == null)
                 return new HtmlString("");
 
-            //if (sensors != null && sensors.Count > 0)
-            //    foreach (var sensor in sensors)
-            //    {
-            //        _logger.Info($"UpdateTree: Product={sensor.Product} Path={sensor.Path}" +
-            //            $"Type={sensor.TransactionType}");
-            //    }
-
             var model = oldModel;
-
-            //StringBuilder str = new StringBuilder();
-            //str.Append("Old Tree\n");
-            //int i = 0;
-            //foreach (var node in model.Nodes)
-            //{
-            //    PrintTree(node, str, "", i == model.Nodes.Count - 1);
-            //    str.Append("-----------\n");
-            //    i++;
-            //}
-
-            //_logger.Info(str.ToString());
 
             if (sensors != null && sensors.Count > 0)
             {
@@ -195,30 +177,18 @@ namespace HSMServer.Controllers
             else 
                 oldModel.UpdateNodeCharacteristics();
 
-            //str = new StringBuilder();
-            //str.Append("Updated Tree\n");
-            //i = 0;
-            //foreach (var node in model.Nodes)
-            //{
-            //    PrintTree(node, str, "", i == model.Nodes.Count - 1);
-            //    str.Append("-----------\n");
-            //    i++;
-            //}
-
-            //_logger.Info(str.ToString());
-
             return ViewHelper.UpdateTree(model.Clone());
         }
 
         private static void PrintTree(NodeViewModel node, StringBuilder str,
             string indent, bool isLast)
         {
-            str.Append(indent + "+- " + $"node: {node.Name} path: {node.Path}\n");
+            str.Append($"{indent} +- node: {node.Name} path: {node.Path}\n");
             indent += isLast ? "\t" : "|\t";
 
             int i = 0;
             if (node.Nodes != null && node.Nodes.Count > 0)
-                foreach (var child in node.Nodes)
+                foreach (var (_, child) in node.Nodes)
                 {
                     PrintTree(child, str, indent, i == node.Nodes.Count - 1);
                     i++;
@@ -226,8 +196,8 @@ namespace HSMServer.Controllers
 
 
             if (node.Sensors != null && node.Sensors.Count > 0)
-                foreach (var sensor in node.Sensors)
-                    str.Append(indent + "--" + $"sensor: {sensor.Name}\n");
+                foreach (var (name, _) in node.Sensors)
+                    str.Append($"{indent}--sensor: {name}\n");
         }
 
         [HttpPost]
@@ -293,9 +263,8 @@ namespace HSMServer.Controllers
             List<SensorDataViewModel> result = new List<SensorDataViewModel>();
             if (node?.Sensors != null)
 
-                foreach (var sensor in node.Sensors)
+                foreach (var (_, sensor) in node.Sensors)
                 {
-                    //if (sensor.TransactionType != TransactionType.Add)
                     result.Add(new SensorDataViewModel(selectedList, sensor));
                 }
 
@@ -323,10 +292,10 @@ namespace HSMServer.Controllers
             var path = SensorPathHelper.Decode(formattedPath);
 
             var node = model.GetNode(path);
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
             if (node?.Sensors != null)
 
-                foreach (var sensor in node.Sensors)
+                foreach (var (_, sensor) in node.Sensors)
                 {
                     if (sensor.TransactionType == TransactionType.Add)
                     {
@@ -334,19 +303,6 @@ namespace HSMServer.Controllers
                         result.Append(ListHelper.CreateSensor(path, sensor));
                     }
                 }
-
-            //if (sensors != null && sensors.Count > 0)
-            //{
-            //    var addedSensors = sensors.Where(s => s.TransactionType == TransactionType.Add).ToList();
-
-            //    foreach (var sensor in addedSensors)
-            //    {
-            //        sensor.TransactionType = TransactionType.Update;
-            //    }
-                    
-
-            //    model = model.Update(addedSensors);
-            //}
 
             return new HtmlString(result.ToString());
         }
@@ -547,6 +503,7 @@ namespace HSMServer.Controllers
         }
 
         #endregion
+
         private void ParseProductAndPath(string encodedPath, out string product, out string path)
         {
             var decodedPath = SensorPathHelper.Decode(encodedPath);
