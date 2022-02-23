@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
 
 namespace HSMServer.Core.Converters
 {
@@ -21,7 +21,6 @@ namespace HSMServer.Core.Converters
                 IntBarSensorValue intBarSensorValue => GetIntBarSensorTypedData(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetDoubleBarSensorTypedData(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetFileSensorBytesTypedData(fileSensorBytesValue),
-                FileSensorValue fileSensorValue => GetFileSensorTypedData(fileSensorValue),
                 UnitedSensorValue unitedSensorValue => GetUnitedSensorTypedData(unitedSensorValue),
                 _ => null,
             };
@@ -51,9 +50,6 @@ namespace HSMServer.Core.Converters
                 sensorValue.Count, sensorValue.StartTime, sensorValue.EndTime, sensorValue.Percentiles, sensorValue.Comment);
 
         private static FileSensorBytesData GetFileSensorBytesTypedData(FileSensorBytesValue sensorValue) =>
-            GetSensorData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
-
-        private static FileSensorData GetFileSensorTypedData(FileSensorValue sensorValue) =>
             GetSensorData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
 
         private static object GetUnitedSensorTypedData(UnitedSensorValue sensorValue) =>
@@ -144,15 +140,6 @@ namespace HSMServer.Core.Converters
         }
 
         private static FileSensorBytesData GetSensorData(string extension, string filename, byte[] content, string comment) =>
-            new()
-            {
-                Extension = extension,
-                FileName = filename,
-                FileContent = content,
-                Comment = comment,
-            };
-
-        private static FileSensorData GetSensorData(string extension, string filename, string content, string comment) =>
             new()
             {
                 Extension = extension,

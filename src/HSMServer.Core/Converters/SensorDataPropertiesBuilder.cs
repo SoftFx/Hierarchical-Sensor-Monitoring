@@ -1,11 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Text.Json;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using System;
+using System.IO;
+using System.Text.Json;
 
 namespace HSMServer.Core.Converters
 {
@@ -24,7 +24,6 @@ namespace HSMServer.Core.Converters
                 IntBarSensorValue intBarSensorValue => GetStringValue(intBarSensorValue, timeCollected),
                 DoubleBarSensorValue doubleBarSensorValue => GetStringValue(doubleBarSensorValue, timeCollected),
                 FileSensorBytesValue fileSensorBytesValue => GetStringValue(fileSensorBytesValue, timeCollected),
-                FileSensorValue fileSensorValue => GetStringValue(fileSensorValue, timeCollected),
                 UnitedSensorValue unitedSensorValue => GetStringValue(unitedSensorValue, timeCollected),
                 _ => null,
             };
@@ -39,7 +38,6 @@ namespace HSMServer.Core.Converters
                 IntBarSensorValue intBarSensorValue => GetShortStringValue(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetShortStringValue(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetShortStringValue(fileSensorBytesValue),
-                FileSensorValue fileSensorValue => GetShortStringValue(fileSensorValue),
                 UnitedSensorValue unitedSensorValue => GetShortStringValue(unitedSensorValue),
                 _ => null,
             };
@@ -127,9 +125,6 @@ namespace HSMServer.Core.Converters
         private static string GetStringValue(StringSensorValue value, DateTime timeCollected) =>
             GetSimpleSensorsString(timeCollected, value.Comment, value.StringValue);
 
-        private static string GetStringValue(FileSensorValue value, DateTime timeCollected) =>
-            GetFileSensorsString(timeCollected, value.Comment, value.FileName, value.Extension, value.FileContent?.Length ?? 0);
-
         private static string GetStringValue(FileSensorBytesValue value, DateTime timeCollected) =>
             GetFileSensorsString(timeCollected, value.Comment, value.FileName, value.Extension, value.FileContent?.Length ?? 0);
 
@@ -173,9 +168,6 @@ namespace HSMServer.Core.Converters
 
         private static string GetShortStringValue(DoubleBarSensorValue value) =>
             GetBarSensorsShortString(value.Min, value.Mean, value.Max, value.Count, value.LastValue);
-
-        private static string GetShortStringValue(FileSensorValue value) =>
-            GetFileSensorsShortString(value.FileName, value.Extension, value.FileContent?.Length ?? 0);
 
         private static string GetShortStringValue(FileSensorBytesValue value) =>
             GetFileSensorsShortString(value.FileName, value.Extension, value.FileContent?.Length ?? 0);

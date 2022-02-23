@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
+using System.Text;
 
 namespace HSMServer.Controllers
 {
@@ -211,8 +212,21 @@ namespace HSMServer.Controllers
         {
             try
             {
+                var fileSensorBytes = new FileSensorBytesValue()
+                {
+                    Key = sensorValue.Key,
+                    Path = sensorValue.Path,
+                    Time = sensorValue.Time,
+                    Comment = sensorValue.Comment,
+                    Status = sensorValue.Status,
+                    Description = sensorValue.Description,
+                    Extension = sensorValue.Extension,
+                    FileContent = Encoding.UTF8.GetBytes(sensorValue.FileContent),
+                    FileName = sensorValue.FileName,
+                };
+
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(fileSensorBytes);
                 return Ok(sensorValue);
             }
             catch (Exception e)
