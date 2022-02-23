@@ -1,4 +1,5 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects
 {
@@ -55,6 +56,7 @@ namespace HSMSensorDataObjects
         /// Data object also includes file extension, so the client app automatically opens the file using a proper program
         /// </summary>
         [EnumMember]
+        [Obsolete("FileSensor enum member is obsolete. New FileSensorValues are replaced by FileSensorBytesValues in API, saved FileSensorValues in db are converted to FileSensorBytesValues in Core")]
         FileSensor = 6,
 
         /// <summary>

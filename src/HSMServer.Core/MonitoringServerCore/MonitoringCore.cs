@@ -444,40 +444,29 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
         public byte[] GetFileSensorValueBytes(string product, string path) =>
-            GetFileSensorProperty(product, path, Array.Empty<byte>(),
-                fileData => fileData switch
-                {
-                    FileSensorBytesData bytesData => bytesData.FileContent,
-                    FileSensorData data => Encoding.UTF8.GetBytes(data.FileContent),
-                    _ => Array.Empty<byte>(),
-                });
+            GetFileSensorProperty(product, path, Array.Empty<byte>(), fileData => fileData?.FileContent);
 
         public string GetFileSensorValueExtension(string product, string path) =>
-            GetFileSensorProperty(product, path, string.Empty,
-                fileData => fileData switch
-                {
-                    FileSensorBytesData bytesData => bytesData.Extension,
-                    FileSensorData data => data.Extension,
-                    _ => string.Empty,
-                });
+            GetFileSensorProperty(product, path, string.Empty, fileData => fileData?.Extension);
 
-        private T GetFileSensorProperty<T>(string product, string path, T defaultValue, Func<object, T> getFileSensorProperty)
+        private T GetFileSensorProperty<T>(string product, string path, T defaultValue, Func<FileSensorBytesData, T> getFileSensorProperty)
         {
             var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
 
-            if (sensorHistoryData == null || (sensorHistoryData.SensorType != SensorType.FileSensorBytes && sensorHistoryData.SensorType != SensorType.FileSensor))
+            if (sensorHistoryData.SensorType == SensorType.FileSensor)
+                sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
+
+            if (sensorHistoryData == null || sensorHistoryData.SensorType != SensorType.FileSensorBytes)
                 return defaultValue;
 
             try
             {
-                if (sensorHistoryData.SensorType == SensorType.FileSensorBytes)
-                    return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData));
-                else if (sensorHistoryData.SensorType == SensorType.FileSensor)
-                    return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorData>(sensorHistoryData.TypedData));
+                return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData));
             }
-            catch { }
-
-            return defaultValue;
+            catch
+            {
+                return defaultValue;
+            }
         }
 
         #endregion

@@ -70,10 +70,6 @@ namespace HSMServer.Core.Converters
                     FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
                     return GetFileSensorsString(dataEntity.TimeCollected, fileSensorBytesData.Comment, fileSensorBytesData.FileName,
                                                 fileSensorBytesData.Extension, fileSensorBytesData.FileContent?.Length ?? 0);
-                case SensorType.FileSensor:
-                    FileSensorData fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
-                    return GetFileSensorsString(dataEntity.TimeCollected, fileSensorData.Comment, fileSensorData.FileName,
-                                                fileSensorData.Extension, fileSensorData.FileContent?.Length ?? 0);
             }
 
             return null;
@@ -104,9 +100,6 @@ namespace HSMServer.Core.Converters
                 case SensorType.FileSensorBytes:
                     FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
                     return GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, fileSensorBytesData.FileContent?.Length ?? 0);
-                case SensorType.FileSensor:
-                    FileSensorData fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
-                    return GetFileSensorsShortString(fileSensorData.FileName, fileSensorData.Extension, fileSensorData.FileContent?.Length ?? 0);
             }
 
             return null;
