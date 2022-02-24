@@ -453,10 +453,13 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
 
+            if (sensorHistoryData == null)
+                return defaultValue;
+
             if (sensorHistoryData.SensorType == SensorType.FileSensor)
                 sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
 
-            if (sensorHistoryData == null || sensorHistoryData.SensorType != SensorType.FileSensorBytes)
+            if (sensorHistoryData.SensorType != SensorType.FileSensorBytes)
                 return defaultValue;
 
             try

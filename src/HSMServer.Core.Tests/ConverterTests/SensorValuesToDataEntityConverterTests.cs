@@ -1,8 +1,8 @@
-﻿using System;
-using System.Text.Json;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.Infrastructure;
+using System;
+using System.Text.Json;
 using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
@@ -29,9 +29,8 @@ namespace HSMServer.Core.Tests.ConverterTests
         [InlineData(SensorType.IntegerBarSensor)]
         [InlineData(SensorType.DoubleBarSensor)]
         [InlineData(SensorType.FileSensorBytes)]
-        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "Simple")]
-        public void BoolSensorValueToSensorDataEntityConverterTest(SensorType type)
+        public void SensorValueToSensorDataEntityConverterTest(SensorType type)
         {
             var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
@@ -72,7 +71,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "Validation result")]
         public void SensorValueToSensorDataEntityConverter_ValidationStatusError_Test()
         {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
             var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Error);
 
@@ -83,7 +82,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "Validation result")]
         public void SensorValueToSensorDataEntityConverter_SensorValueStatusError_Test()
         {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             fileSensorValue.Status = SensorStatus.Error;
 
             var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Warning);
@@ -95,7 +94,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "Validation result")]
         public void SensorValueToSensorDataEntityConverter_ValidationStatusWarning_Test()
         {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
             var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Warning);
 
@@ -106,7 +105,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "Validation result")]
         public void SensorValueToSensorDataEntityConverter_SensorValueStatusWarning_Test()
         {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             fileSensorValue.Status = SensorStatus.Warning;
 
             var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Unknown);

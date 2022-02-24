@@ -34,7 +34,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.IntegerBarSensor => BuildIntBarSensorValue(),
                 SensorType.DoubleBarSensor => BuildDoubleBarSensorValue(),
                 SensorType.FileSensorBytes => BuildFileSensorBytesValue(),
-                SensorType.FileSensor => BuildFileSensorValue(),
+                SensorType.FileSensor => BuildFileSensorBytesValue(),
                 _ => null,
             };
 
@@ -116,18 +116,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
             return fileSensorBytesValue.FillCommonSensorValueProperties(_productKey);
-        }
-
-        internal FileSensorValue BuildFileSensorValue()
-        {
-            var fileSensorValue = new FileSensorValue()
-            {
-                Extension = RandomGenerator.GetRandomString(3),
-                FileContent = RandomGenerator.GetRandomString(),
-                FileName = nameof(FileSensorValue),
-            };
-
-            return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
 
         internal ExtendedBarSensorData BuildExtendedBarSensorData(SensorType type) =>

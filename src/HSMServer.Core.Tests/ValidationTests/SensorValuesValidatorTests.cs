@@ -139,7 +139,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         [Trait("Category", "UnitedSensorValue")]
         public void UnitedSensorValueAllErrorsValidationTest()
         {
-            var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensor);
+            var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensorBytes);
             unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
             unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
