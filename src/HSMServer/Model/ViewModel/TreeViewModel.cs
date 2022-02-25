@@ -2,19 +2,16 @@ using HSMCommon.Constants;
 using HSMServer.Core.Model.Sensor;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Model.ViewModel
 {
     public class TreeViewModel
     {
-        public List<string> Paths { get; set; }
         public ConcurrentDictionary<string, NodeViewModel> Nodes { get; set; }
 
         public TreeViewModel(List<SensorData> sensors)
         {
             Nodes = new ConcurrentDictionary<string, NodeViewModel>();
-            Paths = new List<string>();
 
             foreach (var sensor in sensors)
             {
@@ -28,11 +25,8 @@ namespace HSMServer.Model.ViewModel
 
         private void AddSensor(SensorData sensor)
         {
-            var path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}"; //product/path/...
-            path = path.Substring(0, path.LastIndexOf(CommonConstants.SensorPathSeparator)); //without sensor
-
-            if (Paths.FirstOrDefault(x => x.Equals(path)) == null)
-                Paths.Add(path);
+            //var path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}"; //product/path/...
+            //path = path.Substring(0, path.LastIndexOf(CommonConstants.SensorPathSeparator)); //without sensor
 
             Nodes.TryGetValue(sensor.Product, out var existingNode);
             if (existingNode == null)
@@ -66,7 +60,6 @@ namespace HSMServer.Model.ViewModel
                 if (node.Parent != null)
                 {
                     node.Parent.Nodes.Remove(node.Name, out _);
-                    Paths.Remove(path);
                 }
                 else 
                     RemoveProduct(node.Path);
@@ -88,7 +81,6 @@ namespace HSMServer.Model.ViewModel
                 node.Nodes.Clear();
 
             Nodes.Remove(product, out _);
-            Paths.Remove(product);
         }
 
         public NodeViewModel GetNode(string path)//with product
@@ -140,11 +132,6 @@ namespace HSMServer.Model.ViewModel
         public TreeViewModel Clone()
         {
             var tree = new TreeViewModel();
-
-            if (Paths != null && Paths.Count > 0)
-            {
-                tree.Paths = new List<string>(Paths);
-            }
 
             if (Nodes != null && !Nodes.IsEmpty)
             {

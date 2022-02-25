@@ -28,10 +28,11 @@ namespace HSMServer.HtmlHelpers
                 "<ul id='noData' class='list-group'>" +
                 "<li class='list-group-item'>No Data</li></ul></div>");
 
-            foreach (var path in model.Paths)
+            foreach(var (_, node) in model.Nodes)
             {
-                result.Append(CreateList(path, path, model));
+                DFSCreateList(result, node);
             }
+
             result.Append("</div>");
 
             return result.ToString();
@@ -44,35 +45,37 @@ namespace HSMServer.HtmlHelpers
 
             var result = new StringBuilder();
 
-            foreach(var path in model.Paths)
+            foreach (var (_, node) in model.Nodes)
             {
-                string formattedPath = SensorPathHelper.Encode(path);
-                if (!string.IsNullOrEmpty(selectedPath) 
-                    && selectedPath.Equals(formattedPath)) 
+                string formattedPath = SensorPathHelper.Encode(node.Path);
+                if (!string.IsNullOrEmpty(selectedPath)
+                    && selectedPath.Equals(formattedPath))
                     continue;
 
-                result.Append(CreateList(path, path, model));
+                DFSCreateList(result, node);
             }
 
             return result.ToString();
         }
 
-        public static string CreateList(string path, string fullPath, TreeViewModel model)
+        public static void DFSCreateList(StringBuilder result, NodeViewModel node)
         {
-            if (path == null) 
-                return string.Empty;
+            if (node.Sensors != null && !node.Sensors.IsEmpty)
+                result.Append(CreateList(node));
 
-            var nodes = path.Split('/');
-            var existingNode = model.Nodes[nodes[0]];
-            NodeViewModel node = existingNode;
-            if (nodes[0].Length < path.Length)
+            if (node.Nodes == null || node.Nodes.IsEmpty)
+                return;
+
+            foreach (var (_, child) in node.Nodes)
             {
-                path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
-                node = GetNodeRecursion(path, existingNode);
+                DFSCreateList(result, child);
             }
+        }
 
+        public static string CreateList(NodeViewModel node)
+        {
             var result = new StringBuilder();
-            string formattedNodePath = SensorPathHelper.Encode(fullPath);
+            string formattedNodePath = SensorPathHelper.Encode(node.Path);
 
             result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
 
@@ -80,7 +83,7 @@ namespace HSMServer.HtmlHelpers
             {
                 foreach (var (name, sensor) in node.Sensors)
                 {
-                    string sensorPath = $"{fullPath}/{name}";
+                    string sensorPath = $"{node.Path}/{name}";
                     string formattedPath = SensorPathHelper.Encode(sensorPath);
                     result.Append($"<div id='sensorInfo_parent_{formattedPath}' style='display: none'>");
                     result.Append(CreateSensorInfoLink(formattedPath));
