@@ -1,6 +1,7 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Converters;
 using HSMServer.Core.MonitoringCoreInterface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -212,7 +213,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _dataReceiver.AddSensorValue(sensorValue.ConvertToFileSensorBytes());
                 return Ok(sensorValue);
             }
             catch (Exception e)

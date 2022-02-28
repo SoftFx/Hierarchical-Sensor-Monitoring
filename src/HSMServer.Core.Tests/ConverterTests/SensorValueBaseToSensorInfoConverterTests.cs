@@ -31,7 +31,6 @@ namespace HSMServer.Core.Tests.ConverterTests
         [InlineData(SensorType.IntegerBarSensor)]
         [InlineData(SensorType.DoubleBarSensor)]
         [InlineData(SensorType.FileSensorBytes)]
-        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "Simple")]
         public void SensorValueToSensorInfoConverterTest(SensorType type)
         {
@@ -46,7 +45,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "With complex path")]
         public void FileSensorValueToSensorInfoConverter_WithComplexPath_Test()
         {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             sensorValue.Path = GetSensorPath(_productName, sensorValue.Path);
 
             var sensorInfo = sensorValue.Convert(_productName);
@@ -58,7 +57,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         [Trait("Category", "With complex path")]
         public void FileSensorValueToSensorInfoConverter_WithComplexPath2_Test()
         {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorValue();
+            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             sensorValue.Path = null;
 
             var sensorInfo = sensorValue.Convert(_productName);

@@ -36,7 +36,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly IValuesCache _valuesCache;
 
         public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager, IConfigurationProvider configurationProvider, 
+            IProductManager productManager, IConfigurationProvider configurationProvider,
             IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
@@ -48,10 +48,10 @@ namespace HSMServer.Core.MonitoringServerCore
             _userManager.UpdateUserEvent += UpdateUserEventHandler;
 
             _queueManager = new MonitoringQueueManager();
-            
+
             _productManager = productManager;
-            _productManager.RemovedProduct += RemoveProductHandler;            
-            
+            _productManager.RemovedProduct += RemoveProductHandler;
+
             _valuesCache = valuesVCache;
 
             Thread.Sleep(5000);
@@ -206,7 +206,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 {
                     _logger.LogError(e, $"Failed to add data for {value?.Path}");
                 }
-                
+
             }
         }
 
@@ -390,9 +390,9 @@ namespace HSMServer.Core.MonitoringServerCore
             var productsList = _productManager.Products;
             //Show available products only
             if (!UserRoleHelper.IsAllProductsTreeAllowed(user))
-                productsList = productsList.Where(p => 
+                productsList = productsList.Where(p =>
                 ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
-            
+
             result.AddRange(_valuesCache.GetValues(productsList.Select(p => p.Name).ToList()));
 
             return result;
@@ -405,7 +405,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to)
         {
-            var historyValues = _databaseAdapter.GetSensorHistory(product, path, 
+            var historyValues = _databaseAdapter.GetSensorHistory(product, path,
                 from, to);
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
@@ -443,47 +443,33 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyList;
         }
 
-        public byte[] GetFileSensorValueBytes(string product, string path)
-        {
-            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
+        public byte[] GetFileSensorValueBytes(string product, string path) =>
+            GetFileSensorProperty(product, path, Array.Empty<byte>(), fileData => fileData?.FileContent);
 
-            if (dataObject == null)
-                return Array.Empty<byte>();
+        public string GetFileSensorValueExtension(string product, string path) =>
+            GetFileSensorProperty(product, path, string.Empty, fileData => fileData?.Extension);
+
+        private T GetFileSensorProperty<T>(string product, string path, T defaultValue, Func<FileSensorBytesData, T> getFileSensorProperty)
+        {
+            var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
+
+            if (sensorHistoryData == null)
+                return defaultValue;
+
+            if (sensorHistoryData.SensorType == SensorType.FileSensor)
+                sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
+
+            if (sensorHistoryData.SensorType != SensorType.FileSensorBytes)
+                return defaultValue;
 
             try
             {
-                var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
-                return typedData2?.FileContent;
+                return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData));
             }
-            catch { }
-
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
-            if (typedData != null)
+            catch
             {
-                return Encoding.Default.GetBytes(typedData.FileContent);
+                return defaultValue;
             }
-
-            return new byte[1];
-        }
-        public string GetFileSensorValueExtension(string product, string path)
-        {
-            var dataObject = _databaseAdapter.GetOneValueSensorValue(product, path);
-
-            if (dataObject == null)
-                return string.Empty;
-
-            var typedData = JsonSerializer.Deserialize<FileSensorData>(dataObject.TypedData);
-            if (typedData != null)
-            {
-                return typedData.Extension;
-            }
-            var typedData2 = JsonSerializer.Deserialize<FileSensorBytesData>(dataObject.TypedData);
-            if (typedData2 != null)
-            {
-                return typedData2.Extension;
-            }
-
-            return string.Empty;
         }
 
         #endregion

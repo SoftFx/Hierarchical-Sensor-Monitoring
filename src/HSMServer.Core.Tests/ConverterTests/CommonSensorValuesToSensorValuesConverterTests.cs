@@ -143,25 +143,6 @@ namespace HSMServer.Core.Tests.ConverterTests
             TestTwoSensorValues(expected, actual);
         }
 
-        [Fact]
-        public void CommonSensorValueToFileSensorValueTest()
-        {
-            var expected = _sensorValuesFactory.BuildFileSensorValue();
-
-            var commonSensorValue = new CommonSensorValue()
-            {
-                SensorType = SensorType.FileSensor,
-                TypedValue = JsonSerializer.Serialize(expected),
-            };
-
-            var actual = commonSensorValue.Convert<FileSensorValue>();
-
-            Assert.Equal(expected.FileName, actual.FileName);
-            Assert.Equal(expected.FileContent, actual.FileContent);
-            Assert.Equal(expected.Extension, actual.Extension);
-            TestTwoSensorValues(expected, actual);
-        }
-
 
         private static void TestTwoBarSensorValues(BarSensorValueBase expected, BarSensorValueBase actual)
         {

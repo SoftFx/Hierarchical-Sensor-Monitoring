@@ -14,8 +14,12 @@ namespace HSMServer.Core.Converters
             return data;
         }
 
-        public static SensorData Convert(this SensorDataEntity dataEntity, string productName) =>
-            new()
+        public static SensorData Convert(this SensorDataEntity dataEntity, string productName)
+        {
+            if (dataEntity.DataType == (byte)SensorType.FileSensor)
+                dataEntity = dataEntity.ConvertToFileSensorBytes();
+
+            return new()
             {
                 Path = dataEntity.Path,
                 SensorType = (SensorType)dataEntity.DataType,
@@ -25,5 +29,6 @@ namespace HSMServer.Core.Converters
                 ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(dataEntity),
                 Status = (SensorStatus)dataEntity.Status
             };
+        }
     }
 }
