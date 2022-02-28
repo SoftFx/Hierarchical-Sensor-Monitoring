@@ -60,7 +60,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         [InlineData(SensorType.IntegerBarSensor)]
         [InlineData(SensorType.DoubleBarSensor)]
         [InlineData(SensorType.FileSensorBytes)]
-        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "One")]
         public async Task AddSensorValueTest(SensorType type)
         {
@@ -101,7 +100,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         [InlineData(SensorType.IntegerBarSensor)]
         [InlineData(SensorType.DoubleBarSensor)]
         [InlineData(SensorType.FileSensorBytes)]
-        [InlineData(SensorType.FileSensor)]
         [Trait("Category", "Several")]
         public async Task AddSeveralSensorValuesTest(SensorType type)
         {

@@ -161,7 +161,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                IntBarSensorValue => SensorType.IntegerBarSensor,
                DoubleBarSensorValue => SensorType.DoubleBarSensor,
                FileSensorBytesValue => SensorType.FileSensorBytes,
-               FileSensorValue => SensorType.FileSensor,
                UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
                _ => (SensorType)0,
            };
@@ -202,12 +201,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                     Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
                           actual.ShortStringValue);
                     Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(timeCollected ?? actual.Time, expected.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
-                                 actual.StringValue);
-                    break;
-                case FileSensorValue fileSensorValue:
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
-                         actual.ShortStringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(timeCollected ?? actual.Time, expected.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                                  actual.StringValue);
                     break;
                 case UnitedSensorValue unitedSensorValue:
@@ -267,7 +260,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 IntBarSensorValue intBarSensorValue => GetSensorValueTypedData(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetSensorValueTypedData(fileSensorBytesValue),
-                FileSensorValue fileSensorValue => GetSensorValueTypedData(fileSensorValue),
                 UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
                 _ => null,
             };
@@ -294,9 +286,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         private static FileSensorBytesData GetSensorValueTypedData(FileSensorBytesValue sensorValue) =>
             GetFileSensorBytesData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
-
-        private static FileSensorData GetSensorValueTypedData(FileSensorValue sensorValue) =>
-            GetFileSensorData(sensorValue.Extension, sensorValue.FileName, sensorValue.FileContent, sensorValue.Comment);
 
         private static object GetSensorValueTypedData(UnitedSensorValue sensorValue) =>
             sensorValue.Type switch
@@ -385,15 +374,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
         private static FileSensorBytesData GetFileSensorBytesData(string extension, string filename, byte[] content, string comment) =>
-            new()
-            {
-                Extension = extension,
-                FileName = filename,
-                FileContent = content,
-                Comment = comment,
-            };
-
-        private static FileSensorData GetFileSensorData(string extension, string filename, string content, string comment) =>
             new()
             {
                 Extension = extension,

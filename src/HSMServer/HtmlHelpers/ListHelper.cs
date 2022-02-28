@@ -114,7 +114,7 @@ namespace HSMServer.HtmlHelpers
 
             var time = (DateTime.UtcNow - sensor.Time);
 
-            if (sensor.SensorType == SensorType.FileSensor || sensor.SensorType == SensorType.FileSensorBytes)
+            if (sensor.SensorType == SensorType.FileSensorBytes)
             {
                 //header
                 string fileName = GetFileNameString(sensor.StringValue);

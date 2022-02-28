@@ -14,6 +14,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private const string TestUserViewerName = "TestUserViewer";
         private const string TestUserManagerName = "TestUserManager";
         private const string TestUserNotAdminName = "TestUserNotAdmin";
+        private const string TestUserAdminName = "TestUserAdmin";
 
         internal static User DefaultUser { get; } =
             new(DefaultUserName)
@@ -25,7 +26,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
         internal static User TestUser { get; } =
-            BuildUser((ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2));
+            BuildUser(GenerateRandomProductRole());
 
         internal static User TestUserViewer { get; } =
             BuildUser(ProductRoleEnum.ProductViewer, name: TestUserViewerName);
@@ -33,15 +34,24 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static User TestUserManager { get; } =
             BuildUser(ProductRoleEnum.ProductManager, name: TestUserManagerName);
 
-        internal static User NotAdmin { get; } =
-            new(TestUserNotAdminName)
-            {
-                CertificateFileName = RandomGenerator.GetRandomString(),
-                CertificateThumbprint = RandomGenerator.GetRandomString(40),
-                IsAdmin = false,
-                Password = HashComputer.ComputePasswordHash(TestUserNotAdminName),
-            };
+        internal static User Admin { get; } =
+            BuildUser(TestUserAdminName, true);
 
+        internal static User NotAdmin { get; } =
+            BuildUser(TestUserNotAdminName, false);
+
+
+        internal static User BuildRandomUser() =>
+            BuildUser(GenerateRandomProductRole(), RandomGenerator.GetRandomString());
+
+        private static User BuildUser(string name = TestUserName, bool? isAdmin = null) =>
+             new(name)
+             {
+                 CertificateFileName = RandomGenerator.GetRandomString(),
+                 CertificateThumbprint = RandomGenerator.GetRandomString(40),
+                 IsAdmin = isAdmin ?? RandomGenerator.GetRandomBool(),
+                 Password = HashComputer.ComputePasswordHash(name),
+             };
 
         private static User BuildUser(ProductRoleEnum productRole, string name = TestUserName) =>
             new(name)
@@ -55,5 +65,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                     new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, productRole)
                 },
             };
+
+        private static ProductRoleEnum GenerateRandomProductRole() =>
+            (ProductRoleEnum)RandomGenerator.GetRandomInt(min: 0, max: 2);
     }
 }

@@ -1,9 +1,9 @@
-﻿using System;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.Tests.Infrastructure;
+using System;
 using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.ConverterTests
         [InlineData(SensorType.IntegerBarSensor, TransactionType.UpdateTree)]
         [InlineData(SensorType.DoubleBarSensor, TransactionType.Add)]
         [InlineData(SensorType.FileSensorBytes, TransactionType.Update)]
-        [InlineData(SensorType.FileSensor, TransactionType.UpdateTree)]
         [Trait("Category", "Simple")]
         public void SensorValueToSensorDataEntityConverterTest(SensorType sensorType, TransactionType transactiontype)
         {
@@ -54,7 +53,6 @@ namespace HSMServer.Core.Tests.ConverterTests
         [InlineData(SensorType.IntegerBarSensor, null)]
         [InlineData(SensorType.DoubleBarSensor, "")]
         [InlineData(SensorType.FileSensorBytes, null)]
-        [InlineData(SensorType.FileSensor, "")]
         [Trait("Category", "Without comment")]
         public void SensorValueToSensorDataEntityConverter_WithoutComment_Test(SensorType sensorType, string comment)
         {
@@ -77,7 +75,6 @@ namespace HSMServer.Core.Tests.ConverterTests
                 IntBarSensorValue intBarSensorValue => SensorDataStringValuesFactory.GetBarSensorsString(_timeCollected, intBarSensorValue.Comment, intBarSensorValue.Min, intBarSensorValue.Mean, intBarSensorValue.Max, intBarSensorValue.Count, intBarSensorValue.LastValue),
                 DoubleBarSensorValue doubleBarSensorValue => SensorDataStringValuesFactory.GetBarSensorsString(_timeCollected, doubleBarSensorValue.Comment, doubleBarSensorValue.Min, doubleBarSensorValue.Mean, doubleBarSensorValue.Max, doubleBarSensorValue.Count, doubleBarSensorValue.LastValue),
                 FileSensorBytesValue fileSensorBytesValue => SensorDataStringValuesFactory.GetFileSensorsString(_timeCollected, fileSensorBytesValue.Comment, fileSensorBytesValue.FileName, fileSensorBytesValue.Extension, fileSensorBytesValue.FileContent.Length),
-                FileSensorValue fileSensorValue => SensorDataStringValuesFactory.GetFileSensorsString(_timeCollected, fileSensorValue.Comment, fileSensorValue.FileName, fileSensorValue.Extension, fileSensorValue.FileContent.Length),
                 _ => null,
             };
     }
