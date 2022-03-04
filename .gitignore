@@ -122,3 +122,6 @@ src/HSMServer/EnvironmentData/
 
 # Environment database
 src/HSMServer/Databases/
+
+# bundleconfig bindings
+src/HSMServer/bundleconfig.json.bindings

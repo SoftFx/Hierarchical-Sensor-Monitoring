@@ -25,14 +25,16 @@ function Data(to, from, type, path) {
         InitializePeriodRequests();
         initializeTabLinksRequests();
 
+        $('[id^="button_view_"]').off("click", viewFile);
         $('[id^="button_view_"]').on("click", viewFile);
 
+        $('[id^="button_download_"]').off("click", downloadFile);
         $('[id^="button_download_"]').on("click", downloadFile);
     }
 
     function downloadFile() {
         let path = this.id.substring("button_download_".length);
-        
+
         window.location.href = getFileAction + "?Selected=" + path;
     }
 
