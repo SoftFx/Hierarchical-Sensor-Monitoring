@@ -27,6 +27,8 @@ namespace HSMServer.Core.MonitoringServerCore
 {
     public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IMonitoringUpdatesReceiver, IDisposable
     {
+        private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
+
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
@@ -445,17 +447,16 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public (byte[] content, string extension) GetFileSensorValueData(string product, string path)
         {
-            var defaultValue = (Array.Empty<byte>(), string.Empty);
             var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
 
             if (sensorHistoryData == null)
-                return defaultValue;
+                return _defaultFileSensorData;
 
             if (sensorHistoryData.SensorType == SensorType.FileSensor)
                 sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
 
             if (sensorHistoryData.SensorType != SensorType.FileSensorBytes)
-                return defaultValue;
+                return _defaultFileSensorData;
 
             try
             {
@@ -464,7 +465,7 @@ namespace HSMServer.Core.MonitoringServerCore
             }
             catch
             {
-                return defaultValue;
+                return _defaultFileSensorData;
             }
         }
 
