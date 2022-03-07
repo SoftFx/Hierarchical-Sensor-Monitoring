@@ -443,14 +443,9 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyList;
         }
 
-        public byte[] GetFileSensorValueBytes(string product, string path) =>
-            GetFileSensorProperty(product, path, Array.Empty<byte>(), fileData => fileData?.FileContent);
-
-        public string GetFileSensorValueExtension(string product, string path) =>
-            GetFileSensorProperty(product, path, string.Empty, fileData => fileData?.Extension);
-
-        private T GetFileSensorProperty<T>(string product, string path, T defaultValue, Func<FileSensorBytesData, T> getFileSensorProperty)
+        public (byte[] content, string extension) GetFileSensorValueData(string product, string path)
         {
+            var defaultValue = (Array.Empty<byte>(), string.Empty);
             var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
 
             if (sensorHistoryData == null)
@@ -464,7 +459,8 @@ namespace HSMServer.Core.MonitoringServerCore
 
             try
             {
-                return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData));
+                var fileData = JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData);
+                return (fileData.FileContent, fileData.Extension);
             }
             catch
             {
