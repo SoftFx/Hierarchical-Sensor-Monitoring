@@ -344,47 +344,27 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         [Fact]
-        [Trait("Category", "Get FileSensor content")]
+        [Trait("Category", "Get FileSensor data (content & extension)")]
         public void GetFileSensorValueBytesTest()
         {
-            var bytes = _monitoringCore.GetFileSensorValueBytes(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+            var (content, extension) = _monitoringCore.GetFileSensorValueData(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
 
-            Assert.Empty(bytes);
-        }
-
-        [Theory]
-        [InlineData(SensorType.FileSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "Get FileSensor content")]
-        public void GetFileSensorContentTest(SensorType type)
-        {
-            (byte[] expectedContent, string _, string path) = AddFileSensorAndGetItsContentExtensionAndPath(type);
-
-            var actualContent = _monitoringCore.GetFileSensorValueBytes(TestProductsManager.ProductName, path);
-
-            Assert.Equal(expectedContent, actualContent);
-        }
-
-        [Fact]
-        [Trait("Category", "Get FileSensor extension")]
-        public void GetFileSensorValueExtensionTest()
-        {
-            var extension = _monitoringCore.GetFileSensorValueExtension(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
-
+            Assert.Empty(content);
             Assert.Empty(extension);
         }
 
         [Theory]
         [InlineData(SensorType.FileSensor)]
         [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "Get FileSensor extension")]
-        public void GetFileSensorExtensionTest(SensorType type)
+        [Trait("Category", "Get FileSensor data (content & extension)")]
+        public void GetFileSensorContentTest(SensorType type)
         {
-            (byte[] _, string expectedExtension, string path) = AddFileSensorAndGetItsContentExtensionAndPath(type);
+            (byte[] expectedContent, string expectedExtension, string path) = AddFileSensorAndGetItsContentExtensionAndPath(type);
 
-            var eactualEtension = _monitoringCore.GetFileSensorValueExtension(TestProductsManager.ProductName, path);
+            var (actualContent, actualExtension) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, path);
 
-            Assert.Equal(expectedExtension, eactualEtension);
+            Assert.Equal(expectedContent, actualContent);
+            Assert.Equal(expectedExtension, actualExtension);
         }
 
 
