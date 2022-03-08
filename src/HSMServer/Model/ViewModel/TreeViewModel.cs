@@ -25,11 +25,7 @@ namespace HSMServer.Model.ViewModel
 
         private void AddSensor(SensorData sensor)
         {
-            //var path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}"; //product/path/...
-            //path = path.Substring(0, path.LastIndexOf(CommonConstants.SensorPathSeparator)); //without sensor
-
-            Nodes.TryGetValue(sensor.Product, out var existingNode);
-            if (existingNode == null)
+            if (!Nodes.TryGetValue(sensor.Product, out var existingNode))
             {
                 Nodes[sensor.Product] = new NodeViewModel(sensor.Product, sensor.Product, sensor, null);
             }
@@ -42,8 +38,8 @@ namespace HSMServer.Model.ViewModel
         private void RemoveSensor(SensorData sensor)
         {
             var path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}";
-            path = path.Substring(0, path.LastIndexOf(CommonConstants.SensorPathSeparator));
-            var sensorName = sensor.Path.Substring(sensor.Path.LastIndexOf(CommonConstants.SensorPathSeparator) + 1);
+            path = path[..path.LastIndexOf(CommonConstants.SensorPathSeparator)];
+            var sensorName = sensor.Path[..(sensor.Path.LastIndexOf(CommonConstants.SensorPathSeparator) + 1)];
 
             var node = GetNode(path);
             if (node == null) 

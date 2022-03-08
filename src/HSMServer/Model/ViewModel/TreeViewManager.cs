@@ -23,15 +23,7 @@ namespace HSMServer.Model.ViewModel
 
         public TreeViewModel GetTreeViewModel(User user)
         {
-            TreeViewModel result;
-            try
-            {
-                result = _treeModels[user.UserName];
-            }
-            catch (Exception e)
-            {
-                return null;
-            }
+            _treeModels.TryGetValue(user.UserName, out var result);
 
             return result;
         }

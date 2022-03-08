@@ -31,8 +31,7 @@
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
 
-    var sortByNameAction = "@Html.Raw(Url.Action(ViewConstants.SortByNameAction, ViewConstants.HomeController))";
-    var sortByTimeAction = "@Html.Raw(Url.Action(ViewConstants.SortByTimeAction, ViewConstants.HomeController))";
+    var isTimeSorting = false;
 
     var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
     var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
@@ -46,6 +45,7 @@
 <script src="~/js/bundles/homeBundle.min.js"></script>
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
+<script src="~/moment.js/moment.min.js"></script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -353,29 +353,16 @@
     setInterval(update, 30000);
     $('#sortByName').off("click").on("click",
         function () {
-            $.ajax({
-                type: 'POST',
-                url: sortByNameAction,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function () {
-                location.reload();
-            });
+            isTimeSorting = false;
+            initializeTree();
+            $('#jstree').jstree(true).refresh(true);
         });
 
     $('#sortByTime').off("click").on("click",
         function () {
-            $.ajax({
-                type: 'POST',
-                url: sortByTimeAction,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            });
-            location.reload();
+            isTimeSorting = true;
+            initializeTree();
+            $('#jstree').jstree(true).refresh(true);
         });
 
     function getListIdForSelectedNode(selectedNode) {

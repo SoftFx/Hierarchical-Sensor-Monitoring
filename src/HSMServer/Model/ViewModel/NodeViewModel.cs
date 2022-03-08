@@ -87,8 +87,7 @@ namespace HSMServer.Model.ViewModel
                     Sensors = new ConcurrentDictionary<string, SensorViewModel>();
                 }
 
-                Sensors.TryGetValue(nodes[0], out var existingSensor);
-                if (existingSensor == null)
+                if (!Sensors.TryGetValue(nodes[0], out var existingSensor))
                 {
                     Sensors[nodes[0]] = new SensorViewModel(nodes[0], sensor);
                 }
@@ -161,7 +160,7 @@ namespace HSMServer.Model.ViewModel
                 UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
             else if (sensorMaxTime.HasValue)
                 UpdateTime = sensorMaxTime.Value;
-            else
+            else if (nodeMaxTime.HasValue)
                 UpdateTime = nodeMaxTime.Value;
         }
 

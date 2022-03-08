@@ -18,7 +18,7 @@ namespace HSMServer.HtmlHelpers
             if (model == null) 
                 return string.Empty;
 
-            var result = new StringBuilder();
+            var result = new StringBuilder(1 << 20);
 
             result.Append("<div class='col' id='list'>" +
                 "<div id='list_sensors_header' style='display: none;'>" +
@@ -61,7 +61,7 @@ namespace HSMServer.HtmlHelpers
         public static void DFSCreateList(StringBuilder result, NodeViewModel node)
         {
             if (node.Sensors != null && !node.Sensors.IsEmpty)
-                result.Append(CreateList(node));
+                CreateList(result, node);
 
             if (node.Nodes == null || node.Nodes.IsEmpty)
                 return;
@@ -72,9 +72,8 @@ namespace HSMServer.HtmlHelpers
             }
         }
 
-        public static string CreateList(NodeViewModel node)
-        {
-            var result = new StringBuilder();
+        public static StringBuilder CreateList(StringBuilder result, NodeViewModel node)
+        {           
             string formattedNodePath = SensorPathHelper.Encode(node.Path);
 
             result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
@@ -95,7 +94,7 @@ namespace HSMServer.HtmlHelpers
             }
 
             result.Append("</div>");
-            return result.ToString();
+            return result;
         }
 
         public static string CreateSensorInfoLink(string formattedPath)

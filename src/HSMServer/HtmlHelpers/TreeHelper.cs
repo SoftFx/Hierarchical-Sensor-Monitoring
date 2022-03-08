@@ -51,7 +51,8 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<li id='{name}' title='{node.Name} &#013;{node.UpdateTime}'" +
                           "data-jstree='{\"icon\" : \"fas fa-circle " +
                           ViewHelper.GetStatusHeaderColorClass(node.Status) + 
-                          "\"}'>" + $"{shortName} ({node.Count} sensors)");
+                          $"\", \"time\" : \"{node.UpdateTime}\"" +
+                          "}'>" + $"{shortName} ({node.Count} sensors)");
 
             if (node.Nodes != null)
                 foreach (var (_, child) in node.Nodes)
@@ -71,7 +72,8 @@ namespace HSMServer.HtmlHelpers
                     result.Append($"<li id='sensor_{encodedPath}' title='{sensorName} &#013;{sensor.Time}'" +
                                   "data-jstree='{\"icon\" : \"fas fa-circle " +
                                   ViewHelper.GetStatusHeaderColorClass(sensor.Status) +
-                                  "\"}'>" + shortName + "</li>");
+                                  $"\", \"time\" : \"{sensor.Time}\"" +
+                                  "}'>" + shortName + "</li>");
                 }
 
                 result.Append("</ul>");
