@@ -27,6 +27,8 @@ namespace HSMServer.Core.MonitoringServerCore
 {
     public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IMonitoringUpdatesReceiver, IDisposable
     {
+        private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
+
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
@@ -443,32 +445,27 @@ namespace HSMServer.Core.MonitoringServerCore
             return historyList;
         }
 
-        public byte[] GetFileSensorValueBytes(string product, string path) =>
-            GetFileSensorProperty(product, path, Array.Empty<byte>(), fileData => fileData?.FileContent);
-
-        public string GetFileSensorValueExtension(string product, string path) =>
-            GetFileSensorProperty(product, path, string.Empty, fileData => fileData?.Extension);
-
-        private T GetFileSensorProperty<T>(string product, string path, T defaultValue, Func<FileSensorBytesData, T> getFileSensorProperty)
+        public (byte[] content, string extension) GetFileSensorValueData(string product, string path)
         {
             var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
 
             if (sensorHistoryData == null)
-                return defaultValue;
+                return _defaultFileSensorData;
 
             if (sensorHistoryData.SensorType == SensorType.FileSensor)
                 sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
 
             if (sensorHistoryData.SensorType != SensorType.FileSensorBytes)
-                return defaultValue;
+                return _defaultFileSensorData;
 
             try
             {
-                return getFileSensorProperty(JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData));
+                var fileData = JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData);
+                return (fileData.FileContent, fileData.Extension);
             }
             catch
             {
-                return defaultValue;
+                return _defaultFileSensorData;
             }
         }
 

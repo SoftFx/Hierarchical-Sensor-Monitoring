@@ -204,7 +204,6 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("file")]
-        [RequestSizeLimit(41943040)]//make limit up to 40 MB
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -230,7 +229,6 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("fileBytes")]
-        [RequestSizeLimit(41943040)]//make limit up to 40 MB
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

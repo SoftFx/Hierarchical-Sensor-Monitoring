@@ -22,8 +22,7 @@ namespace HSMServer.Core.MonitoringCoreInterface
         List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetAllSensorHistory(string product, string path);
 
-        byte[] GetFileSensorValueBytes(string product, string path);
-        string GetFileSensorValueExtension(string product, string path);
+        (byte[] content, string extension) GetFileSensorValueData(string product, string path);
 
         //ToDo: move
         bool HideProduct(Product product, out string error);

@@ -421,26 +421,24 @@ namespace HSMServer.Controllers
             var product = path.Substring(0, index);
             path = path.Substring(index + 1, path.Length - index - 1);
 
-            var fileContents = _sensorsInterface.GetFileSensorValueBytes(product, path);
+            var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
 
-            var extension = _sensorsInterface.GetFileSensorValueExtension(product, path);
             var fileName = $"{path.Replace('/', '_')}.{extension}";
 
-            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
+            return File(content, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string selectedSensor)
         {
-            
             var path = SensorPathHelper.Decode(selectedSensor);
             int index = path.IndexOf('/');
             var product = path.Substring(0, index);
             path = path.Substring(index + 1, path.Length - index - 1);
 
-            var fileContents = _sensorsInterface.GetFileSensorValueBytes(product, path);
-            var fileContentsStream = new MemoryStream(fileContents);
-            var extension = _sensorsInterface.GetFileSensorValueExtension(product, path);
+            var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
+
+            var fileContentsStream = new MemoryStream(content);
             var fileName = $"{path.Replace('/', '_')}.{extension}";
 
             return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
