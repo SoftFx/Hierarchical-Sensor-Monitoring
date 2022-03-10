@@ -154,7 +154,7 @@ namespace HSMServer.Model.ViewModel
         public void ModifyUpdateTime()
         {
             var sensorMaxTime = Sensors?.Values.Max(x => x.Time);
-            var nodeMaxTime = Nodes?.Values.Max(x => x.UpdateTime);
+            var nodeMaxTime = (Nodes?.Values?.Count ?? 0) == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
 
             if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
                 UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
@@ -167,7 +167,7 @@ namespace HSMServer.Model.ViewModel
         public void ModifyStatus()
         {
             var statusFromSensors = Sensors?.Values.Max(s => s.Status) ?? SensorStatus.Unknown;
-            var statusFromNodes = Nodes?.Values.Max(n => n.Status) ?? SensorStatus.Unknown;
+            var statusFromNodes = (Nodes?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
         }
