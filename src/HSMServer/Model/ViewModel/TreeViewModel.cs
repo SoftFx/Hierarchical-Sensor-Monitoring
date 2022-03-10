@@ -39,7 +39,7 @@ namespace HSMServer.Model.ViewModel
         {
             var path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}";
             path = path[..path.LastIndexOf(CommonConstants.SensorPathSeparator)];
-            var sensorName = sensor.Path[..(sensor.Path.LastIndexOf(CommonConstants.SensorPathSeparator) + 1)];
+            var sensorName = sensor.Path[(sensor.Path.LastIndexOf(CommonConstants.SensorPathSeparator) + 1)..];
 
             var node = GetNode(path);
             if (node == null) 
