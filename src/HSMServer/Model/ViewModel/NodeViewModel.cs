@@ -56,7 +56,7 @@ namespace HSMServer.Model.ViewModel
             {
                 node.Nodes = new ConcurrentDictionary<string, NodeViewModel>();
 
-                foreach(var (name, child) in Nodes)
+                foreach (var (name, child) in Nodes)
                 {
                     node.Nodes[name] = child.Clone(node);
                 }
@@ -67,7 +67,7 @@ namespace HSMServer.Model.ViewModel
 
                 node.Sensors = new ConcurrentDictionary<string, SensorViewModel>();
 
-                foreach(var (name, sensor) in Sensors)
+                foreach (var (name, sensor) in Sensors)
                 {
                     node.Sensors[name] = sensor.Clone();
                 }
@@ -122,11 +122,11 @@ namespace HSMServer.Model.ViewModel
             if (Nodes != null)
                 foreach (var (_, node) in Nodes)
                 {
-                    if (node.Path.Equals(path)) 
+                    if (node.Path.Equals(path))
                         return node;
 
                     var existingNode = node.GetNode(path);
-                    if (existingNode != null) 
+                    if (existingNode != null)
                         return existingNode;
                 }
 
@@ -153,7 +153,7 @@ namespace HSMServer.Model.ViewModel
 
         public void ModifyUpdateTime()
         {
-            var sensorMaxTime = Sensors?.Values.Max(x => x.Time);
+            var sensorMaxTime = (Sensors?.Values?.Count ?? 0) == 0 ? null : Sensors?.Values.Max(x => x.Time);
             var nodeMaxTime = (Nodes?.Values?.Count ?? 0) == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
 
             if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
@@ -166,7 +166,7 @@ namespace HSMServer.Model.ViewModel
 
         public void ModifyStatus()
         {
-            var statusFromSensors = Sensors?.Values.Max(s => s.Status) ?? SensorStatus.Unknown;
+            var statusFromSensors = (Sensors?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Sensors.Values.Max(s => s.Status);
             var statusFromNodes = (Nodes?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();

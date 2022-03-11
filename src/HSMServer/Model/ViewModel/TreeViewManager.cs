@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.MonitoringCoreInterface;
-using System;
 using System.Collections.Concurrent;
 
 namespace HSMServer.Model.ViewModel
@@ -16,7 +15,7 @@ namespace HSMServer.Model.ViewModel
         {
             _treeModels = new ConcurrentDictionary<string, TreeViewModel>();
             _sensorsInterface = sensorsInterface;
-            
+
             _userManager = userManager;
             _userManager.UpdateUserEvent += UpdateUserEventHandler;
         }

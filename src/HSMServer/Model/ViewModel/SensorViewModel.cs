@@ -80,7 +80,6 @@ namespace HSMServer.Model.ViewModel
             sensor.ValidationError = ValidationError;
 
             return sensor;
-
         }
     }
 }

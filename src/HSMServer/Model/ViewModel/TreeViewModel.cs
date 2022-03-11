@@ -42,7 +42,7 @@ namespace HSMServer.Model.ViewModel
             var sensorName = sensor.Path[(sensor.Path.LastIndexOf(CommonConstants.SensorPathSeparator) + 1)..];
 
             var node = GetNode(path);
-            if (node == null) 
+            if (node == null)
                 return;
 
             node.Sensors?.Remove(sensorName, out _);
@@ -57,7 +57,7 @@ namespace HSMServer.Model.ViewModel
                 {
                     node.Parent.Nodes.Remove(node.Name, out _);
                 }
-                else 
+                else
                     RemoveProduct(node.Path);
 
                 node = parent;
@@ -67,7 +67,7 @@ namespace HSMServer.Model.ViewModel
         private void RemoveProduct(string product)
         {
             var node = GetNode(product);
-            if (node == null) 
+            if (node == null)
                 return;
 
             if (node.Sensors != null && !node.Sensors.IsEmpty)
@@ -84,11 +84,11 @@ namespace HSMServer.Model.ViewModel
             if (Nodes != null)
                 foreach (var (_, node) in Nodes)
                 {
-                    if (node.Path.Equals(path)) 
+                    if (node.Path.Equals(path))
                         return node;
 
                     var existingNode = node.GetNode(path);
-                    if (existingNode != null) 
+                    if (existingNode != null)
                         return existingNode;
                 }
 
@@ -133,7 +133,7 @@ namespace HSMServer.Model.ViewModel
             {
                 tree.Nodes = new ConcurrentDictionary<string, NodeViewModel>();
 
-                foreach(var (_, node) in Nodes)
+                foreach (var (_, node) in Nodes)
                 {
                     tree.Nodes[node.Name] = node.Clone(null);
                 }

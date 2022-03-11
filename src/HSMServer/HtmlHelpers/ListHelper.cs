@@ -15,7 +15,7 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateFullLists(TreeViewModel model)
         {
-            if (model == null) 
+            if (model == null)
                 return string.Empty;
 
             var result = new StringBuilder(1 << 20);
@@ -28,7 +28,7 @@ namespace HSMServer.HtmlHelpers
                 "<ul id='noData' class='list-group'>" +
                 "<li class='list-group-item'>No Data</li></ul></div>");
 
-            foreach(var (_, node) in model.Nodes)
+            foreach (var (_, node) in model.Nodes)
             {
                 DFSCreateList(result, node);
             }
@@ -40,10 +40,10 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateNotSelectedLists(string selectedPath, TreeViewModel model)
         {
-            if (model == null) 
+            if (model == null)
                 return string.Empty;
 
-            var result = new StringBuilder();
+            var result = new StringBuilder(1 << 8);
 
             foreach (var (_, node) in model.Nodes)
             {
@@ -73,7 +73,7 @@ namespace HSMServer.HtmlHelpers
         }
 
         public static StringBuilder CreateList(StringBuilder result, NodeViewModel node)
-        {           
+        {
             string formattedNodePath = SensorPathHelper.Encode(node.Path);
 
             result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
@@ -104,12 +104,12 @@ namespace HSMServer.HtmlHelpers
 
         public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
-            var result = new StringBuilder();
+            var result = new StringBuilder(1 << 5);
 
             string name = formattedPath;
 
-            result.Append("<div class='accordion-item'>" +
-                          $"<h2 class='accordion-header' id='heading_{name}'>");
+            result.Append("<div class='accordion-item'>")
+                  .Append($"<h2 class='accordion-header' id='heading_{name}'>");
 
             var time = (DateTime.UtcNow - sensor.Time);
 
@@ -119,37 +119,35 @@ namespace HSMServer.HtmlHelpers
                 string fileName = GetFileNameString(sensor.StringValue);
 
                 //button
-                result.Append($"<button id='{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'" +
-                          $"data-bs-target='#collapse_{name}' aria-expanded='true' aria-controls='collapse_{name}'>" +
-                          "<div>" +
-                          $"<div class='row'><div class='col-md-auto'>{sensor.Name}</div>" +
-                          $"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
+                result.Append($"<button id='{name}' class='accordion-button' style='display: none' type='button' data-bs-toggle='collapse'")
+                      .Append($"data-bs-target='#collapse_{name}' aria-expanded='true' aria-controls='collapse_{name}'>")
+                      .Append($"<div><div class='row'><div class='col-md-auto'>{sensor.Name}</div>")
+                      .Append($"<div class='col'>{sensor.StringValue}</div></div></div></button></h2>");
                 //body
-                result.Append($"<div id='collapse_{name}' class='accordion-collapse' " +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
-                          "<div class='accordion-body'>");
+                result.Append($"<div id='collapse_{name}' class='accordion-collapse' ")
+                      .Append($"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>")
+                      .Append("<div class='accordion-body'>");
 
-                result.Append("<div style='width: 100%'>" +
-                              "<div class='row justify-content-between'><div class='col-md-auto'>" +
-                              $"<li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
-                              $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
+                result.Append("<div style='width: 100%'><div class='row justify-content-between'><div class='col-md-auto'>")
+                      .Append($"<li id='status_{name}' class='fas fa-circle sensor-icon-with-margin ")
+                      .Append($"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
 
                 result.Append($"<span id='validation_{name}'>");
                 if (!string.IsNullOrEmpty(sensor.ValidationError))
                 {
                     result.Append(CreateValidationErrorIcon(sensor.ValidationError, name));
                 }
-
                 result.Append("</span>");
-                result.Append($"{sensor.Name}</div><input id='sensor_type_{name}' value='{(int)sensor.SensorType}' " +
-                              $"style='display: none' /><div class='col-md-auto time-ago-div' id='update_{name}' " +
-                              $"style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>{sensor.ShortStringValue}</div>" +
-                              $"<div class='row'><div class='col-md-auto'><button id='button_view_{name}' " +
-                              "class='button-view-file-sensor btn btn-secondary' title='View'>" +
-                              $"<i class='fas fa-eye'></i></button></div><div class='col'><input style='display: none;'" +
-                              $" id='fileType_{name}' value='{fileName}'><button id='button_download_{name}'" +
-                              " class='button-download-file-sensor-value btn btn-secondary'" +
-                              " title='Download'><i class='fas fa-file-download'></i></button></div></div>");
+
+                result.Append($"{sensor.Name}</div><input id='sensor_type_{name}' value='{(int)sensor.SensorType}' ")
+                      .Append($"style='display: none' /><div class='col-md-auto time-ago-div' id='update_{name}' ")
+                      .Append($"style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div>{sensor.ShortStringValue}</div>")
+                      .Append($"<div class='row'><div class='col-md-auto'><button id='button_view_{name}' ")
+                      .Append("class='button-view-file-sensor btn btn-secondary' title='View'>")
+                      .Append($"<i class='fas fa-eye'></i></button></div><div class='col'><input style='display: none;'")
+                      .Append($" id='fileType_{name}' value='{fileName}'><button id='button_download_{name}'")
+                      .Append(" class='button-download-file-sensor-value btn btn-secondary'")
+                      .Append(" title='Download'><i class='fas fa-file-download'></i></button></div></div>");
 
 
                 result.Append("</div></div></div>");
@@ -157,38 +155,35 @@ namespace HSMServer.HtmlHelpers
                 return result;
             }
 
-            result.Append(
-                $"<button id='{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'" +
-                $"data-bs-target='#collapse_{name}' aria-expanded='false' aria-controls='collapse_{name}'>" +
-                "<div style='width: 100%'>" +
-                "<div class='row justify-content-between'>" +
-                $"<div class='col-md-auto'><li id='status_{name}' class='fas fa-circle sensor-icon-with-margin " +
-                $"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
+            result.Append($"<button id='{name}' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'")
+                  .Append($"data-bs-target='#collapse_{name}' aria-expanded='false' aria-controls='collapse_{name}'>")
+                  .Append("<div style='width: 100%'><div class='row justify-content-between'>")
+                  .Append($"<div class='col-md-auto'><li id='status_{name}' class='fas fa-circle sensor-icon-with-margin ")
+                  .Append($"{ViewHelper.GetStatusHeaderColorClass(sensor.Status)}' title='Status: {sensor.Status}'></li>");
 
             result.Append($"<span id='validation_{name}'>");
             if (!string.IsNullOrEmpty(sensor.ValidationError))
             {
                 result.Append(CreateValidationErrorIcon(sensor.ValidationError, name));
             }
-
             result.Append("</span>");
-            result.Append($"{sensor.Name}</div><div class='col-md-auto'>" +
-                          $"<input id='sensor_type_{name}' value='{(int)sensor.SensorType}' style='display: none' />" +
-                          $"<div id='update_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>" +
-                          $"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
 
-            result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'" +
-                          $"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>" +
-                          $"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>" +
-                          "<div class='mb-3 row'><div>" +
-                          CreateRadioButton(name, "hour", "1H") +
-                          CreateRadioButton(name, "day", "1D") +
-                          CreateRadioButton(name, "three_days", "3D") +
-                          CreateRadioButton(name, "week", "1W") +
-                          CreateRadioButton(name, "month", "1M") + 
-                          CreateRadioButton(name, "all", "All") + 
-                          //CreateCsvButton(name) +
-                          CreateActionsList(name) + "</div>");
+            result.Append($"{sensor.Name}</div><div class='col-md-auto'>")
+                  .Append($"<input id='sensor_type_{name}' value='{(int)sensor.SensorType}' style='display: none' />")
+                  .Append($"<div id='update_{name}' class='time-ago-div' style='margin-right: 10px'>updated {GetTimeAgo(time)}</div></div></div>")
+                  .Append($"<div id='value_{name}'>{sensor.ShortStringValue}</div></div></button></h2>");
+
+            result.Append($"<div id='collapse_{name}' class='accordion-collapse collapse'")
+                  .Append($"aria-labelledby='heading_{name}' data-bs-parent='#sensorData_{formattedPath}'>")
+                  .Append($"<div class='accordion-body'><input style='display: none' id='listId_{name}' value='{formattedPath}'/>")
+                  .Append("<div class='mb-3 row'><div>")
+                  .Append(CreateRadioButton(name, "hour", "1H"))
+                  .Append(CreateRadioButton(name, "day", "1D"))
+                  .Append(CreateRadioButton(name, "three_days", "3D"))
+                  .Append(CreateRadioButton(name, "week", "1W"))
+                  .Append(CreateRadioButton(name, "month", "1M"))
+                  .Append(CreateRadioButton(name, "all", "All"))
+                  .Append(CreateActionsList(name)).Append("</div>");
 
             result.Append("<div style='margin-top: 15px'>");
             result.Append(GetNoDataDivForSensor(name));
@@ -213,7 +208,6 @@ namespace HSMServer.HtmlHelpers
                 return "> a month ago";
 
             if (time.TotalDays >= 1)
-                //return $"{time:%d} day(s) {time:%h} hours {time:%m} minutes";
                 return $"> {UnitsToString(time.TotalDays, "day")} ago";
 
             if (time.TotalHours >= 1)
@@ -243,11 +237,6 @@ namespace HSMServer.HtmlHelpers
                 "</ul></div>";
         }
 
-        private static string CreateCsvButton(string name)
-        {
-            return "<div class='form-check form-check-inline'><button type='button'" +
-                   $" class='btn btn-primary' id='button_export_csv_{name}'>Export to CSV</button></div>";
-        }
         private static string CreateRadioButton(string name, string period, string shortPeriod)
         {
             return
@@ -266,20 +255,20 @@ namespace HSMServer.HtmlHelpers
         }
         private static string GetNavTabsForHistory(string name)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder(1 << 3);
             sb.Append("<ul class='nav nav-tabs'>");
 
             //Graph tab
             string graphElementId = $"graph_{name}";
             string graphParentDivId = $"graph_parent_{name}";
-            sb.Append($"<li class='nav-item'><a id='link_graph_{name}' " +
-                $"class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
+            sb.Append($"<li class='nav-item'><a id='link_graph_{name}' ")
+              .Append($"class='nav-link active' data-bs-toggle='tab' href='#{graphParentDivId}'>Graph</a></li>");
 
             //Values tab
             string valuesElementId = $"values_{name}";
             string valuesParentDivId = $"values_parent_{name}";
-            sb.Append($"<li class='nav-item'><a id='link_table_{name}' " +
-                $"class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
+            sb.Append($"<li class='nav-item'><a id='link_table_{name}' ")
+              .Append($"class='nav-link' data-bs-toggle='tab' href='#{valuesParentDivId}'>Table</a></li></ul>");
 
             sb.Append("<div class='tab-content'>");
             sb.Append($"<div class='tab-pane fade show active' id={graphParentDivId}><div id='{graphElementId}'></div></div>");
@@ -292,6 +281,7 @@ namespace HSMServer.HtmlHelpers
         {
             return $"<div id='values_{name}'></div>";
         }
+
         private static bool IsPlottingSupported(SensorType sensorType)
         {
             if (sensorType == SensorType.IntSensor || sensorType == SensorType.DoubleSensor)
@@ -311,18 +301,18 @@ namespace HSMServer.HtmlHelpers
             var ind = shortValue.IndexOf(FileNamePattern);
             if (ind != -1)
             {
-                var fileNameString = shortValue.Substring(ind + FileNamePattern.Length);
+                var fileNameString = shortValue[(ind + FileNamePattern.Length)..];
                 int firstDotIndex = fileNameString.IndexOf('.');
-                int secondDotIndex = fileNameString.Substring(firstDotIndex + 1).IndexOf('.');
-                return fileNameString.Substring(0, firstDotIndex + secondDotIndex + 1);
+                int secondDotIndex = fileNameString[(firstDotIndex + 1)..].IndexOf('.');
+                return fileNameString[..(firstDotIndex + secondDotIndex + 1)];
             }
 
             ind = shortValue.IndexOf(ExtensionPattern);
             if (ind != -1)
             {
-                var extensionString = shortValue.Substring(ind + ExtensionPattern.Length);
+                var extensionString = shortValue[(ind + ExtensionPattern.Length)..];
                 int dotIndex = extensionString.IndexOf('.');
-                return extensionString.Substring(0, dotIndex);
+                return extensionString[..dotIndex];
             }
 
             return string.Empty;
@@ -330,22 +320,21 @@ namespace HSMServer.HtmlHelpers
 
         public static string CreateHistoryList(List<SensorHistoryData> sensors)
         {
-            if (sensors == null) 
+            if (sensors == null)
                 return string.Empty;
 
-            var result = new StringBuilder();
+            var result = new StringBuilder(sensors.Count + 2);
             result.Append("<div class='col-xxl' style='margin: 10px 0px'><ul class='list-group'>");
 
-            foreach(var sensor in sensors)
+            foreach (var sensor in sensors)
             {
-                result.Append("<li class='list-group-item list-group-item-action'>"
-                        + $"{sensor.Time}: {sensor.TypedData}" + "</li>");
+                result.Append("<li class='list-group-item list-group-item-action'>")
+                      .Append($"{sensor.Time}: {sensor.TypedData}").Append("</li>");
             }
 
             result.Append("</ul></div>");
             return result.ToString();
         }
-
 
         private static NodeViewModel GetNodeRecursion(string path, NodeViewModel model)
         {
