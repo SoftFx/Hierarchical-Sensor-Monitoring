@@ -236,7 +236,7 @@ namespace HSMServer.Controllers
 
             var node = model.Clone().GetNode(nodePath);
 
-            var result = new List<SensorDataViewModel>();
+            var result = new List<SensorDataViewModel>(node?.Sensors?.Count ?? 0);
             if (node?.Sensors != null)
                 foreach (var (_, sensor) in node.Sensors)
                     result.Add(new SensorDataViewModel(selectedList, sensor));
