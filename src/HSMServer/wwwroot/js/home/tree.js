@@ -63,9 +63,27 @@
                 }
             }
         },
-        "plugins": ["state", "contextmenu", "themes", "wholerow"]
+        "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
+        "sort": function (a, b) {
+
+            if (isTimeSorting) {
+                nodeA = this.get_node(a);
+                nodeB = this.get_node(b);
+
+                format = "DD/MM/YYYY hh:mm:ss";
+                timeA = moment(nodeA.data.jstree.time, format);
+                timeB = moment(nodeB.data.jstree.time, format);
+
+                return timeSorting(timeA, timeB);
+            }
+            else {
+                a = this.get_text(a);
+                b = this.get_text(b);
+
+                return nameSorting(a, b);
+            }
+        }
     });
-    //$('#jstree').jstree();
 
     $('#updateTime').empty();
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());
@@ -79,4 +97,12 @@ function initializeClickTree() {
             return;
         displayList(data);
     });
+}
+
+function nameSorting(a, b) {
+    return a.toLowerCase() > b.toLowerCase() ? 1 : -1;
+}
+
+function timeSorting(a, b) {
+    return b.diff(a);
 }

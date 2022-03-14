@@ -6,14 +6,17 @@ namespace HSMServer.HtmlHelpers
 {
     public static class TreeHelper
     {
+        private const int NodeNameMaxLength = 35;
+
         public static string CreateTree(TreeViewModel model)
         {
-            if (model == null) return string.Empty;
+            if (model == null)
+                return string.Empty;
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder(model.Nodes?.Count ?? 0 + 2);
             result.Append("<div class='col-md-auto'><div id='jstree'><ul>");
             if (model.Nodes != null)
-                foreach (var node in model.Nodes)
+                foreach (var (_, node) in model.Nodes)
                 {
                     result.Append(Recursion(node));
                 }
@@ -25,11 +28,12 @@ namespace HSMServer.HtmlHelpers
 
         public static string UpdateTree(TreeViewModel model)
         {
-            if (model == null) return string.Empty;
+            if (model == null)
+                return string.Empty;
 
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder(model.Nodes?.Count ?? 0);
             if (model.Nodes != null)
-                foreach (var node in model.Nodes)
+                foreach (var (_, node) in model.Nodes)
                 {
                     result.Append(Recursion(node));
                 }
@@ -39,35 +43,38 @@ namespace HSMServer.HtmlHelpers
 
         public static string Recursion(NodeViewModel node)
         {
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder(node.Nodes?.Count ?? 0 + node.Sensors?.Count ?? 0 + 8);
             var name = SensorPathHelper.Encode(node.Path);
-            var shortName = node.Name.Length > 35 
-                ? node.Name.Substring(0, 35) + "..." : node.Name;
+            var shortName = node.Name.Length > NodeNameMaxLength
+                ? $"{node.Name[..NodeNameMaxLength]}..."
+                : node.Name;
 
-            result.Append($"<li id='{name}' title='{node.Name} &#013;{node.UpdateTime}'" +
-                          "data-jstree='{\"icon\" : \"fas fa-circle " +
-                          ViewHelper.GetStatusHeaderColorClass(node.Status) + 
-                          "\"}'>" + $"{shortName} ({node.Count} sensors)");
+            result.Append($"<li id='{name}' title='{node.Name} &#013;{node.UpdateTime}'")
+                  .Append("data-jstree='{\"icon\" : \"fas fa-circle ")
+                  .Append(ViewHelper.GetStatusHeaderColorClass(node.Status))
+                  .Append($"\", \"time\" : \"{node.UpdateTime}\"")
+                  .Append($"}}'>{shortName} ({node.Count} sensors)");
 
             if (node.Nodes != null)
-                foreach (var subnode in node.Nodes)
+                foreach (var (_, child) in node.Nodes)
                 {
-                    result.Append("<ul>" + Recursion(subnode) + "</ul>");
+                    result.Append($"<ul>{Recursion(child)}</ul>");
                 }
 
-            if (node.Sensors != null && node.Sensors.Count > 0)
+            if (node.Sensors != null && !node.Sensors.IsEmpty)
             {
                 result.Append("<ul>");
-                foreach (var sensor in node.Sensors)
+                foreach (var (sensorName, sensor) in node.Sensors)
                 {
-                    shortName = sensor.Name.Length > 35
-                        ? sensor.Name.Substring(0, 35) + "..." : sensor.Name;
+                    shortName = sensorName.Length > NodeNameMaxLength
+                        ? $"{sensorName[..NodeNameMaxLength]}..."
+                        : sensorName;
 
-                    var encodedPath = SensorPathHelper.Encode($"{node.Path}/{sensor.Name}");
-                    result.Append($"<li id='sensor_{encodedPath}' title='{sensor.Name} &#013;{sensor.Time}'" +
-                                  "data-jstree='{\"icon\" : \"fas fa-circle " +
-                                  ViewHelper.GetStatusHeaderColorClass(sensor.Status) +
-                                  "\"}'>" + shortName + "</li>");
+                    var encodedPath = SensorPathHelper.Encode($"{node.Path}/{sensorName}");
+                    result.Append($"<li id='sensor_{encodedPath}' title='{sensorName} &#013;{sensor.Time}'")
+                          .Append("data-jstree='{\"icon\" : \"fas fa-circle ")
+                          .Append(ViewHelper.GetStatusHeaderColorClass(sensor.Status))
+                          .Append($"\", \"time\" : \"{sensor.Time}\"}}'>{shortName}</li>");
                 }
 
                 result.Append("</ul>");
