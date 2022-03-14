@@ -59,6 +59,32 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "Add user(s), Negative")]
+        public void AddEmptyUserTest()
+        {
+            var emptyUser = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty };
+
+            _userManager.AddUser(emptyUser);
+
+            var actual = _userManager.GetUsers();
+            var expected = new List<User>(2) { TestUsersManager.DefaultUser, emptyUser };
+
+            CompareUserLists(actual, expected);
+        }
+
+        [Fact]
+        [Trait("Category", "Add user(s), Negative")]
+        public void AddSameUserTest()
+        {
+            _userManager.AddUser(TestUsersManager.DefaultUser);
+
+            var actual = _userManager.GetUsers();
+            var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.DefaultUser };
+
+            CompareUserLists(actual, expected);
+        }
+
+        [Fact]
         [Trait("Category", "Update user(s)")]
         public async Task UpdateDefaultUserTest()
         {
@@ -154,6 +180,30 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                                   _databaseAdapterManager.DatabaseAdapter.GetUsers);
         }
 
+        [Fact]
+        [Trait("Category", "Remove user(s), Negative")]
+        public void RemoveUserByIncorrectNameTest()
+        {
+            _userManager.RemoveUser(RandomGenerator.GetRandomString());
+
+            var expected = new List<User>(1) { TestUsersManager.DefaultUser };
+            var actual = _userManager.GetUsers();
+
+            CompareUserLists(expected, actual);
+        }
+
+        [Fact]
+        [Trait("Category", "Remove user(s), Negative")]
+        public void RemoveUserByEmptyNameTest()
+        {
+            _userManager.RemoveUser(String.Empty);
+
+            var expected = new List<User>(1) { TestUsersManager.DefaultUser };
+            var actual = _userManager.GetUsers();
+
+            CompareUserLists(expected, actual);
+        }
+
         [Theory]
         [InlineData(3)]
         [InlineData(10)]
@@ -184,10 +234,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        [Trait("Category", "Authenticate")]
+        [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateUnregisteredUserTest()
         {
             var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
+
+            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+
+            Assert.Null(actual);
+        }
+
+        [Fact]
+        [Trait("Category", "Authenticate, Negative")]
+        public void AuthenticateEmptyUserTest()
+        {
+            var UnregisteredUser = new User() { UserName = String.Empty, Password = String.Empty };
 
             var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
 
@@ -213,12 +274,26 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetViewiersTest()
+        public void GetViewersTest()
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
+
+            CompareUserLists(expected, actual);
+        }
+
+        [Fact]
+        [Trait("Category", "Get users, Negative")]
+        public void GetEmptyViewersTest()
+        {
+            var emptyViewer = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty, ProductsRoles = TestUsersManager.TestUserViewer.ProductsRoles };
+
+            _userManager.AddUser(emptyViewer);
+
+            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
+            var expected = new List<User>(1) { emptyViewer };
 
             CompareUserLists(expected, actual);
         }
@@ -231,6 +306,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
+
+            CompareUserLists(expected, actual);
+        }
+
+        [Fact]
+        [Trait("Category", "Get users, Negative")]
+        public void GetEmptyManagersTest()
+        {
+            var emptyManager = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty, ProductsRoles = TestUsersManager.TestUserManager.ProductsRoles };
+
+            _userManager.AddUser(emptyManager);
+
+            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
+            var expected = new List<User>(1) { emptyManager };
 
             CompareUserLists(expected, actual);
         }
