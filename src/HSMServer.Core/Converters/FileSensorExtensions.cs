@@ -34,6 +34,7 @@ namespace HSMServer.Core.Converters
                 Time = sensorData.Time,
                 SensorType = SensorType.FileSensorBytes,
                 TypedData = GetTypedDataForFileSensorBytes(sensorData.TypedData),
+                OriginalFileSensorContentSize = sensorData.OriginalFileSensorContentSize,
             };
         }
 
@@ -51,6 +52,7 @@ namespace HSMServer.Core.Converters
                 TimeCollected = dataEntity.TimeCollected,
                 DataType = (byte)SensorType.FileSensorBytes,
                 TypedData = GetTypedDataForFileSensorBytes(dataEntity.TypedData),
+                OriginalFileSensorContentSize = dataEntity.OriginalFileSensorContentSize,
             };
         }
 

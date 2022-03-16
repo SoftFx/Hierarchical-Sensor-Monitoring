@@ -1,7 +1,9 @@
 ﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Tests.Infrastructure;
 using System;
+using System.IO;
 using System.Text.Json;
 using Xunit;
 
@@ -73,7 +75,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
-            var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Error);
+            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Error);
 
             Assert.Equal((byte)SensorStatus.Error, dataEntity.Status);
         }
@@ -85,7 +87,7 @@ namespace HSMServer.Core.Tests.ConverterTests
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             fileSensorValue.Status = SensorStatus.Error;
 
-            var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Warning);
+            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Warning);
 
             Assert.Equal((byte)SensorStatus.Error, dataEntity.Status);
         }
@@ -96,7 +98,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
-            var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Warning);
+            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Warning);
 
             Assert.Equal((byte)SensorStatus.Warning, dataEntity.Status);
         }
@@ -108,9 +110,26 @@ namespace HSMServer.Core.Tests.ConverterTests
             var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             fileSensorValue.Status = SensorStatus.Warning;
 
-            var dataEntity = fileSensorValue.Convert(_timeCollected, SensorStatus.Unknown);
+            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Unknown);
 
             Assert.Equal((byte)SensorStatus.Warning, dataEntity.Status);
+        }
+
+        [Fact]
+        [Trait("Category", "Compressing content")]
+        public void SensorValueToSensorDataEntityConverter_CompressingContent_Test()
+        {
+            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+            var originalContent = fileSensorValue.FileContent;
+            var compressedContent = CompressionHelper.GetCompressedData(originalContent);
+
+            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Unknown);
+            var actualData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
+
+            Assert.Equal(originalContent.Length, dataEntity.OriginalFileSensorContentSize);
+            Assert.Equal(compressedContent.Length, actualData.FileContent.Length);
+            Assert.Equal(compressedContent, actualData.FileContent);
+            Assert.NotEqual(originalContent, compressedContent);
         }
     }
 }

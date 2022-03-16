@@ -1,12 +1,13 @@
-﻿using System;
-using System.Text.Json;
-using HSMCommon.Constants;
+﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Sensor;
+using System;
+using System.Text.Json;
 
 namespace HSMServer.Core.Converters
 {
@@ -40,6 +41,17 @@ namespace HSMServer.Core.Converters
                 TypedData = TypedDataFactory.GetTypedData(sensorValue),
                 DataType = (byte)SensorTypeFactory.GetSensorType(sensorValue),
             };
+
+        public static SensorDataEntity ConvertWithContentCompression(this FileSensorBytesValue sensorValue, DateTime timeCollected,
+            SensorStatus validationStatus)
+        {
+            int originalSize = sensorValue.FileContent.Length;
+
+            var dataEntity = sensorValue.CompressContent().Convert(timeCollected, validationStatus);
+            dataEntity.OriginalFileSensorContentSize = originalSize;
+
+            return dataEntity;
+        }
 
         public static SensorInfo Convert(this SensorValueBase sensorValue, string productName) =>
             new()

@@ -11,5 +11,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string TypedData { get; set; }
         public DateTime TimeCollected { get; set; }
         public byte Status { get; set; }
+        public int OriginalFileSensorContentSize { get; set; }
     }
 }
