@@ -8,5 +8,6 @@ namespace HSMServer.Core.Model.Sensor
         public DateTime Time { get; set; }
         public SensorType SensorType { get; set; }
         public string TypedData { get; set; }
+        public int OriginalFileSensorContentSize { get; set; }
     }
 }

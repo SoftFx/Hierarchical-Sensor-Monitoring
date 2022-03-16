@@ -399,6 +399,24 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
+        [Fact]
+        [Trait("Category", "File sensor bytes compressing/decompressing content")]
+        public void FileSensorBytesCompressingDecompressingContentTest()
+        {
+            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+            var originalContent = sensorValue.FileContent;
+
+            _monitoringCore.AddFileSensor(sensorValue);
+
+            Assert.NotEqual(sensorValue.FileContent, originalContent);
+
+            var (actualContent, _) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, sensorValue.Path);
+
+            Assert.Equal(originalContent.Length, actualContent.Length);
+            Assert.Equal(originalContent, actualContent);
+        }
+
+
         private static void FullTestSensorInfo(string productName, SensorValueBase sensorValue, IsSensorRegistered isSensorRegistered,
             GetSensorInfo getSensorInfo, GetProductSensors getProductSensors, GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
         {

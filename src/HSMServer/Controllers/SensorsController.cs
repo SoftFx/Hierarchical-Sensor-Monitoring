@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue.ConvertToFileSensorBytes());
+                _dataReceiver.AddFileSensor(sensorValue.ConvertToFileSensorBytes());
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -237,7 +237,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _dataReceiver.AddFileSensor(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)

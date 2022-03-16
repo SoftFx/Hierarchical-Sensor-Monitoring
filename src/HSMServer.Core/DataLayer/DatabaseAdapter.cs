@@ -202,6 +202,7 @@ namespace HSMServer.Core.DataLayer
                 SensorType = (SensorType)entity.DataType,
                 TypedData = entity.TypedData,
                 Time = entity.Time,
+                OriginalFileSensorContentSize = entity.OriginalFileSensorContentSize,
             };
 
         private static ProductEntity ConvertProductToEntity(Product product) =>

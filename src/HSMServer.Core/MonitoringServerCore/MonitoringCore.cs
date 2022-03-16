@@ -282,25 +282,35 @@ namespace HSMServer.Core.MonitoringServerCore
                 DateTime timeCollected = DateTime.UtcNow;
 
                 var validationResult = value.Validate();
-
-                if (validationResult.IsError)
-                {
-                    _logger.LogError($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
+                if (!CheckValidationResult(value, validationResult))
                     return;
-                }
-                else if (validationResult.IsWarning)
-                    _logger.LogWarning($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
 
-                var sensorData = GetSensorData(value, timeCollected, validationResult);
-
-                _queueManager.AddSensorData(sensorData);
-                _valuesCache.AddValue(sensorData.Product, sensorData);
+                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
 
                 if (!ProcessBarSensorValue(value, sensorData))
                     return;
 
-                SensorDataEntity databaseObj = value.Convert(timeCollected, sensorData.Status);
-                SaveSensorValue(databaseObj, sensorData.Product);
+                SaveSensorValue(value.Convert(timeCollected, sensorData.Status), sensorData.Product);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
+            }
+        }
+
+        public void AddFileSensor(FileSensorBytesValue value)
+        {
+            try
+            {
+                DateTime timeCollected = DateTime.UtcNow;
+
+                var validationResult = value.Validate();
+                if (!CheckValidationResult(value, validationResult))
+                    return;
+
+                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
+
+                SaveSensorValue(value.ConvertWithContentCompression(timeCollected, sensorData.Status), sensorData.Product);
             }
             catch (Exception e)
             {
@@ -314,6 +324,29 @@ namespace HSMServer.Core.MonitoringServerCore
 
             return _productManager.GetProductByName(productName)?.Sensors.TryGetValue(path, out value)
                 ?? false ? value : null;
+        }
+
+        private bool CheckValidationResult(SensorValueBase value, SensorsDataValidation.ValidationResult validationResult)
+        {
+            if (validationResult.IsError)
+            {
+                _logger.LogError($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
+                return false;
+            }
+            else if (validationResult.IsWarning)
+                _logger.LogWarning($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
+
+            return true;
+        }
+
+        private SensorData RegisterAndGetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
+        {
+            var sensorData = GetSensorData(value, timeCollected, validationResult);
+
+            _queueManager.AddSensorData(sensorData);
+            _valuesCache.AddValue(sensorData.Product, sensorData);
+
+            return sensorData;
         }
 
         private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
@@ -461,7 +494,7 @@ namespace HSMServer.Core.MonitoringServerCore
             try
             {
                 var fileData = JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData);
-                return (fileData.FileContent, fileData.Extension);
+                return (FileSensorContentCompressionHelper.GetDecompressedContent(sensorHistoryData, fileData), fileData.Extension);
             }
             catch
             {
