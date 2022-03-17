@@ -195,7 +195,7 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             //Remove tree for a disconnected user to save memory/process & keep the data fresh
             int connectionsCount = _sessionsManager.GetConnectionsCount(user);
-            if (connectionsCount < 1)
+            if (connectionsCount <= 1)
             {
                 _treeManager.RemoveViewModel(user);
             }
