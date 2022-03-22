@@ -3,11 +3,11 @@
 @using HSMServer.Model.ViewModel
 @model List<ConfigurationObjectViewModel>
 
-@{ ViewData["Title"] = "Admin"; }
+@{ ViewData["Title"] = "Configuration"; }
 
 <script>
-    var setToDefaultAction = "@Html.Raw(Url.Action(ViewConstants.SetConfigObjectToDefaultAction, ViewConstants.AdminController))";
-    var saveAction = "@Html.Raw(Url.Action(ViewConstants.SaveConfigObjectAction, ViewConstants.AdminController))";
+    var setToDefaultAction = "@Html.Raw(Url.Action(ViewConstants.SetConfigObjectToDefaultAction, ViewConstants.ConfigurationController))";
+    var saveAction = "@Html.Raw(Url.Action(ViewConstants.SaveConfigObjectAction, ViewConstants.ConfigurationController))";
 </script>
 
 <style>
