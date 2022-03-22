@@ -10,8 +10,6 @@ namespace HSMServer.Core.Configuration
         string ClientAppFolderPath { get; }
         ClientVersionModel ClientVersion { get; }
 
-        event EventHandler<ConfigurationObject> ConfigurationObjectUpdated;
-
         List<string> GetAllParameterNames();
         void AddConfigurationObject(string name, string value);
         void SetConfigurationObjectToDefault(string name);
