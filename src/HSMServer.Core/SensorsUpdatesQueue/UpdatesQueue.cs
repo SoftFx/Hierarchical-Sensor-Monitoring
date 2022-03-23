@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         private bool _run;
 
-        public event Action<IEnumerable<SensorValueBase>> NewItemsEvent;
+        public event Action<List<SensorValueBase>> NewItemsEvent;
 
 
         public UpdatesQueue()
@@ -24,7 +25,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             _queue = new ConcurrentQueue<SensorValueBase>();
             _run = true;
 
-            ThreadPool.QueueUserWorkItem(_ => RunManageThread());
+            ThreadPool.QueueUserWorkItem(RunManageThread);
         }
 
 
@@ -40,7 +41,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         public void Dispose() => _run = false;
 
 
-        private async void RunManageThread()
+        private async void RunManageThread(object _)
         {
             while (_run)
             {
@@ -53,6 +54,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private List<SensorValueBase> GetDataPackage()
         {
             var data = new List<SensorValueBase>(PackageMaxSize);

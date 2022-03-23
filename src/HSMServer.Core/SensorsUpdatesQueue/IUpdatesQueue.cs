@@ -6,7 +6,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public interface IUpdatesQueue : IDisposable
     {
-        event Action<IEnumerable<SensorValueBase>> NewItemsEvent;
+        event Action<List<SensorValueBase>> NewItemsEvent;
 
         void AddItem(SensorValueBase sensorValue);
         void AddItems(IEnumerable<SensorValueBase> sensorValues);
