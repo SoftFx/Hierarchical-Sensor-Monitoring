@@ -272,8 +272,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
-                foreach (var value in values)
-                    _updatesQueue.AddItem(value);
+                _updatesQueue.AddItems(values);
 
                 return Ok(values);
             }

@@ -59,7 +59,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _valuesCache = valuesVCache;
 
             _updatesQueue = updatesQueue;
-            _updatesQueue.NewItemEvent += UpdatesQueueNewItemHandler;
+            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             Thread.Sleep(5000);
             FillValuesCache();
@@ -69,12 +69,15 @@ namespace HSMServer.Core.MonitoringServerCore
             SensorDataValidationExtensions.Initialize(configurationProvider);
         }
 
-        private void UpdatesQueueNewItemHandler(SensorValueBase sensorValue)
+        private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
         {
-            if (sensorValue is FileSensorBytesValue fileSensorBytesValue)
-                AddFileSensor(fileSensorBytesValue);
-            else
-                AddSensorValue(sensorValue);
+            foreach (var value in sensorValues)
+            {
+                if (value is FileSensorBytesValue fileSensorBytesValue)
+                    AddFileSensor(fileSensorBytesValue);
+                else
+                    AddSensorValue(value);
+            }
         }
 
         private void FillValuesCache()
@@ -525,7 +528,7 @@ namespace HSMServer.Core.MonitoringServerCore
             foreach (var lastBarValue in lastBarsValues)
                 ProcessExtendedBarData(lastBarValue);
 
-            _updatesQueue.Stop();
+            _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
             _queueManager?.Dispose();
 
