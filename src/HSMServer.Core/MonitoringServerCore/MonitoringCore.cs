@@ -159,26 +159,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseAdapter.AddSensor(newSensor);
         }
 
-        #region Typed Sensors from UnitedSensorValue
-
-        public void AddSensorsValues(List<UnitedSensorValue> values)
-        {
-            foreach (var value in values)
-            {
-                try
-                {
-                    AddSensorValue(value);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
-                }
-
-            }
-        }
-
-        #endregion
-
         public void RemoveSensor(string productName, string path)
         {
             var product = _productManager.GetProductByName(productName);
