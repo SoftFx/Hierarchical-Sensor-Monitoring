@@ -1,8 +1,8 @@
 ﻿using HSMDatabase.AccessManager;
 
-namespace HSMServer.Core.DataLayer
+namespace HSMDatabase.Settings
 {
-    internal sealed record DatabaseSettings : IDatabaseSettings
+    public sealed record DatabaseSettings : IDatabaseSettings
     {
         private const string DefaultDatabaseFolder = "Databases";
         private const string DefaultEnvironmentDatabaseName = "EnvironmentData";
@@ -12,8 +12,7 @@ namespace HSMServer.Core.DataLayer
         public string EnvironmentDatabaseName { get; init; }
         public string MonitoringDatabaseName { get; init; }
 
-
-        internal DatabaseSettings()
+        public DatabaseSettings()
         {
             DatabaseFolder = DefaultDatabaseFolder;
             EnvironmentDatabaseName = DefaultEnvironmentDatabaseName;

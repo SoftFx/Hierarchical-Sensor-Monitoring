@@ -5,6 +5,7 @@ using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
+using HSMDatabase.Settings;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -15,9 +16,9 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IDatabaseSettings _databaseSettings;
 
 
-        public DatabaseCore(IDatabaseSettings dbSettings)
+        public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
-            _databaseSettings = dbSettings;
+            _databaseSettings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
             _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings);
 

@@ -4,7 +4,7 @@ using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.DatabaseWorkCore;
-using HSMSensorDataObjects;
+using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -13,15 +13,6 @@ namespace HSMServer.Core.DataLayer
 {
     public class DatabaseAdapter : IDatabaseAdapter
     {
-        private readonly DatabaseCore _database;
-
-
-        public DatabaseAdapter(IDatabaseSettings dbSettings = null)
-        {
-            _database = new DatabaseCore(dbSettings ?? new DatabaseSettings());
-        }
-
-
         #region Size
 
         public long GetDatabaseSize() => _database.GetDatabaseSize();
@@ -40,7 +31,7 @@ namespace HSMServer.Core.DataLayer
 
         public void AddProduct(Product product)
         {
-            var entity = ConvertProductToEntity(product);
+            var entity = product.ConvertToEntity();
             _database.AddProduct(entity);
         }
 
@@ -64,13 +55,13 @@ namespace HSMServer.Core.DataLayer
 
         public void AddSensor(SensorInfo info)
         {
-            SensorEntity entity = ConvertSensorInfoToEntity(info);
+            SensorEntity entity = info.ConvertToEntity();
             _database.AddSensor(entity);
         }
 
         public void UpdateSensor(SensorInfo info)
         {
-            SensorEntity entity = ConvertSensorInfoToEntity(info);
+            SensorEntity entity = info.ConvertToEntity();
             _database.AddSensor(entity);
         }
 
@@ -101,7 +92,7 @@ namespace HSMServer.Core.DataLayer
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
             SensorDataEntity entity = _database.GetLatestSensorValue(productName, path);
-            return entity != null ? ConvertSensorDataEntityToHistoryData(entity) : null;
+            return entity != null ? entity.ConvertToHistoryData() : null;
         }
 
         public List<SensorInfo> GetProductSensors(Product product) =>
@@ -113,7 +104,7 @@ namespace HSMServer.Core.DataLayer
 
             List<SensorHistoryData> historyDatas = new List<SensorHistoryData>(historyCount);
             if (historyCount != 0)
-                historyDatas.AddRange(history.Select(ConvertSensorDataEntityToHistoryData));
+                historyDatas.AddRange(history.Select(h => h.ConvertToHistoryData()));
 
             return historyDatas;
         }
@@ -124,19 +115,19 @@ namespace HSMServer.Core.DataLayer
 
         public void AddUser(User user)
         {
-            UserEntity entity = ConvertUserToEntity(user);
+            UserEntity entity = user.ConvertToEntity();
             _database.AddUser(entity);
         }
 
         public void UpdateUser(User user)
         {
-            UserEntity entity = ConvertUserToEntity(user);
+            UserEntity entity = user.ConvertToEntity();
             _database.AddUser(entity);
         }
 
         public void RemoveUser(User user)
         {
-            UserEntity entity = ConvertUserToEntity(user);
+            UserEntity entity = user.ConvertToEntity();
             _database.RemoveUser(entity);
         }
 
@@ -168,7 +159,7 @@ namespace HSMServer.Core.DataLayer
 
         public void WriteConfigurationObject(ConfigurationObject obj)
         {
-            var entity = ConvertConfigurationObjectToEntity(obj);
+            var entity = obj.ConvertToEntity();
             _database.WriteConfigurationObject(entity);
         }
 
@@ -188,89 +179,11 @@ namespace HSMServer.Core.DataLayer
 
         public void WriteRegistrationTicket(RegistrationTicket ticket)
         {
-            var entity = ConvertRegistrationTicketToEntity(ticket);
+            var entity = ticket.ConvertToEntity();
             _database.WriteRegistrationTicket(entity);
         }
 
         #endregion
 
-        #region Convert objects
-
-        private SensorHistoryData ConvertSensorDataEntityToHistoryData(SensorDataEntity entity) =>
-            new()
-            {
-                SensorType = (SensorType)entity.DataType,
-                TypedData = entity.TypedData,
-                Time = entity.Time,
-                OriginalFileSensorContentSize = entity.OriginalFileSensorContentSize,
-            };
-
-        private static ProductEntity ConvertProductToEntity(Product product) =>
-            new()
-            {
-                Name = product.Name,
-                Key = product.Key,
-                DateAdded = product.DateAdded,
-                ExtraKeys = product.ExtraKeys?.Select(ConvertExtraProductKeyToEntity)?.ToList(),
-            };
-
-        private static ExtraKeyEntity ConvertExtraProductKeyToEntity(ExtraProductKey key) =>
-            new()
-            {
-                Key = key.Key,
-                Name = key.Name,
-            };
-
-        private static SensorEntity ConvertSensorInfoToEntity(SensorInfo info) =>
-            new()
-            {
-                Description = info.Description,
-                Path = info.Path,
-                ProductName = info.ProductName,
-                SensorName = info.SensorName,
-                SensorType = (int)info.SensorType,
-                Unit = info.Unit,
-                ExpectedUpdateIntervalTicks = info.ExpectedUpdateInterval.Ticks,
-                ValidationParameters = info.ValidationParameters?.Select(ConvertSensorValidationParameterToEntity)?.ToList(),
-            };
-
-        private static ValidationParameterEntity ConvertSensorValidationParameterToEntity(SensorValidationParameter validationParameter) =>
-            new()
-            {
-                ValidationValue = validationParameter.ValidationValue,
-                ParameterType = (int)validationParameter.ValidationType
-            };
-
-        private static UserEntity ConvertUserToEntity(User user) =>
-            new()
-            {
-                UserName = user.UserName,
-                Password = user.Password,
-                CertificateThumbprint = user.CertificateThumbprint,
-                CertificateFileName = user.CertificateFileName,
-                Id = user.Id,
-                IsAdmin = user.IsAdmin,
-                ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
-            };
-
-        private static ConfigurationEntity ConvertConfigurationObjectToEntity(ConfigurationObject obj) =>
-            new()
-            {
-                Value = obj.Value,
-                Name = obj.Name,
-            };
-
-        private static RegisterTicketEntity ConvertRegistrationTicketToEntity(RegistrationTicket ticket) =>
-            new()
-            {
-                Role = ticket.Role,
-                ExpirationDate = ticket.ExpirationDate,
-                Id = ticket.Id,
-                ProductKey = ticket.ProductKey,
-            };
-
-        #endregion
-
-        public void Dispose() => _database.Dispose();
     }
 }

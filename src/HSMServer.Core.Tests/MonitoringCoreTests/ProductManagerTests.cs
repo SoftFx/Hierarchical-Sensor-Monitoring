@@ -23,7 +23,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture) 
         {
-            _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+            _userManager = new UserManager(_databaseAdapterManager.DatabaseCore, CommonMoqs.CreateNullLogger<UserManager>());
         }
 
 
