@@ -3,9 +3,10 @@
 namespace HSMServer.Core.Model.Authentication
 {
     [SwaggerIgnore]
-    public enum ProductRoleEnum
+    public enum KeyRolesEnum
     {
-        ProductManager = 0,
-        ProductViewer = 1
+        Viewer,
+        Feeder,
+        Admin
     }
 }
