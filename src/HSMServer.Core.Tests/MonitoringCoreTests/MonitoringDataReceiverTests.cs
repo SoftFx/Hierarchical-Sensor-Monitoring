@@ -48,6 +48,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 _productManager,
                 configurationProvider,
                 _valuesCache,
+                _updatesQueue,
                 monitoringLogger);
         }
 
