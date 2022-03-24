@@ -244,8 +244,7 @@ namespace HSMServer.Controllers
                     var valuesList = values.ToList();
 
                     _dataCollector.ReportSensorsCount(valuesList.Count);
-                    foreach (var value in valuesList)
-                        _updatesQueue.AddItem(value.Convert());
+                    _updatesQueue.AddItems(valuesList.Select(v => v.Convert()).ToList());
 
                     return Ok(values);
                 }
@@ -272,7 +271,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
-                _updatesQueue.AddItems(values);
+                _updatesQueue.AddItems(values.Cast<SensorValueBase>().ToList());
 
                 return Ok(values);
             }

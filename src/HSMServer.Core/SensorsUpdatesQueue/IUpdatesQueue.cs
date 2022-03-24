@@ -9,6 +9,6 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         event Action<List<SensorValueBase>> NewItemsEvent;
 
         void AddItem(SensorValueBase sensorValue);
-        void AddItems(IEnumerable<SensorValueBase> sensorValues);
+        void AddItems(List<SensorValueBase> sensorValues);
     }
 }

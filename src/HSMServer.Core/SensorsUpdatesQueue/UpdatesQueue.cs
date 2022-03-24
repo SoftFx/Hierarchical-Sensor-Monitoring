@@ -32,7 +32,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         public void AddItem(SensorValueBase sensorValue) =>
             _queue.Enqueue(sensorValue);
 
-        public void AddItems(IEnumerable<SensorValueBase> sensorValues)
+        public void AddItems(List<SensorValueBase> sensorValues)
         {
             foreach (var value in sensorValues)
                 AddItem(value);
