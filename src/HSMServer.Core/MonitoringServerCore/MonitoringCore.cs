@@ -22,6 +22,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -36,10 +37,11 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly IProductManager _productManager;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
+        private readonly IUpdatesQueue _updatesQueue;
 
         public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider,
-            IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
+            IValuesCache valuesVCache, IUpdatesQueue updatesQueue, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;
@@ -56,12 +58,26 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _valuesCache = valuesVCache;
 
+            _updatesQueue = updatesQueue;
+            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
+
             Thread.Sleep(5000);
             FillValuesCache();
 
             _logger.LogInformation("Monitoring core initialized");
 
             SensorDataValidationExtensions.Initialize(configurationProvider);
+        }
+
+        private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
+        {
+            foreach (var value in sensorValues)
+            {
+                if (value is FileSensorBytesValue fileSensorBytesValue)
+                    AddFileSensor(fileSensorBytesValue);
+                else
+                    AddSensorValue(value);
+            }
         }
 
         private void FillValuesCache()
@@ -142,77 +158,6 @@ namespace HSMServer.Core.MonitoringServerCore
             product.AddOrUpdateSensor(newSensor);
             _databaseAdapter.AddSensor(newSensor);
         }
-
-        public void AddSensorsValues(List<CommonSensorValue> values)
-        {
-            foreach (var value in values)
-            {
-                if (value == null)
-                {
-                    _logger.LogWarning("Received null value in list!");
-                    continue;
-                }
-                switch (value.SensorType)
-                {
-                    case SensorType.IntegerBarSensor:
-                    {
-                        var typedValue = value.Convert<IntBarSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.DoubleBarSensor:
-                    {
-                        var typedValue = value.Convert<DoubleBarSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.DoubleSensor:
-                    {
-                        var typedValue = value.Convert<DoubleSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.IntSensor:
-                    {
-                        var typedValue = value.Convert<IntSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.BooleanSensor:
-                    {
-                        var typedValue = value.Convert<BoolSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.StringSensor:
-                    {
-                        var typedValue = value.Convert<StringSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                }
-            }
-        }
-
-        #region Typed Sensors from UnitedSensorValue
-
-        public void AddSensorsValues(List<UnitedSensorValue> values)
-        {
-            foreach (var value in values)
-            {
-                try
-                {
-                    AddSensorValue(value);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
-                }
-
-            }
-        }
-
-        #endregion
 
         public void RemoveSensor(string productName, string path)
         {
@@ -563,6 +508,7 @@ namespace HSMServer.Core.MonitoringServerCore
             foreach (var lastBarValue in lastBarsValues)
                 ProcessExtendedBarData(lastBarValue);
 
+            _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
             _queueManager?.Dispose();
 
