@@ -7,6 +7,6 @@ namespace HSMServer.Core.Model.Authentication
     {
         Viewer,
         Feeder,
-        Admin
+        Admin = 255
     }
 }

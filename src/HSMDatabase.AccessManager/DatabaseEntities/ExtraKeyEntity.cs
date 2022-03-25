@@ -2,15 +2,15 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public class ExtraKeyEntity
+    public sealed record ExtraKeyEntity
     {
-        public Guid Id { get; set; }
-        public Guid AuthorId { get; set; }
-        public Guid ProductId { get; set; }
-        public bool IsLocked { get; set; }
-        public byte KeyRole { get; set; }
-        public string DisplayName { get; set; }
-        public DateTime CreationTime { get; set; }
-        public DateTime ExpirationTime { get; set; }
+        public string Id { get; init; }
+        public string AuthorId { get; init; }
+        public string ProductId { get; init; }
+        public bool IsLocked { get; init; }
+        public byte KeyRole { get; init; }
+        public string DisplayName { get; init; }
+        public long CreationTime { get; init; }
+        public long ExpirationTime { get; init; }
     }
 }
