@@ -2,7 +2,7 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed record ExtraKeyEntity
+    public sealed record AccessKeyEntity
     {
         public string Id { get; init; }
         public string AuthorId { get; init; }
