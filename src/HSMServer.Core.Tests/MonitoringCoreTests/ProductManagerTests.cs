@@ -21,7 +21,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture) 
+            : base(fixture, registerFixture)
         {
             _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
         }
@@ -38,6 +38,30 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "Negative, One")]
+        public void AddEmptyProductNameTest()
+        {
+            string name = string.Empty;
+
+            _productManager.AddProduct(name);
+
+            FullProductTest(name, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
+        }
+
+        [Fact]
+        [Trait("Category", "Negative, One")]
+        public void AddIncorrectProductNameTest()
+        {
+            const string name = " @$=к;";
+
+            _productManager.AddProduct(name);
+
+            FullProductTest(name, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
+        }
+
+        [Fact]
         [Trait("Category", "OneRemove")]
         public void RemoveProductTest()
         {
@@ -49,6 +73,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             FullRemoveProductTest(name, key, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
         }
+
+        //[Fact]
+        //[Trait("Category", "Negative, OneRemove")]
+        //public void RemoveEmptyProductTest()
+        //{
+        //    var product = CreateProduct(_productManager.AddProduct);
+        //    var name = string.Empty;
+        //    var key = string.Empty;
+        //    _productManager.RemoveProduct(name);
+
+        //    FullRemoveProductTest(name, key, _productManager.GetProductByName, _productManager.GetProductByKey,
+        //        _productManager.GetProductNameByKey);
+        //}
 
         [Fact]
         [Trait("Category", "OneUpdateExtraKey")]
@@ -65,10 +102,47 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        [Trait("Category", "Negative, OneUpdateExtraKey")]
+        public void UpdateEmptyExtraProductKeyTest()
+        {
+            var product = CreateProduct(_productManager.AddProduct);
+
+            var extraKeyName = string.Empty;
+            product.AddExtraKey(extraKeyName);
+
+            _productManager.UpdateProduct(product);
+
+            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+        }
+
+        [Fact]
+        [Trait("Category", "Negative, OneUpdateExtraKey")]
+        public void UpdateIncorrectExtraProductKeyTest()
+        {
+            var product = CreateProduct(_productManager.AddProduct);
+
+            const string extraKeyName = " @$=к;";
+            product.AddExtraKey(extraKeyName);
+
+            _productManager.UpdateProduct(product);
+
+            FullUpdateExtraProductKeyTest(product, _productManager.GetProductByName, _productManager.GetProductByKey);
+        }
+
+        [Fact]
         [Trait("Category", "GetCopy")]
         public void GetCopyProductTest()
         {
             var product = CreateProduct(_productManager.AddProduct);
+
+            TestGetProductCopy(product, _productManager.GetProductCopyByKey);
+        }
+
+        [Fact]
+        [Trait("Category", "Negative, GetCopy")]
+        public void GetCopyEmptyProductTest()
+        {
+            var product = CreateEmptyProduct(_productManager.AddProduct);
 
             TestGetProductCopy(product, _productManager.GetProductCopyByKey);
         }
@@ -84,6 +158,30 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public void AddSeveralProductsTest(int count)
         {
             var names = CreateProducts(count, _productManager.AddProduct);
+
+            FullSeveralProductsTest(names, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Negative, Several")]
+        public void AddSeveralSameProductsTest(int count)
+        {
+            const string name = "123";
+
+            List<string> names = new List<string>();
+
+            for (int i = 0; i < count; i++)
+            {
+                _productManager.AddProduct(name);
+                names.Add(name);
+            }
 
             FullSeveralProductsTest(names, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
@@ -125,7 +223,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             for (int i = 0; i < names.Count; i++)
             {
                 var product = _productManager.AddProduct(names[i]);
-                if (i % 2 == 1) 
+                if (i % 2 == 1)
                     continue;
 
                 _notAdminUser.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key,
@@ -182,11 +280,78 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _productManager.GetProductNameByKey);
         }
 
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Negative, RemoveSeveral")]
+        public void RemoveSeveralSameProductsTest(int count)
+        {
+            const string sameName = "123";
+
+            List<string> names = new List<string>();
+
+            for (int i = 0; i < count; i++)
+            {
+                _productManager.AddProduct(sameName);
+                names.Add(sameName);
+            }
+
+            var tuples = new List<(string name, string key)>(count);
+            foreach (var name in names)
+                tuples.Add((name, _productManager.GetProductByName(name).Key));
+
+            names.ForEach(_productManager.RemoveProduct);
+
+            FullSeveralRemoveProductsTest(tuples, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Negative, RemoveSeveral")]
+        public void RemoveSeveralEmptyProductsTest(int count)
+        {
+            string sameName = string.Empty;
+
+            List<string> names = new List<string>();
+
+            for (int i = 0; i < count; i++)
+            {
+                _productManager.AddProduct(sameName);
+                names.Add(sameName);
+            }
+
+            var tuples = new List<(string name, string key)>(count);
+            foreach (var name in names)
+                tuples.Add((name, _productManager.GetProductByName(name).Key));
+
+            names.ForEach(_productManager.RemoveProduct);
+
+            FullSeveralRemoveProductsTest(tuples, _productManager.GetProductByName, _productManager.GetProductByKey,
+                _productManager.GetProductNameByKey);
+        }
+
         #region [Private methods]
 
         private static Product CreateProduct(GetProduct addProduct)
         {
             var name = RandomGenerator.GetRandomString();
+
+            return addProduct?.Invoke(name);
+        }
+
+        private static Product CreateEmptyProduct(GetProduct addProduct)
+        {
+            var name = string.Empty;
 
             return addProduct?.Invoke(name);
         }
@@ -231,20 +396,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void FullSeveralProductsTest(List<string> names, GetProduct getProductByName,
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            foreach(var name in names)
+            foreach (var name in names)
                 FullProductTest(name, getProductByName, getProductByKey, getNameByKey);
         }
 
         private static void FullGetSeveralProductsTest(List<Product> products, GetProduct getProductByKey)
         {
-            foreach(var product in products)
+            foreach (var product in products)
                 TestGetProductCopy(product, getProductByKey);
         }
 
         private static void FullSeveralRemoveProductsTest(List<(string name, string key)> tuples,
             GetProduct getProductByName, GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
-            foreach(var pair in tuples)
+            foreach (var pair in tuples)
                 FullRemoveProductTest(pair.name, pair.key, getProductByName, getProductByKey, getNameByKey);
         }
 
