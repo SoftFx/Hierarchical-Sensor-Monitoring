@@ -16,10 +16,10 @@ namespace HSMServer.BackgroundTask
         private DateTime _lastReported;
         private readonly TimeSpan _checkInterval = new TimeSpan(0,0, 5, 0);
         private readonly ILogger<DatabaseMonitoringService> _logger;
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseAdapter;
         private readonly IDataCollectorFacade _dataCollector;
 
-        public DatabaseMonitoringService(IDatabaseAdapter databaseAdapter, IDataCollectorFacade dataCollector,
+        public DatabaseMonitoringService(IDatabaseCore databaseAdapter, IDataCollectorFacade dataCollector,
             ILogger<DatabaseMonitoringService> logger)
         {
             _databaseAdapter = databaseAdapter;

@@ -26,7 +26,7 @@ namespace HSMServer.BackgroundTask
         private readonly IValuesCache _cache;
         private readonly ILogger<OutdatedSensorService> _logger;
 
-        public OutdatedSensorService(IDatabaseAdapter databaseAdapter, IProductManager productManager, IConfigurationProvider configurationProvider,
+        public OutdatedSensorService(IDatabaseCore databaseAdapter, IProductManager productManager, IConfigurationProvider configurationProvider,
             ISensorsInterface sensorsInterface, IValuesCache cache,
             ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
         {

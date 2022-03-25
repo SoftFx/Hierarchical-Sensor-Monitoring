@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
-    <ProjectReference Include="..\HSMDatabase\HSMDatabase.csproj" />
+    <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
     <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 

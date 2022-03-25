@@ -9,9 +9,9 @@ namespace HSMServer.BackgroundTask
     /// </summary>
     public abstract class WorkerServiceBase : BackgroundService
     {
-        protected readonly IDatabaseAdapter _databaseAdapter;
+        protected readonly IDatabaseCore _databaseAdapter;
         protected readonly IProductManager _productManager;
-        protected WorkerServiceBase(IDatabaseAdapter databaseAdapter, IProductManager productManager)
+        protected WorkerServiceBase(IDatabaseCore databaseAdapter, IProductManager productManager)
         {
             _databaseAdapter = databaseAdapter;
             _productManager = productManager;

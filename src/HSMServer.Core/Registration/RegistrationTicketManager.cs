@@ -6,8 +6,8 @@ namespace HSMServer.Core.Registration
 {
     public class RegistrationTicketManager : IRegistrationTicketManager
     {
-        private readonly IDatabaseAdapter _databaseAdapter;
-        public RegistrationTicketManager(IDatabaseAdapter databaseAdapter)
+        private readonly IDatabaseCore _databaseAdapter;
+        public RegistrationTicketManager(IDatabaseCore databaseAdapter)
         {
             _databaseAdapter = databaseAdapter;
             //MigrateTicketsToNewDatabase();

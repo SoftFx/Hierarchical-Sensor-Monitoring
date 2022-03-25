@@ -29,7 +29,7 @@ namespace HSMServer.Core.MonitoringServerCore
     {
         private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
 
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
@@ -37,7 +37,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
 
-        public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseCore databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider,
             IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
         {

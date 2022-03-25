@@ -14,7 +14,7 @@ namespace HSMServer.Core.Products
 {
     public class ProductManager : IProductManager
     {
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseAdapter;
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
@@ -22,7 +22,7 @@ namespace HSMServer.Core.Products
 
         public event Action<Product> RemovedProduct;
 
-        public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseCore databaseAdapter, ILogger<ProductManager> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;

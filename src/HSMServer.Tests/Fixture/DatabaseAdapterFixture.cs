@@ -13,7 +13,7 @@ namespace HSMServer.Tests.Fixture
 {
     public class DatabaseAdapterFixture : IDisposable
     {
-        public IDatabaseAdapter DatabaseAdapter { get; }
+        public IDatabaseCore DatabaseAdapter { get; }
         /// <summary>
         /// Use as Set Up method for all Database tests
         /// </summary>

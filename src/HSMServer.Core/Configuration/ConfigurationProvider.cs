@@ -13,7 +13,7 @@ namespace HSMServer.Core.Configuration
     {
         #region Private fields
 
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseAdapter;
         private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
@@ -26,7 +26,7 @@ namespace HSMServer.Core.Configuration
         };
         #endregion
 
-        public ConfigurationProvider(IDatabaseAdapter databaseAdapter, ILogger<ConfigurationProvider> logger)
+        public ConfigurationProvider(IDatabaseCore databaseAdapter, ILogger<ConfigurationProvider> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;

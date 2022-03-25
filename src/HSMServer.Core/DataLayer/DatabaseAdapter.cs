@@ -11,177 +11,179 @@ using HSMServer.Core.Model.Sensor;
 
 namespace HSMServer.Core.DataLayer
 {
-    public class DatabaseAdapter : IDatabaseAdapter
+    public class DatabaseAdapter : IDatabaseCore
     {
         #region Size
 
-        public long GetDatabaseSize() => _database.GetDatabaseSize();
+        //private readonly DatabaseCore _database;
 
-        public long GetMonitoringDataSize() => _database.GetMonitoringDataSize();
+        //public long GetDatabaseSize() => _database.GetDatabaseSize();
 
-        public long GetEnvironmentDatabaseSize() =>
-            _database.GetEnvironmentDatabaseSize();
+        //public long GetMonitoringDataSize() => _database.GetMonitoringDataSize();
 
-        #endregion
+        //public long GetEnvironmentDatabaseSize() =>
+        //    _database.GetEnvironmentDatabaseSize();
 
-        #region Product
+        //#endregion
 
-        public void RemoveProduct(string productName) =>
-            _database.RemoveProduct(productName);
+        //#region Product
 
-        public void AddProduct(Product product)
-        {
-            var entity = product.ConvertToEntity();
-            _database.AddProduct(entity);
-        }
+        //public void RemoveProduct(string productName) =>
+        //    _database.RemoveProduct(productName);
 
-        public void UpdateProduct(Product product) => AddProduct(product);
+        //public void AddProduct(Product product)
+        //{
+        //    var entity = product.ConvertToEntity();
+        //    _database.AddProduct(entity);
+        //}
 
-        public Product GetProduct(string productName)
-        {
-            var entity = _database.GetProduct(productName);
-            return entity != null ? new Product(entity) : null;
-        }
+        //public void UpdateProduct(Product product) => AddProduct(product);
 
-        public List<Product> GetProducts() =>
-            _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
+        //public Product GetProduct(string productName)
+        //{
+        //    var entity = _database.GetProduct(productName);
+        //    return entity != null ? new Product(entity) : null;
+        //}
 
-        #endregion
+        //public List<Product> GetProducts() =>
+        //    _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
 
-        #region Sensors
+        //#endregion
 
-        public void RemoveSensor(string productName, string path) =>
-            _database.RemoveSensor(productName, path);
+        //#region Sensors
 
-        public void AddSensor(SensorInfo info)
-        {
-            SensorEntity entity = info.ConvertToEntity();
-            _database.AddSensor(entity);
-        }
+        //public void RemoveSensor(string productName, string path) =>
+        //    _database.RemoveSensor(productName, path);
 
-        public void UpdateSensor(SensorInfo info)
-        {
-            SensorEntity entity = info.ConvertToEntity();
-            _database.AddSensor(entity);
-        }
+        //public void AddSensor(SensorInfo info)
+        //{
+        //    SensorEntity entity = info.ConvertToEntity();
+        //    _database.AddSensor(entity);
+        //}
 
-        public void PutSensorData(SensorDataEntity data, string productName) =>
-            _database.AddSensorValue(data, productName);
+        //public void UpdateSensor(SensorInfo info)
+        //{
+        //    SensorEntity entity = info.ConvertToEntity();
+        //    _database.AddSensor(entity);
+        //}
 
-        public SensorDataEntity GetLastSensorValue(string productName, string path) =>
-            _database.GetLatestSensorValue(productName, path);
+        //public void PutSensorData(SensorDataEntity data, string productName) =>
+        //    _database.AddSensorValue(data, productName);
 
-        public SensorInfo GetSensorInfo(string productName, string path)
-        {
-            var sensorEntity = _database.GetSensorInfo(productName, path);
-            return sensorEntity != null ? new SensorInfo(sensorEntity) : null;
-        }
+        //public SensorDataEntity GetLastSensorValue(string productName, string path) =>
+        //    _database.GetLatestSensorValue(productName, path);
 
-        public List<SensorHistoryData> GetAllSensorHistory(string productName, string path) =>
-            GetSensorHistoryDatas(_database.GetAllSensorData(productName, path));
+        //public SensorInfo GetSensorInfo(string productName, string path)
+        //{
+        //    var sensorEntity = _database.GetSensorInfo(productName, path);
+        //    return sensorEntity != null ? new SensorInfo(sensorEntity) : null;
+        //}
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from) =>
-            GetSensorHistoryDatas(_database.GetSensorData(productName, path, from));
+        //public List<SensorHistoryData> GetAllSensorHistory(string productName, string path) =>
+        //    GetSensorHistoryDatas(_database.GetAllSensorData(productName, path));
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to) =>
-            GetSensorHistoryDatas(_database.GetSensorData(productName, path, from, to));
+        //public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from) =>
+        //    GetSensorHistoryDatas(_database.GetSensorData(productName, path, from));
 
-        public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
-            GetSensorHistoryDatas(_database.GetSensorData(productName, path, n));
+        //public List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to) =>
+        //    GetSensorHistoryDatas(_database.GetSensorData(productName, path, from, to));
 
-        public SensorHistoryData GetOneValueSensorValue(string productName, string path)
-        {
-            SensorDataEntity entity = _database.GetLatestSensorValue(productName, path);
-            return entity != null ? entity.ConvertToHistoryData() : null;
-        }
+        //public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
+        //    GetSensorHistoryDatas(_database.GetSensorData(productName, path, n));
 
-        public List<SensorInfo> GetProductSensors(Product product) =>
-            _database.GetProductSensors(product.Name)?.Select(e => new SensorInfo(e))?.ToList() ?? new List<SensorInfo>();
+        //public SensorHistoryData GetOneValueSensorValue(string productName, string path)
+        //{
+        //    SensorDataEntity entity = _database.GetLatestSensorValue(productName, path);
+        //    return entity != null ? entity.ConvertToHistoryData() : null;
+        //}
 
-        private List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)
-        {
-            var historyCount = history?.Count ?? 0;
+        //public List<SensorInfo> GetProductSensors(Product product) =>
+        //    _database.GetProductSensors(product.Name)?.Select(e => new SensorInfo(e))?.ToList() ?? new List<SensorInfo>();
 
-            List<SensorHistoryData> historyDatas = new List<SensorHistoryData>(historyCount);
-            if (historyCount != 0)
-                historyDatas.AddRange(history.Select(h => h.ConvertToHistoryData()));
+        //private List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)
+        //{
+        //    var historyCount = history?.Count ?? 0;
 
-            return historyDatas;
-        }
+        //    List<SensorHistoryData> historyDatas = new List<SensorHistoryData>(historyCount);
+        //    if (historyCount != 0)
+        //        historyDatas.AddRange(history.Select(h => h.ConvertToHistoryData()));
 
-        #endregion
+        //    return historyDatas;
+        //}
 
-        #region User
+        //#endregion
 
-        public void AddUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
-            _database.AddUser(entity);
-        }
+        //#region User
 
-        public void UpdateUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
-            _database.AddUser(entity);
-        }
+        //public void AddUser(User user)
+        //{
+        //    UserEntity entity = user.ConvertToEntity();
+        //    _database.AddUser(entity);
+        //}
 
-        public void RemoveUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
-            _database.RemoveUser(entity);
-        }
+        //public void UpdateUser(User user)
+        //{
+        //    UserEntity entity = user.ConvertToEntity();
+        //    _database.AddUser(entity);
+        //}
 
-        public List<User> GetUsers() => GetUsers(_database.ReadUsers());
+        //public void RemoveUser(User user)
+        //{
+        //    UserEntity entity = user.ConvertToEntity();
+        //    _database.RemoveUser(entity);
+        //}
 
-        public List<User> GetUsersPage(int page, int pageSize) =>
-            GetUsers(_database.ReadUsersPage(page, pageSize));
+        //public List<User> GetUsers() => GetUsers(_database.ReadUsers());
 
-        private static List<User> GetUsers(List<UserEntity> userEntities)
-        {
-            var userEntitiesCount = userEntities?.Count ?? 0;
-            var users = new List<User>(userEntitiesCount);
+        //public List<User> GetUsersPage(int page, int pageSize) =>
+        //    GetUsers(_database.ReadUsersPage(page, pageSize));
 
-            if (userEntitiesCount != 0)
-                users.AddRange(userEntities.Select(e => new User(e)));
+        //private static List<User> GetUsers(List<UserEntity> userEntities)
+        //{
+        //    var userEntitiesCount = userEntities?.Count ?? 0;
+        //    var users = new List<User>(userEntitiesCount);
 
-            return users;
-        }
+        //    if (userEntitiesCount != 0)
+        //        users.AddRange(userEntities.Select(e => new User(e)));
 
-        #endregion
+        //    return users;
+        //}
 
-        #region Configuration object
+        //#endregion
 
-        public ConfigurationObject GetConfigurationObject(string name)
-        {
-            var entity = _database.ReadConfigurationObject(name);
-            return entity != null ? new ConfigurationObject(entity) : null;
-        }
+        //#region Configuration object
 
-        public void WriteConfigurationObject(ConfigurationObject obj)
-        {
-            var entity = obj.ConvertToEntity();
-            _database.WriteConfigurationObject(entity);
-        }
+        //public ConfigurationObject GetConfigurationObject(string name)
+        //{
+        //    var entity = _database.ReadConfigurationObject(name);
+        //    return entity != null ? new ConfigurationObject(entity) : null;
+        //}
 
-        public void RemoveConfigurationObject(string name) => _database.RemoveConfigurationObject(name);
+        //public void WriteConfigurationObject(ConfigurationObject obj)
+        //{
+        //    var entity = obj.ConvertToEntity();
+        //    _database.WriteConfigurationObject(entity);
+        //}
 
-        #endregion
+        //public void RemoveConfigurationObject(string name) => _database.RemoveConfigurationObject(name);
 
-        #region Registration ticket
+        //#endregion
 
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
-        {
-            var entity = _database.ReadRegistrationTicket(id);
-            return entity != null ? new RegistrationTicket(entity) : null;
-        }
+        //#region Registration ticket
 
-        public void RemoveRegistrationTicket(Guid id) => _database.RemoveRegistrationTicket(id);
+        //public RegistrationTicket ReadRegistrationTicket(Guid id)
+        //{
+        //    var entity = _database.ReadRegistrationTicket(id);
+        //    return entity != null ? new RegistrationTicket(entity) : null;
+        //}
 
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
-        {
-            var entity = ticket.ConvertToEntity();
-            _database.WriteRegistrationTicket(entity);
-        }
+        //public void RemoveRegistrationTicket(Guid id) => _database.RemoveRegistrationTicket(id);
+
+        //public void WriteRegistrationTicket(RegistrationTicket ticket)
+        //{
+        //    var entity = ticket.ConvertToEntity();
+        //    _database.WriteRegistrationTicket(entity);
+        //}
 
         #endregion
 

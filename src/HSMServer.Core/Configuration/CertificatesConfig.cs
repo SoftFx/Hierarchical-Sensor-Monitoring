@@ -51,7 +51,7 @@ namespace HSMServer.Core.Configuration
             }
         }
 
-        public static IDatabaseAdapter DatabaseAdapter { get; private set; }
+        public static IDatabaseCore DatabaseAdapter { get; private set; }
 
         public static X509Certificate2 ServerCertificate =>
             _serverCertificate ??= ReadServerCertificate();

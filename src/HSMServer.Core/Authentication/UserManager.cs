@@ -17,7 +17,7 @@ namespace HSMServer.Core.Authentication
         private readonly ConcurrentDictionary<Guid, User> _users;
         private readonly ConcurrentDictionary<string, Guid> _userNames;
 
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseAdapter;
         private readonly ILogger<UserManager> _logger;
 
         private readonly AddUserActionHandler _addUserActionHandler;
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Authentication
         public event Action<User> UpdateUserEvent;
 
 
-        public UserManager(IDatabaseAdapter databaseAdapter, ILogger<UserManager> logger)
+        public UserManager(IDatabaseCore databaseAdapter, ILogger<UserManager> logger)
         {
             _databaseAdapter = databaseAdapter;
             _logger = logger;

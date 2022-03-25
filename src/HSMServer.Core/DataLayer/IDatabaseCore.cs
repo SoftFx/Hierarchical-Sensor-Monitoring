@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.DataLayer
 {
-    public interface IDatabaseAdapter
+    public interface IDatabaseCore
     {
         #region Size
 
