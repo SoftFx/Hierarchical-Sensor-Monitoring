@@ -24,6 +24,7 @@ namespace HSMServer.Core.DataLayer
         void UpdateProduct(Product product);
         Product GetProduct(string productName);
         List<Product> GetProducts();
+        List<ProductEntity> GetAllProducts();
 
         #endregion
 

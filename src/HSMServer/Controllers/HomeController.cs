@@ -7,6 +7,7 @@ using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
 using HSMServer.Core.Products;
+using HSMServer.Core.TreeValuesCache;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
@@ -34,16 +35,18 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
+        private readonly ITreeValuesCache _treeValuesCache;
 
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
+            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager, ITreeValuesCache treeValuesCache)
         {
             _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
+            _treeValuesCache = treeValuesCache;
         }
 
 
@@ -53,7 +56,7 @@ namespace HSMServer.Controllers
             var tree = _treeManager.GetTreeViewModel(user);
             if (tree == null)
             {
-                var result = _sensorsInterface.GetSensorsTree(user);
+                var result = _treeValuesCache.GetTree();// _sensorsInterface.GetSensorsTree(user);
                 tree = new TreeViewModel(result);
                 _treeManager.AddOrCreate(user, tree);
             }

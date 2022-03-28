@@ -23,6 +23,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TreeValuesCache;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -38,10 +39,11 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
         private readonly IUpdatesQueue _updatesQueue;
+        private readonly ITreeValuesCache _treeValuesCache;
 
         public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider,
-            IValuesCache valuesVCache, IUpdatesQueue updatesQueue, ILogger<MonitoringCore> logger)
+            IValuesCache valuesVCache, IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseAdapter = databaseAdapter;
@@ -60,6 +62,8 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
+
+            _treeValuesCache = treeValuesCache;
 
             Thread.Sleep(5000);
             FillValuesCache();

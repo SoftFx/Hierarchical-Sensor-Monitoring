@@ -1,5 +1,6 @@
 using HSMCommon.Constants;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.TreeValuesCache.Entities;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -8,6 +9,15 @@ namespace HSMServer.Model.ViewModel
     public class TreeViewModel
     {
         public ConcurrentDictionary<string, NodeViewModel> Nodes { get; set; }
+
+        public TreeViewModel(List<ProductValue> products)
+        {
+            Nodes = new ConcurrentDictionary<string, NodeViewModel>();
+            foreach (var product in products)
+            {
+                Nodes[product.DisplayName] = new NodeViewModel(product.DisplayName, string.Empty, new SensorData() { Path = "1" }, null);
+            }
+        }
 
         public TreeViewModel(List<SensorData> sensors)
         {
