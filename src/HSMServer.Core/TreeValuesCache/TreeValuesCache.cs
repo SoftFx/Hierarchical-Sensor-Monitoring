@@ -2,6 +2,7 @@
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TreeValuesCache.Entities;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,12 +17,12 @@ namespace HSMServer.Core.TreeValuesCache
 
     public sealed class TreeValuesCache : ITreeValuesCache
     {
-        private readonly Dictionary<Guid, ProductValue> _tree;
+        private readonly ConcurrentDictionary<Guid, ProductValue> _tree;
 
 
         public TreeValuesCache(IDatabaseAdapter database)
         {
-            _tree = new Dictionary<Guid, ProductValue>();
+            _tree = new ConcurrentDictionary<Guid, ProductValue>();
 
             var products = new List<ProductValue>();
 
@@ -35,7 +36,7 @@ namespace HSMServer.Core.TreeValuesCache
             }
 
             foreach (var product in products)
-                _tree.Add(product.Id, product);
+                _tree.TryAdd(product.Id, product);
         }
 
 

@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.TreeValuesCache.Entities
@@ -12,41 +13,40 @@ namespace HSMServer.Core.TreeValuesCache.Entities
 
     public class ProductValue
     {
-        public Guid Id { get; init; }
-        public Guid? ParentProductId { get; set; }
-        public ProductState State { get; set; }
-        public string DisplayName { get; set; }
-        public string Description { get; set; }
-        public DateTime CreationDate { get; set; }
-        public Dictionary<Guid, ProductValue> SubProducts { get; set; }
-        public Dictionary<Guid, SensorValue> Sensors { get; set; }
+        public Guid Id { get; }
+        public ProductValue ParentProduct { get; private set; }
+        public ProductState State { get; }
+        public string DisplayName { get; }
+        public string Description { get; }
+        public DateTime CreationDate { get; }
+        public ConcurrentDictionary<Guid, ProductValue> SubProducts { get; }
+        public ConcurrentDictionary<Guid, SensorValue> Sensors { get; }
 
 
         public ProductValue(ProductEntity entity)
         {
             Id = entity.Id == null ? Guid.NewGuid() : new Guid(entity.Id);
-            ParentProductId = entity.ParentProductId == null ? Guid.NewGuid() : new Guid(entity.ParentProductId);
             State = (ProductState)entity.State;
-            DisplayName = entity.DisplayName ?? entity.Name;
+            DisplayName = entity.DisplayName ?? entity.Name; // TODO: remove '?? entity.Name'
             Description = entity.Description;
-            CreationDate = entity.CreationDate == 0 ? entity.DateAdded : new DateTime(entity.CreationDate);
-            SubProducts = new Dictionary<Guid, ProductValue>();
-            Sensors = new Dictionary<Guid, SensorValue>();
+            CreationDate = new DateTime(entity.CreationDate);
+            SubProducts = new ConcurrentDictionary<Guid, ProductValue>();
+            Sensors = new ConcurrentDictionary<Guid, SensorValue>();
         }
 
 
         internal void AddSubProduct(ProductValue product)
         {
-            product.ParentProductId = Id;
+            product.ParentProduct = this;
 
-            SubProducts.Add(product.Id, product);
+            SubProducts.TryAdd(product.Id, product);
         }
 
         internal void AddSensor(SensorValue sensor)
         {
-            sensor.ParentProductId = Id;
+            sensor.ParentProduct = this;
 
-            Sensors.Add(sensor.ParentProductId, sensor);
+            Sensors.TryAdd(sensor.ParentProduct.Id, sensor);
         }
     }
 }

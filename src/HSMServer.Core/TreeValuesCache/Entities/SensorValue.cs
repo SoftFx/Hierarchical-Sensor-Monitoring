@@ -11,18 +11,18 @@ namespace HSMServer.Core.TreeValuesCache.Entities
     {
         // будет ли логика создания недостоющих продуктов для Path типа 11/22/33? где продукт 11 сущетсвует, а мы хотим видеть в дереве сенсор 33?
         // если да, её нужно учесть при миграции базы и при добавлении нового сенсора через АПИ
-        public string Path { get; set; } // если будет логика создания недостоющих продуктов, Path не нужен
-        public Guid ParentProductId { get; set; }
-        public string SensorName { get; set; }
-        public string Description { get; set; }
-        public SensorType SensorType { get; set; }
-        public TimeSpan ExpectedUpdateInterval { get; set; }
-        public DateTime LastUpdateTime { get; set; }
-        public SensorStatus Status { get; set; }
+        public string Path { get; } // если будет логика создания недостоющих продуктов, Path не нужен
+        public ProductValue ParentProduct { get; set; }
+        public string SensorName { get; }
+        public string Description { get; }
+        public SensorType SensorType { get; }
+        public TimeSpan ExpectedUpdateInterval { get; }
+        public DateTime LastUpdateTime { get; }
+        public SensorStatus Status { get; }
         // поля для хранения значений сенсоров? может хранить SensorValueBase/SensorValueBaseData? и из него уже на View составлять строки для отображения
         // или создать сенсоры-наследники для каждого типа сенсора
-        public List<string> TypedData { get; set; }
-        public int OriginalFileSensorContentSize { get; set; }
+        public List<string> TypedData { get; }
+        public int OriginalFileSensorContentSize { get; }
 
 
         public SensorValue(SensorEntity entity, List<SensorDataEntity> dataEntities)
