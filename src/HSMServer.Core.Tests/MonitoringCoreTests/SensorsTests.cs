@@ -47,6 +47,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _productManager,
                 configurationProvider.Object,
                 _valuesCache,
+                _updatesQueue,
                 monitoringLogger);
         }
 

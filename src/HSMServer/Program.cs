@@ -2,7 +2,7 @@ using System;
 using System.Net;
 using System.Security.Authentication;
 using HSMCommon.Constants;
-using HSMServer.Core.Configuration;
+using HSMServer.Certificates;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;

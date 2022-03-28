@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.DataLayer
 {
-    public interface IDatabaseCore
+    public interface IDatabaseCore : IDisposable
     {
         #region Size
 
@@ -40,7 +40,7 @@ namespace HSMServer.Core.DataLayer
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
-        List<SensorInfo> GetProductSensors(Product product);
+        List<SensorInfo> GetProductSensors(string  productName);
 
         #endregion
 

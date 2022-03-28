@@ -1,8 +1,10 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using Moq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -16,6 +18,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected readonly ProductManager _productManager;
         protected readonly ValuesCache _valuesCache;
+        protected readonly IUpdatesQueue _updatesQueue;
 
         protected MonitoringCore _monitoringCore;
 
@@ -34,6 +37,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             _productManager = new ProductManager(_databaseAdapterManager.DatabaseCore, productManagerLogger);
+
+            _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }
     }
 }

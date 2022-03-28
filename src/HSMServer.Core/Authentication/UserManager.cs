@@ -17,7 +17,7 @@ namespace HSMServer.Core.Authentication
         private readonly ConcurrentDictionary<Guid, User> _users;
         private readonly ConcurrentDictionary<string, Guid> _userNames;
 
-        private readonly IDatabaseCore _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<UserManager> _logger;
 
         private readonly AddUserActionHandler _addUserActionHandler;
@@ -27,9 +27,9 @@ namespace HSMServer.Core.Authentication
         public event Action<User> UpdateUserEvent;
 
 
-        public UserManager(IDatabaseCore databaseAdapter, ILogger<UserManager> logger)
+        public UserManager(IDatabaseCore databaseCore, ILogger<UserManager> logger)
         {
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _logger = logger;
 
             _users = new ConcurrentDictionary<Guid, User>();
@@ -98,7 +98,7 @@ namespace HSMServer.Core.Authentication
             }
 
             foreach (var userToEdt in updatedUsers)
-                _databaseAdapter.UpdateUser(userToEdt);
+                _databaseCore.UpdateUser(userToEdt);
         }
 
         public User Authenticate(string login, string password)
@@ -164,7 +164,7 @@ namespace HSMServer.Core.Authentication
 
         private async void InitializeUsers()
         {
-            var usersFromDB = _databaseAdapter.GetUsers();
+            var usersFromDB = _databaseCore.GetUsers();
 
             if (usersFromDB.Count == 0)
             {

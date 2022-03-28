@@ -48,6 +48,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 _productManager,
                 configurationProvider,
                 _valuesCache,
+                _updatesQueue,
                 monitoringLogger);
         }
 
@@ -148,7 +149,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            _monitoringCore.AddSensorsValues(new List<UnitedSensorValue>() { unitedValue });
+            _monitoringCore.AddSensorValue(unitedValue);
 
             await FullSeveralSensorValuesTestAsync(new List<SensorValueBase>() { unitedValue },
                                                    _valuesCache.GetValues,
@@ -164,7 +165,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(type, isMinEndTime: true);
 
-            _monitoringCore.AddSensorsValues(new List<UnitedSensorValue>() { unitedValue });
+            _monitoringCore.AddSensorValue(unitedValue);
 
             var lastBarValue = _barStorage.GetLastValue(_testProductName, unitedValue.Path);
 
@@ -184,7 +185,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var unitedValues = GetRandomUnitedSensors(count);
 
-            _monitoringCore.AddSensorsValues(unitedValues.Cast<UnitedSensorValue>().ToList());
+            unitedValues.ForEach(_monitoringCore.AddSensorValue);
 
             await FullSeveralSensorValuesTestAsync(unitedValues,
                                                    _valuesCache.GetValues,

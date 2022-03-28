@@ -22,6 +22,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -29,20 +30,21 @@ namespace HSMServer.Core.MonitoringServerCore
     {
         private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
 
-        private readonly IDatabaseCore _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IValuesCache _valuesCache;
+        private readonly IUpdatesQueue _updatesQueue;
 
-        public MonitoringCore(IDatabaseCore databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseCore databaseCore, IUserManager userManager, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider,
-            IValuesCache valuesVCache, ILogger<MonitoringCore> logger)
+            IValuesCache valuesVCache, IUpdatesQueue updatesQueue, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
@@ -56,12 +58,26 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _valuesCache = valuesVCache;
 
+            _updatesQueue = updatesQueue;
+            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
+
             Thread.Sleep(5000);
             FillValuesCache();
 
             _logger.LogInformation("Monitoring core initialized");
 
             SensorDataValidationExtensions.Initialize(configurationProvider);
+        }
+
+        private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
+        {
+            foreach (var value in sensorValues)
+            {
+                if (value is FileSensorBytesValue fileSensorBytesValue)
+                    AddFileSensor(fileSensorBytesValue);
+                else
+                    AddSensorValue(value);
+            }
         }
 
         private void FillValuesCache()
@@ -73,7 +89,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 foreach (var sensor in sensors)
                 {
                     //var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
-                    var lastVal = _databaseAdapter.GetLastSensorValue(product.Name, sensor.Path);
+                    var lastVal = _databaseCore.GetLastSensorValue(product.Name, sensor.Path);
                     if (lastVal != null)
                     {
                         _valuesCache.AddValue(product.Name, lastVal.Convert(sensor, product.Name));
@@ -118,7 +134,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private void SaveSensorValue(SensorDataEntity dataObject, string productName)
         {
             //await Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
-            _databaseAdapter.PutSensorData(dataObject, productName);
+            _databaseCore.PutSensorData(dataObject, productName);
         }
 
         /// <summary>
@@ -129,7 +145,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private void SaveOneValueSensorValue(SensorDataEntity dataObject, string productName)
         {
             //Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
-            Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
+            Task.Run(() => _databaseCore.PutSensorData(dataObject, productName));
         }
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
@@ -140,79 +156,8 @@ namespace HSMServer.Core.MonitoringServerCore
             var newSensor = sensorValue.Convert(productName);
 
             product.AddOrUpdateSensor(newSensor);
-            _databaseAdapter.AddSensor(newSensor);
+            _databaseCore.AddSensor(newSensor);
         }
-
-        public void AddSensorsValues(List<CommonSensorValue> values)
-        {
-            foreach (var value in values)
-            {
-                if (value == null)
-                {
-                    _logger.LogWarning("Received null value in list!");
-                    continue;
-                }
-                switch (value.SensorType)
-                {
-                    case SensorType.IntegerBarSensor:
-                    {
-                        var typedValue = value.Convert<IntBarSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.DoubleBarSensor:
-                    {
-                        var typedValue = value.Convert<DoubleBarSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.DoubleSensor:
-                    {
-                        var typedValue = value.Convert<DoubleSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.IntSensor:
-                    {
-                        var typedValue = value.Convert<IntSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.BooleanSensor:
-                    {
-                        var typedValue = value.Convert<BoolSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                    case SensorType.StringSensor:
-                    {
-                        var typedValue = value.Convert<StringSensorValue>();
-                        AddSensorValue(typedValue);
-                        break;
-                    }
-                }
-            }
-        }
-
-        #region Typed Sensors from UnitedSensorValue
-
-        public void AddSensorsValues(List<UnitedSensorValue> values)
-        {
-            foreach (var value in values)
-            {
-                try
-                {
-                    AddSensorValue(value);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, $"Failed to add data for {value?.Path}");
-                }
-
-            }
-        }
-
-        #endregion
 
         public void RemoveSensor(string productName, string path)
         {
@@ -222,7 +167,7 @@ namespace HSMServer.Core.MonitoringServerCore
             try
             {
                 product.RemoveSensor(path);
-                _databaseAdapter.RemoveSensor(productName, path);
+                _databaseCore.RemoveSensor(productName, path);
             }
             catch (Exception e)
             {
@@ -269,7 +214,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _productManager.GetProductByName(newInfo.ProductName)?.AddOrUpdateSensor(existingInfo);
 
-            _databaseAdapter.UpdateSensor(existingInfo);
+            _databaseCore.UpdateSensor(existingInfo);
         }
 
         public bool IsSensorRegistered(string productName, string path) =>
@@ -440,7 +385,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to)
         {
-            var historyValues = _databaseAdapter.GetSensorHistory(product, path,
+            var historyValues = _databaseCore.GetSensorHistory(product, path,
                 from, to);
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
@@ -452,7 +397,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public List<SensorHistoryData> GetAllSensorHistory(string product, string path)
         {
-            var allValues = _databaseAdapter.GetAllSensorHistory(product, path);
+            var allValues = _databaseCore.GetAllSensorHistory(product, path);
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null)
             {
@@ -463,7 +408,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public List<SensorHistoryData> GetSensorHistory(string product, string path, int n)
         {
-            List<SensorHistoryData> historyList = _databaseAdapter.GetSensorHistory(product, path, n);
+            List<SensorHistoryData> historyList = _databaseCore.GetSensorHistory(product, path, n);
             var lastValue = _barsStorage.GetLastValue(product, path);
             if (lastValue != null)
             {
@@ -480,7 +425,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public (byte[] content, string extension) GetFileSensorValueData(string product, string path)
         {
-            var sensorHistoryData = _databaseAdapter.GetOneValueSensorValue(product, path);
+            var sensorHistoryData = _databaseCore.GetOneValueSensorValue(product, path);
 
             if (sensorHistoryData == null)
                 return _defaultFileSensorData;
@@ -563,6 +508,7 @@ namespace HSMServer.Core.MonitoringServerCore
             foreach (var lastBarValue in lastBarsValues)
                 ProcessExtendedBarData(lastBarValue);
 
+            _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
             _queueManager?.Dispose();
 

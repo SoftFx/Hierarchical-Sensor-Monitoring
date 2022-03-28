@@ -1,14 +1,18 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
+using HSMDatabase.DatabaseWorkCore;
 using HSMServer.BackgroundTask;
+using HSMServer.Certificates;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;
@@ -53,9 +57,9 @@ namespace HSMServer
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-            services.AddSingleton(CertificatesConfig.DatabaseAdapter);
+            services.AddSingleton<IDatabaseCore, DatabaseCore>();
+            //services.AddSingleton(CertificatesConfig.DatabaseCore);
             services.AddSingleton<IProductManager, ProductManager>();
-            services.AddSingleton<CertificateManager>();
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
@@ -63,6 +67,7 @@ namespace HSMServer
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
+            services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());

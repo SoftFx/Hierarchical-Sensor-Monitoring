@@ -14,7 +14,7 @@ namespace HSMServer.Core.Products
 {
     public class ProductManager : IProductManager
     {
-        private readonly IDatabaseCore _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
@@ -22,10 +22,10 @@ namespace HSMServer.Core.Products
 
         public event Action<Product> RemovedProduct;
 
-        public ProductManager(IDatabaseCore databaseAdapter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseCore databaseCore, ILogger<ProductManager> logger)
         {
             _logger = logger;
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _products = new ConcurrentDictionary<string, Product>();
 
             InitializeProducts();
@@ -45,12 +45,12 @@ namespace HSMServer.Core.Products
 
         private void InitializeProducts()
         {
-            var existingProducts = _databaseAdapter.GetProducts();
+            var existingProducts = _databaseCore.GetProducts();
             foreach (var product in existingProducts)
             {
                 _products[product.Name] = product;
 
-                var sensors = _databaseAdapter.GetProductSensors(product);
+                var sensors = _databaseCore.GetProductSensors(product.Name);
                 product.InitializeSensors(sensors);
             }
 
@@ -86,7 +86,7 @@ namespace HSMServer.Core.Products
         {
             try
             {
-                _databaseAdapter.AddProduct(product);
+                _databaseCore.AddProduct(product);
 
                 _products[product.Name] = product;
             }
@@ -107,7 +107,7 @@ namespace HSMServer.Core.Products
             }
 
             currentProduct.Update(product);
-            _databaseAdapter.UpdateProduct(currentProduct);
+            _databaseCore.UpdateProduct(currentProduct);
         }
 
         public void RemoveProduct(string name)
@@ -117,7 +117,7 @@ namespace HSMServer.Core.Products
                 if (GetProductByName(name) == null) 
                     return;
 
-                _databaseAdapter.RemoveProduct(name);
+                _databaseCore.RemoveProduct(name);
                 _products.Remove(name, out var product);
 
                 RemovedProduct?.Invoke(product);

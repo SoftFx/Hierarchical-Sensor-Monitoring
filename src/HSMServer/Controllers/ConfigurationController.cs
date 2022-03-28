@@ -11,10 +11,10 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin(true)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class AdminController : Controller
+    public class ConfigurationController : Controller
     {
         private readonly IConfigurationProvider _configurationProvider;
-        public AdminController(IConfigurationProvider configurationProvider)
+        public ConfigurationController(IConfigurationProvider configurationProvider)
         {
             _configurationProvider = configurationProvider;
         }

@@ -1,5 +1,6 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.DatabaseWorkCore;
 using HSMSensorDataObjects;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Keys;
@@ -13,13 +14,13 @@ namespace HSMServer.Tests.Fixture
 {
     public class DatabaseAdapterFixture : IDisposable
     {
-        public IDatabaseCore DatabaseAdapter { get; }
+        public IDatabaseCore DatabaseCore { get; }
         /// <summary>
         /// Use as Set Up method for all Database tests
         /// </summary>
         public DatabaseAdapterFixture()
         {
-            DatabaseAdapter = new DatabaseAdapter();
+            DatabaseCore = new DatabaseCore();
         }
         
         #region Product
@@ -197,14 +198,14 @@ namespace HSMServer.Tests.Fixture
         /// </summary>
         public void Dispose()
         {
-            DatabaseAdapter?.RemoveProduct(FirstProductName);
-            DatabaseAdapter?.RemoveProduct(SecondProductName);
-            DatabaseAdapter?.RemoveProduct(ThirdProductName);
-            DatabaseAdapter?.RemoveUser(CreateFirstUser());
-            DatabaseAdapter?.RemoveUser(CreateSecondUser());
-            DatabaseAdapter?.RemoveUser(CreateThirdUser());
-            DatabaseAdapter?.RemoveRegistrationTicket(_ticket.Id);
-            DatabaseAdapter?.RemoveConfigurationObject(ConfigurationObjectName);
+            DatabaseCore?.RemoveProduct(FirstProductName);
+            DatabaseCore?.RemoveProduct(SecondProductName);
+            DatabaseCore?.RemoveProduct(ThirdProductName);
+            DatabaseCore?.RemoveUser(CreateFirstUser());
+            DatabaseCore?.RemoveUser(CreateSecondUser());
+            DatabaseCore?.RemoveUser(CreateThirdUser());
+            DatabaseCore?.RemoveRegistrationTicket(_ticket.Id);
+            DatabaseCore?.RemoveConfigurationObject(ConfigurationObjectName);
         }
     }
 }

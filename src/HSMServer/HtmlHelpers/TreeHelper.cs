@@ -1,4 +1,5 @@
-﻿using HSMServer.Helpers;
+﻿using HSMServer.Constants;
+using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System.Text;
 
@@ -52,7 +53,7 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<li id='{name}' title='{node.Name} &#013;{node.UpdateTime}'")
                   .Append("data-jstree='{\"icon\" : \"fas fa-circle ")
                   .Append(ViewHelper.GetStatusHeaderColorClass(node.Status))
-                  .Append($"\", \"time\" : \"{node.UpdateTime}\"")
+                  .Append($"\", \"time\" : \"{node.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)}\"")
                   .Append($"}}'>{shortName} ({node.Count} sensors)");
 
             if (node.Nodes != null)
