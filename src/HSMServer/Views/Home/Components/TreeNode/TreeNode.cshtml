@@ -1,0 +1,36 @@
+﻿@using HSMServer.Constants
+@using HSMServer.HtmlHelpers
+@using HSMServer.Helpers
+@model HSMServer.Model.ViewModel.NodeViewModel
+
+@{
+    const int NodeNameMaxLength = 35;
+    string encodedPath = SensorPathHelper.Encode(Model.Path);
+
+    string GetShortName(string name) =>
+        name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
+}
+
+<li id='@encodedPath' title='@Model.Name &#013;@Model.UpdateTime'
+    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
+    @GetShortName(Model.Name) (@Model.Count sensors)
+    
+    @if (Model.Nodes != null)
+        @foreach (var (_, child) in Model.Nodes)
+        {
+            <ul>@await Component.InvokeAsync("TreeNode", new { node = child })</ul>
+        }
+
+    @if (Model.Sensors != null && !Model.Sensors.IsEmpty)
+    {
+        <ul>
+            @foreach (var (sensorName, sensor) in Model.Sensors)
+            {
+                <li id='sensor_@encodedPath' title='@sensorName &#013;@sensor.Time'
+                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.Time"}'>
+                    @GetShortName(sensorName)
+                </li>
+            }
+        </ul>
+    }
+</li>

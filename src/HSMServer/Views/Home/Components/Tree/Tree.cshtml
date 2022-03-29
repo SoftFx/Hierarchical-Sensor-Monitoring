@@ -1,0 +1,12 @@
+﻿@model HSMServer.Model.ViewModel.TreeViewModel
+
+<div class="col-md-auto">
+    <div id="jstree">
+        <ul>
+            @foreach (var (_, node) in Model.Nodes)
+            {
+                @await Component.InvokeAsync("TreeNode", new { node = node })
+            }
+        </ul>
+    </div>
+</div>
