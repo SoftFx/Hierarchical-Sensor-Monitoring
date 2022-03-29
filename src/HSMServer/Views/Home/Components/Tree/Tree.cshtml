@@ -5,7 +5,7 @@
         <ul>
             @foreach (var (_, node) in Model.Nodes)
             {
-                @await Component.InvokeAsync("TreeNode", new { node = node })
+                @await Html.PartialAsync("_TreeNode", node)
             }
         </ul>
     </div>

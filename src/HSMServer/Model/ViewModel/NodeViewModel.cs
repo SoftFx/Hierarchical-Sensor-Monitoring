@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Helpers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,9 +11,12 @@ namespace HSMServer.Model.ViewModel
 {
     public class NodeViewModel
     {
+        private const int NodeNameMaxLength = 35;
+
         public int Count { get; set; }
         public string Name { get; set; }
         public string Path { get; set; }
+        public string EncodedPath => SensorPathHelper.Encode(Path);
         public SensorStatus Status { get; set; }
         public DateTime UpdateTime { get; set; }
         public NodeViewModel Parent { get; set; }
@@ -171,5 +175,8 @@ namespace HSMServer.Model.ViewModel
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
         }
+
+        public string GetShortName(string name) =>
+            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
     }
 }
