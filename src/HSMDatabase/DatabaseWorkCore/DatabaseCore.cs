@@ -25,7 +25,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _databaseSettings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
-            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings);
+            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings ?? new DatabaseSettings());
 
             OpenAllExistingSensorDatabases();
         }
