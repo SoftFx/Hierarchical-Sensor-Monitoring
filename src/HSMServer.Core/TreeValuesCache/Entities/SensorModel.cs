@@ -7,12 +7,11 @@ using System.Linq;
 
 namespace HSMServer.Core.TreeValuesCache.Entities
 {
-    public class SensorValue
+    public class SensorModel
     {
-        // будет ли логика создания недостоющих продуктов для Path типа 11/22/33? где продукт 11 сущетсвует, а мы хотим видеть в дереве сенсор 33?
-        // если да, её нужно учесть при миграции базы и при добавлении нового сенсора через АПИ
+        public Guid Id { get; }
         public string Path { get; } // если будет логика создания недостоющих продуктов, Path не нужен
-        public ProductValue ParentProduct { get; set; }
+        public ProductModel ParentProduct { get; set; }
         public string SensorName { get; }
         public string Description { get; }
         public SensorType SensorType { get; }
@@ -25,8 +24,9 @@ namespace HSMServer.Core.TreeValuesCache.Entities
         public int OriginalFileSensorContentSize { get; }
 
 
-        public SensorValue(SensorEntity entity, List<SensorDataEntity> dataEntities)
+        public SensorModel(SensorEntity entity)//, List<SensorDataEntity> dataEntities)
         {
+            Id = new Guid(entity.Id);
             Path = entity.Path;
             SensorName = GetSensorName(entity.Path);
             Description = entity.Description;
@@ -34,14 +34,14 @@ namespace HSMServer.Core.TreeValuesCache.Entities
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
 
             // sorting entities in order from newest to oldest
-            dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
-            var newestDataEntity = dataEntities[0];
+            //dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
+            //var newestDataEntity = dataEntities[0];
 
-            LastUpdateTime = newestDataEntity.TimeCollected;
-            Status = (SensorStatus)newestDataEntity.Status;
-            OriginalFileSensorContentSize = newestDataEntity.OriginalFileSensorContentSize;
+            //LastUpdateTime = newestDataEntity.TimeCollected;
+            //Status = (SensorStatus)newestDataEntity.Status;
+            //OriginalFileSensorContentSize = newestDataEntity.OriginalFileSensorContentSize;
 
-            TypedData = dataEntities.Select(e => e.TypedData).ToList();
+            //TypedData = dataEntities.Select(e => e.TypedData).ToList();
         }
 
 

@@ -50,19 +50,7 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index()
-        {
-            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-            var tree = _treeManager.GetTreeViewModel(user);
-            if (tree == null)
-            {
-                var result = _treeValuesCache.GetTree();// _sensorsInterface.GetSensorsTree(user);
-                tree = new TreeViewModel(result);
-                _treeManager.AddOrCreate(user, tree);
-            }
-
-            return View(tree);
-        }
+        public IActionResult Index() => View();
 
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)

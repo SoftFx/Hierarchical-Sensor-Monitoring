@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.TreeValuesCache.Entities;
 using HSMServer.Helpers;
 using System;
 using System.Collections.Concurrent;
@@ -34,17 +35,28 @@ namespace HSMServer.Model.ViewModel
             ModifyUpdateTime();
         }
 
-        public NodeViewModel(NodeViewModel model, NodeViewModel parent)
+        public NodeViewModel(ProductModel model)
         {
-            Name = model.Name;
-            Path = model.Path;
-            Status = model.Status;
-            Parent = parent;
-            UpdateTime = model.UpdateTime;
-            Count = model.Count;
+            Name = model.DisplayName;
+            Path = model.Id.ToString();
+
+            Nodes = new ConcurrentDictionary<string, NodeViewModel>();
+            Sensors = new ConcurrentDictionary<string, SensorViewModel>();
+            foreach (var (_, sensor) in model.Sensors)
+            {
+                var sensorVM = new SensorViewModel(sensor);
+                Sensors.TryAdd(sensorVM.Name, sensorVM); // TODO: key is id or path?
+            }
         }
 
         public NodeViewModel() { }
+
+
+        public void AddSubNode(NodeViewModel node)
+        {
+            Nodes.TryAdd(node.Path, node);
+            node.Parent = this;
+        }
 
         public NodeViewModel Clone(NodeViewModel parent)
         {

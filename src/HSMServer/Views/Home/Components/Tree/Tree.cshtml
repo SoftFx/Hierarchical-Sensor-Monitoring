@@ -1,11 +1,12 @@
-﻿@model HSMServer.Model.ViewModel.TreeViewModel
+﻿@model HSMServer.Components.TreeViewComponent
 
 <div class="col-md-auto">
     <div id="jstree">
         <ul>
             @foreach (var (_, node) in Model.Nodes)
             {
-                @await Html.PartialAsync("_TreeNode", node)
+                @if (node.Parent == null)
+                    @await Html.PartialAsync("_TreeNode", node)
             }
         </ul>
     </div>
