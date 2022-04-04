@@ -1,6 +1,6 @@
 ﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
-@model HSMServer.Model.ViewModel.TreeViewModel
+@using HSMServer.Model.ViewModel
+@model HSMServer.Components.TreeViewModel
 
 @{
     ViewData["Title"] = "Tree";
@@ -14,6 +14,8 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+
+    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))"
 
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
     var removeSensorAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorAction, ViewConstants.HomeController))";
@@ -105,11 +107,12 @@
     <div>
         <div id="mainContainer" class="row">
             <div class="scrollableBlock">
-                <div id="treeContainer" class="col-md-4">@await Component.InvokeAsync("Tree")</div>
+                <div id="treeContainer" class="col-md-4">@await Html.PartialAsync("_Tree", Model)</div>
             </div>
 
 
-            <div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>
+            @*<div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>*@
+            <div id="listSensors" class="col-md-8">@await Html.PartialAsync("_Sensor", (NodeViewModel)null)</div>
         </div>
         <hr />
     </div>

@@ -1,11 +1,14 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TreeValuesCache.Entities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace HSMServer.Core.TreeValuesCache
 {
@@ -27,6 +30,7 @@ namespace HSMServer.Core.TreeValuesCache
 
             var products = new List<ProductEntity>();
             var sensors = new List<SensorEntity>();
+            var sensorsData = new List<SensorDataEntity>();
 
             for (int i = 0; i < 2; ++i)
             {
@@ -57,6 +61,34 @@ namespace HSMServer.Core.TreeValuesCache
                 sensors.Add(sensor2);
                 sensors.Add(sensor3);
 
+                var sensorDaata1 = new SensorDataEntity()
+                {
+                    TimeCollected = DateTime.UtcNow,
+                    Path = sensor1.Path,
+                    DataType = (byte)sensor1.SensorType,
+                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData1" }),
+                    Status = (byte)SensorStatus.Warning,
+                };
+                var sensorDaata2 = new SensorDataEntity()
+                {
+                    TimeCollected = DateTime.UtcNow,
+                    Path = sensor2.Path,
+                    DataType = (byte)sensor2.SensorType,
+                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = false, Comment = "sensorData2" }),
+                    Status = (byte)SensorStatus.Ok,
+                };
+                var sensorDaata3 = new SensorDataEntity()
+                {
+                    TimeCollected = DateTime.UtcNow,
+                    Path = sensor3.Path,
+                    DataType = (byte)sensor3.SensorType,
+                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = false, Comment = "sensorData3" }),
+                    Status = (byte)SensorStatus.Ok,
+                };
+                sensorsData.Add(sensorDaata1);
+                sensorsData.Add(sensorDaata2);
+                sensorsData.Add(sensorDaata3);
+
                 products.Add(new ProductEntity()
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -65,11 +97,12 @@ namespace HSMServer.Core.TreeValuesCache
                 });
             }
 
-            BuildTreeWithMigration(products, sensors);
+            BuildTreeWithMigration(products, sensors, sensorsData);
         }
 
 
-        public void BuildTreeWithMigration(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
+        public void BuildTreeWithMigration(List<ProductEntity> productEntities,
+            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
             foreach (var productEntity in productEntities)
             {
@@ -77,6 +110,7 @@ namespace HSMServer.Core.TreeValuesCache
                 _tree.TryAdd(product.Id, product);
             }
 
+            var sensorDatas = sensorDataEntities.ToDictionary(s => s.Path);
             foreach (var sensorEntity in sensorEntities)
             {
                 var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == sensorEntity.ProductName).Value;
@@ -97,7 +131,7 @@ namespace HSMServer.Core.TreeValuesCache
                     parentProduct = subProduct;
                 }
 
-                var sensor = new SensorModel(sensorEntity);
+                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);

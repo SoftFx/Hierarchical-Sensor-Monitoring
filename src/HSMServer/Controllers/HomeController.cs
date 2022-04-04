@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects;
+using HSMServer.Components;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -7,7 +8,6 @@ using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
 using HSMServer.Core.Products;
-using HSMServer.Core.TreeValuesCache;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
@@ -35,22 +35,31 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-        private readonly ITreeValuesCache _treeValuesCache;
+        private readonly Components.TreeViewModel _treeViewModel;
 
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager, ITreeValuesCache treeValuesCache)
+            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
+            Components.TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
-            _treeValuesCache = treeValuesCache;
+            _treeViewModel = treeViewModel;
         }
 
 
-        public IActionResult Index() => View();
+        public IActionResult Index() => View(_treeViewModel);
+
+        [HttpPost]
+        public IActionResult SelectNode([FromQuery(Name = "Selected")] string node)
+        {
+            var nodes = _treeViewModel.Nodes;
+            nodes.TryGetValue(SensorPathHelper.Decode(node), out var n);
+            return PartialView("_Sensor", n);
+        }
 
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)

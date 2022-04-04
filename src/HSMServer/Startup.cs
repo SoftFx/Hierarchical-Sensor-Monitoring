@@ -66,6 +66,7 @@ namespace HSMServer
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+            services.AddSingleton<HSMServer.Components.TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());

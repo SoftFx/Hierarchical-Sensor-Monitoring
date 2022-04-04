@@ -20,11 +20,11 @@ namespace HSMServer.Core.TreeValuesCache.Entities
         public SensorStatus Status { get; }
         // поля для хранения значений сенсоров? может хранить SensorValueBase/SensorValueBaseData? и из него уже на View составлять строки для отображения
         // или создать сенсоры-наследники для каждого типа сенсора
-        public List<string> TypedData { get; }
+        public string TypedData { get; }
         public int OriginalFileSensorContentSize { get; }
 
 
-        public SensorModel(SensorEntity entity)//, List<SensorDataEntity> dataEntities)
+        public SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = new Guid(entity.Id);
             Path = entity.Path;
@@ -37,11 +37,11 @@ namespace HSMServer.Core.TreeValuesCache.Entities
             //dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
             //var newestDataEntity = dataEntities[0];
 
-            //LastUpdateTime = newestDataEntity.TimeCollected;
-            //Status = (SensorStatus)newestDataEntity.Status;
-            //OriginalFileSensorContentSize = newestDataEntity.OriginalFileSensorContentSize;
+            LastUpdateTime = dataEntity.TimeCollected;
+            Status = (SensorStatus)dataEntity.Status;
+            OriginalFileSensorContentSize = dataEntity.OriginalFileSensorContentSize;
 
-            //TypedData = dataEntities.Select(e => e.TypedData).ToList();
+            TypedData = dataEntity.TypedData;
         }
 
 

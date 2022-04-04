@@ -89,6 +89,19 @@
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
     initializeClickTree();
+
+    $('#jstree').on('select_node.jstree', function (e, data) {
+        $.ajax({
+            type: 'post',
+            url: selectNode + '?Selected=' + data.selected,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (data) {
+                $("#listSensors").html(data);
+            }
+        });
+    });
 }
 
 function initializeClickTree() {
