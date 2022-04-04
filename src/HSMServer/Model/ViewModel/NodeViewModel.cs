@@ -1,8 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.TreeValuesCache.Entities;
-using HSMServer.Helpers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -12,12 +10,9 @@ namespace HSMServer.Model.ViewModel
 {
     public class NodeViewModel
     {
-        private const int NodeNameMaxLength = 35;
-
         public int Count { get; set; }
         public string Name { get; set; }
         public string Path { get; set; }
-        public string EncodedPath => SensorPathHelper.Encode(Path);
         public SensorStatus Status { get; set; }
         public DateTime UpdateTime { get; set; }
         public NodeViewModel Parent { get; set; }
@@ -35,28 +30,7 @@ namespace HSMServer.Model.ViewModel
             ModifyUpdateTime();
         }
 
-        public NodeViewModel(ProductModel model)
-        {
-            Name = model.DisplayName;
-            Path = model.Id.ToString();
-
-            Nodes = new ConcurrentDictionary<string, NodeViewModel>();
-            Sensors = new ConcurrentDictionary<string, SensorViewModel>();
-            foreach (var (_, sensor) in model.Sensors)
-            {
-                var sensorVM = new SensorViewModel(sensor);
-                Sensors.TryAdd(sensorVM.Name, sensorVM); // TODO: key is id or path?
-            }
-        }
-
         public NodeViewModel() { }
-
-
-        public void AddSubNode(NodeViewModel node)
-        {
-            Nodes.TryAdd(node.Path, node);
-            node.Parent = this;
-        }
 
         public NodeViewModel Clone(NodeViewModel parent)
         {
@@ -187,8 +161,5 @@ namespace HSMServer.Model.ViewModel
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
         }
-
-        public string GetShortName(string name) =>
-            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
     }
 }

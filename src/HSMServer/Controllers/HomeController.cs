@@ -1,5 +1,4 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Components;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -35,12 +34,12 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-        private readonly Components.TreeViewModel _treeViewModel;
+        private readonly Model.TreeViewModels.TreeViewModel _treeViewModel;
 
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
             IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
-            Components.TreeViewModel treeViewModel)
+            Model.TreeViewModels.TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
@@ -54,11 +53,16 @@ namespace HSMServer.Controllers
         public IActionResult Index() => View(_treeViewModel);
 
         [HttpPost]
-        public IActionResult SelectNode([FromQuery(Name = "Selected")] string node)
+        public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var nodes = _treeViewModel.Nodes;
-            nodes.TryGetValue(SensorPathHelper.Decode(node), out var n);
-            return PartialView("_Sensor", n);
+            var decodedId = SensorPathHelper.Decode(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                return PartialView("_TreeNodeSensors", node);
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                return PartialView("_TreeNodeSensors", sensor);
+
+            return PartialView("_TreeNodeSensors", null);
         }
 
         [HttpPost]

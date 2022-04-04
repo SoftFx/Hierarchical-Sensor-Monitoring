@@ -1,8 +1,8 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.HtmlHelpers
-@model HSMServer.Model.ViewModel.NodeViewModel
+@model HSMServer.Model.TreeViewModels.ProductViewModel
 
-<li id='@Model.EncodedPath' title='@Model.Name &#013;@Model.UpdateTime'
+<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime'
     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
     @Model.GetShortName(Model.Name) (@Model.Count sensors)
 
@@ -15,11 +15,11 @@
     @if (Model.Sensors != null && !Model.Sensors.IsEmpty)
     {
         <ul>
-            @foreach (var (sensorName, sensor) in Model.Sensors)
+            @foreach (var (_, sensor) in Model.Sensors)
             {
-                <li id='sensor_@Model.EncodedPath' title='@sensorName &#013;@sensor.Time'
-                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.Time"}'>
-                    @Model.GetShortName(sensorName)
+                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime'
+                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime"}'>
+                    @Model.GetShortName(sensor.Name)
                 </li>
             }
         </ul>
