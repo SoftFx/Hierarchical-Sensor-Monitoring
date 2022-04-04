@@ -1,4 +1,5 @@
 using HSMDatabase.DatabaseWorkCore;
+using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
 
 
@@ -11,7 +12,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public string DatabaseFolder { get; }
 
-        public DatabaseCore DatabaseCore { get; private set; }
+        public IDatabaseCore DatabaseCore { get; private set; }
 
 
         public DatabaseCoreManager(string databaseFolder)
@@ -19,7 +20,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             ++_dbNumber;
 
             DatabaseFolder = databaseFolder;
-            DatabaseCore = new DatabaseAdapter(
+            DatabaseCore = new DatabaseCore(
                 new DatabaseSettings()
                 {
                     DatabaseFolder = databaseFolder,

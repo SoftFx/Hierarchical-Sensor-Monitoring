@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     [Collection("Database collection")]
     public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
-        private protected readonly DatabaseCoreManager _databaseAdapterManager;
+        private protected readonly DatabaseCoreManager _databaseCoreManager;
         private protected readonly SensorValuesFactory _sensorValuesFactory;
         private protected readonly SensorValuesTester _sensorValuesTester;
 
@@ -25,10 +25,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {
-            _databaseAdapterManager = new DatabaseCoreManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
+            _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
+            _databaseCoreManager.AddTestProduct();
 
-            dbRegisterFixture.RegisterDatabase(_databaseAdapterManager);
+            dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Key);
             _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.Name);
@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _valuesCache = new ValuesCache();
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseCore, productManagerLogger);
+            _productManager = new ProductManager(_databaseCoreManager.DatabaseCore, productManagerLogger);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }
