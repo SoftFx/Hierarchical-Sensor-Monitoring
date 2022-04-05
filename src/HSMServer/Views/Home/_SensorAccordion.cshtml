@@ -150,37 +150,37 @@
                                 </ul>
                             </div>
                         </div>
-                            <div style='margin-top: 15px'>
-                                <div id='no_data_@sensorId' style='display: none'>
-                                    <p>No data for the specified period</p>
-                                </div>
-                                <div id='history_@sensorId'>
-                                    @if (Model.IsPlottingSupported)
-                                    {
-                                        <ul class='nav nav-tabs'>
-                                            <li class='nav-item'>
-                                                <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                                            </li>
-                                            <li class='nav-item'>
-                                                <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
-                                            </li>
-                                        </ul>
-                                        <div class='tab-content'>
-                                            <div class='tab-pane fade show active' id=@graphParentDivId>
-                                                <div id='@graphElementId' />
-                                            </div>
-                                            <div class='tab-pane fade' id=@valuesParentDivId>
-                                                <div id='@valuesElementId' />
-                                            </div>
+                        <div style='margin-top: 15px'>
+                            <div id='no_data_@sensorId' style='display: none'>
+                                <p>No data for the specified period</p>
+                            </div>
+                            <div id='history_@sensorId'>
+                                @if (Model.IsPlottingSupported)
+                                {
+                                    <ul class='nav nav-tabs'>
+                                        <li class='nav-item'>
+                                            <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                                        </li>
+                                        <li class='nav-item'>
+                                            <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
+                                        </li>
+                                    </ul>
+                                    <div class='tab-content'>
+                                        <div class='tab-pane fade show active' id=@graphParentDivId>
+                                            <div id='@graphElementId' />
                                         </div>
-                                    }
-                                    else
-                                    {
-                                        <div id='values_@sensorId'></div>
-                                    }
-                                </div>
+                                        <div class='tab-pane fade' id=@valuesParentDivId>
+                                            <div id='@valuesElementId' />
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div id='values_@sensorId'></div>
+                                }
                             </div>
                         </div>
+                    </div>
                 </div>
             </div>
         }
