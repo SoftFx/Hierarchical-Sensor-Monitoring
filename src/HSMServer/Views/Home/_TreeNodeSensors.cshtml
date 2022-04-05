@@ -1,10 +1,8 @@
-﻿@using HSMServer.Helpers
-@using HSMServer.Model.TreeViewModels
+﻿@using HSMServer.Model.TreeViewModels
 
 @model HSMServer.Model.TreeViewModels.NodeViewModel
 
 <div class='col' id='list'>
-    @*<div>@(Model == null ? "No data" : Model.Name)</div>*@
 
     <div style='width: 800px'>
         <ul id='noData' class='list-group'>
@@ -16,24 +14,4 @@
         @await Html.PartialAsync("_Sensors", productVM)
     else if (Model is SensorViewModel sensorVM)
         @await Html.PartialAsync("_Sensor", sensorVM)
-
-    @*@if (Model?.Sensors != null && !Model.Sensors.IsEmpty)
-    {
-        @foreach (var s in Model.Sensors)
-            {
-                <div>@s.Value.Name</div>
-            }
-        <div>
-            @foreach (var (name, sensor) in Model.Sensors)
-            {
-                <div id='sensorInfo_parent_@SensorPathHelper.Encode($"{Model.Path}/{name}")'>
-                    <a tabindex='0' class='link-primary info-link' id='sensorInfo_link_@SensorPathHelper.Encode($"{Model.Path}/{name}")'>Show meta info</a>
-                    <div id=sensor_info_@SensorPathHelper.Encode($"{Model.Path}/{name}") />
-                </div>
-                <div class='accordion' id='sensorData_@SensorPathHelper.Encode($"{Model.Path}/{name}")'>
-
-                </div>
-            }
-        </div>
-    }*@
 </div>

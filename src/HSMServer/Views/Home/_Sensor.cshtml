@@ -1,3 +1,8 @@
 ﻿@model HSMServer.Model.TreeViewModels.SensorViewModel
 
-<div>Sensor @Model.Name</div>
+<div id='sensorInfo_parent_@Model.EncodedId'>
+    <a tabindex='0' class='link-primary info-link' id='sensorInfo_link_@Model.EncodedId'>Show meta info</a>
+    <div id='sensor_info_@Model.EncodedId'/>
+</div>
+
+@await Html.PartialAsync("_SensorAccordion", Model) 

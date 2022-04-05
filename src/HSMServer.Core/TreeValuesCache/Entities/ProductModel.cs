@@ -8,7 +8,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
     public enum ProductState : long
     {
         Disabled = 0,
-        Enabled = 1 << 62,
+        FullAccess = 1 << 62,
     }
 
 
@@ -45,7 +45,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
             Id = Guid.NewGuid();
             ParentProductId = parent.Id;
             ParentProduct = parent;
-            State = ProductState.Enabled;
+            State = ProductState.FullAccess;
             DisplayName = name;
             CreationDate = DateTime.UtcNow;
         }

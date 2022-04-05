@@ -28,6 +28,54 @@ namespace HSMServer.Core.TreeValuesCache
             _tree = new ConcurrentDictionary<Guid, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
+            (var products, var sensors, var sensorsData) = GenerateTestData();
+
+            BuildTreeWithMigration(products, sensors, sensorsData);
+        }
+
+
+        public void BuildTreeWithMigration(List<ProductEntity> productEntities,
+            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
+
+            var sensorDatas = sensorDataEntities.ToDictionary(s => s.Path);
+            foreach (var sensorEntity in sensorEntities)
+            {
+                var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == sensorEntity.ProductName).Value;
+
+                var pathParts = sensorEntity.Path.Split(CommonConstants.SensorPathSeparator);
+                for (int i = 0; i < pathParts.Length - 1; ++i)
+                {
+                    var subProductName = pathParts[i];
+                    var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
+                    if (subProduct == null)
+                    {
+                        subProduct = new ProductModel(subProductName, parentProduct);
+                        parentProduct.AddSubProduct(subProduct);
+
+                        _tree.TryAdd(subProduct.Id, subProduct);
+                    }
+
+                    parentProduct = subProduct;
+                }
+
+                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
+                parentProduct.AddSensor(sensor);
+
+                _sensors.TryAdd(sensor.Id, sensor);
+            }
+        }
+
+        public List<ProductModel> GetTree() => _tree.Values.ToList();
+
+
+        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
+        {
             var products = new List<ProductEntity>();
             var sensors = new List<SensorEntity>();
             var sensorsData = new List<SensorDataEntity>();
@@ -97,47 +145,7 @@ namespace HSMServer.Core.TreeValuesCache
                 });
             }
 
-            BuildTreeWithMigration(products, sensors, sensorsData);
+            return (products, sensors, sensorsData);
         }
-
-
-        public void BuildTreeWithMigration(List<ProductEntity> productEntities,
-            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
-            }
-
-            var sensorDatas = sensorDataEntities.ToDictionary(s => s.Path);
-            foreach (var sensorEntity in sensorEntities)
-            {
-                var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == sensorEntity.ProductName).Value;
-
-                var pathParts = sensorEntity.Path.Split(CommonConstants.SensorPathSeparator);
-                for (int i = 0; i < pathParts.Length - 1; ++i)
-                {
-                    var subProductName = pathParts[i];
-                    var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
-                    if (subProduct == null)
-                    {
-                        subProduct = new ProductModel(subProductName, parentProduct);
-                        parentProduct.AddSubProduct(subProduct);
-
-                        _tree.TryAdd(subProduct.Id, subProduct);
-                    }
-
-                    parentProduct = subProduct;
-                }
-
-                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
-                parentProduct.AddSensor(sensor);
-
-                _sensors.TryAdd(sensor.Id, sensor);
-            }
-        }
-
-        public List<ProductModel> GetTree() => _tree.Values.ToList();
     }
 }
