@@ -4,14 +4,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace HSMServer.Model.TreeViewModels
 {
     public class ProductViewModel : NodeViewModel
     {
         public int Count { get; set; }
-        public NodeViewModel Parent { get; set; }
         public ConcurrentDictionary<string, ProductViewModel> Nodes { get; set; }
         public ConcurrentDictionary<string, SensorViewModel> Sensors { get; set; }
 
@@ -26,8 +24,8 @@ namespace HSMServer.Model.TreeViewModels
 
             foreach (var (_, sensor) in model.Sensors)
             {
-                var sensorVM = new SensorViewModel(sensor);
-                Sensors.TryAdd(sensorVM.Id, sensorVM); // TODO: key is id or path?
+                var sensorVM = new SensorViewModel(sensor, this);
+                Sensors.TryAdd(sensorVM.Id, sensorVM);
             }
         }
 

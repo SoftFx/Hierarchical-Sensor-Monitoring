@@ -63,7 +63,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
         {
             sensor.ParentProduct = this;
 
-            Sensors.TryAdd(sensor.ParentProduct.Id, sensor);
+            Sensors.TryAdd(sensor.Id, sensor);
         }
     }
 }

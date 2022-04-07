@@ -1,9 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Helpers;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -16,6 +13,7 @@ namespace HSMServer.Model.TreeViewModels
         public string Name { get; set; }
         public SensorStatus Status { get; set; }
         public DateTime UpdateTime { get; set; }
+        public NodeViewModel Parent { get; set; }
 
 
         public string GetShortName(string name) =>

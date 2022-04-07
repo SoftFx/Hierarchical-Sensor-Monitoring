@@ -8,6 +8,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace HSMServer.Core.TreeValuesCache
@@ -91,6 +92,13 @@ namespace HSMServer.Core.TreeValuesCache
                     Path = $"sensor{i}",
                     SensorType = 0,
                 };
+                var sensor11 = new SensorEntity()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ProductName = productName,
+                    Path = $"sensor{i}1",
+                    SensorType = 7,
+                };
                 var sensor2 = new SensorEntity()
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -106,6 +114,7 @@ namespace HSMServer.Core.TreeValuesCache
                     SensorType = 0,
                 };
                 sensors.Add(sensor1);
+                sensors.Add(sensor11);
                 sensors.Add(sensor2);
                 sensors.Add(sensor3);
 
@@ -116,6 +125,14 @@ namespace HSMServer.Core.TreeValuesCache
                     DataType = (byte)sensor1.SensorType,
                     TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData1" }),
                     Status = (byte)SensorStatus.Warning,
+                };
+                var sensorDaata11 = new SensorDataEntity()
+                {
+                    TimeCollected = DateTime.UtcNow,
+                    Path = sensor11.Path,
+                    DataType = (byte)sensor11.SensorType,
+                    TypedData = JsonSerializer.Serialize(new FileSensorBytesData() { FileContent = Encoding.UTF8.GetBytes("123"), FileName = "filename", Extension = "txt", Comment = "sensorData11" }),
+                    Status = (byte)SensorStatus.Ok,
                 };
                 var sensorDaata2 = new SensorDataEntity()
                 {
@@ -134,6 +151,7 @@ namespace HSMServer.Core.TreeValuesCache
                     Status = (byte)SensorStatus.Ok,
                 };
                 sensorsData.Add(sensorDaata1);
+                sensorsData.Add(sensorDaata11);
                 sensorsData.Add(sensorDaata2);
                 sensorsData.Add(sensorDaata3);
 
@@ -141,7 +159,7 @@ namespace HSMServer.Core.TreeValuesCache
                 {
                     Id = Guid.NewGuid().ToString(),
                     DisplayName = productName,
-                    SensorsIds = new List<string> { sensor1.Id, sensor2.Id, sensor3.Id }
+                    SensorsIds = new List<string> { sensor1.Id, sensor11.Id, sensor2.Id, sensor3.Id }
                 });
             }
 

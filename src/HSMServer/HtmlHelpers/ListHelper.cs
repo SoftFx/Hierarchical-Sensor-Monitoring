@@ -1,9 +1,7 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Model.Sensor;
 using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace HSMServer.HtmlHelpers
@@ -12,31 +10,6 @@ namespace HSMServer.HtmlHelpers
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
-
-        public static string CreateFullLists(TreeViewModel model)
-        {
-            if (model == null)
-                return string.Empty;
-
-            var result = new StringBuilder(1 << 20);
-
-            result.Append("<div class='col' id='list'>" +
-                "<div id='list_sensors_header' style='display: none;'>" +
-                "<h5 style='margin: 0px 20px 10px;'>Sensors</h5></div>");
-
-            result.Append("<div style='width: 800px'>" +
-                "<ul id='noData' class='list-group'>" +
-                "<li class='list-group-item'>No Data</li></ul></div>");
-
-            foreach (var (_, node) in model.Nodes)
-            {
-                DFSCreateList(result, node);
-            }
-
-            result.Append("</div>");
-
-            return result.ToString();
-        }
 
         public static string CreateNotSelectedLists(string selectedPath, TreeViewModel model)
         {
@@ -316,24 +289,6 @@ namespace HSMServer.HtmlHelpers
             }
 
             return string.Empty;
-        }
-
-        public static string CreateHistoryList(List<SensorHistoryData> sensors)
-        {
-            if (sensors == null)
-                return string.Empty;
-
-            var result = new StringBuilder(sensors.Count + 2);
-            result.Append("<div class='col-xxl' style='margin: 10px 0px'><ul class='list-group'>");
-
-            foreach (var sensor in sensors)
-            {
-                result.Append("<li class='list-group-item list-group-item-action'>")
-                      .Append($"{sensor.Time}: {sensor.TypedData}").Append("</li>");
-            }
-
-            result.Append("</ul></div>");
-            return result.ToString();
         }
 
         private static NodeViewModel GetNodeRecursion(string path, NodeViewModel model)

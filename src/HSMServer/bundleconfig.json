@@ -14,7 +14,6 @@
     "inputFiles": [
       "wwwroot/js/home/file.js",
       "wwwroot/js/home/history.js",
-      "wwwroot/js/home/list.js",
       "wwwroot/js/home/plotting.js",
       "wwwroot/js/home/sensorInfo.js",
       "wwwroot/js/home/tree.js"

@@ -480,12 +480,14 @@ namespace HSMServer.Controllers
 
         #endregion
 
-        private static void ParseProductAndPath(string encodedPath, out string product, out string path)
+        private void ParseProductAndPath(string encodedId, out string product, out string path)
         {
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            int index = decodedPath.IndexOf('/');
-            product = decodedPath.Substring(0, index);
-            path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
+            var decodedId = SensorPathHelper.Decode(encodedId);
+
+            _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
+
+            path = sensor?.Path;
+            product = sensor?.Product;
         }
 
         private static void ParseProductPathAndSensor(string encodedPath, out string product,

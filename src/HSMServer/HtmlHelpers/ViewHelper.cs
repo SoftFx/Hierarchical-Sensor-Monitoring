@@ -18,11 +18,6 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TreeHelper.UpdateTree(model));
         }
 
-        public static HtmlString CreateFullLists(TreeViewModel model)
-        {
-            return new HtmlString(ListHelper.CreateFullLists(model));
-        }
-
         public static HtmlString CreateNotSelectedLists(string selectedPath, TreeViewModel model)
         {
             return new HtmlString(ListHelper.CreateNotSelectedLists(selectedPath, model));

@@ -88,27 +88,31 @@
     $('#updateTime').empty();
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
-    initializeClickTree();
+    initializeActivateNodeTree();
+}
 
-    $('#jstree').on('select_node.jstree', function (e, data) {
+function initializeActivateNodeTree() {
+    $('#jstree').on('activate_node.jstree', function (e, data) {
+        var selectedId = data.node.id;
+
         $.ajax({
             type: 'post',
-            url: selectNode + '?Selected=' + data.selected,
+            url: selectNode + '?Selected=' + selectedId,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,
-            success: function (data) {
-                $("#listSensors").html(data);
+            success: function (viewData) {
+                $("#listSensors").html(viewData);
             }
-        });
-    });
-}
+        }).done(function () {
+            $('#noData').css('display', 'none');
 
-function initializeClickTree() {
-    $('#jstree').on('activate_node.jstree', function (e, data) {
-        if (data == undefined || data.node == undefined || data.node.id == undefined)
-            return;
-        displayList(data);
+            initialize();
+
+            var selectedAccordionId = '#accordion_' + selectedId;
+            if ($(selectedAccordionId).attr('aria-expanded') == 'false')
+                $(selectedAccordionId).click();
+        });
     });
 }
 

@@ -32,6 +32,10 @@
     margin-right: 5px;
 }
 
+.sensor-icon-without-padding {
+    padding: 0px 0px 0px 12px;
+}
+
 .time-ago-div {
     color: grey;
 }
