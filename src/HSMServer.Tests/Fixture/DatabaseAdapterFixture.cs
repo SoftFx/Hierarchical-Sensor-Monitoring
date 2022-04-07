@@ -201,10 +201,13 @@ namespace HSMServer.Tests.Fixture
             DatabaseCore?.RemoveProduct(FirstProductName);
             DatabaseCore?.RemoveProduct(SecondProductName);
             DatabaseCore?.RemoveProduct(ThirdProductName);
+
             DatabaseCore?.RemoveUser(CreateFirstUser());
             DatabaseCore?.RemoveUser(CreateSecondUser());
             DatabaseCore?.RemoveUser(CreateThirdUser());
+
             DatabaseCore?.RemoveRegistrationTicket(_ticket.Id);
+
             DatabaseCore?.RemoveConfigurationObject(ConfigurationObjectName);
         }
     }
