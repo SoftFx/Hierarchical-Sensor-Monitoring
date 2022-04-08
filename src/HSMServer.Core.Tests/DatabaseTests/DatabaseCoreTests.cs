@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
@@ -56,7 +57,7 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        [Trait("Category", "OneRemoveProduct")]
+        [Trait("Category", "OneProductRemove")]
         public void RemoveProductTest()
         {
             var name = RandomGenerator.GetRandomString();
@@ -76,7 +77,7 @@ namespace HSMServer.Core.Tests
         [InlineData(100)]
         [InlineData(500)]
         [InlineData(1000)]
-        [Trait("Category", "RemoveSeveralProduct")]
+        [Trait("Category", "SeveralProductRemove")]
         public void RemoveSeveralProductsTest(int count)
         {
             for (int i = 0; i < count; i++)
@@ -93,7 +94,7 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        [Trait("Category", "OneExtraKeyAdd")]
+        [Trait("Category", "OneExtraKey")]
         public void AddExtraKeyTest()
         {
             var name = RandomGenerator.GetRandomString();
@@ -133,6 +134,77 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
+        #region [ User Tests ]
+
+        [Fact]
+        [Trait("Category", "OneUser")]
+        public void AddUser()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var user = DatabaseCoreFactory.CreateUser(name);
+            _databaseCore.AddUser(user);
+
+            var actualUser = GetUser(name);
+
+            FullUserTest(user, actualUser);
+        }
+
+        [Fact]
+        [Trait("Category", "OneUserRemove")]
+        public void RemoveUser()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var user = DatabaseCoreFactory.CreateUser(name);
+
+            _databaseCore.AddUser(user);
+            _databaseCore.RemoveUser(user);
+
+            var actualUser = GetUser(name);
+            Assert.Null(actualUser);
+        }
+
+        [Fact]
+        [Trait("Category", "OneProductRole")]
+        public void AddProductRole()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var user = DatabaseCoreFactory.CreateUser(name);
+            var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
+
+            _databaseCore.AddUser(user);
+            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key, ProductRoleEnum.ProductManager));
+            _databaseCore.UpdateUser(user);
+
+            var actualUser = GetUser(name);
+            FullUserTest(user, actualUser);
+        }
+
+        [Theory]
+        [InlineData(3, 0, 0)]
+        [InlineData(10, 4, 3)]
+        [InlineData(50, 52, 1)]
+        [InlineData(100, 1, 100)]
+        [InlineData(500, 2, 10)]
+        [InlineData(1000, 2, 1)]
+        [Trait("Category", "GetUsersPage")]
+        public void GetUsersPageTest(int count, int page, int pageSize)
+        {
+            for (int i=0; i < count; i++)
+            {
+                var name = RandomGenerator.GetRandomString();
+                var user = DatabaseCoreFactory.CreateUser(name);
+
+                _databaseCore.AddUser(user);
+            }
+
+            var actualUsers = _databaseCore.GetUsersPage(page, pageSize);
+
+            Assert.NotNull(actualUsers);
+            Assert.Equal(GetTotalCount(count, page, pageSize), actualUsers.Count);
+        }
+
+        #endregion
+
         #region [ Private methods ]
 
         private static void FullProductTest(Product expectedProduct, Product actualProduct)
@@ -150,10 +222,55 @@ namespace HSMServer.Core.Tests
 
                 for (int i=0; i < expectedProduct.ExtraKeys.Count; i++)
                 {
-                    Assert.Equal(expectedProduct.ExtraKeys[i].Key, actualProduct.ExtraKeys[i].Key);
-                    Assert.Equal(expectedProduct.ExtraKeys[i].Name, actualProduct.ExtraKeys[i].Name);
+                    var expectedExtraKey = expectedProduct.ExtraKeys[i];
+                    var actualExtraKey = actualProduct.ExtraKeys[i];
+
+                    Assert.Equal(expectedExtraKey.Key, actualExtraKey.Key);
+                    Assert.Equal(expectedExtraKey.Name, actualExtraKey.Name);
                 }
             }
+        }
+
+        private static void FullUserTest(User expectedUser, User actualUser)
+        {
+            Assert.NotNull(actualUser);
+            Assert.Equal(expectedUser.Id, actualUser.Id);
+            Assert.Equal(expectedUser.UserName, actualUser.UserName);
+            Assert.Equal(expectedUser.Password, actualUser.Password);
+            Assert.Equal(expectedUser.IsAdmin, actualUser.IsAdmin);
+            Assert.Equal(expectedUser.ProductsRoles.Count, actualUser.ProductsRoles.Count);
+
+            if (expectedUser.ProductsRoles.Count > 0)
+            {
+                expectedUser.ProductsRoles.OrderBy(pr => pr.Key);
+                actualUser.ProductsRoles.OrderBy(pr => pr.Key);
+
+                for (int i=0; i < expectedUser.ProductsRoles.Count; i++)
+                {
+                    var expectedRole = expectedUser.ProductsRoles[i];
+                    var actualRole = actualUser.ProductsRoles[i];
+
+                    Assert.Equal(expectedRole.Key, actualRole.Key);
+                    Assert.Equal(expectedRole.Value, actualRole.Value);
+                }
+            }
+        }
+
+        private User GetUser(string username) => 
+            _databaseCore.GetUsers().FirstOrDefault(u => u.Equals(username));
+
+        private int GetTotalCount(int count, int page, int pageSize)
+        {
+            count--;
+
+            if (page == count / pageSize)
+                return count % pageSize;
+            else if (page > count / pageSize)
+                return 0;
+            else if (page < count / pageSize)
+                return pageSize;
+
+            return -1;
         }
 
         #endregion
