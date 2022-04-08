@@ -17,6 +17,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             ExtraKeys = new List<ExtraProductKey>()
         };
 
+        internal static ExtraProductKey CreateExtraKey(string productName, string extraKeyName) => new()
+        {
+            Key = KeyGenerator.GenerateExtraProductKey(productName, extraKeyName),
+            Name = extraKeyName
+        };
+
         internal static User CreateUser(string name) => new () 
         {
             UserName = name,

@@ -9,6 +9,7 @@ namespace HSMServer.Core.Tests.DatabaseTests.Fixture
     {
         protected override string DatabaseFolder => nameof(DatabaseCoreTests);
 
+        //Todo? Probably remove this
         private readonly string _firstProductName = nameof(_firstProductName);
         private readonly string _secondProductName = nameof(_secondProductName);
         private readonly string _thirdProductName = nameof(_thirdProductName);
