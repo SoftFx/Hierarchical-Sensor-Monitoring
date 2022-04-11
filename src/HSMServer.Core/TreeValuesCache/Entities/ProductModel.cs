@@ -15,7 +15,6 @@ namespace HSMServer.Core.TreeValuesCache.Entities
     public class ProductModel
     {
         public Guid Id { get; }
-        public Guid? ParentProductId { get; private set; }
         public ProductModel ParentProduct { get; private set; }
         public ProductState State { get; }
         public string DisplayName { get; }
@@ -33,9 +32,9 @@ namespace HSMServer.Core.TreeValuesCache.Entities
 
         public ProductModel(ProductEntity entity) : this()
         {
-            Id = new Guid(entity.Id);// entity.Id == null ? Guid.NewGuid() : new Guid(entity.Id);
+            Id = new Guid(entity.Id);
             State = (ProductState)entity.State;
-            DisplayName = entity.DisplayName;// ?? entity.Name; // TODO: remove '?? entity.Name'
+            DisplayName = entity.DisplayName;
             Description = entity.Description;
             CreationDate = new DateTime(entity.CreationDate);
         }
@@ -43,7 +42,6 @@ namespace HSMServer.Core.TreeValuesCache.Entities
         public ProductModel(string name, ProductModel parent) : this()
         {
             Id = Guid.NewGuid();
-            ParentProductId = parent.Id;
             ParentProduct = parent;
             State = ProductState.FullAccess;
             DisplayName = name;
@@ -53,7 +51,6 @@ namespace HSMServer.Core.TreeValuesCache.Entities
 
         internal void AddSubProduct(ProductModel product)
         {
-            product.ParentProductId = this.Id;
             product.ParentProduct = this;
 
             SubProducts.TryAdd(product.Id, product);

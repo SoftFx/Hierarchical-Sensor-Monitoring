@@ -2,15 +2,12 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.TreeValuesCache.Entities
 {
     public class SensorModel
     {
         public Guid Id { get; }
-        public string Path { get; } // если будет логика создания недостоющих продуктов, Path не нужен
         public ProductModel ParentProduct { get; set; }
         public string SensorName { get; }
         public string Description { get; }
@@ -27,8 +24,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
         public SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = new Guid(entity.Id);
-            Path = entity.Path;
-            SensorName = GetSensorName(entity.Path);
+            SensorName = string.IsNullOrEmpty(SensorName) ? GetSensorName(entity.Path) : entity.SensorName; // TODO: is sensorName right in database????
             Description = entity.Description;
             SensorType = (SensorType)entity.SensorType;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);

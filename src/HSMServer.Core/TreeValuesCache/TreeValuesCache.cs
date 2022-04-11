@@ -35,16 +35,41 @@ namespace HSMServer.Core.TreeValuesCache
         }
 
 
+        public void BuildTree(List<ProductEntity> productEntities,
+            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        {
+            FillTreeByProductModels(productEntities);
+
+            var sensorDatas = GetSensorDatasDict(sensorDataEntities);
+            foreach (var sensorEntity in sensorEntities)
+            {
+                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
+                _sensors.TryAdd(sensor.Id, sensor);
+            }
+
+            foreach (var productEntity in productEntities)
+                if (_tree.TryGetValue(new Guid(productEntity.Id), out var product))
+                {
+                    foreach (var subProductId in productEntity.SubProductsIds)
+                    {
+                        if (_tree.TryGetValue(new Guid(subProductId), out var subProduct))
+                            product.AddSubProduct(subProduct);
+                    }
+
+                    foreach (var sensorId in productEntity.SensorsIds)
+                    {
+                        if (_sensors.TryGetValue(new Guid(sensorId), out var sensor))
+                            product.AddSensor(sensor);
+                    }
+                }
+        }
+
         public void BuildTreeWithMigration(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
-            foreach (var productEntity in productEntities)
-            {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
-            }
+            FillTreeByProductModels(productEntities);
 
-            var sensorDatas = sensorDataEntities.ToDictionary(s => s.Path);
+            var sensorDatas = GetSensorDatasDict(sensorDataEntities);
             foreach (var sensorEntity in sensorEntities)
             {
                 var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == sensorEntity.ProductName).Value;
@@ -65,7 +90,7 @@ namespace HSMServer.Core.TreeValuesCache
                     parentProduct = subProduct;
                 }
 
-                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
+                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
@@ -74,6 +99,20 @@ namespace HSMServer.Core.TreeValuesCache
 
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
+        public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+
+
+        private void FillTreeByProductModels(List<ProductEntity> productEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
+        }
+
+        private static Dictionary<string, SensorDataEntity> GetSensorDatasDict(List<SensorDataEntity> sensorDataEntities) =>
+            sensorDataEntities.ToDictionary(s => s.Id); // TODO: dictionary (key, list<values>) for several datas
 
         private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
         {
@@ -120,6 +159,7 @@ namespace HSMServer.Core.TreeValuesCache
 
                 var sensorDaata1 = new SensorDataEntity()
                 {
+                    Id = sensor1.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor1.Path,
                     DataType = (byte)sensor1.SensorType,
@@ -128,6 +168,7 @@ namespace HSMServer.Core.TreeValuesCache
                 };
                 var sensorDaata11 = new SensorDataEntity()
                 {
+                    Id = sensor11.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor11.Path,
                     DataType = (byte)sensor11.SensorType,
@@ -136,6 +177,7 @@ namespace HSMServer.Core.TreeValuesCache
                 };
                 var sensorDaata2 = new SensorDataEntity()
                 {
+                    Id = sensor2.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor2.Path,
                     DataType = (byte)sensor2.SensorType,
@@ -144,6 +186,7 @@ namespace HSMServer.Core.TreeValuesCache
                 };
                 var sensorDaata3 = new SensorDataEntity()
                 {
+                    Id = sensor3.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor3.Path,
                     DataType = (byte)sensor3.SensorType,
