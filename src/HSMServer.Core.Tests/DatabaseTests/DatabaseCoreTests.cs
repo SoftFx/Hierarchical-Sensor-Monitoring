@@ -138,7 +138,7 @@ namespace HSMServer.Core.Tests
 
         [Fact]
         [Trait("Category", "OneUser")]
-        public void AddUser()
+        public void AddUserTest()
         {
             var name = RandomGenerator.GetRandomString();
             var user = DatabaseCoreFactory.CreateUser(name);
@@ -149,9 +149,31 @@ namespace HSMServer.Core.Tests
             FullUserTest(user, actualUser);
         }
 
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralUser")]
+        public void AddSeveralUsersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var name = RandomGenerator.GetRandomString();
+                var user = DatabaseCoreFactory.CreateUser(name);
+                _databaseCore.AddUser(user);
+
+                var actualUser = GetUser(name);
+
+                FullUserTest(user, actualUser);
+            }
+        }
+
         [Fact]
         [Trait("Category", "OneUserRemove")]
-        public void RemoveUser()
+        public void RemoveUserTest()
         {
             var name = RandomGenerator.GetRandomString();
             var user = DatabaseCoreFactory.CreateUser(name);
@@ -159,13 +181,34 @@ namespace HSMServer.Core.Tests
             _databaseCore.AddUser(user);
             _databaseCore.RemoveUser(user);
 
-            var actualUser = GetUser(name);
-            Assert.Null(actualUser);
+            Assert.Null(GetUser(name));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralUsersRemove")]
+        public void RemoveSeveralUsersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var name = RandomGenerator.GetRandomString();
+                var user = DatabaseCoreFactory.CreateUser(name);
+
+                _databaseCore.AddUser(user);
+                _databaseCore.RemoveUser(user);
+
+                Assert.Null(GetUser(name));
+            }
         }
 
         [Fact]
         [Trait("Category", "OneProductRole")]
-        public void AddProductRole()
+        public void AddProductRoleTest()
         {
             var name = RandomGenerator.GetRandomString();
             var user = DatabaseCoreFactory.CreateUser(name);
@@ -175,6 +218,32 @@ namespace HSMServer.Core.Tests
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key, ProductRoleEnum.ProductManager));
             _databaseCore.UpdateUser(user);
 
+            FullUserTest(user, GetUser(name));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralProductRoles")]
+        public void SeveralProductRolesTest(int count) 
+        {
+            var name = RandomGenerator.GetRandomString();
+            var user = DatabaseCoreFactory.CreateUser(name);
+            _databaseCore.AddUser(user);
+
+            for (int i = 0; i < count; i++)
+            {
+                var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
+
+                var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
+                user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key, role));
+            }
+
+            _databaseCore.UpdateUser(user);
             var actualUser = GetUser(name);
             FullUserTest(user, actualUser);
         }
@@ -189,7 +258,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "GetUsersPage")]
         public void GetUsersPageTest(int count, int page, int pageSize)
         {
-            for (int i=0; i < count; i++)
+            for (int i = 0; i < count; i++)
             {
                 var name = RandomGenerator.GetRandomString();
                 var user = DatabaseCoreFactory.CreateUser(name);
@@ -200,7 +269,161 @@ namespace HSMServer.Core.Tests
             var actualUsers = _databaseCore.GetUsersPage(page, pageSize);
 
             Assert.NotNull(actualUsers);
-            Assert.Equal(GetTotalCount(count, page, pageSize), actualUsers.Count);
+            Assert.Equal(GetCountItemsOnPage(count, page, pageSize), actualUsers.Count);
+        }
+
+        #endregion
+
+        #region [ Registration Ticket ]
+
+        [Fact]
+        [Trait("Category", "OneRegistrationTicket")]
+        public void AddRegistrationTicketTest()
+        {
+            var ticket = DatabaseCoreFactory.CreateTicket();
+
+            _databaseCore.WriteRegistrationTicket(ticket);
+
+            FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralRegistrationTicket")]
+        public void SeveralRegistartionTicketTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var ticket = DatabaseCoreFactory.CreateTicket();
+
+                _databaseCore.WriteRegistrationTicket(ticket);
+
+                FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
+            }
+        }
+
+        [Fact]
+        [Trait("Category", "OneRemoveRegistrationTicket")]
+        public void RemoveRegistrationTicket()
+        {
+            var ticket = DatabaseCoreFactory.CreateTicket();
+
+            _databaseCore.WriteRegistrationTicket(ticket);
+            _databaseCore.RemoveRegistrationTicket(ticket.Id);
+
+            Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralRemoveRegistrationTickets")]
+        public void SeveralRemoveRegistrationTickets(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var ticket = DatabaseCoreFactory.CreateTicket();
+
+                _databaseCore.WriteRegistrationTicket(ticket);
+                _databaseCore.RemoveRegistrationTicket(ticket.Id);
+
+                Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
+            }
+        }
+
+        #endregion
+
+        #region [ Configuration Object ]
+
+        [Fact]
+        [Trait("Category", "AddConfigurationObject")]
+        public void AddConfigurationObjectTest()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var config = DatabaseCoreFactory.CreateConfiguration(name);
+
+            _databaseCore.WriteConfigurationObject(config);
+
+            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralConfigurationObject")]
+        public void SeveralConfigurationObjectTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var name = RandomGenerator.GetRandomString();
+                var config = DatabaseCoreFactory.CreateConfiguration(name);
+
+                _databaseCore.WriteConfigurationObject(config);
+
+                FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
+            }
+        }
+
+        [Fact]
+        [Trait("Category", "UpdateConfigurationObject")]
+        public void UpdateConfigurationObjectTest()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var config = DatabaseCoreFactory.CreateConfiguration(name);
+
+            _databaseCore.WriteConfigurationObject(config);
+            config.Value = RandomGenerator.GetRandomString();
+            _databaseCore.WriteConfigurationObject(config);
+
+            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
+        }
+
+        [Fact]
+        [Trait("Category", "RemoveConfigurationObject")]
+        public void RemoveConfigurationObject()
+        {
+            var name = RandomGenerator.GetRandomString();
+            var config = DatabaseCoreFactory.CreateConfiguration(name);
+
+            _databaseCore.WriteConfigurationObject(config);
+            _databaseCore.RemoveConfigurationObject(name);
+
+            Assert.Null(_databaseCore.GetConfigurationObject(name));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "SeveralRemoveConfigurationObject")]
+        public void SeveralRemoveConfigurationObject(int count)
+        {
+            for(int i = 0; i < count; i++)
+            {
+                var name = RandomGenerator.GetRandomString();
+                var config = DatabaseCoreFactory.CreateConfiguration(name);
+
+                _databaseCore.WriteConfigurationObject(config);
+                _databaseCore.RemoveConfigurationObject(name);
+
+                Assert.Null(_databaseCore.GetConfigurationObject(name));
+            }
         }
 
         #endregion
@@ -256,18 +479,35 @@ namespace HSMServer.Core.Tests
             }
         }
 
+        private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
+        {
+            Assert.NotNull(actualTicket);
+            Assert.Equal(expectedTicket.Id, actualTicket.Id);
+            Assert.Equal(expectedTicket.Role, actualTicket.Role);
+            Assert.Equal(expectedTicket.ProductKey, actualTicket.ProductKey);
+            Assert.Equal(expectedTicket.ExpirationDate, actualTicket.ExpirationDate);
+        }
+
+        private static void FullConfigurationObjectTest(ConfigurationObject expectedConfig, ConfigurationObject actualConfig)
+        {
+            Assert.NotNull(actualConfig);
+            Assert.Equal(expectedConfig.Name, expectedConfig.Name);
+            Assert.Equal(expectedConfig.Description, actualConfig.Description);
+            Assert.Equal(expectedConfig.Value, actualConfig.Value);
+        }
+
         private User GetUser(string username) => 
             _databaseCore.GetUsers().FirstOrDefault(u => u.Equals(username));
 
-        private int GetTotalCount(int count, int page, int pageSize)
+        private static int GetCountItemsOnPage(int count, int pageNumber, int pageSize)
         {
             count--;
 
-            if (page == count / pageSize)
+            if (pageNumber == count / pageSize)
                 return count % pageSize;
-            else if (page > count / pageSize)
+            else if (pageNumber > count / pageSize)
                 return 0;
-            else if (page < count / pageSize)
+            else if (pageNumber < count / pageSize)
                 return pageSize;
 
             return -1;

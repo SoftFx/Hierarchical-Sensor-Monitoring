@@ -40,7 +40,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static ConfigurationObject CreateConfiguration(string name) => new()
         {
             Name = name,
-            Value = RandomGenerator.GetRandomString()
+            Value = RandomGenerator.GetRandomString(),
+            Description = RandomGenerator.GetRandomString()
         };
     }
 }
