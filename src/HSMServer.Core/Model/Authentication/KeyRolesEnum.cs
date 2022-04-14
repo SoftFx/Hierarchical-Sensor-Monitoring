@@ -5,8 +5,7 @@ namespace HSMServer.Core.Model.Authentication
 {
     [SwaggerIgnore]
     [Obsolete]
-    public enum ProductRoleEnum
-    {
+    public enum ProductRoleEnum    {
         ProductManager = 0,
         ProductViewer = 1
     }

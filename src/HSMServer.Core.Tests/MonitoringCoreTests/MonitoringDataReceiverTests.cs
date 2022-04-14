@@ -8,6 +8,7 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Core.TreeValuesCache;
 using Moq;
 using System.Collections.Generic;
 using System.Linq;
@@ -39,6 +40,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
+            var treeValuesCache = new Mock<ITreeValuesCache>();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
@@ -49,6 +51,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 configurationProvider,
                 _valuesCache,
                 _updatesQueue,
+                treeValuesCache.Object,
                 monitoringLogger);
         }
 

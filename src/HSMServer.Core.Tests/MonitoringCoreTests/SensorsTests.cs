@@ -8,6 +8,7 @@ using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Core.TreeValuesCache;
 using Moq;
 using System;
 using System.Collections.Generic;
@@ -38,6 +39,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var configurationProvider = new Mock<IConfigurationProvider>();
 
             var barStorage = new BarSensorsStorage();
+            var treeValuesCache = new Mock<ITreeValuesCache>();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
@@ -48,6 +50,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 configurationProvider.Object,
                 _valuesCache,
                 _updatesQueue,
+                treeValuesCache.Object,
                 monitoringLogger);
         }
 
