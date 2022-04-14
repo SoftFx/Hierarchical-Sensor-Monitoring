@@ -1,6 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Converters;
+using HSMServer.Core.Extensions;
+using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.TreeValuesCache.Entities
@@ -8,20 +12,22 @@ namespace HSMServer.Core.TreeValuesCache.Entities
     public class SensorModel
     {
         public Guid Id { get; }
-        public ProductModel ParentProduct { get; set; }
         public string SensorName { get; }
-        public string Description { get; }
-        public SensorType SensorType { get; }
         public TimeSpan ExpectedUpdateInterval { get; }
-        public DateTime LastUpdateTime { get; }
-        public SensorStatus Status { get; }
+        public string Description { get; private set; }
+        public SensorType SensorType { get; private set; }
+        public DateTime SensorTime { get; private set; }
+        public DateTime LastUpdateTime { get; private set; }
+        public SensorStatus Status { get; private set; }
         // поля для хранения значений сенсоров? может хранить SensorValueBase/SensorValueBaseData? и из него уже на View составлять строки для отображения
         // или создать сенсоры-наследники для каждого типа сенсора
-        public string TypedData { get; }
-        public int OriginalFileSensorContentSize { get; }
+        public string TypedData { get; private set; }
+        public int OriginalFileSensorContentSize { get; private set; }
+        public string ValidationError { get; private set; }
+        public ProductModel ParentProduct { get; set; }
 
 
-        public SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
+        internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = new Guid(entity.Id);
             SensorName = string.IsNullOrEmpty(SensorName) ? GetSensorName(entity.Path) : entity.SensorName; // TODO: is sensorName right in database????
@@ -40,7 +46,57 @@ namespace HSMServer.Core.TreeValuesCache.Entities
             TypedData = dataEntity.TypedData;
         }
 
+        internal SensorModel(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        {
+            Id = Guid.NewGuid();
+            SensorName = GetSensorName(sensorValue.Path);
+
+            UpdateData(sensorValue, timeCollected, validationResult);
+        }
+
+
+        internal void UpdateData(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        {
+            Description = sensorValue.Description;
+            SensorType = SensorTypeFactory.GetSensorType(sensorValue);
+            TypedData = TypedDataFactory.GetTypedData(sensorValue);
+            SensorTime = sensorValue.Time;
+            LastUpdateTime = timeCollected;
+            ValidationError = validationResult.Error;
+
+            var sensorStatus = GetSensorStatus(validationResult);
+            Status = sensorStatus > sensorValue.Status ? sensorStatus : sensorValue.Status;
+        }
+
+        internal SensorDataEntity ToSensorDataEntity() =>
+            new()
+            {
+                Id = Id.ToString(),
+                Status = (byte)Status,
+                Time = SensorTime.ToUniversalTime(),
+                TimeCollected = LastUpdateTime.ToUniversalTime(),
+                Timestamp = GetTimestamp(SensorTime),
+                TypedData = TypedData,
+                DataType = (byte)SensorType,
+            };
+
 
         private static string GetSensorName(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
+
+        private static SensorStatus GetSensorStatus(ValidationResult validationResult) =>
+            validationResult.ResultType switch
+            {
+                ResultType.Unknown => SensorStatus.Unknown,
+                ResultType.Ok => SensorStatus.Ok,
+                ResultType.Warning => SensorStatus.Warning,
+                ResultType.Error => SensorStatus.Error,
+                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
+            };
+
+        private static long GetTimestamp(DateTime dateTime)
+        {
+            var timeSpan = dateTime - DateTime.UnixEpoch;
+            return (long)timeSpan.TotalSeconds;
+        }
     }
 }

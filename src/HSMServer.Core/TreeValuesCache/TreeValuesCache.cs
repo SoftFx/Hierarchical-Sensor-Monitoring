@@ -1,8 +1,11 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Products;
+using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.TreeValuesCache.Entities;
 using System;
 using System.Collections.Concurrent;
@@ -15,17 +18,30 @@ namespace HSMServer.Core.TreeValuesCache
 {
     public interface ITreeValuesCache
     {
+        event Action<ProductModel> NewValueEvent;
+
+
         List<ProductModel> GetTree();
+
+        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);
     }
 
     public sealed class TreeValuesCache : ITreeValuesCache
     {
+        private readonly IDatabaseAdapter _database;
+        private readonly IProductManager _productManager;
+
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
 
+        public event Action<ProductModel> NewValueEvent;
 
-        public TreeValuesCache(IDatabaseAdapter database)
+
+        public TreeValuesCache(IDatabaseAdapter database, IProductManager productManager)
         {
+            _database = database;
+            _productManager = productManager;
+
             _tree = new ConcurrentDictionary<Guid, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
@@ -34,6 +50,32 @@ namespace HSMServer.Core.TreeValuesCache
             BuildTreeWithMigration(products, sensors, sensorsData);
         }
 
+
+        public List<ProductModel> GetTree() => _tree.Values.ToList();
+
+        public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+
+        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        {
+            var parentProductName = _productManager.GetProductNameByKey(sensorValue.Key);  // TODO? get product by key from db?
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(parentProductName, sensorValue.Path);
+
+            var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
+            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.SensorName == newSensorValueName).Value;
+            if (sensor == null)
+            {
+                sensor = new SensorModel(sensorValue, timeCollected, validationResult);
+                parentProduct.AddSensor(sensor);
+
+                _sensors.TryAdd(sensor.Id, sensor);
+            }
+            else
+                sensor.UpdateData(sensorValue, timeCollected, validationResult);
+
+            //_database.PutSensorData(sensor.ToSensorDataEntity(), parentProductName); // TODO: save to db
+
+            NewValueEvent?.Invoke(_tree.FirstOrDefault(p => p.Value.DisplayName == parentProductName).Value);
+        }
 
         public void BuildTree(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
@@ -72,23 +114,7 @@ namespace HSMServer.Core.TreeValuesCache
             var sensorDatas = GetSensorDatasDict(sensorDataEntities);
             foreach (var sensorEntity in sensorEntities)
             {
-                var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == sensorEntity.ProductName).Value;
-
-                var pathParts = sensorEntity.Path.Split(CommonConstants.SensorPathSeparator);
-                for (int i = 0; i < pathParts.Length - 1; ++i)
-                {
-                    var subProductName = pathParts[i];
-                    var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
-                    if (subProduct == null)
-                    {
-                        subProduct = new ProductModel(subProductName, parentProduct);
-                        parentProduct.AddSubProduct(subProduct);
-
-                        _tree.TryAdd(subProduct.Id, subProduct);
-                    }
-
-                    parentProduct = subProduct;
-                }
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
 
                 var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
                 parentProduct.AddSensor(sensor);
@@ -97,10 +123,35 @@ namespace HSMServer.Core.TreeValuesCache
             }
         }
 
-        public List<ProductModel> GetTree() => _tree.Values.ToList();
 
-        public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        {
+            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
+            if (parentProduct == null)
+            {
+                parentProduct = new ProductModel(productName);
 
+                _tree.TryAdd(parentProduct.Id, parentProduct);
+            }
+
+            var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
+            for (int i = 0; i < pathParts.Length - 1; ++i)
+            {
+                var subProductName = pathParts[i];
+                var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
+                if (subProduct == null)
+                {
+                    subProduct = new ProductModel(subProductName, parentProduct);
+                    parentProduct.AddSubProduct(subProduct);
+
+                    _tree.TryAdd(subProduct.Id, subProduct);
+                }
+
+                parentProduct = subProduct;
+            }
+
+            return parentProduct;
+        }
 
         private void FillTreeByProductModels(List<ProductEntity> productEntities)
         {

@@ -66,6 +66,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult RefreshTree() => PartialView("_Tree", _treeViewModel);
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
         {
             if (encodedPath.Contains("sensor_"))

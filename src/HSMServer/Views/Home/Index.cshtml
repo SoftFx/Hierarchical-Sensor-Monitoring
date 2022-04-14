@@ -15,7 +15,8 @@
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
 
-    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))"
+    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))";
+    var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
     var removeSensorAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorAction, ViewConstants.HomeController))";
@@ -107,7 +108,11 @@
     <div>
         <div id="mainContainer" class="row">
             <div class="scrollableBlock">
-                <div id="treeContainer" class="col-md-4">@await Html.PartialAsync("_Tree", Model)</div>
+                <div id="treeContainer" class="col-md-4">
+                    <div class="col-md-auto">
+                        <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
+                    </div>
+                </div>
             </div>
 
 
@@ -404,4 +409,20 @@
         $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'" +
             " title=' " + error + "'></li>");
     }
+
+    function updateTreeTimer() {
+        $.ajax({
+            type: 'POST',
+            url: refreshTree,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (treeData) {
+            $('#jstree').jstree(true).settings.core.data = treeData;
+            $('#jstree').jstree(true).refresh(true);
+        });
+    }
+
+    setInterval(updateTreeTimer, 5000);
 </script>

@@ -1,5 +1,7 @@
 ﻿using HSMServer.Core.TreeValuesCache;
+using HSMServer.Core.TreeValuesCache.Entities;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -14,13 +16,13 @@ namespace HSMServer.Model.TreeViewModels
         public TreeViewModel(ITreeValuesCache valuesCache)
         {
             _treeValuesCache = valuesCache;
+            _treeValuesCache.NewValueEvent += NewValueEventHandler;
 
             Nodes = new ConcurrentDictionary<string, ProductViewModel>();
             Sensors = new ConcurrentDictionary<string, SensorViewModel>();
 
             BuildTree();
         }
-
 
         private void BuildTree()
         {
@@ -48,6 +50,34 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)
                     node.Recursion();
+        }
+
+        private void NewValueEventHandler(ProductModel productModel)
+        {
+            var allProducts = new List<ProductModel>();
+            AddSubProducts(productModel, allProducts);
+
+            foreach (var product in allProducts)
+                UpdateProduct(product);
+        }
+
+        private void AddSubProducts(ProductModel model, List<ProductModel> allProducts)
+        {
+            foreach (var (_, subProduct) in model.SubProducts)
+                AddSubProducts(subProduct, allProducts);
+
+            allProducts.Add(model);
+        }
+
+        private void UpdateProduct(ProductModel model)
+        {
+            if (!Nodes.TryGetValue(model.Id.ToString(), out var productVM))
+            {
+                productVM = new ProductViewModel(model);
+                Nodes.TryAdd(productVM.Id, productVM);
+            }
+            else
+                productVM.Update(model);
         }
     }
 }

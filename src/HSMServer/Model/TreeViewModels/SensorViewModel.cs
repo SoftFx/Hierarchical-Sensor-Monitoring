@@ -53,6 +53,31 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
+        public void Update(SensorModel model)
+        {
+            Name = model.SensorName;
+            SensorType = model.SensorType;
+            Status = model.Status;
+            Description = model.Description;
+            UpdateTime = model.LastUpdateTime;
+
+            // TODO remove this logic
+            if (SensorType == SensorType.BooleanSensor)
+            {
+                ShortStringValue = JsonSerializer.Deserialize<BoolSensorData>(model.TypedData).BoolValue.ToString(); // TODO: build ShortStringValue and StringValue for all sensors 
+            }
+            else if (SensorType == SensorType.FileSensorBytes)
+            {
+                var data = JsonSerializer.Deserialize<FileSensorBytesData>(model.TypedData);
+                ShortStringValue = GetFileSensorsShortString(data.FileName, data.Extension, data.FileContent?.Length ?? 0);
+            }
+
+            IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
+            FileNameString = GetFileNameStting(model.SensorType, ShortStringValue);
+
+            FillProductAndPath();
+        }
+
         public string GetTimeAgo(TimeSpan time)
         {
             if (time.TotalDays > 30)

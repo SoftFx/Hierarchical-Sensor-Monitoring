@@ -239,7 +239,8 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!ProcessBarSensorValue(value, sensorData))
                     return;
 
-                SaveSensorValue(value.Convert(timeCollected, sensorData.Status), sensorData.Product);
+                _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);
+                //SaveSensorValue(value.Convert(timeCollected, sensorData.Status), sensorData.Product);
             }
             catch (Exception e)
             {
@@ -292,8 +293,8 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             var sensorData = GetSensorData(value, timeCollected, validationResult);
 
-            _queueManager.AddSensorData(sensorData);
-            _valuesCache.AddValue(sensorData.Product, sensorData);
+            //_queueManager.AddSensorData(sensorData);
+            //_valuesCache.AddValue(sensorData.Product, sensorData);
 
             return sensorData;
         }

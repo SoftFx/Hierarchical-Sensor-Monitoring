@@ -39,7 +39,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
             CreationDate = new DateTime(entity.CreationDate);
         }
 
-        public ProductModel(string name, ProductModel parent) : this()
+        public ProductModel(string name, ProductModel parent = null) : this()
         {
             Id = Guid.NewGuid();
             ParentProduct = parent;

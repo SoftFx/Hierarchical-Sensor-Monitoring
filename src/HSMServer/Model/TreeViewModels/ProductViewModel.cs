@@ -30,6 +30,20 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
+        public void Update(ProductModel model)
+        {
+            Name = model.DisplayName;
+
+            foreach (var (sensorId, sensor) in model.Sensors)
+                if (!Sensors.TryGetValue(sensorId.ToString(), out var existingSensorVM))
+                {
+                    var sensorVM = new SensorViewModel(sensor, this);
+                    Sensors.TryAdd(sensorVM.Id, sensorVM);
+                }
+                else
+                    existingSensorVM.Update(sensor);
+        }
+
         public void AddSubNode(ProductViewModel node)
         {
             Nodes.TryAdd(node.Id, node);
