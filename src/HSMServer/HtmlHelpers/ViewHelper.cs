@@ -13,19 +13,9 @@ namespace HSMServer.HtmlHelpers
     {
         #region Sensors tree
 
-        public static HtmlString CreateTree(TreeViewModel model)
-        {
-            return new HtmlString(TreeHelper.CreateTree(model));
-        }
-
         public static HtmlString UpdateTree(TreeViewModel model)
         {
             return new HtmlString(TreeHelper.UpdateTree(model));
-        }
-
-        public static HtmlString CreateFullLists(TreeViewModel model)
-        {
-            return new HtmlString(ListHelper.CreateFullLists(model));
         }
 
         public static HtmlString CreateNotSelectedLists(string selectedPath, TreeViewModel model)

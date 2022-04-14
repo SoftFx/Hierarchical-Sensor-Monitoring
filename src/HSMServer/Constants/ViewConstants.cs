@@ -25,6 +25,8 @@
         public const string GetSensorInfoAction = "GetSensorInfo";
         public const string UpdateSensorInfoAction = "UpdateSensorInfo";
 
+        public const string SelectNodeAction = "SelectNode";
+
         public const string RemoveProductAction = "RemoveProduct";
         public const string RemoveNodeAction = "RemoveNode";
         public const string RemoveSensorAction = "RemoveSensor";

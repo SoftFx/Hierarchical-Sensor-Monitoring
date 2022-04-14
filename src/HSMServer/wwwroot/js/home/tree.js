@@ -88,14 +88,31 @@
     $('#updateTime').empty();
     $('#updateTime').append('Update Time: ' + new Date().toUTCString());
 
-    initializeClickTree();
+    initializeActivateNodeTree();
 }
 
-function initializeClickTree() {
+function initializeActivateNodeTree() {
     $('#jstree').on('activate_node.jstree', function (e, data) {
-        if (data == undefined || data.node == undefined || data.node.id == undefined)
-            return;
-        displayList(data);
+        var selectedId = data.node.id;
+
+        $.ajax({
+            type: 'post',
+            url: selectNode + '?Selected=' + selectedId,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                $("#listSensors").html(viewData);
+            }
+        }).done(function () {
+            $('#noData').css('display', 'none');
+
+            initialize();
+
+            var selectedAccordionId = '#accordion_' + selectedId;
+            if ($(selectedAccordionId).attr('aria-expanded') == 'false')
+                $(selectedAccordionId).click();
+        });
     });
 }
 

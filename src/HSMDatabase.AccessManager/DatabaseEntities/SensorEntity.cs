@@ -5,6 +5,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public class SensorEntity
     {
+        public string Id { get; set; }
+        public string ProductId { get; set; }
         public string Path { get; set; }
         public string ProductName { get; set; }
         public string SensorName { get; set; }

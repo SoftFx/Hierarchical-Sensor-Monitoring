@@ -1,0 +1,9 @@
+﻿@model HSMServer.Model.TreeViewModels.ProductViewModel
+
+@if (Model?.Sensors != null && !Model.Sensors.IsEmpty)
+{
+    <div>
+        @foreach (var (name, sensor) in Model.Sensors)
+            @await Html.PartialAsync("_SensorAccordion", sensor)
+    </div>
+}

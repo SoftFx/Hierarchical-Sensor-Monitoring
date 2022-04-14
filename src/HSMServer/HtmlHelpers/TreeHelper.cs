@@ -9,24 +9,6 @@ namespace HSMServer.HtmlHelpers
     {
         private const int NodeNameMaxLength = 35;
 
-        public static string CreateTree(TreeViewModel model)
-        {
-            if (model == null)
-                return string.Empty;
-
-            var result = new StringBuilder(model.Nodes?.Count ?? 0 + 2);
-            result.Append("<div class='col-md-auto'><div id='jstree'><ul>");
-            if (model.Nodes != null)
-                foreach (var (_, node) in model.Nodes)
-                {
-                    result.Append(Recursion(node));
-                }
-
-            result.Append("</ul></div></div>");
-
-            return result.ToString();
-        }
-
         public static string UpdateTree(TreeViewModel model)
         {
             if (model == null)

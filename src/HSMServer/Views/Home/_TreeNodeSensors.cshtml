@@ -1,0 +1,17 @@
+﻿@using HSMServer.Model.TreeViewModels
+
+@model HSMServer.Model.TreeViewModels.NodeViewModel
+
+<div class='col' id='list'>
+
+    <div style='width: 800px'>
+        <ul id='noData' class='list-group'>
+            <li class='list-group-item'>No Data</li>
+        </ul>
+    </div>
+
+    @if (Model is ProductViewModel productVM)
+        @await Html.PartialAsync("_Sensors", productVM)
+    else if (Model is SensorViewModel sensorVM)
+        @await Html.PartialAsync("_Sensor", sensorVM)
+</div>

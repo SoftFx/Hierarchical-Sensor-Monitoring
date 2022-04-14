@@ -1,11 +1,15 @@
 ﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model.Sensor;
+using HSMServer.Core.TreeValuesCache.Entities;
 using System;
+using System.Text.Json;
 
 namespace HSMServer.Model.ViewModel
 {
     public class SensorViewModel
     {
+        public string Id { get; set; }
         public string Name { get; set; }
         public string StringValue { get; set; }
         public SensorType SensorType { get; set; }
@@ -15,6 +19,18 @@ namespace HSMServer.Model.ViewModel
         public string ShortStringValue { get; set; }
         public TransactionType TransactionType { get; set; }
         public string ValidationError { get; set; }
+
+        
+        public SensorViewModel(SensorModel model)
+        {
+            Id = model.Id.ToString();
+            Name = model.SensorName;
+            SensorType = model.SensorType;
+            Status = model.Status;
+            Description = model.Description;
+            Time = model.LastUpdateTime;
+            ShortStringValue = JsonSerializer.Deserialize<BoolSensorData>(model.TypedData).BoolValue.ToString(); // TODO: build ShortStringValue and StringValue for all sensors 
+        }
 
         public SensorViewModel(string name, SensorData sensor)
         {
@@ -27,19 +43,6 @@ namespace HSMServer.Model.ViewModel
             Time = sensor.Time;
             TransactionType = sensor.TransactionType;
             ValidationError = sensor.ValidationError;
-        }
-
-        public SensorViewModel(SensorViewModel model)
-        {
-            Name = model.Name;
-            SensorType = model.SensorType;
-            Status = model.Status;
-            StringValue = model.StringValue;
-            ShortStringValue = model.ShortStringValue;
-            Description = model.Description;
-            Time = model.Time;
-            TransactionType = model.TransactionType;
-            ValidationError = model.ValidationError;
         }
 
         public SensorViewModel() { }

@@ -9,6 +9,8 @@ using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
+using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TreeValuesCache;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;
@@ -62,6 +64,9 @@ namespace HSMServer
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
+            services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
+            services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+            services.AddSingleton<HSMServer.Model.TreeViewModels.TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());

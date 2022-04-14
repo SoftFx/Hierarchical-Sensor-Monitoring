@@ -34,31 +34,35 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
+        private readonly Model.TreeViewModels.TreeViewModel _treeViewModel;
 
 
         public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
+            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
+            Model.TreeViewModels.TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
             _treeManager = treeManager;
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
+            _treeViewModel = treeViewModel;
         }
 
 
-        public IActionResult Index()
-        {
-            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-            var tree = _treeManager.GetTreeViewModel(user);
-            if (tree == null)
-            {
-                var result = _sensorsInterface.GetSensorsTree(user);
-                tree = new TreeViewModel(result);
-                _treeManager.AddOrCreate(user, tree);
-            }
+        public IActionResult Index() => View(_treeViewModel);
 
-            return View(tree);
+        [HttpPost]
+        public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var decodedId = SensorPathHelper.Decode(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                return PartialView("_TreeNodeSensors", node);
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                return PartialView("_TreeNodeSensors", sensor);
+
+            return PartialView("_TreeNodeSensors", null);
         }
 
         [HttpPost]
@@ -476,12 +480,14 @@ namespace HSMServer.Controllers
 
         #endregion
 
-        private static void ParseProductAndPath(string encodedPath, out string product, out string path)
+        private void ParseProductAndPath(string encodedId, out string product, out string path)
         {
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            int index = decodedPath.IndexOf('/');
-            product = decodedPath.Substring(0, index);
-            path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
+            var decodedId = SensorPathHelper.Decode(encodedId);
+
+            _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
+
+            path = sensor?.Path;
+            product = sensor?.Product;
         }
 
         private static void ParseProductPathAndSensor(string encodedPath, out string product,

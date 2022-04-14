@@ -30,16 +30,6 @@ namespace HSMServer.Model.ViewModel
             ModifyUpdateTime();
         }
 
-        public NodeViewModel(NodeViewModel model, NodeViewModel parent)
-        {
-            Name = model.Name;
-            Path = model.Path;
-            Status = model.Status;
-            Parent = parent;
-            UpdateTime = model.UpdateTime;
-            Count = model.Count;
-        }
-
         public NodeViewModel() { }
 
         public NodeViewModel Clone(NodeViewModel parent)

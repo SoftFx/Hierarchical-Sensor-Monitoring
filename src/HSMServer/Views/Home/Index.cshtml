@@ -1,6 +1,6 @@
 ﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
-@model HSMServer.Model.ViewModel.TreeViewModel
+@using HSMServer.Model.ViewModel
+@model HSMServer.Model.TreeViewModels.TreeViewModel
 
 @{
     ViewData["Title"] = "Tree";
@@ -14,6 +14,8 @@
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
+
+    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))"
 
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
     var removeSensorAction = "@Html.Raw(Url.Action(ViewConstants.RemoveSensorAction, ViewConstants.HomeController))";
@@ -105,11 +107,12 @@
     <div>
         <div id="mainContainer" class="row">
             <div class="scrollableBlock">
-                <div id="treeContainer" class="col-md-4">@ViewHelper.CreateTree(Model)</div>
+                <div id="treeContainer" class="col-md-4">@await Html.PartialAsync("_Tree", Model)</div>
             </div>
 
 
-            <div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>
+            @*<div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>*@
+            <div id="listSensors" class="col-md-8">@await Html.PartialAsync("_TreeNodeSensors", (NodeViewModel)null)</div>
         </div>
         <hr />
     </div>
@@ -119,10 +122,9 @@
 
 <script>
     initializeTree();
-    initializeDataHistoryRequests();
+    //initializeDataHistoryRequests();
     InitializePeriodRequests();
     initializeInfoLinks();
-    //InitializePeriodRequests();
 
     const hubConnection = new signalR.HubConnectionBuilder()
         .withUrl('/monitoring')
@@ -135,9 +137,9 @@
         function (sensors) {
             if (sensors == undefined) return;
 
-            var node = $('#jstree').jstree().get_selected(true)[0];
-            if (node != undefined)
-                displayList(node);
+            //var node = $('#jstree').jstree().get_selected(true)[0];
+            //if (node != undefined)
+            //    displayList(node);
 
             //update tree
             $.ajax({
@@ -156,7 +158,7 @@
                 $('#jstree').jstree(true).settings.core.data = treeData;
                 $('#jstree').jstree(true).refresh(true);
 
-                initializeClickTree();
+                initializeActivateNodeTree();
             });
 
             var selectedNode = $('#jstree').jstree().get_selected(true)[0];
@@ -178,7 +180,7 @@
                 });
                 let parsedData = JSON.parse(listsData);
                 $('#listContainer').append(parsedData.value);
-                initializeDataHistoryRequests();
+                //initializeDataHistoryRequests();
                 initializeInfoLinks();
             });
 
@@ -202,7 +204,7 @@
                             selectedRadio.click();
                         }
                     }
-                    initializeDataHistoryRequests();
+                    //initializeDataHistoryRequests();
                     initializeInfoLinks();
                 });
 
@@ -230,7 +232,7 @@
                     }
 
                     $('#' + listId).append(sensorsData);
-                    initializeDataHistoryRequests();
+                    //initializeDataHistoryRequests();
                     initializeInfoLinks();
                 });
 
@@ -269,9 +271,9 @@
     });
 
     function update() {
-        var node = $('#jstree').jstree().get_selected(true)[0];
-        if (node != undefined)
-            displayList(node);
+        //var node = $('#jstree').jstree().get_selected(true)[0];
+        //if (node != undefined)
+        //    displayList(node);
 
         //update tree
         $.ajax({
@@ -291,7 +293,7 @@
             $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
 
-            initializeClickTree();
+            //initializeActivateNodeTree();
         });
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
@@ -317,7 +319,7 @@
 
             $('#listContainer').append(listsData);
 
-            initializeDataHistoryRequests();
+            //initializeDataHistoryRequests();
             initializeInfoLinks();
         });
 
@@ -340,7 +342,7 @@
                         selectedRadio.click();
                     }
                 }
-                initializeDataHistoryRequests();
+                //initializeDataHistoryRequests();
                 initializeInfoLinks();
             });
 

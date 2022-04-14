@@ -2,6 +2,10 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
+    [Obsolete]
+    {
+        public string Key { get; set; }
+    }
     public sealed record AccessKeyEntity
     {
         public string Id { get; init; }

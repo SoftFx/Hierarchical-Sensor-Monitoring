@@ -55,6 +55,8 @@ namespace HSMServer.Core.DataLayer
         public List<Product> GetProducts() =>
             _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
 
+        public List<ProductEntity> GetAllProducts() => _database.GetAllProducts();
+
         #endregion
 
         #region Sensors
