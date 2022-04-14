@@ -10,17 +10,19 @@ namespace HSMServer.Model.TreeViewModels
     public class ProductViewModel : NodeViewModel
     {
         public int Count { get; set; }
-        public ConcurrentDictionary<string, ProductViewModel> Nodes { get; set; }
-        public ConcurrentDictionary<string, SensorViewModel> Sensors { get; set; }
+
+        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; set; }
+
+        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; set; }
 
 
         public ProductViewModel(ProductModel model)
         {
-            Id = model.Id.ToString();
+            Id = model.Id;
             Name = model.DisplayName;
 
-            Nodes = new ConcurrentDictionary<string, ProductViewModel>();
-            Sensors = new ConcurrentDictionary<string, SensorViewModel>();
+            Nodes = new ConcurrentDictionary<Guid, ProductViewModel>();
+            Sensors = new ConcurrentDictionary<Guid, SensorViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)
             {
@@ -30,12 +32,12 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public void Update(ProductModel model)
+        internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
 
             foreach (var (sensorId, sensor) in model.Sensors)
-                if (!Sensors.TryGetValue(sensorId.ToString(), out var existingSensorVM))
+                if (!Sensors.TryGetValue(sensorId, out var existingSensorVM))
                 {
                     var sensorVM = new SensorViewModel(sensor, this);
                     Sensors.TryAdd(sensorVM.Id, sensorVM);
@@ -44,13 +46,13 @@ namespace HSMServer.Model.TreeViewModels
                     existingSensorVM.Update(sensor);
         }
 
-        public void AddSubNode(ProductViewModel node)
+        internal void AddSubNode(ProductViewModel node)
         {
             Nodes.TryAdd(node.Id, node);
             node.Parent = this;
         }
 
-        public void Recursion()
+        internal void Recursion()
         {
             int count = 0;
             if (Nodes != null && !Nodes.IsEmpty)
@@ -68,7 +70,7 @@ namespace HSMServer.Model.TreeViewModels
             ModifyStatus();
         }
 
-        public void ModifyUpdateTime()
+        private void ModifyUpdateTime()
         {
             var sensorMaxTime = (Sensors?.Values?.Count ?? 0) == 0 ? null : Sensors?.Values.Max(x => x.UpdateTime);
             var nodeMaxTime = (Nodes?.Values?.Count ?? 0) == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
@@ -81,7 +83,7 @@ namespace HSMServer.Model.TreeViewModels
                 UpdateTime = nodeMaxTime.Value;
         }
 
-        public void ModifyStatus()
+        private void ModifyStatus()
         {
             var statusFromSensors = (Sensors?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Sensors.Values.Max(s => s.Status);
             var statusFromNodes = (Nodes?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);

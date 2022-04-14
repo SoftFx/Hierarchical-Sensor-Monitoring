@@ -3,33 +3,41 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
-using HSMServer.Core.Extensions;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.TreeValuesCache.Entities
 {
-    public class SensorModel
+    public sealed class SensorModel
     {
         public Guid Id { get; }
+
         public string SensorName { get; }
+
         public TimeSpan ExpectedUpdateInterval { get; }
+
         public string Description { get; private set; }
+
         public SensorType SensorType { get; private set; }
+
         public DateTime SensorTime { get; private set; }
+
         public DateTime LastUpdateTime { get; private set; }
+
         public SensorStatus Status { get; private set; }
-        // поля для хранения значений сенсоров? может хранить SensorValueBase/SensorValueBaseData? и из него уже на View составлять строки для отображения
-        // или создать сенсоры-наследники для каждого типа сенсора
-        public string TypedData { get; private set; }
+
+        public string TypedData { get; private set; } // TODO: хранить последние 100 значений, классы-наследники??
+
         public int OriginalFileSensorContentSize { get; private set; }
+
         public string ValidationError { get; private set; }
+
         public ProductModel ParentProduct { get; set; }
 
 
         internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
-            Id = new Guid(entity.Id);
+            Id = Guid.Parse(entity.Id);
             SensorName = string.IsNullOrEmpty(SensorName) ? GetSensorName(entity.Path) : entity.SensorName; // TODO: is sensorName right in database????
             Description = entity.Description;
             SensorType = (SensorType)entity.SensorType;

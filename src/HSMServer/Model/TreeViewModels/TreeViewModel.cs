@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.TreeValuesCache;
 using HSMServer.Core.TreeValuesCache.Entities;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -9,8 +10,10 @@ namespace HSMServer.Model.TreeViewModels
     {
         private readonly ITreeValuesCache _treeValuesCache;
 
-        public ConcurrentDictionary<string, ProductViewModel> Nodes { get; }
-        public ConcurrentDictionary<string, SensorViewModel> Sensors { get; }
+
+        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; }
+
+        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; }
 
 
         public TreeViewModel(ITreeValuesCache valuesCache)
@@ -18,11 +21,12 @@ namespace HSMServer.Model.TreeViewModels
             _treeValuesCache = valuesCache;
             _treeValuesCache.NewValueEvent += NewValueEventHandler;
 
-            Nodes = new ConcurrentDictionary<string, ProductViewModel>();
-            Sensors = new ConcurrentDictionary<string, SensorViewModel>();
+            Nodes = new ConcurrentDictionary<Guid, ProductViewModel>();
+            Sensors = new ConcurrentDictionary<Guid, SensorViewModel>();
 
             BuildTree();
         }
+
 
         private void BuildTree()
         {
@@ -36,7 +40,7 @@ namespace HSMServer.Model.TreeViewModels
 
             foreach (var product in products)
                 foreach (var (_, subProduct) in product.SubProducts)
-                    Nodes[product.Id.ToString()].AddSubNode(Nodes[subProduct.Id.ToString()]);
+                    Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
 
             foreach (var (_, node) in Nodes)
                 foreach (var sensor in node.Sensors)
@@ -71,7 +75,7 @@ namespace HSMServer.Model.TreeViewModels
 
         private void UpdateProduct(ProductModel model)
         {
-            if (!Nodes.TryGetValue(model.Id.ToString(), out var productVM))
+            if (!Nodes.TryGetValue(model.Id, out var productVM))
             {
                 productVM = new ProductViewModel(model);
                 Nodes.TryAdd(productVM.Id, productVM);

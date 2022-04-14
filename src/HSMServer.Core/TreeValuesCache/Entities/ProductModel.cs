@@ -12,16 +12,23 @@ namespace HSMServer.Core.TreeValuesCache.Entities
     }
 
 
-    public class ProductModel
+    public sealed class ProductModel
     {
         public Guid Id { get; }
-        public ProductModel ParentProduct { get; private set; }
-        public ProductState State { get; }
+
         public string DisplayName { get; }
+
         public string Description { get; }
+
+        public ProductState State { get; }
+
         public DateTime CreationDate { get; }
+
         public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; }
+
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
+
+        public ProductModel ParentProduct { get; private set; }
 
 
         public ProductModel()
@@ -32,7 +39,7 @@ namespace HSMServer.Core.TreeValuesCache.Entities
 
         public ProductModel(ProductEntity entity) : this()
         {
-            Id = new Guid(entity.Id);
+            Id = Guid.Parse(entity.Id);
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;

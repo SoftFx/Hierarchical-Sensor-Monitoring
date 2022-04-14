@@ -55,7 +55,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 return PartialView("_TreeNodeSensors", node);
@@ -485,7 +485,7 @@ namespace HSMServer.Controllers
 
         private void ParseProductAndPath(string encodedId, out string product, out string path)
         {
-            var decodedId = SensorPathHelper.Decode(encodedId);
+            var decodedId = SensorPathHelper.DecodeGuid(encodedId);
 
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 

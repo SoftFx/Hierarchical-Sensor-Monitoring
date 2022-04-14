@@ -90,17 +90,17 @@ namespace HSMServer.Core.TreeValuesCache
             }
 
             foreach (var productEntity in productEntities)
-                if (_tree.TryGetValue(new Guid(productEntity.Id), out var product))
+                if (_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
                 {
                     foreach (var subProductId in productEntity.SubProductsIds)
                     {
-                        if (_tree.TryGetValue(new Guid(subProductId), out var subProduct))
+                        if (_tree.TryGetValue(Guid.Parse(subProductId), out var subProduct))
                             product.AddSubProduct(subProduct);
                     }
 
                     foreach (var sensorId in productEntity.SensorsIds)
                     {
-                        if (_sensors.TryGetValue(new Guid(sensorId), out var sensor))
+                        if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
                             product.AddSensor(sensor);
                     }
                 }
