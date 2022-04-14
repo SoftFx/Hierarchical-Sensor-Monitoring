@@ -3,7 +3,9 @@
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     [Obsolete]
+    public class ExtraKeyEntity
     {
+        public string Name { get; set; }
         public string Key { get; set; }
     }
     public sealed record AccessKeyEntity
