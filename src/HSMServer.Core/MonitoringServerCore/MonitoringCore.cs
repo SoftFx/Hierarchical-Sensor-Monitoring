@@ -354,11 +354,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        public List<SensorData> GetSensorUpdates(User user)
-        {
-            return new List<SensorData>();
-        }
-
         public List<SensorData> GetSensorsTree(User user)
         {
             List<SensorData> result = new List<SensorData>();

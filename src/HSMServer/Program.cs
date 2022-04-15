@@ -1,17 +1,15 @@
-using System;
-using System.Net;
-using System.Security.Authentication;
 using HSMCommon.Constants;
 using HSMServer.Core.Configuration;
-using HSMServer.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using NLog.Web;
+using System;
+using System.Net;
+using System.Security.Authentication;
 
 namespace HSMServer
 {
@@ -31,8 +29,6 @@ namespace HSMServer
                 logger.Debug("init main");
 
                 var host = CreateHostBuilder(args).Build();
-
-                StartSignalRService(host);
 
                 host.Run();
             }
@@ -101,14 +97,5 @@ namespace HSMServer
                 })
                 .UseNLog()
                 .UseConsoleLifetime();
-
-        private static void StartSignalRService(IHost host)
-        {
-            using var serviceScope = host.Services.CreateScope();
-            var services = serviceScope.ServiceProvider;
-            var serviceContext = services.GetRequiredService<IClientMonitoringService>();
-
-            serviceContext.Initialize();
-        }
     }
 }

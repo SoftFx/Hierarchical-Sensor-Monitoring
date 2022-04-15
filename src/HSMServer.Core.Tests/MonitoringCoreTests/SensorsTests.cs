@@ -374,23 +374,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get sensors data")]
-        public void GetSensorUpdates()
-        {
-            // initialize queueManager
-            _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
-
-            var sensorValue = AddAndGetRandomSensorValue();
-            _monitoringCore.RemoveSensors(TestProductsManager.ProductName, sensorValue.Key, new List<string>() { sensorValue.Path });
-
-            var result = _monitoringCore.GetSensorUpdates(TestUsersManager.TestUser);
-
-            Assert.Equal(2, result.Count);
-            _sensorValuesTester.TestSensorDataFromCache(sensorValue, result[0]);
-            TestRemovedSensorData(sensorValue, TestProductsManager.ProductName, result[1]);
-        }
-
-        [Fact]
-        [Trait("Category", "Get sensors data")]
         public void GetSensorsTreeTest()
         {
             var sensorsLastValues = AddRandomSensorValuesAndGetTheirLastValues(10);

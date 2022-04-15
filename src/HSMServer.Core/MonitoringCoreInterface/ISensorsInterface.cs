@@ -27,7 +27,6 @@ namespace HSMServer.Core.MonitoringCoreInterface
         //ToDo: move
         bool HideProduct(Product product, out string error);
 
-        List<SensorData> GetSensorUpdates(User user);
         List<SensorData> GetSensorsTree(User user);
     }
 }

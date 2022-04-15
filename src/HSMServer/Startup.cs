@@ -14,8 +14,6 @@ using HSMServer.Core.TreeValuesCache;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;
-using HSMServer.Services;
-using HSMServer.SignalR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -59,7 +57,6 @@ namespace HSMServer
             services.AddSingleton<IProductManager, ProductManager>();
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
-            services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IValuesCache, ValuesCache>();
@@ -72,7 +69,6 @@ namespace HSMServer
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
-            services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
@@ -128,9 +124,6 @@ namespace HSMServer
             app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<MonitoringDataHub>("/monitoring",
-                    options => options.Transports = HttpTransportType.ServerSentEvents); //only server can send messages
-
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",

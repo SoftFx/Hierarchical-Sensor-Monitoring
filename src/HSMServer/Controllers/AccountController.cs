@@ -10,7 +10,6 @@ using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
-using HSMServer.SignalR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -30,16 +29,14 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
-        private readonly ISignalRSessionsManager _sessionsManager;
         private readonly ITreeViewManager _treeManager;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ISignalRSessionsManager sessionsManager, ITreeViewManager treeManager)
+            IRegistrationTicketManager ticketManager, ITreeViewManager treeManager)
         {
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
-            _sessionsManager = sessionsManager;
             _treeManager = treeManager;
         }
 
@@ -192,13 +189,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> Logout()
         {
             TempData.Remove(TextConstants.TempDataErrorText);
-            var user = HttpContext.User as User;
-            //Remove tree for a disconnected user to save memory/process & keep the data fresh
-            int connectionsCount = _sessionsManager.GetConnectionsCount(user);
-            if (connectionsCount <= 1)
-            {
-                _treeManager.RemoveViewModel(user);
-            }
+
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Index", "Home");
         }
