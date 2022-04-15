@@ -8,7 +8,6 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
-using HSMServer.Core.TreeValuesCache;
 using Moq;
 using System.Collections.Generic;
 using System.Linq;

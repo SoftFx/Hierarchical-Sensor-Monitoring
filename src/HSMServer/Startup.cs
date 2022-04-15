@@ -2,6 +2,7 @@
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
@@ -9,7 +10,6 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
-using HSMServer.Core.TreeValuesCache;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.ViewModel;

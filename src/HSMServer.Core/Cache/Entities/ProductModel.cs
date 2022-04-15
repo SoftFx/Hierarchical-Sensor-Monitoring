@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 
-namespace HSMServer.Core.TreeValuesCache.Entities
+namespace HSMServer.Core.Cache.Entities
 {
     [Flags]
     public enum ProductState : long

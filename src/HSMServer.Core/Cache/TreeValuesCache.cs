@@ -3,10 +3,10 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataValidation;
-using HSMServer.Core.TreeValuesCache.Entities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 
-namespace HSMServer.Core.TreeValuesCache
+namespace HSMServer.Core.Cache
 {
     public interface ITreeValuesCache
     {

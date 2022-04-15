@@ -21,7 +21,7 @@ using System.Text.Json;
 using System.Threading;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.SensorsUpdatesQueue;
-using HSMServer.Core.TreeValuesCache;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Core.MonitoringServerCore
 {

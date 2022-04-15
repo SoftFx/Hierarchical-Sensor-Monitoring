@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.TreeValuesCache;
-using HSMServer.Core.TreeValuesCache.Entities;
+﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

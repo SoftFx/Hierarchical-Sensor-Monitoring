@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.TreeValuesCache.Entities;
+using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

@@ -6,7 +6,7 @@ using HSMServer.Core.Converters;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 
-namespace HSMServer.Core.TreeValuesCache.Entities
+namespace HSMServer.Core.Cache.Entities
 {
     public sealed class SensorModel
     {
