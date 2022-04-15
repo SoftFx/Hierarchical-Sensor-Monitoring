@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -46,12 +47,12 @@ namespace HSMServer.Model.TreeViewModels
                 foreach (var sensor in node.Sensors)
                     Sensors.TryAdd(sensor.Key, sensor.Value);
 
-            UpdateNodesCharacteristics();
+            UpdateNodesCharacteristics(Nodes.Values.ToList());
         }
 
-        private void UpdateNodesCharacteristics()
+        private void UpdateNodesCharacteristics(List<ProductViewModel> nodes)
         {
-            foreach (var (_, node) in Nodes)
+            foreach (var node in nodes)
                 if (node.Parent == null)
                     node.Recursion();
         }
@@ -61,8 +62,16 @@ namespace HSMServer.Model.TreeViewModels
             var allProducts = new List<ProductModel>();
             AddSubProducts(productModel, allProducts);
 
+            var updatedProducts = new List<ProductViewModel>();
             foreach (var product in allProducts)
-                UpdateProduct(product);
+                updatedProducts.Add(UpdateProduct(product));
+
+            foreach (var product in allProducts)
+                foreach (var (_, subProduct) in product.SubProducts)
+                    if (!Nodes[product.Id].Nodes.ContainsKey(subProduct.Id))
+                        Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
+
+            UpdateNodesCharacteristics(updatedProducts);
         }
 
         private void AddSubProducts(ProductModel model, List<ProductModel> allProducts)
@@ -73,7 +82,7 @@ namespace HSMServer.Model.TreeViewModels
             allProducts.Add(model);
         }
 
-        private void UpdateProduct(ProductModel model)
+        private ProductViewModel UpdateProduct(ProductModel model)
         {
             if (!Nodes.TryGetValue(model.Id, out var productVM))
             {
@@ -82,6 +91,8 @@ namespace HSMServer.Model.TreeViewModels
             }
             else
                 productVM.Update(model);
+
+            return productVM;
         }
     }
 }
