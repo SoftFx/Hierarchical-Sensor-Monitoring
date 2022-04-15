@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -23,15 +22,12 @@ namespace HSMServer.BackgroundTask
         private readonly TimeSpan _checkInterval = new TimeSpan(1, 0 , 0,0);
         private readonly IConfigurationProvider _configurationProvider;
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly IValuesCache _cache;
         private readonly ILogger<OutdatedSensorService> _logger;
 
         public OutdatedSensorService(IDatabaseAdapter databaseAdapter, IProductManager productManager, IConfigurationProvider configurationProvider,
-            ISensorsInterface sensorsInterface, IValuesCache cache,
-            ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
+            ISensorsInterface sensorsInterface, ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
         {
             _configurationProvider = configurationProvider;
-            _cache = cache;
             _sensorsInterface = sensorsInterface;
             _logger = logger;
             _lastChecked = DateTime.MinValue;
@@ -71,7 +67,6 @@ namespace HSMServer.BackgroundTask
                     foreach (var sensorToRemove in sensorsToRemove)
                     {
                         _sensorsInterface.RemoveSensor(sensorToRemove.Item1, sensorToRemove.Item2);
-                        _cache.RemoveSensorValue(sensorToRemove.Item1, sensorToRemove.Item2);
                     }
 
                     _logger.LogInformation($"{sensorsToRemove.Count} sensors removed.");

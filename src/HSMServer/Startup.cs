@@ -2,7 +2,6 @@
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
@@ -18,7 +17,6 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
@@ -59,7 +57,6 @@ namespace HSMServer
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
-            services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
@@ -67,12 +64,10 @@ namespace HSMServer
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ITreeViewManager, TreeViewManager>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
-            services.AddHostedService<SensorsExpirationService>();
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 

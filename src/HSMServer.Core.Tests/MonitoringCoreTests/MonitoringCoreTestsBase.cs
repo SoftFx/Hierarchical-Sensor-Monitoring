@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Cache;
-using HSMServer.Core.MonitoringServerCore;
+﻿using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -17,7 +16,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private protected readonly SensorValuesTester _sensorValuesTester;
 
         protected readonly ProductManager _productManager;
-        protected readonly ValuesCache _valuesCache;
+        protected readonly TreeValuesCache.TreeValuesCache _valuesCache;
         protected readonly IUpdatesQueue _updatesQueue;
 
         protected MonitoringCore _monitoringCore;
@@ -33,10 +32,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Key);
             _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.Name);
 
-            _valuesCache = new ValuesCache();
-
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
+
+            _valuesCache = new TreeValuesCache.TreeValuesCache(_databaseAdapterManager.DatabaseAdapter, _productManager);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }

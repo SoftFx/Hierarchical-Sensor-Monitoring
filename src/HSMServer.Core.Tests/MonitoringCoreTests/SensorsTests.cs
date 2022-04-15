@@ -39,7 +39,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var configurationProvider = new Mock<IConfigurationProvider>();
 
             var barStorage = new BarSensorsStorage();
-            var treeValuesCache = new Mock<ITreeValuesCache>();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
@@ -48,9 +47,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 barStorage,
                 _productManager,
                 configurationProvider.Object,
-                _valuesCache,
                 _updatesQueue,
-                treeValuesCache.Object,
+                _valuesCache,
                 monitoringLogger);
         }
 
@@ -158,7 +156,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                       _monitoringCore.IsSensorRegistered,
                                       _monitoringCore.GetSensorInfo,
                                       _monitoringCore.GetProductSensors,
-                                      _valuesCache.GetValues,
+                                      //_valuesCache.GetValues,
                                       _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
                                       _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
                                       _sensorValuesTester);
@@ -177,7 +175,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                   _monitoringCore.IsSensorRegistered,
                                   _monitoringCore.GetSensorInfo,
                                   _monitoringCore.GetProductSensors,
-                                  _valuesCache.GetValues,
+                                  //_valuesCache.GetValues,
                                   _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
                                   _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
                                   _sensorValuesTester);
@@ -196,7 +194,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                   _monitoringCore.IsSensorRegistered,
                                   _monitoringCore.GetSensorInfo,
                                   _monitoringCore.GetProductSensors,
-                                  _valuesCache.GetValues,
+                                  //_valuesCache.GetValues,
                                   _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
                                   _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
                                   _sensorValuesTester);
@@ -441,7 +439,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void FullTestRemovedSensor(string productName, SensorValueBase sensorValue,
             IsSensorRegistered isSensorRegistered, GetSensorInfo getSensorInfo, GetProductSensors getProductSensors,
-            GetQueueValues getQueueValues, GetAllSensorHistory getAllSensorHistory,
+            /*GetQueueValues getQueueValues,*/ GetAllSensorHistory getAllSensorHistory,
             GetSensorInfoFromDB getSensorFromDB, SensorValuesTester tester)
         {
             string sensorValuePath = sensorValue.Path;
@@ -449,7 +447,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.False(isSensorRegistered(productName, sensorValuePath));
             Assert.Null(getSensorInfo(productName, sensorValuePath));
             Assert.Null(getProductSensors(productName).FirstOrDefault(s => s.Path == sensorValuePath));
-            Assert.Empty(getQueueValues(new List<string>() { productName }));
+            //Assert.Empty(getQueueValues(new List<string>() { productName }));
             Assert.Empty(getAllSensorHistory(productName, sensorValuePath));
             tester.TestSensorInfoFromDB(sensorValue, getSensorFromDB(productName, sensorValuePath));
         }
