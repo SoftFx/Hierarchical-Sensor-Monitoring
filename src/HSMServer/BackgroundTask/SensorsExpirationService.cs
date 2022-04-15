@@ -67,7 +67,7 @@ namespace HSMServer.BackgroundTask
                         continue;
 
                     SensorData statusObject = CreateStatusUpdateObject(cachedValue);
-                    _updatesReceiver.AddUpdate(statusObject);
+                    _updatesReceiver.AddUpdate(statusObject); // TODO: Add updates sensors statuses to cache
                 }
 
                 await Task.Delay(_checkInterval, stoppingToken);

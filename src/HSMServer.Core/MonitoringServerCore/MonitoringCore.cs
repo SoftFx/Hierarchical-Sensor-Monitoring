@@ -33,7 +33,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
-        private readonly IMonitoringQueueManager _queueManager;
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly ILogger<MonitoringCore> _logger;
@@ -51,9 +50,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
             _userManager = userManager;
-            _userManager.UpdateUserEvent += UpdateUserEventHandler;
-
-            _queueManager = new MonitoringQueueManager();
 
             _productManager = productManager;
             _productManager.RemovedProduct += RemoveProductHandler;
@@ -192,7 +188,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 updateMessage.TransactionType = TransactionType.Delete;
                 updateMessage.Time = timeCollected;
 
-                _queueManager.AddSensorData(updateMessage);
                 RemoveSensor(product, path);
                 _valuesCache.RemoveSensorValue(product, path);
             }
@@ -361,16 +356,11 @@ namespace HSMServer.Core.MonitoringServerCore
 
         public List<SensorData> GetSensorUpdates(User user)
         {
-            return _queueManager.GetUserUpdates(user);
+            return new List<SensorData>();
         }
 
         public List<SensorData> GetSensorsTree(User user)
         {
-            if (!_queueManager.IsUserRegistered(user))
-            {
-                _queueManager.AddUserSession(user);
-            }
-
             List<SensorData> result = new List<SensorData>();
             var productsList = _productManager.Products;
             //Show available products only
@@ -459,16 +449,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private void RemoveProductHandler(Product product)
         {
-            var updateMessage = new SensorData
-            {
-                Product = product.Name,
-                Path = string.Empty,
-                TransactionType = TransactionType.Delete,
-                Time = DateTime.UtcNow
-            };
-
             _userManager.RemoveProductFromUsers(product.Key);
-            _queueManager.AddSensorData(updateMessage);
             _valuesCache.RemoveProduct(product.Name);
         }
       
@@ -478,13 +459,7 @@ namespace HSMServer.Core.MonitoringServerCore
             error = string.Empty;
             try
             {
-                DateTime timeCollected = DateTime.UtcNow;
-                SensorData updateMessage = new SensorData();
-                updateMessage.Product = product.Name;
-                updateMessage.TransactionType = TransactionType.Delete;
-                updateMessage.Time = timeCollected;
-
-                _queueManager.AddSensorData(updateMessage);
+                // TODO: remove product from cache but not remove from db
 
                 result = true;
             }
@@ -499,12 +474,8 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        private void UpdateUserEventHandler(User user) =>
-            _queueManager.AddSensorDataForUser(user, new() { TransactionType = TransactionType.UpdateTree });
-
         public void AddUpdate(SensorData update)
         {
-            _queueManager.AddSensorData(update);
         }
 
         public void Dispose()
@@ -515,13 +486,9 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
-            _queueManager?.Dispose();
 
             if (_productManager != null)
                 _productManager.RemovedProduct -= RemoveProductHandler;
-
-            if (_userManager != null)
-                _userManager.UpdateUserEvent -= UpdateUserEventHandler;         
         }
     }
 }
