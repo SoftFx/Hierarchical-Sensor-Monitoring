@@ -66,7 +66,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult RefreshTree() => PartialView("_Tree", _treeViewModel);
+        public IActionResult RefreshTree()
+        {
+            _treeViewModel.UpdateNodesCharacteristics();
+            return PartialView("_Tree", _treeViewModel);
+        }
 
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)

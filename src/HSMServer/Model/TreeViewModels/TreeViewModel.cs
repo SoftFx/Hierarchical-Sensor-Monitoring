@@ -20,7 +20,9 @@ namespace HSMServer.Model.TreeViewModels
         public TreeViewModel(ITreeValuesCache valuesCache)
         {
             _treeValuesCache = valuesCache;
-            _treeValuesCache.NewValueEvent += NewValueEventHandler;
+            _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
+            _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
+            _treeValuesCache.UploadSensorDataEvent += UploadSensorDataHandler;
 
             Nodes = new ConcurrentDictionary<Guid, ProductViewModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorViewModel>();
@@ -28,6 +30,13 @@ namespace HSMServer.Model.TreeViewModels
             BuildTree();
         }
 
+
+        internal void UpdateNodesCharacteristics()
+        {
+            foreach (var (_, node) in Nodes)
+                if (node.Parent == null)
+                    node.Recursion();
+        }
 
         private void BuildTree()
         {
@@ -47,52 +56,67 @@ namespace HSMServer.Model.TreeViewModels
                 foreach (var sensor in node.Sensors)
                     Sensors.TryAdd(sensor.Key, sensor.Value);
 
-            UpdateNodesCharacteristics(Nodes.Values.ToList());
+            UpdateNodesCharacteristics();
         }
 
-        private void UpdateNodesCharacteristics(List<ProductViewModel> nodes)
+        private void ChangeProductHandler(ProductModel model, TransactionType transaction)
         {
-            foreach (var node in nodes)
-                if (node.Parent == null)
-                    node.Recursion();
-        }
-
-        private void NewValueEventHandler(ProductModel productModel)
-        {
-            var allProducts = new List<ProductModel>();
-            AddSubProducts(productModel, allProducts);
-
-            var updatedProducts = new List<ProductViewModel>();
-            foreach (var product in allProducts)
-                updatedProducts.Add(UpdateProduct(product));
-
-            foreach (var product in allProducts)
-                foreach (var (_, subProduct) in product.SubProducts)
-                    if (!Nodes[product.Id].Nodes.ContainsKey(subProduct.Id))
-                        Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
-
-            UpdateNodesCharacteristics(updatedProducts);
-        }
-
-        private void AddSubProducts(ProductModel model, List<ProductModel> allProducts)
-        {
-            foreach (var (_, subProduct) in model.SubProducts)
-                AddSubProducts(subProduct, allProducts);
-
-            allProducts.Add(model);
-        }
-
-        private ProductViewModel UpdateProduct(ProductModel model)
-        {
-            if (!Nodes.TryGetValue(model.Id, out var productVM))
+            switch (transaction)
             {
-                productVM = new ProductViewModel(model);
-                Nodes.TryAdd(productVM.Id, productVM);
-            }
-            else
-                productVM.Update(model);
+                case TransactionType.Add:
+                    var newProduct = new ProductViewModel(model);
+                    Nodes.TryAdd(newProduct.Id, newProduct);
 
-            return productVM;
+                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
+                        parent.AddSubNode(newProduct);
+
+                    break;
+
+                case TransactionType.Update:
+                    if (!Nodes.TryGetValue(model.Id, out var product))
+                        return;
+
+                    product.Update(model);
+
+                    break;
+
+                case TransactionType.Delete: //TODO
+                    break;
+            }
+        }
+
+        private void ChangeSensorHandler(SensorModel model, TransactionType transaction)
+        {
+            switch (transaction)
+            {
+                case TransactionType.Add:
+                    if (!Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
+                        return;
+
+                    var newSensor = new SensorViewModel(model);
+                    parent.AddSensor(newSensor);
+
+                    Sensors.TryAdd(newSensor.Id, newSensor);
+
+                    break;
+
+                case TransactionType.Update:
+                    if (!Sensors.TryGetValue(model.Id, out var sensor))
+                        return;
+
+                    sensor.Update(model);
+
+                    break;
+
+                case TransactionType.Delete: // TODO
+                    break;
+            }
+        }
+
+        private void UploadSensorDataHandler(SensorModel model)
+        {
+            if (Sensors.TryGetValue(model.Id, out var sensor))
+                sensor.Update(model);
         }
     }
 }

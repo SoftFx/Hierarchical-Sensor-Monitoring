@@ -9,11 +9,11 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductViewModel : NodeViewModel
     {
-        public int Count { get; set; }
+        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; }
 
-        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; set; }
+        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; }
 
-        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; set; }
+        public int Count { get; private set; }
 
 
         public ProductViewModel(ProductModel model)
@@ -26,8 +26,8 @@ namespace HSMServer.Model.TreeViewModels
 
             foreach (var (_, sensor) in model.Sensors)
             {
-                var sensorVM = new SensorViewModel(sensor, this);
-                Sensors.TryAdd(sensorVM.Id, sensorVM);
+                var sensorVM = new SensorViewModel(sensor);
+                AddSensor(sensorVM);
             }
         }
 
@@ -35,21 +35,20 @@ namespace HSMServer.Model.TreeViewModels
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-
-            foreach (var (sensorId, sensor) in model.Sensors)
-                if (!Sensors.TryGetValue(sensorId, out var existingSensorVM))
-                {
-                    var sensorVM = new SensorViewModel(sensor, this);
-                    Sensors.TryAdd(sensorVM.Id, sensorVM);
-                }
-                else
-                    existingSensorVM.Update(sensor);
         }
 
         internal void AddSubNode(ProductViewModel node)
         {
             Nodes.TryAdd(node.Id, node);
             node.Parent = this;
+        }
+
+        internal void AddSensor(SensorViewModel sensor)
+        {
+            Sensors.TryAdd(sensor.Id, sensor);
+            sensor.Parent = this;
+
+            sensor.FillProductAndPath();
         }
 
         internal void Recursion()

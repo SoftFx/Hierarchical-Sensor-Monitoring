@@ -16,16 +16,6 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
-    public interface ITreeValuesCache
-    {
-        event Action<ProductModel> NewValueEvent;
-
-
-        List<ProductModel> GetTree();
-
-        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);
-    }
-
     public sealed class TreeValuesCache : ITreeValuesCache
     {
         private readonly IDatabaseAdapter _database;
@@ -34,7 +24,9 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
 
-        public event Action<ProductModel> NewValueEvent;
+        public event Action<ProductModel, TransactionType> ChangeProductEvent;
+        public event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        public event Action<SensorModel> UploadSensorDataEvent;
 
 
         public TreeValuesCache(IDatabaseAdapter database, IProductManager productManager)
@@ -68,13 +60,14 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
+                ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
             }
             else
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
 
             //_database.PutSensorData(sensor.ToSensorDataEntity(), parentProductName); // TODO: save to db
 
-            NewValueEvent?.Invoke(_tree.FirstOrDefault(p => p.Value.DisplayName == parentProductName).Value);
+            UploadSensorDataEvent?.Invoke(sensor);
         }
 
         public void BuildTree(List<ProductEntity> productEntities,
@@ -132,6 +125,7 @@ namespace HSMServer.Core.Cache
                 parentProduct = new ProductModel(productName);
 
                 _tree.TryAdd(parentProduct.Id, parentProduct);
+                ChangeProductEvent?.Invoke(parentProduct, TransactionType.Add);
             }
 
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
@@ -145,6 +139,7 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     _tree.TryAdd(subProduct.Id, subProduct);
+                    ChangeProductEvent?.Invoke(subProduct, TransactionType.Add);
                 }
 
                 parentProduct = subProduct;

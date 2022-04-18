@@ -17,7 +17,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorStatus Status { get; protected set; }
 
-        public NodeViewModel Parent { get; protected set; }
+        public NodeViewModel Parent { get; internal set; }
 
         public string EncodedId => SensorPathHelper.EncodeGuid(Id);
 

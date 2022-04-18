@@ -29,10 +29,9 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsPlottingSupported { get; private set; }
 
 
-        public SensorViewModel(SensorModel model, ProductViewModel parent)
+        public SensorViewModel(SensorModel model)
         {
             Id = model.Id;
-            Parent = parent;
 
             Update(model);
         }
@@ -71,11 +70,9 @@ namespace HSMServer.Model.TreeViewModels
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
             FileNameString = GetFileNameString(model.SensorType, ShortStringValue);
-
-            FillProductAndPath();
         }
 
-        private void FillProductAndPath()
+        internal void FillProductAndPath()
         {
             var pathParts = new List<string>() { Name };
 

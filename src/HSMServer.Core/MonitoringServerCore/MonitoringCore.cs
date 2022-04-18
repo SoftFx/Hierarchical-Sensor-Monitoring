@@ -269,14 +269,14 @@ namespace HSMServer.Core.MonitoringServerCore
             return true;
         }
 
-        private TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
+        private Model.Sensor.TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
         {
-            var transactionType = TransactionType.Update;
+            var transactionType = Model.Sensor.TransactionType.Update;
 
             if (!IsSensorRegistered(productName, value.Path))
             {
                 AddSensor(productName, value);
-                transactionType = TransactionType.Add;
+                transactionType = Model.Sensor.TransactionType.Add;
             }
 
             return transactionType;
