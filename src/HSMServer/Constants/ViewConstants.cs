@@ -17,7 +17,6 @@
 
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
-        public const string UpdateTreeAction = "UpdateTree";
         public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
         public const string UpdateSelectedListAction = "UpdateSelectedList";
         public const string AddNewSensorsAction = "AddNewSensors";

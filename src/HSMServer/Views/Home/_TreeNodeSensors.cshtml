@@ -4,13 +4,15 @@
 
 <div class='col' id='list'>
 
-    <div>
-        <ul id='noData' class='list-group'>
-            <li class='list-group-item'>No Data</li>
-        </ul>
-    </div>
-
-    @if (Model is ProductViewModel productVM)
+    @if (Model == null)
+    {
+        <div>
+            <ul id='noData' class='list-group'>
+                <li class='list-group-item'>No Data</li>
+            </ul>
+        </div>
+    }
+    else if (Model is ProductViewModel productVM)
         @await Html.PartialAsync("_Sensors", productVM)
     else if (Model is SensorViewModel sensorVM)
         @await Html.PartialAsync("_Sensor", sensorVM)

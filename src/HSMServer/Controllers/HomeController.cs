@@ -55,6 +55,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
+            if (string.IsNullOrEmpty(selectedId))
+                return PartialView("_TreeNodeSensors", null);
+
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
@@ -138,55 +141,6 @@ namespace HSMServer.Controllers
         }
 
         #region Update
-
-        [HttpPost]
-        public HtmlString UpdateTree([FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
-
-            var model = oldModel;
-
-            if (sensors != null && sensors.Count > 0)
-            {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-            else
-                oldModel.UpdateNodeCharacteristics();
-
-            return ViewHelper.UpdateTree(model.Clone());
-        }
-
-        private static void PrintTree(NodeViewModel node, StringBuilder str,
-            string indent, bool isLast)
-        {
-            str.Append($"{indent} +- node: {node.Name} path: {node.Path}\n");
-            indent += isLast ? "\t" : "|\t";
-
-            if (node.Nodes != null && node.Nodes.Count > 0)
-            {
-                int i = 0;
-
-                foreach (var (_, child) in node.Nodes)
-                {
-                    PrintTree(child, str, indent, i == node.Nodes.Count - 1);
-                    i++;
-                }
-            }
-
-
-            if (node.Sensors != null && node.Sensors.Count > 0)
-                foreach (var (name, _) in node.Sensors)
-                    str.Append($"{indent}--sensor: {name}\n");
-        }
 
         [HttpPost]
         public HtmlString UpdateInvisibleLists([FromQuery(Name = "Selected")] string selectedList,

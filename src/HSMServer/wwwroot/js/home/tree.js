@@ -105,8 +105,6 @@ function initializeActivateNodeTree() {
                 $("#listSensors").html(viewData);
             }
         }).done(function () {
-            $('#noData').css('display', 'none');
-
             initialize();
 
             var selectedAccordionId = '#accordion_' + selectedId;

@@ -10,7 +10,6 @@
     var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
     var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
     var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
-    var updateTree = "@Html.Raw(Url.Action(ViewConstants.UpdateTreeAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
     var selected = "";
@@ -135,31 +134,6 @@
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
     function update() {
-        //var node = $('#jstree').jstree().get_selected(true)[0];
-        //if (node != undefined)
-        //    displayList(node);
-
-        //update tree
-        $.ajax({
-            type: 'POST',
-            url: updateTree,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (treeData) {
-            //var node = $('#jstree').jstree().get_selected(true)[0];
-
-            treeData = treeData.replace('{"value":"', '');
-            treeData = treeData.slice(0, treeData.length - 2);
-            treeData = treeData.replaceAll("\\", "");
-
-            $('#jstree').jstree(true).settings.core.data = treeData;
-            $('#jstree').jstree(true).refresh(true);
-
-            //initializeActivateNodeTree();
-        });
-
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var listId = getListIdForSelectedNode(selectedNode);
 
