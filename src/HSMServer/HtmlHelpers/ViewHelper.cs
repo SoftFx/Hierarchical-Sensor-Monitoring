@@ -11,15 +11,6 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ViewHelper
     {
-        #region Sensors tree
-
-        public static HtmlString CreateNotSelectedLists(string selectedPath, TreeViewModel model)
-        {
-            return new HtmlString(ListHelper.CreateNotSelectedLists(selectedPath, model));
-        }
-
-        #endregion
-
         #region Product
 
         public static HtmlString CreateProductList(ClaimsPrincipal claims, List<ProductViewModel> products)

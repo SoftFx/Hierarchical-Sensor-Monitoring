@@ -143,34 +143,6 @@ namespace HSMServer.Controllers
         #region Update
 
         [HttpPost]
-        public HtmlString UpdateInvisibleLists([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
-
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
-            {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            return ViewHelper.CreateNotSelectedLists(formattedPath, model.Clone());
-        }
-
-        [HttpPost]
         public ActionResult UpdateSelectedList([FromQuery(Name = "Selected")] string selectedList,
             [FromBody] List<SensorData> sensors)
         {

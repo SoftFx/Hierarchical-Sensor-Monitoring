@@ -11,70 +11,6 @@ namespace HSMServer.HtmlHelpers
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
 
-        public static string CreateNotSelectedLists(string selectedPath, TreeViewModel model)
-        {
-            if (model == null)
-                return string.Empty;
-
-            var result = new StringBuilder(1 << 8);
-
-            foreach (var (_, node) in model.Nodes)
-            {
-                string formattedPath = SensorPathHelper.Encode(node.Path);
-                if (!string.IsNullOrEmpty(selectedPath)
-                    && selectedPath.Equals(formattedPath))
-                    continue;
-
-                DFSCreateList(result, node);
-            }
-
-            return result.ToString();
-        }
-
-        public static void DFSCreateList(StringBuilder result, NodeViewModel node)
-        {
-            if (node.Sensors != null && !node.Sensors.IsEmpty)
-                CreateList(result, node);
-
-            if (node.Nodes == null || node.Nodes.IsEmpty)
-                return;
-
-            foreach (var (_, child) in node.Nodes)
-            {
-                DFSCreateList(result, child);
-            }
-        }
-
-        public static StringBuilder CreateList(StringBuilder result, NodeViewModel node)
-        {
-            string formattedNodePath = SensorPathHelper.Encode(node.Path);
-
-            result.Append($"<div id='list_{formattedNodePath}' style='display: none;'>");
-
-            if (node.Sensors != null && !node.Sensors.IsEmpty)
-            {
-                foreach (var (name, sensor) in node.Sensors)
-                {
-                    string sensorPath = $"{node.Path}/{name}";
-                    string formattedPath = SensorPathHelper.Encode(sensorPath);
-                    result.Append($"<div id='sensorInfo_parent_{formattedPath}' style='display: none'>");
-                    result.Append(CreateSensorInfoLink(formattedPath));
-                    result.Append($"<div id=sensor_info_{formattedPath}></div></div>");
-                    result.Append($"<div class='accordion' id='sensorData_{formattedPath}' style='display: none'>");
-                    result.Append(CreateSensor(formattedPath, sensor));
-                    result.Append("</div>");
-                }
-            }
-
-            result.Append("</div>");
-            return result;
-        }
-
-        public static string CreateSensorInfoLink(string formattedPath)
-        {
-            return $"<a tabindex='0' class='link-primary info-link' id='sensorInfo_link_{formattedPath}'>Show meta info</a>";
-        }
-
         public static StringBuilder CreateSensor(string formattedPath, SensorViewModel sensor)
         {
             var result = new StringBuilder(1 << 5);
@@ -289,19 +225,6 @@ namespace HSMServer.HtmlHelpers
             }
 
             return string.Empty;
-        }
-
-        private static NodeViewModel GetNodeRecursion(string path, NodeViewModel model)
-        {
-            var nodes = path.Split('/');
-
-            if (nodes[0].Length == path.Length)
-                return model.Nodes[nodes[0]];
-
-            path = path.Substring(nodes[0].Length + 1, path.Length - nodes[0].Length - 1);
-            var existingNode = model.Nodes[nodes[0]];
-
-            return GetNodeRecursion(path, existingNode);
         }
     }
 }

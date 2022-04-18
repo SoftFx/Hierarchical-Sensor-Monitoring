@@ -7,7 +7,6 @@
 }
 
 <script>
-    var updateLists = "@Html.Raw(Url.Action(ViewConstants.UpdateInvisibleListsAction, ViewConstants.HomeController))";
     var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
     var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
@@ -136,30 +135,6 @@
     function update() {
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var listId = getListIdForSelectedNode(selectedNode);
-
-        //update invisible lists
-        $.ajax({
-            type: 'POST',
-            url: updateLists + '?Selected=' + listId,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (listsData) {
-            //removing invisible lists
-            $('[id^="list_"][style*="display: none;"]').each(function (index) {
-                this.remove();
-            });
-
-            listsData = listsData.replace('{"value":"', '');
-            listsData = listsData.slice(0, listsData.length - 2);
-            listsData = listsData.replaceAll("\\", "");
-
-            $('#listContainer').append(listsData);
-
-            //initializeDataHistoryRequests();
-            initializeInfoLinks();
-        });
 
         if (listId != "" && listId != undefined)
             //update selected list
