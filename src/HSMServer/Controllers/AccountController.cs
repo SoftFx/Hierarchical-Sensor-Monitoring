@@ -29,15 +29,13 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
-        private readonly ITreeViewManager _treeManager;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ITreeViewManager treeManager)
+            IRegistrationTicketManager ticketManager)
         {
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
-            _treeManager = treeManager;
         }
 
         #region Login

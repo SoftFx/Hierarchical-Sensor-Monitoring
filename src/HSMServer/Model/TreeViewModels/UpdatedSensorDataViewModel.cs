@@ -1,7 +1,7 @@
 ﻿using HSMServer.HtmlHelpers;
 using System;
 
-namespace HSMServer.Model.ViewModel
+namespace HSMServer.Model.TreeViewModels
 {
     public class UpdatedSensorDataViewModel
     {
@@ -16,7 +16,7 @@ namespace HSMServer.Model.ViewModel
         public string ValidationError { get; }
 
 
-        public UpdatedSensorDataViewModel(TreeViewModels.SensorViewModel sensor)
+        public UpdatedSensorDataViewModel(SensorNodeViewModel sensor)
         {
             Id = sensor.EncodedId;
             Value = sensor.ShortStringValue;

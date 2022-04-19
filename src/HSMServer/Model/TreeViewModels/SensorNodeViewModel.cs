@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public class SensorViewModel : NodeViewModel
+    public class SensorNodeViewModel : NodeViewModel
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
@@ -29,7 +29,7 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsPlottingSupported { get; private set; }
 
 
-        public SensorViewModel(SensorModel model)
+        public SensorNodeViewModel(SensorModel model)
         {
             Id = model.Id;
 

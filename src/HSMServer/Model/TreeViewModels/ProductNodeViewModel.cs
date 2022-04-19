@@ -7,26 +7,26 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public class ProductViewModel : NodeViewModel
+    public class ProductNodeViewModel : NodeViewModel
     {
-        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; }
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; }
 
-        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; }
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
 
         public int Count { get; private set; }
 
 
-        public ProductViewModel(ProductModel model)
+        public ProductNodeViewModel(ProductModel model)
         {
             Id = model.Id;
             Name = model.DisplayName;
 
-            Nodes = new ConcurrentDictionary<Guid, ProductViewModel>();
-            Sensors = new ConcurrentDictionary<Guid, SensorViewModel>();
+            Nodes = new ConcurrentDictionary<Guid, ProductNodeViewModel>();
+            Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)
             {
-                var sensorVM = new SensorViewModel(sensor);
+                var sensorVM = new SensorNodeViewModel(sensor);
                 AddSensor(sensorVM);
             }
         }
@@ -37,13 +37,13 @@ namespace HSMServer.Model.TreeViewModels
             Name = model.DisplayName;
         }
 
-        internal void AddSubNode(ProductViewModel node)
+        internal void AddSubNode(ProductNodeViewModel node)
         {
             Nodes.TryAdd(node.Id, node);
             node.Parent = this;
         }
 
-        internal void AddSensor(SensorViewModel sensor)
+        internal void AddSensor(SensorNodeViewModel sensor)
         {
             Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;

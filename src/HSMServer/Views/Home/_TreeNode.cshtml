@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.HtmlHelpers
-@model HSMServer.Model.TreeViewModels.ProductViewModel
+
+@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
 <li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime'
     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>

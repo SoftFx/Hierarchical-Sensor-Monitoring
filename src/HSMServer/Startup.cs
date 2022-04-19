@@ -12,6 +12,7 @@ using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -60,11 +61,10 @@ namespace HSMServer
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
-            services.AddSingleton<HSMServer.Model.TreeViewModels.TreeViewModel>();
+            services.AddSingleton<TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
             services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<ITreeViewManager, TreeViewManager>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
@@ -96,7 +96,7 @@ namespace HSMServer
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, (app.ApplicationServices.GetService<MonitoringCore>(), app.ApplicationServices.GetService<ITreeViewManager>()));
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -138,13 +138,10 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        private void OnShutdown(object services)
+        private void OnShutdown(object service)
         {
-            if (services is (MonitoringCore monitoringCore, ITreeViewManager treeViewManager))
-            {
+            if (service is MonitoringCore monitoringCore)
                 monitoringCore.Dispose();
-                treeViewManager.Dispose();
-            }
 
             // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();

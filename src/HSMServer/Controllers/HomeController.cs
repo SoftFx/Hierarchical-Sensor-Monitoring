@@ -1,6 +1,5 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
@@ -10,6 +9,7 @@ using HSMServer.Core.Products;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
@@ -30,19 +30,19 @@ namespace HSMServer.Controllers
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly ITreeViewManager _treeManager;
         private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
-        private readonly Model.TreeViewModels.TreeViewModel _treeViewModel;
+        private readonly TreeViewModel _treeViewModel;
 
 
-        public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager,
-            Model.TreeViewModels.TreeViewModel treeViewModel)
+        public HomeController(ISensorsInterface sensorsInterface,
+            IUserManager userManager,
+            IHistoryProcessorFactory factory,
+            IProductManager productManager,
+            TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
-            _treeManager = treeManager;
             _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
@@ -98,19 +98,6 @@ namespace HSMServer.Controllers
             {
                 // TODO remove sensor from _treeViewModel (maybe with _sensorInterface, that help to delete sensor from db and from cache)
             }
-        }
-
-        private void GetSensorsPaths(NodeViewModel node, List<string> paths)
-        {
-            var path = node.Path[(node.Path.IndexOf('/') + 1)..];
-
-            if (node.Sensors != null && !node.Sensors.IsEmpty)
-                foreach (var (name, _) in node.Sensors)
-                    paths.Add($"{path}/{name}");
-
-            if (node.Nodes != null && !node.Nodes.IsEmpty)
-                foreach (var (_, child) in node.Nodes)
-                    GetSensorsPaths(child, paths);
         }
 
         #region Update

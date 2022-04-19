@@ -2,8 +2,6 @@
 using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -12,9 +10,9 @@ namespace HSMServer.Model.TreeViewModels
         private readonly ITreeValuesCache _treeValuesCache;
 
 
-        public ConcurrentDictionary<Guid, ProductViewModel> Nodes { get; }
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; }
 
-        public ConcurrentDictionary<Guid, SensorViewModel> Sensors { get; }
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
 
 
         public TreeViewModel(ITreeValuesCache valuesCache)
@@ -24,8 +22,8 @@ namespace HSMServer.Model.TreeViewModels
             _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
             _treeValuesCache.UploadSensorDataEvent += UploadSensorDataHandler;
 
-            Nodes = new ConcurrentDictionary<Guid, ProductViewModel>();
-            Sensors = new ConcurrentDictionary<Guid, SensorViewModel>();
+            Nodes = new ConcurrentDictionary<Guid, ProductNodeViewModel>();
+            Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
 
             BuildTree();
         }
@@ -44,7 +42,7 @@ namespace HSMServer.Model.TreeViewModels
 
             foreach (var product in products)
             {
-                var node = new ProductViewModel(product);
+                var node = new ProductNodeViewModel(product);
                 Nodes.TryAdd(node.Id, node);
             }
 
@@ -64,7 +62,7 @@ namespace HSMServer.Model.TreeViewModels
             switch (transaction)
             {
                 case TransactionType.Add:
-                    var newProduct = new ProductViewModel(model);
+                    var newProduct = new ProductNodeViewModel(model);
                     Nodes.TryAdd(newProduct.Id, newProduct);
 
                     if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
@@ -93,7 +91,7 @@ namespace HSMServer.Model.TreeViewModels
                     if (!Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
                         return;
 
-                    var newSensor = new SensorViewModel(model);
+                    var newSensor = new SensorNodeViewModel(model);
                     parent.AddSensor(newSensor);
 
                     Sensors.TryAdd(newSensor.Id, newSensor);
