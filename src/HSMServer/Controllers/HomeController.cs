@@ -162,56 +162,6 @@ namespace HSMServer.Controllers
             return Json(updatedSensorsData);
         }
 
-        [HttpPost]
-        public HtmlString AddNewSensors([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
-
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
-                model = oldModel.Update(sensors);
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            var path = SensorPathHelper.Decode(formattedPath);
-
-            var node = model.GetNode(path);
-            var result = new StringBuilder(1 << 2);
-            if (node?.Sensors != null)
-                foreach (var (_, sensor) in node.Sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                    {
-                        sensor.TransactionType = TransactionType.Update;
-                        result.Append(ListHelper.CreateSensor(path, sensor));
-                    }
-                }
-
-            return new HtmlString(result.ToString());
-        }
-
-        [HttpPost]
-        public List<string> RemoveSensors([FromBody] List<SensorData> sensors)
-        {
-            var ids = new List<string>();
-
-            if (sensors != null && sensors.Count > 0)
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Delete)
-                        ids.Add(SensorPathHelper.Encode($"{sensor.Product}/{sensor.Path}"));
-                }
-
-            return ids;
-
-        }
-
         #endregion
 
         #region SensorsHistory
