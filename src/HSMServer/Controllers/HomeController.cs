@@ -143,42 +143,23 @@ namespace HSMServer.Controllers
         #region Update
 
         [HttpPost]
-        public ActionResult UpdateSelectedList([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
+        public ActionResult UpdateSelectedNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return Json("");
+            if (string.IsNullOrEmpty(selectedId))
+                return Json(string.Empty);
 
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var updatedSensorsData = new List<UpdatedSensorDataViewModel>();
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            var formattedPath = SensorPathHelper.Decode(path);
-            //var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
-            var nodePath = formattedPath;
-
-            var node = model.Clone().GetNode(nodePath);
-
-            var result = new List<SensorDataViewModel>(node?.Sensors?.Count ?? 0);
-            if (node?.Sensors != null)
                 foreach (var (_, sensor) in node.Sensors)
-                    result.Add(new SensorDataViewModel(selectedList, sensor));
+                    updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
+            }
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
 
-            return Json(result);
+            return Json(updatedSensorsData);
         }
 
         [HttpPost]

@@ -7,7 +7,7 @@
 }
 
 <script>
-    var updateSelectedList = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedListAction, ViewConstants.HomeController))";
+    var updateSelectedNode = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedNodeAction, ViewConstants.HomeController))";
     var addNewSensors = "@Html.Raw(Url.Action(ViewConstants.AddNewSensorsAction, ViewConstants.HomeController))";
     var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
     var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
@@ -113,8 +113,6 @@
                 </div>
             </div>
 
-
-            @*<div id="listContainer" class="col-md-8">@ViewHelper.CreateFullLists(Model)</div>*@
             <div id="listSensors" class="col-md-8">@await Html.PartialAsync("_TreeNodeSensors", (NodeViewModel)null)</div>
         </div>
         <hr />
@@ -125,47 +123,11 @@
 
 <script>
     initializeTree();
-    //initializeDataHistoryRequests();
-    InitializePeriodRequests();
-    initializeInfoLinks();
+    initialize();
 
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
-    function update() {
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var listId = getListIdForSelectedNode(selectedNode);
-
-        if (listId != "" && listId != undefined)
-            //update selected list
-            $.ajax({
-                type: 'POST',
-                url: updateSelectedList + '?Selected=' + listId,
-                dataType: 'html',
-                contentType: 'application/json',
-                cache: false,
-                async: true
-            }).done(function (listsData) {
-                var array = JSON.parse(listsData);
-                for (let i = 0; i < array.length; i++) {
-                    let id = array[i].id.substring('sensor_'.length);
-                    updateSelectedSensor(array[i], id);
-                    let selectedRadio = $('input[id$=' + id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
-                    }
-                }
-                //initializeDataHistoryRequests();
-                initializeInfoLinks();
-            });
-
-        $('#updateTime').empty();
-        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-        $("#state").empty();
-        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-    }
-
-    setInterval(update, 30000);
     $('#sortByName').off("click").on("click",
         function () {
             isTimeSorting = false;
@@ -180,42 +142,29 @@
             $('#jstree').jstree(true).refresh(true);
         });
 
-    function getListIdForSelectedNode(selectedNode) {
-        let selectedListId = "";
+    function getSelectedNodeId(selectedNode) {
+        let selectedNodeId = "";
+
         if (selectedNode != undefined) {
-            let nodeId = selectedNode.id;
-            if (nodeId.startsWith("sensor_")) {
-                //let path = nodeId.substring("sensor_".length);
-                selectedListId = 'list_' + selectedNode.parent;
-            } else {
-                selectedListId = 'list_' + nodeId;
-            }
+            selectedNodeId = selectedNode.id;
         }
-        return selectedListId;
+
+        return selectedNodeId;
     }
 
-    function updateSelectedSensor(dataObject, id) {
+    function updateSelectedSensor(dataObject) {
+        var id = dataObject.id;
+
         $('#value_' + id).empty().append(dataObject.value);
-        $('#update_' + id).empty().append('updated ' + dataObject.updateTime);
-        $('#status_' + id).removeClass('tree-icon-unknown ' +
-            'tree-icon-ok ' +
-            'tree-icon-warning ' +
-            'tree-icon-error ' +
-            'tree-icon-unknown');
-        $('#status_' + id).addClass(dataObject.status);
-        clearValidationError(id);
-        if (dataObject.ValidationError != null || dataObject.validationError) {
-            updateValidationError(id, dataObject.validationError);
-        }
-    }
+        $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
-    function clearValidationError(id) {
+        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error tree-icon-unknown');
+        $('#status_' + id).addClass(dataObject.statusColorClass);
+
         $('#validation_' + id).empty();
-    }
-
-    function updateValidationError(id, error) {
-        $('#validation_' + id).append("<li id='errorIcon_ " + id + "' class='fas fa-exclamation-triangle' style='margin-right:5px'" +
-            " title=' " + error + "'></li>");
+        if (dataObject.validationError != null && dataObject.validationError != "") {
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
+        }
     }
 
     function updateTreeTimer() {
@@ -232,5 +181,39 @@
         });
     }
 
+    function updateSelectedSensors() {
+        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+        var selectedNodeId = getSelectedNodeId(selectedNode);
+
+        if (selectedNodeId != "")
+            $.ajax({
+                type: 'POST',
+                url: updateSelectedNode + '?Selected=' + selectedNodeId,
+                dataType: 'html',
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).done(function (sensorsData) {
+                var array = JSON.parse(sensorsData);
+                for (let i = 0; i < array.length; i++) {
+                    updateSelectedSensor(array[i]);
+
+                    let selectedRadio = $('input[id$=' + array[i].id + ']:checked');
+                    if (selectedRadio !== undefined) {
+                        selectedRadio.click();
+                    }
+                }
+
+                initialize();
+            });
+
+        $('#updateTime').empty();
+        $('#updateTime').append('Update Time: ' + new Date().toUTCString());
+
+        $("#state").empty();
+        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+    }
+
     setInterval(updateTreeTimer, 5000);
+    setInterval(updateSelectedSensors, 5000);
 </script>
