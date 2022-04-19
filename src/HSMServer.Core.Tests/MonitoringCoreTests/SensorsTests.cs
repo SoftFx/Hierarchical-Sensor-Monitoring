@@ -370,20 +370,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
         [Fact]
-        [Trait("Category", "Get sensors data")]
-        public void GetSensorsTreeTest()
-        {
-            var sensorsLastValues = AddRandomSensorValuesAndGetTheirLastValues(10);
-
-            var result = _monitoringCore.GetSensorsTree(TestUsersManager.TestUser);
-
-            Assert.Equal(sensorsLastValues.Count, result.Count);
-            foreach (var sensorData in result)
-                _sensorValuesTester.TestSensorDataFromCache(sensorsLastValues[sensorData.Path], sensorData);
-        }
-
-
-        [Fact]
         [Trait("Category", "File sensor bytes compressing/decompressing content")]
         public void FileSensorBytesCompressingDecompressingContentTest()
         {

@@ -307,13 +307,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         #endregion
 
-        public List<SensorData> GetSensorsTree(User user)
-        {
-            List<SensorData> result = new List<SensorData>();
-
-            return result;
-        }
-
         public List<SensorInfo> GetProductSensors(string productName) =>
             _productManager.GetProductByName(productName)?.Sensors.Values.ToList();
 
