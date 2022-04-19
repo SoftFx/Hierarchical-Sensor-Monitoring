@@ -28,7 +28,7 @@
                             modal.show();
 
                             //modal confirm
-                            $('#confirmDeleteButton').on('click', function () {
+                            $('#confirmDeleteButton').off('click').on('click', function () {
                                 modal.hide();
 
                                 $.ajax({
@@ -40,22 +40,11 @@
                                     async: true
                                 }).done(function () {
                                     tree.delete_node($node.id);
-                                    //tree.disable_node($node.id);
-
-                                    //$node.children.forEach(function (child_id) {
-                                        //tree.disable_node(child_id.id);
-                                    //});
-
-                                    $('#list_' + $node.id).remove();
-                                    $('#noData').css('display', 'block');
-
-                                    $('[id^="list_"][style*="display: block;"]').each(function (index) {
-                                        this.remove();
-                                    }); 
+                                    selectNodeAjax("");
                                 });                               
                             });
 
-                            $('#closeDeleteButton').on('click', function () {
+                            $('#closeDeleteButton').off('click').on('click', function () {
                                 modal.hide();
                             });
                         }
@@ -93,24 +82,26 @@
 
 function initializeActivateNodeTree() {
     $('#jstree').on('activate_node.jstree', function (e, data) {
-        var selectedId = data.node.id;
+        selectNodeAjax(data.node.id)
+    });
+}
 
-        $.ajax({
-            type: 'post',
-            url: selectNode + '?Selected=' + selectedId,
-            datatype: 'html',
-            contenttype: 'application/json',
-            cache: false,
-            success: function (viewData) {
-                $("#listSensors").html(viewData);
-            }
-        }).done(function () {
-            initialize();
+function selectNodeAjax(selectedId) {
+    $.ajax({
+        type: 'post',
+        url: selectNode + '?Selected=' + selectedId,
+        datatype: 'html',
+        contenttype: 'application/json',
+        cache: false,
+        success: function (viewData) {
+            $("#listSensors").html(viewData);
+        }
+    }).done(function () {
+        initialize();
 
-            var selectedAccordionId = '#accordion_' + selectedId;
-            if ($(selectedAccordionId).attr('aria-expanded') == 'false')
-                $(selectedAccordionId).click();
-        });
+        var selectedAccordionId = '#accordion_' + selectedId;
+        if ($(selectedAccordionId).attr('aria-expanded') == 'false')
+            $(selectedAccordionId).click();
     });
 }
 

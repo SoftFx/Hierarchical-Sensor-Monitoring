@@ -76,54 +76,27 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
+        public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            if (encodedPath.Contains("sensor_"))
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
+            // TODO !!_sensorsInterface.RemoveSensors() method!!
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
-                encodedPath = encodedPath.Substring("sensor_".Length);
-            }
+                // TODO remove all subproducts and sensors from _treeViewModel (and from db)
 
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-
-            if (decodedPath.Contains('/'))
-            {
-                //remove node
-                ParseProductAndPath(encodedPath, out var product, out var path);
-                var model = _treeManager.GetTreeViewModel(user).Clone();
-                var node = model.GetNode(decodedPath);
-
-                var paths = new List<string>(1 << 2);
-                if (node == null) //remove single sensor
+                if (node.Parent == null)
                 {
-                    ParseProductPathAndSensor(encodedPath, out product, out path, out var sensor);
-                    node = string.IsNullOrEmpty(path) ?
-                        model.GetNode(product) : model.GetNode($"{product}/{path}");
+                    var productEntity = _productManager.GetProductByName(node.Name);
+                    if (productEntity == null)
+                        return;
 
-                    if (node != null)
-                    {
-                        if (string.IsNullOrEmpty(path))
-                            paths.Add(sensor);
-                        else
-                            paths.Add($"{path}/{sensor}");
-                    }
+                    _sensorsInterface.HideProduct(productEntity, out _);
                 }
-                else //remove sensors
-                    GetSensorsPaths(node, paths);
-
-                var productEntity = _productManager.GetProductByName(product);
-
-                _sensorsInterface.RemoveSensors(product, productEntity.Key, paths);
             }
-
-            else
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
             {
-                //remove product
-                var productEntity = _productManager.GetProductByName(decodedPath);
-                if (productEntity == null)
-                    return;
-
-                _sensorsInterface.HideProduct(productEntity, out _);
+                // TODO remove sensor from _treeViewModel (maybe with _sensorInterface, that help to delete sensor from db and from cache)
             }
         }
 
