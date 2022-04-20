@@ -1,6 +1,8 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMCommon.Constants;
+using HSMSensorDataObjects;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Converters;
+using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
 
@@ -11,14 +13,49 @@ namespace HSMServer.Model.TreeViewModels
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
 
+        private readonly TimeSpan _minimumUpdateInterval = new(0, 0, 5, 0);
+
+        private TimeSpan _expectedUpdateInterval;
+        private bool _isSensorValueOutdated;
+
+        private string _validationError;
+
+        public override SensorStatus Status
+        {
+            get
+            {
+                var lastUpdateInterval = DateTime.UtcNow - UpdateTime;
+
+                if (lastUpdateInterval < _minimumUpdateInterval || _expectedUpdateInterval == TimeSpan.Zero ||
+                    lastUpdateInterval < _expectedUpdateInterval)
+                {
+                    _isSensorValueOutdated = false;
+                    return base.Status;
+                }
+
+                _isSensorValueOutdated = true;
+                return base.Status.GetWorst(SensorStatus.Warning);
+            }
+            protected set => base.Status = value;
+        }
+
+        public string ValidationError
+        {
+            get
+            {
+                if (_isSensorValueOutdated)
+                    return $"{_validationError}{Environment.NewLine}{ValidationConstants.SensorValueOutdated}";
+
+                return _validationError;
+            }
+            private set => _validationError = value;
+        }
 
         public SensorType SensorType { get; private set; }
 
         public string Description { get; private set; }
 
         public string ShortStringValue { get; private set; }
-
-        public string ValidationError { get; private set; }
 
         public string Path { get; private set; }
 
@@ -59,6 +96,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(SensorModel model)
         {
+            _expectedUpdateInterval = model.ExpectedUpdateInterval;
+
             Name = model.SensorName;
             SensorType = model.SensorType;
             Status = model.Status;

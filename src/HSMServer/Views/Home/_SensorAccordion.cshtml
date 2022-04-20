@@ -38,11 +38,11 @@
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@sensorId' class='fas fa-circle sensor-icon-with-margin @ViewHelper.GetStatusHeaderColorClass(Model.Status)'
-                                        title='Status: @Model.Status' />
+                                        title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
                                         @if (!string.IsNullOrEmpty(Model.ValidationError))
                                         {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError' />
+                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
                                         }
                                     </span>
                                 </div>
@@ -79,11 +79,11 @@
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='fas fa-circle sensor-icon-with-margin @ViewHelper.GetStatusHeaderColorClass(Model.Status)' title='Status: @Model.Status' />
+                                    <li id='status_@sensorId' class='fas fa-circle sensor-icon-with-margin @ViewHelper.GetStatusHeaderColorClass(Model.Status)' title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
                                         @if (!string.IsNullOrEmpty(Model.ValidationError))
                                         {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError' />
+                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
                                         }
                                     </span>
                                 </div>

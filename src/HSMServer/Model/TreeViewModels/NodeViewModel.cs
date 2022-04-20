@@ -4,7 +4,7 @@ using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public class NodeViewModel
+    public abstract class NodeViewModel
     {
         private const int NodeNameMaxLength = 35;
 
@@ -15,7 +15,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public DateTime UpdateTime { get; protected set; }
 
-        public SensorStatus Status { get; protected set; }
+        public virtual SensorStatus Status { get; protected set; }
 
         public NodeViewModel Parent { get; internal set; }
 
