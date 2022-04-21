@@ -11,6 +11,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
@@ -37,9 +38,10 @@ namespace HSMServer.Core.Cache
             _tree = new ConcurrentDictionary<Guid, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
-            (var products, var sensors, var sensorsData) = GenerateTestData();
+            (var products, var sensors, var sensorsData) = GenerateTestData();//GenerateTestDataNeedToResave();
 
-            BuildTreeWithMigration(products, sensors, sensorsData);
+            BuildTree(products, sensors, sensorsData);
+            //Initialize(products, sensors, sensorsData);
         }
 
 
@@ -70,12 +72,26 @@ namespace HSMServer.Core.Cache
             UploadSensorDataEvent?.Invoke(sensor);
         }
 
-        public void BuildTree(List<ProductEntity> productEntities,
+        // TODO  -> method is right after adding new property NeedToResave to product and sensor entities
+        private void Initialize(List<ProductEntity> productEntities,
+            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        {
+            //BuildTree(productEntities.Where(e => !e.NeedToResave).ToList(),
+            //          sensorEntities.Where(e => !e.NeedToResave).ToList(),
+            //          sensorDataEntities);
+
+            //BuildTreeWithMigration(
+            //    productEntities.Where(e => e.NeedToResave).ToList(),
+            //    sensorEntities.Where(e => e.NeedToResave).ToList(),
+            //    sensorDataEntities);
+        }
+
+        private void BuildTree(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
             FillTreeByProductModels(productEntities);
 
-            var sensorDatas = GetSensorDatasDict(sensorDataEntities);
+            var sensorDatas = sensorDataEntities.Where(d => !string.IsNullOrEmpty(d.Id)).ToDictionary(s => s.Id); // TODO: dictionary (key, list<values>) for several datas
             foreach (var sensorEntity in sensorEntities)
             {
                 var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
@@ -85,37 +101,116 @@ namespace HSMServer.Core.Cache
             foreach (var productEntity in productEntities)
                 if (_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
                 {
-                    foreach (var subProductId in productEntity.SubProductsIds)
-                    {
-                        if (_tree.TryGetValue(Guid.Parse(subProductId), out var subProduct))
-                            product.AddSubProduct(subProduct);
-                    }
+                    if (productEntity.SubProductsIds != null)
+                        foreach (var subProductId in productEntity.SubProductsIds)
+                        {
+                            if (_tree.TryGetValue(Guid.Parse(subProductId), out var subProduct))
+                                product.AddSubProduct(subProduct);
+                        }
 
-                    foreach (var sensorId in productEntity.SensorsIds)
-                    {
-                        if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
-                            product.AddSensor(sensor);
-                    }
+                    if (productEntity.SensorsIds != null)
+                        foreach (var sensorId in productEntity.SensorsIds)
+                        {
+                            if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
+                                product.AddSensor(sensor);
+                        }
                 }
         }
 
-        public void BuildTreeWithMigration(List<ProductEntity> productEntities,
+        private void BuildTreeWithMigration(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
-            FillTreeByProductModels(productEntities);
+            var newProductIds = new List<Guid>();
+            void AddNewProductHandler(ProductModel product, TransactionType transaction)
+            {
+                if (transaction == TransactionType.Add)
+                    newProductIds.Add(product.Id);
+            }
 
-            var sensorDatas = GetSensorDatasDict(sensorDataEntities);
+            ChangeProductEvent += AddNewProductHandler;
+
+            FillTreeByProductModels(productEntities);
+            FillTreeBySensorModels(sensorEntities, sensorDataEntities);
+
+            ChangeProductEvent -= AddNewProductHandler;
+
+            //ResaveEntities(productEntities, newProductIds, sensorEntities, sensorDataEntities);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void FillTreeBySensorModels(List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        {
+            var sensorDatas = sensorDataEntities.Where(d => !string.IsNullOrEmpty(d.Path)).ToDictionary(s => s.Path); // TODO: dictionary (key, list<values>) for several datas
             foreach (var sensorEntity in sensorEntities)
             {
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
 
-                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
+                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveEntities(List<ProductEntity> productEntities, List<Guid> newProductIds,
+            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        {
+            ResaveProducts(productEntities);
+            SaveNewProducts(newProductIds);
+            ResaveSensors(sensorEntities);
+            ResaveSensorDatas(sensorDataEntities);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveProducts(List<ProductEntity> productEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
+                    continue;
+
+                _database.UpdateProduct(product.ToProductEntity(productEntity.Key));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SaveNewProducts(List<Guid> productsIdsToSave)
+        {
+            foreach (var productId in productsIdsToSave)
+            {
+                if (_tree.TryGetValue(productId, out var product))
+                    _database.UpdateProduct(product.ToProductEntity(productId.ToString()));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveSensors(List<SensorEntity> sensorEntities)
+        {
+            foreach (var sensorEntity in sensorEntities)
+            {
+                if (/*!sensorEntity.NeedToResave || */!_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
+                    continue;
+
+                _database.UpdateSensor(sensor.ToSensorEntity());
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveSensorDatas(List<SensorDataEntity> sensorDataEntities)
+        {
+            // TODO
+        }
+
+
+        private void FillTreeByProductModels(List<ProductEntity> productEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
+        }
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
@@ -148,19 +243,102 @@ namespace HSMServer.Core.Cache
             return parentProduct;
         }
 
-        private void FillTreeByProductModels(List<ProductEntity> productEntities)
+        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
         {
-            foreach (var productEntity in productEntities)
+            var products = new List<ProductEntity>();
+            var sensors = new List<SensorEntity>();
+            var sensorsData = new List<SensorDataEntity>();
+
+            for (int i = 0; i < 2; ++i)
             {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
+                var product = new ProductEntity()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    State = (long)ProductState.FullAccess,
+                    DisplayName = $"product{i}",
+                    CreationDate = DateTime.UtcNow.Ticks,
+                    SubProductsIds = new List<string>(),
+                    SensorsIds = new List<string>(),
+                };
+
+                for (int j = 0; j < 2; j++)
+                {
+                    var subProduct = new ProductEntity()
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ParentProductId = product.Id,
+                        State = (long)ProductState.FullAccess,
+                        DisplayName = $"subProduct{j}",
+                        CreationDate = DateTime.UtcNow.Ticks,
+                        SubProductsIds = new List<string>(),
+                    };
+
+                    var sensor = new SensorEntity()
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ProductId = product.Id,
+                        SensorName = $"sensor{j}",
+                        SensorType = (int)SensorType.BooleanSensor,
+                    };
+                    var sensorData = new SensorDataEntity()
+                    {
+                        Id = sensor.Id,
+                        TimeCollected = DateTime.UtcNow,
+                        DataType = (byte)sensor.SensorType,
+                        TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData" }),
+                        Status = (byte)SensorStatus.Warning,
+                    };
+
+                    product.SubProductsIds.Add(subProduct.Id);
+                    product.SensorsIds.Add(sensor.Id);
+
+                    var subSubProduct = new ProductEntity()
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ParentProductId = subProduct.Id,
+                        State = (long)ProductState.FullAccess,
+                        DisplayName = $"subSubProduct",
+                        CreationDate = DateTime.UtcNow.Ticks,
+                        SensorsIds = new List<string>(),
+                    };
+
+                    subProduct.SubProductsIds.Add(subSubProduct.Id);
+
+                    var sensorForSubSubProduct = new SensorEntity()
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ProductId = subSubProduct.Id,
+                        SensorName = "sensor",
+                        SensorType = (int)SensorType.IntSensor,
+                    };
+                    var sensorForSubSubProductData = new SensorDataEntity()
+                    {
+                        Id = sensorForSubSubProduct.Id,
+                        TimeCollected = DateTime.UtcNow,
+                        DataType = (byte)sensorForSubSubProduct.SensorType,
+                        TypedData = JsonSerializer.Serialize(new IntSensorData() { IntValue = 12345, Comment = "sensorData1" }),
+                        Status = (byte)SensorStatus.Ok,
+                    };
+
+                    subSubProduct.SensorsIds.Add(sensorForSubSubProduct.Id);
+
+                    products.Add(subProduct);
+                    products.Add(subSubProduct);
+
+                    sensors.Add(sensor);
+                    sensors.Add(sensorForSubSubProduct);
+
+                    sensorsData.Add(sensorData);
+                    sensorsData.Add(sensorForSubSubProductData);
+                }
+
+                products.Add(product);
             }
+
+            return (products, sensors, sensorsData);
         }
 
-        private static Dictionary<string, SensorDataEntity> GetSensorDatasDict(List<SensorDataEntity> sensorDataEntities) =>
-            sensorDataEntities.ToDictionary(s => s.Id); // TODO: dictionary (key, list<values>) for several datas
-
-        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
+        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestDataNeedToResave()
         {
             var products = new List<ProductEntity>();
             var sensors = new List<SensorEntity>();
@@ -203,9 +381,11 @@ namespace HSMServer.Core.Cache
                 sensors.Add(sensor2);
                 sensors.Add(sensor3);
 
+                //foreach (var s in sensors)
+                //    s.NeedToResave = true;
+
                 var sensorDaata1 = new SensorDataEntity()
                 {
-                    Id = sensor1.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor1.Path,
                     DataType = (byte)sensor1.SensorType,
@@ -214,7 +394,6 @@ namespace HSMServer.Core.Cache
                 };
                 var sensorDaata11 = new SensorDataEntity()
                 {
-                    Id = sensor11.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor11.Path,
                     DataType = (byte)sensor11.SensorType,
@@ -223,7 +402,6 @@ namespace HSMServer.Core.Cache
                 };
                 var sensorDaata2 = new SensorDataEntity()
                 {
-                    Id = sensor2.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor2.Path,
                     DataType = (byte)sensor2.SensorType,
@@ -232,7 +410,6 @@ namespace HSMServer.Core.Cache
                 };
                 var sensorDaata3 = new SensorDataEntity()
                 {
-                    Id = sensor3.Id,
                     TimeCollected = DateTime.UtcNow,
                     Path = sensor3.Path,
                     DataType = (byte)sensor3.SensorType,
@@ -248,7 +425,7 @@ namespace HSMServer.Core.Cache
                 {
                     Id = Guid.NewGuid().ToString(),
                     DisplayName = productName,
-                    SensorsIds = new List<string> { sensor1.Id, sensor11.Id, sensor2.Id, sensor3.Id }
+                    //NeedToResave = true,
                 });
             }
 

@@ -46,6 +46,8 @@ namespace HSMServer.Core.DataLayer
 
         public void UpdateProduct(Product product) => AddProduct(product);
 
+        public void UpdateProduct(ProductEntity product) => _database.AddProduct(product);
+
         public Product GetProduct(string productName)
         {
             var entity = _database.GetProduct(productName);
@@ -75,6 +77,8 @@ namespace HSMServer.Core.DataLayer
             SensorEntity entity = ConvertSensorInfoToEntity(info);
             _database.AddSensor(entity);
         }
+
+        public void UpdateSensor(SensorEntity sensor) => _database.AddSensor(sensor);
 
         public void PutSensorData(SensorDataEntity data, string productName) =>
             _database.AddSensorValue(data, productName);

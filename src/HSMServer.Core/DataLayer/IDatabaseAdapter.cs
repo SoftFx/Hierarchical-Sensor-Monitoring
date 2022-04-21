@@ -22,6 +22,7 @@ namespace HSMServer.Core.DataLayer
         void RemoveProduct(string productName);
         void AddProduct(Product product);
         void UpdateProduct(Product product);
+        void UpdateProduct(ProductEntity product);
         Product GetProduct(string productName);
         List<Product> GetProducts();
         List<ProductEntity> GetAllProducts();
@@ -33,6 +34,7 @@ namespace HSMServer.Core.DataLayer
         void RemoveSensor(string productName, string path);
         void AddSensor(SensorInfo info);
         void UpdateSensor(SensorInfo info);
+        void UpdateSensor(SensorEntity sensor);
         void PutSensorData(SensorDataEntity data, string productName);
         SensorDataEntity GetLastSensorValue(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);

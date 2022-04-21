@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace HSMServer.Core.Cache.Entities
 {
@@ -69,5 +70,20 @@ namespace HSMServer.Core.Cache.Entities
 
             Sensors.TryAdd(sensor.Id, sensor);
         }
+
+        internal ProductEntity ToProductEntity(string key) =>
+            new()
+            {
+                Key = key,
+                Id = Id.ToString(),
+                //AuthorId ???
+                ParentProductId = ParentProduct?.Id.ToString() ?? string.Empty,
+                State = (long)State,
+                DisplayName = DisplayName,
+                Description = Description,
+                CreationDate = CreationDate.Ticks,
+                SubProductsIds = SubProducts.Select(p => p.Value.Id.ToString()).ToList(),
+                SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
+            };
     }
 }
