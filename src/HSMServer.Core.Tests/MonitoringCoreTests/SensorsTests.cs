@@ -147,7 +147,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             for (int i = 0; i < count; ++i)
                 sensorValues.Add(AddAndGetRandomSensorValue(i.ToString()));
 
-            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Key, sensorValues.Select(s => s.Path));
+            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Id, sensorValues.Select(s => s.Path));
 
             foreach (var sensorValue in sensorValues)
                 FullTestRemovedSensor(_testProductName,
@@ -167,7 +167,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var sensorValue = AddAndGetRandomSensor();
 
-            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Key, new List<string>() { sensorValue.Path });
+            _monitoringCore.RemoveSensors(_testProductName, TestProductsManager.TestProduct.Id, new List<string>() { sensorValue.Path });
 
             FullTestRemovedSensor(_testProductName,
                                   sensorValue,

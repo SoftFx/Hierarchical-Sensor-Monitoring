@@ -20,7 +20,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
     {
         private const int SeveralSensorValuesCount = 3;
 
-        private readonly string _testProductName = TestProductsManager.TestProduct.Name;
+        private readonly string _testProductName = TestProductsManager.TestProduct.DisplayName;
         private readonly BarSensorsStorage _barStorage;
 
         private delegate List<SensorData> GetValuesFromCache(List<string> products);

@@ -200,13 +200,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
-            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Key);
+            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Id);
 
             var result = _userManager.GetUsers().ToList();
 
             for (int i = 0; i < result.Count; i++)
             {
-                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Key);
+                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Id);
                 Assert.Equal(default, actual);
             }
         }
@@ -217,7 +217,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
+            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -229,7 +229,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
+            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -284,7 +284,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users")]
         public void GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Key);
+            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Id);
 
 
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);

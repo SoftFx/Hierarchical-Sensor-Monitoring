@@ -122,7 +122,7 @@ namespace HSMServer.HtmlHelpers
 
             foreach (var right in productsRights)
             {
-                var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key))?.Name;
+                var name = products?.FirstOrDefault(p => p.Id.Equals(right.Key))?.DisplayName;
                 result.AppendLine($"{name ?? right.Key} ({right.Value})<br>");
             }
 

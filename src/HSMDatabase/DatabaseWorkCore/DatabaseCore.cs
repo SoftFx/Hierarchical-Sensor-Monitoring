@@ -257,7 +257,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddProduct(ProductEntity productEntity)
         {
-            _environmentDatabase.AddProductToList(productEntity.Name);
+            _environmentDatabase.AddProductToList(productEntity.DisplayName);
             _environmentDatabase.PutProductInfo(productEntity);
         }
 
@@ -268,11 +268,29 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<ProductEntity> GetAllProducts()
         {
+            //move OldProducts to this
             List<ProductEntity> products = new List<ProductEntity>();
             var productNames = _environmentDatabase.GetProductsList();
             foreach (var productName in productNames)
             {
                 var product = _environmentDatabase.GetProductInfo(productName);
+                if (product != null)
+                    products.Add(product);
+            }
+
+            return products;
+        }
+
+        public List<string> GetOldAllProducts()
+        {
+            var products = new List<string>();
+            var productNames = _environmentDatabase.GetProductsList();
+
+            if (productNames == null || productNames.Count == 0) return null;
+
+            foreach (var productName in productNames)
+            {
+                var product = _environmentDatabase.GetOldProductInfo(productName);
                 if (product != null)
                     products.Add(product);
             }

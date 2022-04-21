@@ -170,7 +170,7 @@ namespace HSMServer.Core.Cache
                 if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
                     continue;
 
-                _database.UpdateProduct(product.ToProductEntity(productEntity.Key));
+                _database.UpdateProduct(product.ToProductEntity());
             }
         }
 
@@ -180,7 +180,7 @@ namespace HSMServer.Core.Cache
             foreach (var productId in productsIdsToSave)
             {
                 if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToProductEntity(productId.ToString()));
+                    _database.UpdateProduct(product.ToProductEntity());
             }
         }
 
@@ -254,7 +254,7 @@ namespace HSMServer.Core.Cache
                 var product = new ProductEntity()
                 {
                     Id = Guid.NewGuid().ToString(),
-                    State = (long)ProductState.FullAccess,
+                    State = (int)ProductState.FullAccess,
                     DisplayName = $"product{i}",
                     CreationDate = DateTime.UtcNow.Ticks,
                     SubProductsIds = new List<string>(),
@@ -267,7 +267,7 @@ namespace HSMServer.Core.Cache
                     {
                         Id = Guid.NewGuid().ToString(),
                         ParentProductId = product.Id,
-                        State = (long)ProductState.FullAccess,
+                        State = (int)ProductState.FullAccess,
                         DisplayName = $"subProduct{j}",
                         CreationDate = DateTime.UtcNow.Ticks,
                         SubProductsIds = new List<string>(),
@@ -296,7 +296,7 @@ namespace HSMServer.Core.Cache
                     {
                         Id = Guid.NewGuid().ToString(),
                         ParentProductId = subProduct.Id,
-                        State = (long)ProductState.FullAccess,
+                        State = (int)ProductState.FullAccess,
                         DisplayName = $"subSubProduct",
                         CreationDate = DateTime.UtcNow.Ticks,
                         SensorsIds = new List<string>(),

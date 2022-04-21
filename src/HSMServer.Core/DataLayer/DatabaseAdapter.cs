@@ -57,7 +57,21 @@ namespace HSMServer.Core.DataLayer
         public List<Product> GetProducts() =>
             _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
 
-        public List<ProductEntity> GetAllProducts() => _database.GetAllProducts();
+        public List<ProductEntity> GetAllProducts() 
+        {
+            //_database.GetAllProducts();
+            var result = new List<ProductEntity>();
+
+            var oldEntities = _database.GetOldAllProducts();
+            if (oldEntities == null || oldEntities.Count == 0) return null;
+
+            foreach (var oldEntity in oldEntities)
+            {
+                result.Add(EntityConverter.Convert(oldEntity));
+            }
+
+            return result;
+        }
 
         #endregion
 
@@ -111,7 +125,7 @@ namespace HSMServer.Core.DataLayer
         }
 
         public List<SensorInfo> GetProductSensors(Product product) =>
-            _database.GetProductSensors(product.Name)?.Select(e => new SensorInfo(e))?.ToList() ?? new List<SensorInfo>();
+            _database.GetProductSensors(product.DisplayName)?.Select(e => new SensorInfo(e))?.ToList() ?? new List<SensorInfo>();
 
         private List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)
         {
@@ -214,10 +228,9 @@ namespace HSMServer.Core.DataLayer
         private static ProductEntity ConvertProductToEntity(Product product) =>
             new()
             {
-                Name = product.Name,
-                Key = product.Key,
-                DateAdded = product.DateAdded,
-                ExtraKeys = product.ExtraKeys?.Select(ConvertExtraProductKeyToEntity)?.ToList(),
+                DisplayName = product.DisplayName,
+                Id = product.Id,
+                DateAdded = product.DateAdded.Ticks
             };
 
         private static ExtraKeyEntity ConvertExtraProductKeyToEntity(ExtraProductKey key) =>

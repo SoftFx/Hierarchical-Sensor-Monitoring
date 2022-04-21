@@ -49,7 +49,7 @@ namespace HSMServer.BackgroundTask
                     var products = _productManager.Products;
                     foreach (var product in products)
                     {
-                        var sensors = _sensorsInterface.GetProductSensors(product.Name);
+                        var sensors = _sensorsInterface.GetProductSensors(product.DisplayName);
                         foreach (var sensor in sensors)
                         {
                             //var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
@@ -60,7 +60,7 @@ namespace HSMServer.BackgroundTask
                             if (DateTime.Now - lastValue.TimeCollected < expireInterval)
                                 continue;
 
-                            sensorsToRemove.Add((product.Name, sensor.Path));
+                            sensorsToRemove.Add((product.DisplayName, sensor.Path));
                         }
                     }
 

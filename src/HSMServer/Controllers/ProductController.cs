@@ -55,10 +55,10 @@ namespace HSMServer.Controllers
             else
                 products = _productManager.GetProducts(user);
 
-            products = products?.OrderBy(x => x.Name).ToList();
+            products = products?.OrderBy(x => x.DisplayName).ToList();
 
             var result = products?.Select(x => new ProductViewModel(
-                _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
+                _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
         }
@@ -106,7 +106,7 @@ namespace HSMServer.Controllers
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
+                        user.ProductsRoles.First(x => x.Key.Equals(product.Id)).Value));
                 }
 
             return View(new EditProductViewModel(product, pairs));
@@ -125,7 +125,7 @@ namespace HSMServer.Controllers
 
             Product product = _productManager.GetProductCopyByKey(model.ProductKey);
             model.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
-                product.Name, model.ExtraKeyName);
+                product.DisplayName, model.ExtraKeyName);
 
             var extraProduct = new ExtraProductKey(model.ExtraKeyName, model.ExtraProductKey);
             if (product.ExtraKeys == null || product.ExtraKeys.Count == 0)

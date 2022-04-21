@@ -90,9 +90,31 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
+        public string GetOldProductInfo(string productName)
+        {
+            string key = PrefixConstants.GetProductInfoKey(productName);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read product info");
+                }
+
+                return Encoding.UTF8.GetString(value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for product {productName}");
+            }
+
+            return null;
+        }
+
         public void PutProductInfo(ProductEntity product)
         {
-            string key = PrefixConstants.GetProductInfoKey(product.Name);
+            string key = PrefixConstants.GetProductInfoKey(product.DisplayName);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             string stringData = JsonSerializer.Serialize(product);
             byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
@@ -102,7 +124,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to put product info for {product.Name}");
+                _logger.Error(e, $"Failed to put product info for {product.DisplayName}");
             }
         }
 

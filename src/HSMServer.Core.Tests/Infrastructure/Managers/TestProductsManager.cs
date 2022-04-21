@@ -12,9 +12,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static Product TestProduct { get; } =
             new()
             {
-                Name = ProductName,
+                DisplayName = ProductName,
                 DateAdded = DateTime.UtcNow,
-                Key = KeyGenerator.GenerateProductKey(ProductName),
+                Id = KeyGenerator.GenerateProductKey(ProductName),
                 ExtraKeys = new List<ExtraProductKey>(),
             };
     }

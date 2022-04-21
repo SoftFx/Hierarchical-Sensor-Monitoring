@@ -28,7 +28,7 @@ namespace HSMServer.Model.Validators
             var products = _productManager.Products;
 
             return products?.FirstOrDefault(x =>
-                x.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;
+                x.DisplayName.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;
         }
     }
 }

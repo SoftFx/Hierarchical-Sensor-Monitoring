@@ -51,9 +51,9 @@ namespace HSMServer.Tests.Fixture
         private Product CreateProduct(string name, string key)
         {
             Product product = new Product();
-            product.Name = name;
+            product.DisplayName = name;
             product.DateAdded = DateTime.Now;
-            product.Key = key;
+            product.Id = key;
             product.ExtraKeys = new List<ExtraProductKey>();
             return product;
         }

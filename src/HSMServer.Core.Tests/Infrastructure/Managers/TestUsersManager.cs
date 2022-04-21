@@ -62,7 +62,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Password = HashComputer.ComputePasswordHash(name),
                 ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Key, productRole)
+                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Id, productRole)
                 },
             };
 

@@ -12,9 +12,10 @@ namespace HSMServer.Core.Model
     [SwaggerIgnore]
     public class Product
     {
-        public string Key { get; set; }
-        public string Name { get; set; }
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
         public DateTime DateAdded { get; set; }
+        [Obsolete]
         public List<ExtraProductKey> ExtraKeys { get; set; }
         [JsonIgnore]
         public ConcurrentDictionary<string, SensorInfo> Sensors { get; }
@@ -28,32 +29,29 @@ namespace HSMServer.Core.Model
 
         public Product(string key, string name) : this()
         {
-            Key = key;
-            Name = name;
+            Id = key;
+            DisplayName = name;
         }
 
         public Product(Product product) : this()
         {
             if (product == null) return;
 
-            Key = product.Key;
-            Name = product.Name;
+            Id = product.Id;
+            DisplayName = product.DisplayName;
             DateAdded = product.DateAdded;
             AddExtraKeys(product.ExtraKeys);
         }
 
+        //todo update ?
         public Product(ProductEntity entity) : this()
         {
             if (entity == null) return;
 
-            Key = entity.Key;
-            Name = entity.Name;
-            DateAdded = entity.DateAdded;
-
-            if (entity.ExtraKeys != null && entity.ExtraKeys.Count > 0)
-            {
-                ExtraKeys.AddRange(entity.ExtraKeys.Select(e => new ExtraProductKey(e)));
-            }
+            Id = entity.Id;
+            DisplayName = entity.DisplayName;
+            DateAdded = new DateTime(entity.DateAdded);
+            ExtraKeys = new List<ExtraProductKey>();
         }
 
         public void Update(Product product)

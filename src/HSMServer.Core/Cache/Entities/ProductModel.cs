@@ -6,7 +6,7 @@ using System.Linq;
 namespace HSMServer.Core.Cache.Entities
 {
     [Flags]
-    public enum ProductState : long
+    public enum ProductState : int
     {
         Disabled = 0,
         FullAccess = 1 << 62,
@@ -71,14 +71,13 @@ namespace HSMServer.Core.Cache.Entities
             Sensors.TryAdd(sensor.Id, sensor);
         }
 
-        internal ProductEntity ToProductEntity(string key) =>
+        internal ProductEntity ToProductEntity() =>
             new()
             {
-                Key = key,
                 Id = Id.ToString(),
                 //AuthorId ???
                 ParentProductId = ParentProduct?.Id.ToString() ?? string.Empty,
-                State = (long)State,
+                State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,

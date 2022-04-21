@@ -30,8 +30,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             dbRegisterFixture.RegisterDatabase(_databaseAdapterManager);
 
-            _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Key);
-            _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.Name);
+            _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
+            _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.DisplayName);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
             _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);

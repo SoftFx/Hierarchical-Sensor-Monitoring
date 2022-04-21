@@ -28,6 +28,8 @@ namespace HSMServer.Core.Products
             _databaseAdapter = databaseAdapter;
             _products = new ConcurrentDictionary<string, Product>();
 
+            _databaseAdapter.GetAllProducts();
+
             InitializeProducts();
         }
 
@@ -48,7 +50,7 @@ namespace HSMServer.Core.Products
             var existingProducts = _databaseAdapter.GetProducts();
             foreach (var product in existingProducts)
             {
-                _products[product.Name] = product;
+                _products[product.DisplayName] = product;
 
                 var sensors = _databaseAdapter.GetProductSensors(product);
                 product.InitializeSensors(sensors);
@@ -88,17 +90,17 @@ namespace HSMServer.Core.Products
             {
                 _databaseAdapter.AddProduct(product);
 
-                _products[product.Name] = product;
+                _products[product.DisplayName] = product;
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add new product, name = {product.Name}");
+                _logger.LogError(e, $"Failed to add new product, name = {product.DisplayName}");
             }
         }
 
         public void UpdateProduct(Product product)
         {
-            Product currentProduct = _products[product.Name];
+            Product currentProduct = _products[product.DisplayName];
 
             if (currentProduct == null)
             {
@@ -129,13 +131,13 @@ namespace HSMServer.Core.Products
         }
 
         public string GetProductNameByKey(string key) =>
-            GetProductByKey(key)?.Name;
+            GetProductByKey(key)?.DisplayName;
 
         public Product GetProductByKey(string key)
         {
             foreach (var (_, product) in _products)
             {
-                if (product.Key.Equals(key)) 
+                if (product.Id.Equals(key)) 
                     return product;
             }
 
@@ -151,7 +153,7 @@ namespace HSMServer.Core.Products
                 return null;
 
             return Products.Where(p =>
-                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
+                ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
     }
 }

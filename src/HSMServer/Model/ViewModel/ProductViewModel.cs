@@ -12,8 +12,8 @@ namespace HSMServer.Model.ViewModel
 
         public ProductViewModel(string manager, Product product)
         {
-            Key = product.Key;
-            Name = product.Name;
+            Key = product.Id;
+            Name = product.DisplayName;
             CreationDate = product.DateAdded;
             ManagerName = manager;
         }

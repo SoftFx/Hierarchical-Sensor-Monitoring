@@ -11,6 +11,7 @@ namespace HSMDatabase.AccessManager
         void AddProductToList(string productName);
         List<string> GetProductsList();
         ProductEntity GetProductInfo(string productName);
+        string GetOldProductInfo(string productName);
         void PutProductInfo(ProductEntity product);
         void RemoveProductInfo(string productName);
         void RemoveProductFromList(string productName);

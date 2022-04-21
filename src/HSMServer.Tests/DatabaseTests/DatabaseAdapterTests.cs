@@ -34,8 +34,8 @@ namespace HSMServer.Tests.DatabaseTests
             var existingProduct = _databaseFixture.DatabaseAdapter.GetProduct(_databaseFixture.FirstProductName);
 
             //Assert
-            Assert.Equal(product.Name, existingProduct.Name);
-            Assert.Equal(product.Key, existingProduct.Key);
+            Assert.Equal(product.DisplayName, existingProduct.DisplayName);
+            Assert.Equal(product.Id, existingProduct.Id);
             Assert.Equal(product.DateAdded, existingProduct.DateAdded);
         }
 
@@ -52,8 +52,8 @@ namespace HSMServer.Tests.DatabaseTests
             Assert.NotNull(_databaseFixture.DatabaseAdapter.GetProduct(_databaseFixture.SecondProductName));
 
             //Act
-            _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
-            var correspondingProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.Name);
+            _databaseFixture.DatabaseAdapter.RemoveProduct(product.DisplayName);
+            var correspondingProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.DisplayName);
 
             //Assert
             Assert.Null(correspondingProduct);
@@ -71,28 +71,10 @@ namespace HSMServer.Tests.DatabaseTests
             Debug.Print($"List of {list.Count} products received");
 
             //Assert
-            Assert.Contains(list, p => p.Name == product.Name && p.Key == product.Key);
+            Assert.Contains(list, p => p.DisplayName == product.DisplayName && p.Id == product.Id);
         }
 
-        [Fact]
-        public void ExtraKeyMustBeAdded()
-        {
-            //Arrange
-            var product = _databaseFixture.GetFirstTestProduct();
-            var key = KeyGenerator.GenerateExtraProductKey(product.Name, _databaseFixture.ExtraKeyName);
-            var extraKey = new ExtraProductKey { Key = key, Name = _databaseFixture.ExtraKeyName };
-            product.ExtraKeys = new List<ExtraProductKey> { extraKey };
-
-            //Act
-            _databaseFixture.DatabaseAdapter.UpdateProduct(product);
-
-            //Assert
-            var gotProduct = _databaseFixture.DatabaseAdapter.GetProduct(product.Name);
-            Assert.NotEmpty(gotProduct.ExtraKeys);
-            var keyFromDB = gotProduct.ExtraKeys.First();
-            Assert.Equal(extraKey.Name, keyFromDB.Name);
-            Assert.Equal(extraKey.Key, keyFromDB.Key);
-        }
+ 
 
         #endregion
 
@@ -173,7 +155,7 @@ namespace HSMServer.Tests.DatabaseTests
             //Act
             _databaseFixture.DatabaseAdapter.AddUser(user);
             var existingUser = _databaseFixture.DatabaseAdapter.GetUsers().First(u => u.Id == user.Id);
-            var key = _databaseFixture.GetFirstTestProduct().Key;
+            var key = _databaseFixture.GetFirstTestProduct().Id;
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(key, ProductRoleEnum.ProductManager));
             existingUser.Update(user);
             Thread.Sleep(1000);
@@ -199,7 +181,7 @@ namespace HSMServer.Tests.DatabaseTests
 
             //Act
             _databaseFixture.DatabaseAdapter.AddSensor(info);
-            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
+            var infoFromDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotNull(infoFromDB);
@@ -219,12 +201,12 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.RemoveSensor(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.RemoveSensor(product.DisplayName, info.Path);
 
             await Task.Delay(100);
 
-            var infoFromEnvironmentDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.Name, info.Path);
-            var sensorFromMonitoringDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+            var infoFromEnvironmentDB = _databaseFixture.DatabaseAdapter.GetSensorInfo(product.DisplayName, info.Path);
+            var sensorFromMonitoringDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotNull(infoFromEnvironmentDB);
@@ -242,8 +224,8 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.DisplayName);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotNull(dataFromDB);
@@ -262,8 +244,8 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.Name, info.Path);
+            _databaseFixture.DatabaseAdapter.PutSensorData(data, product.DisplayName);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetOneValueSensorValue(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotNull(dataFromDB);
@@ -282,8 +264,8 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.DisplayName));
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -301,9 +283,9 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            data.ForEach(d => Task.Run(() => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name)));
+            data.ForEach(d => Task.Run(() => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.DisplayName)));
             Thread.Sleep(3000);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.Name, info.Path);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetAllSensorHistory(product.DisplayName, info.Path);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -322,10 +304,10 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.DisplayName));
             DateTime dateTime = DateTime.Now.AddDays(-1 * 9);
             var expectedData = data.Where(e => e.TimeCollected > dateTime).ToList();
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, dateTime);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.DisplayName, info.Path, dateTime);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -350,12 +332,12 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.DisplayName));
             DateTime from = DateTime.Now.AddDays(-1 * 15);
             DateTime to = DateTime.Now.AddDays(-1 * 4);
             var expectedData = data.Where(e => e.TimeCollected < to
                 && e.TimeCollected > from).ToList();
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, from, to);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.DisplayName, info.Path, from, to);
 
             //Assert
             Assert.NotEmpty(dataFromDB);
@@ -380,10 +362,10 @@ namespace HSMServer.Tests.DatabaseTests
             _databaseFixture.DatabaseAdapter.AddSensor(info);
 
             //Act
-            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.Name));
+            data.ForEach(d => _databaseFixture.DatabaseAdapter.PutSensorData(d, product.DisplayName));
             Thread.Sleep(5000);
-            _databaseFixture.DatabaseAdapter.RemoveProduct(product.Name);
-            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.Name, info.Path, DateTime.MinValue);
+            _databaseFixture.DatabaseAdapter.RemoveProduct(product.DisplayName);
+            var dataFromDB = _databaseFixture.DatabaseAdapter.GetSensorHistory(product.DisplayName, info.Path, DateTime.MinValue);
 
             //Assert
             Assert.NotNull(dataFromDB);

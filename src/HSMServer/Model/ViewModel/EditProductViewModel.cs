@@ -16,13 +16,13 @@ namespace HSMServer.Model.ViewModel
         public EditProductViewModel(Product product, 
             List<KeyValuePair<User, ProductRoleEnum>> usersRights)
         {
-            ProductName = product.Name;
-            ProductKey = product.Key;
+            ProductName = product.DisplayName;
+            ProductKey = product.Id;
             UsersRights = usersRights.Select(x =>
                 new KeyValuePair<UserViewModel, ProductRoleEnum>(
                     new UserViewModel(x.Key), x.Value)).ToList();
 
-            ExtraKeys = product.ExtraKeys?.Select(k => new ExtraKeyViewModel(product.Key, k)).ToList();
+            ExtraKeys = product.ExtraKeys?.Select(k => new ExtraKeyViewModel(product.Id, k)).ToList();
         }
     }
 }

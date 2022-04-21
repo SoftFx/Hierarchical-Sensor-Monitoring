@@ -383,7 +383,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private void RemoveProductHandler(Product product)
         {
-            _userManager.RemoveProductFromUsers(product.Key);
+            _userManager.RemoveProductFromUsers(product.Id);
             // TODO: remove product from cache
         }
       
@@ -401,7 +401,7 @@ namespace HSMServer.Core.MonitoringServerCore
             {
                 result = false;
                 error = ex.Message;
-                _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
+                _logger.LogError(ex, $"Failed to hide product, name = {product.DisplayName}");
             }
             return result;
         }
