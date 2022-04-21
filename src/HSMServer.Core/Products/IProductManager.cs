@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 
@@ -11,6 +12,7 @@ namespace HSMServer.Core.Products
         List<Product> Products { get; }
         event Action<Product> RemovedProduct;
         Product AddProduct(string name);
+        void AddProduct(ProductModel product);
         void RemoveProduct(string name);
         void UpdateProduct(Product product);
         string GetProductNameByKey(string key);

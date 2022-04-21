@@ -3,7 +3,7 @@
 <ul>
     @foreach (var (_, node) in Model.Nodes)
     {
-        @if (node.Parent == null)
+        @if (node.Parent == null && node.Count != 0)
             @await Html.PartialAsync("_TreeNode", node)
     }
 </ul>

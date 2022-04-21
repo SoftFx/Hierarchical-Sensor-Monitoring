@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Constants;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Email;
 using HSMServer.Core.Encryption;
@@ -32,15 +33,17 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<ProductController> _logger;
 
         public ProductController(IProductManager productManager, IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ILogger<ProductController> logger)
+            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, ILogger<ProductController> logger)
         {
             _productManager = productManager;
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
+            _treeValuesCache = treeValuesCache;
             _logger = logger;
         }
 
@@ -74,21 +77,13 @@ namespace HSMServer.Controllers
             }
 
             TempData.Remove(TextConstants.TempDataErrorText);
-            _productManager.AddProduct(productName);
+            _treeValuesCache.AddProduct(productName);
         }
 
         public void RemoveProduct([FromQuery(Name = "Product")] string productKey)
         {
             var name = _productManager.GetProductNameByKey(productKey);
             _productManager.RemoveProduct(name);
-        }
-
-        [HttpPost]
-        public void UpdateProduct([FromBody] ProductViewModel model)
-        {
-            Product product = GetModelFromViewModel(model);
-
-            _productManager.UpdateProduct(product);
         }
 
         #endregion
@@ -274,8 +269,5 @@ namespace HSMServer.Controllers
 
             return string.Empty;
         }
-
-        private Product GetModelFromViewModel(ProductViewModel productViewModel) =>
-            _productManager.GetProductCopyByKey(productViewModel.Key);
     }
 }
