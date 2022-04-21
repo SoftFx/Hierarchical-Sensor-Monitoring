@@ -22,7 +22,7 @@ namespace HSMServer.Core.Cache
         private readonly IDatabaseAdapter _database;
         private readonly IProductManager _productManager;
 
-        private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
+        private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
@@ -35,7 +35,7 @@ namespace HSMServer.Core.Cache
             _database = database;
             _productManager = productManager;
 
-            _tree = new ConcurrentDictionary<Guid, ProductModel>();
+            _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
             (var products, var sensors, var sensorsData) = GenerateTestData();//GenerateTestDataNeedToResave();
@@ -109,12 +109,12 @@ namespace HSMServer.Core.Cache
             }
 
             foreach (var productEntity in productEntities)
-                if (_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
+                if (_tree.TryGetValue(productEntity.Id, out var product))
                 {
                     if (productEntity.SubProductsIds != null)
                         foreach (var subProductId in productEntity.SubProductsIds)
                         {
-                            if (_tree.TryGetValue(Guid.Parse(subProductId), out var subProduct))
+                            if (_tree.TryGetValue(subProductId, out var subProduct))
                                 product.AddSubProduct(subProduct);
                         }
 
@@ -130,7 +130,7 @@ namespace HSMServer.Core.Cache
         private void BuildTreeWithMigration(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
-            var newProductIds = new List<Guid>();
+            var newProductIds = new List<string>();
             void AddNewProductHandler(ProductModel product, TransactionType transaction)
             {
                 if (transaction == TransactionType.Add)
@@ -163,7 +163,7 @@ namespace HSMServer.Core.Cache
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities, List<Guid> newProductIds,
+        private void ResaveEntities(List<ProductEntity> productEntities, List<string> newProductIds,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
             ResaveProducts(productEntities);
@@ -177,7 +177,7 @@ namespace HSMServer.Core.Cache
         {
             foreach (var productEntity in productEntities)
             {
-                if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
+                if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(productEntity.Id, out var product))
                     continue;
 
                 _database.UpdateProduct(product.ToProductEntity());
@@ -185,7 +185,7 @@ namespace HSMServer.Core.Cache
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SaveNewProducts(List<Guid> productsIdsToSave)
+        private void SaveNewProducts(List<string> productsIdsToSave)
         {
             foreach (var productId in productsIdsToSave)
             {

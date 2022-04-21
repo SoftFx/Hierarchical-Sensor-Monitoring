@@ -58,11 +58,11 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(selectedId))
                 return PartialView("_TreeNodeSensors", null);
 
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var decodedId = SensorPathHelper.Decode(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 return PartialView("_TreeNodeSensors", node);
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
                 return PartialView("_TreeNodeSensors", sensor);
 
             return PartialView("_TreeNodeSensors", null);
@@ -78,7 +78,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var decodedId = SensorPathHelper.Decode(selectedId);
 
             // TODO !!_sensorsInterface.RemoveSensors() method!!
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
@@ -94,7 +94,7 @@ namespace HSMServer.Controllers
                     _sensorsInterface.HideProduct(productEntity, out _);
                 }
             }
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
             {
                 // TODO remove sensor from _treeViewModel (maybe with _sensorInterface, that help to delete sensor from db and from cache)
             }
@@ -108,7 +108,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(selectedId))
                 return Json(string.Empty);
 
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var decodedId = SensorPathHelper.Decode(selectedId);
             var updatedSensorsData = new List<UpdatedSensorDataViewModel>();
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
@@ -116,7 +116,7 @@ namespace HSMServer.Controllers
                 foreach (var (_, sensor) in node.Sensors)
                     updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
             }
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
                 updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
 
             return Json(updatedSensorsData);

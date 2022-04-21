@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Helpers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,7 +10,11 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductNodeViewModel : NodeViewModel
     {
-        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; }
+        public string Id { get; }
+
+        public string EncodedId => SensorPathHelper.Encode(Id);
+
+        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; }
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
 
@@ -21,7 +26,7 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             Name = model.DisplayName;
 
-            Nodes = new ConcurrentDictionary<Guid, ProductNodeViewModel>();
+            Nodes = new ConcurrentDictionary<string, ProductNodeViewModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)

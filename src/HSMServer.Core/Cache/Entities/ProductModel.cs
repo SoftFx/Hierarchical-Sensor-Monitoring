@@ -15,7 +15,7 @@ namespace HSMServer.Core.Cache.Entities
 
     public sealed class ProductModel
     {
-        public Guid Id { get; }
+        public string Id { get; }
 
         public string DisplayName { get; }
 
@@ -25,7 +25,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime CreationDate { get; }
 
-        public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; }
+        public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
 
@@ -34,13 +34,13 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel()
         {
-            SubProducts = new ConcurrentDictionary<Guid, ProductModel>();
+            SubProducts = new ConcurrentDictionary<string, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorModel>();
         }
 
         public ProductModel(ProductEntity entity) : this()
         {
-            Id = Guid.Parse(entity.Id);
+            Id = entity.Id;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel(string name, ProductModel parent = null) : this()
         {
-            Id = Guid.NewGuid();
+            Id = Guid.NewGuid().ToString();
             ParentProduct = parent;
             State = ProductState.FullAccess;
             DisplayName = name;
@@ -74,14 +74,14 @@ namespace HSMServer.Core.Cache.Entities
         internal ProductEntity ToProductEntity() =>
             new()
             {
-                Id = Id.ToString(),
+                Id = Id,
                 //AuthorId ???
-                ParentProductId = ParentProduct?.Id.ToString() ?? string.Empty,
+                ParentProductId = ParentProduct?.Id ?? string.Empty,
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                SubProductsIds = SubProducts.Select(p => p.Value.Id.ToString()).ToList(),
+                SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
                 SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
             };
     }

@@ -3,6 +3,7 @@ using HSMSensorDataObjects;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Extensions;
+using HSMServer.Helpers;
 using System;
 using System.Collections.Generic;
 
@@ -19,6 +20,11 @@ namespace HSMServer.Model.TreeViewModels
         private bool _isSensorValueOutdated;
 
         private string _validationError;
+
+
+        public Guid Id { get; }
+
+        public string EncodedId => SensorPathHelper.EncodeGuid(Id);
 
         public override SensorStatus Status
         {
