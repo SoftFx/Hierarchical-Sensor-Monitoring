@@ -49,9 +49,19 @@ namespace HSMServer.Core.Cache
 
         public List<SensorModel> GetSensors() => _sensors.Values.ToList();
 
+        public void AddProduct(string productName)
+        {
+            var product = new ProductModel(productName);
+
+            _productManager.AddProduct(product);
+            //_database.AddProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Add);
+        }
+
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
-            var parentProductName = _productManager.GetProductNameByKey(sensorValue.Key);  // TODO? get product by key from db?
+            var parentProductName = _productManager.GetProductNameByKey(sensorValue.Key);  // TODO? get product by key from cache (_tree)?
             var parentProduct = AddNonExistingProductsAndGetParentProduct(parentProductName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
@@ -170,7 +180,7 @@ namespace HSMServer.Core.Cache
                 if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(Guid.Parse(productEntity.Id), out var product))
                     continue;
 
-                _database.UpdateProduct(product.ToProductEntity(productEntity.Key));
+                _database.UpdateProduct(product.ToProductEntity());
             }
         }
 
@@ -180,7 +190,7 @@ namespace HSMServer.Core.Cache
             foreach (var productId in productsIdsToSave)
             {
                 if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToProductEntity(productId.ToString()));
+                    _database.UpdateProduct(product.ToProductEntity());
             }
         }
 

@@ -44,6 +44,8 @@ namespace HSMServer.Core.DataLayer
             _database.AddProduct(entity);
         }
 
+        public void AddProduct(ProductEntity product) => _database.AddProduct(product);
+
         public void UpdateProduct(Product product) => AddProduct(product);
 
         public void UpdateProduct(ProductEntity product) => _database.AddProduct(product);

@@ -71,10 +71,9 @@ namespace HSMServer.Core.Cache.Entities
             Sensors.TryAdd(sensor.Id, sensor);
         }
 
-        internal ProductEntity ToProductEntity(string key) =>
+        internal ProductEntity ToProductEntity() =>
             new()
             {
-                Key = key,
                 Id = Id.ToString(),
                 //AuthorId ???
                 ParentProductId = ParentProduct?.Id.ToString() ?? string.Empty,

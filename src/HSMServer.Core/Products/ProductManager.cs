@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Constants;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Keys;
@@ -69,6 +70,9 @@ namespace HSMServer.Core.Products
 
             AddProduct(product);
         }
+
+        public void AddProduct(ProductModel product) =>
+            _products[product.DisplayName] = new Product() { Key = product.Id.ToString(), Name = product.DisplayName };
 
         public Product AddProduct(string name)
         {
