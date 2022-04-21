@@ -29,8 +29,6 @@ namespace HSMServer.Core.Products
             _databaseAdapter = databaseAdapter;
             _products = new ConcurrentDictionary<string, Product>();
 
-            _databaseAdapter.GetAllProducts();
-
             InitializeProducts();
         }
 
