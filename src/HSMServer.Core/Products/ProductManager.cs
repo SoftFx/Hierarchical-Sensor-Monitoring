@@ -74,7 +74,11 @@ namespace HSMServer.Core.Products
         }
 
         public void AddProduct(ProductModel product) =>
-            _products[product.DisplayName] = new Product() { Key = product.Id.ToString(), Name = product.DisplayName };
+            _products[product.DisplayName] = new Product() 
+            { 
+                Id = product.Id.ToString(),
+                DisplayName = product.DisplayName
+            };
 
         public Product AddProduct(string name)
         {
