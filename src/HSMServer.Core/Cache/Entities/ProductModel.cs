@@ -47,10 +47,9 @@ namespace HSMServer.Core.Cache.Entities
             CreationDate = new DateTime(entity.CreationDate);
         }
 
-        public ProductModel(string name, ProductModel parent = null) : this()
+        public ProductModel(string name) : this()
         {
             Id = Guid.NewGuid().ToString();
-            ParentProduct = parent;
             State = ProductState.FullAccess;
             DisplayName = name;
             CreationDate = DateTime.UtcNow;

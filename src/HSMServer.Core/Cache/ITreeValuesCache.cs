@@ -23,7 +23,7 @@ namespace HSMServer.Core.Cache
 
         List<ProductModel> GetTree();
 
-        void AddProduct(string productName);
+        ProductModel AddProduct(string productName);
         void RemoveProduct(string id);
 
         void RemoveSensor(Guid sensorId);

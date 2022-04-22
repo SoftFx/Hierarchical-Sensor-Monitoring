@@ -49,15 +49,13 @@ namespace HSMServer.Core.Cache
 
         public List<SensorModel> GetSensors() => _sensors.Values.ToList();
 
-        public void AddProduct(string productName)
+        public ProductModel AddProduct(string productName)
         {
             var product = new ProductModel(productName);
 
-            _tree.TryAdd(product.Id, product);
-            _productManager.AddProduct(product);
-            //_database.AddProduct(product.ToProductEntity());
+            AddProduct(product);
 
-            ChangeProductEvent?.Invoke(product, TransactionType.Add);
+            return product;
         }
 
         public void RemoveProduct(string productId)
@@ -173,21 +171,10 @@ namespace HSMServer.Core.Cache
         private void BuildTreeWithMigration(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
-            var newProductIds = new List<string>();
-            void AddNewProductHandler(ProductModel product, TransactionType transaction)
-            {
-                if (transaction == TransactionType.Add)
-                    newProductIds.Add(product.Id);
-            }
-
-            ChangeProductEvent += AddNewProductHandler;
-
             FillTreeByProductModels(productEntities);
             FillTreeBySensorModels(sensorEntities, sensorDataEntities);
 
-            ChangeProductEvent -= AddNewProductHandler;
-
-            //ResaveEntities(productEntities, newProductIds, sensorEntities, sensorDataEntities);
+            //ResaveEntities(productEntities, sensorEntities, sensorDataEntities);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -206,11 +193,10 @@ namespace HSMServer.Core.Cache
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities, List<string> newProductIds,
+        private void ResaveEntities(List<ProductEntity> productEntities,
             List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
         {
             ResaveProducts(productEntities);
-            SaveNewProducts(newProductIds);
             ResaveSensors(sensorEntities);
             ResaveSensorDatas(sensorDataEntities);
         }
@@ -224,16 +210,6 @@ namespace HSMServer.Core.Cache
                     continue;
 
                 _database.UpdateProduct(product.ToProductEntity());
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SaveNewProducts(List<string> productsIdsToSave)
-        {
-            foreach (var productId in productsIdsToSave)
-            {
-                if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToProductEntity());
             }
         }
 
@@ -269,12 +245,7 @@ namespace HSMServer.Core.Cache
         {
             var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
             if (parentProduct == null)
-            {
-                parentProduct = new ProductModel(productName);
-
-                _tree.TryAdd(parentProduct.Id, parentProduct);
-                ChangeProductEvent?.Invoke(parentProduct, TransactionType.Add);
-            }
+                parentProduct = AddProduct(productName);
 
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
@@ -283,17 +254,25 @@ namespace HSMServer.Core.Cache
                 var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
                 if (subProduct == null)
                 {
-                    subProduct = new ProductModel(subProductName, parentProduct);
+                    subProduct = new ProductModel(subProductName);
                     parentProduct.AddSubProduct(subProduct);
 
-                    _tree.TryAdd(subProduct.Id, subProduct);
-                    ChangeProductEvent?.Invoke(subProduct, TransactionType.Add);
+                    AddProduct(subProduct);
                 }
 
                 parentProduct = subProduct;
             }
 
             return parentProduct;
+        }
+
+        private void AddProduct(ProductModel product)
+        {
+            _tree.TryAdd(product.Id, product);
+            _productManager.AddProduct(product);
+            //_database.AddProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
 
         private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
