@@ -384,7 +384,6 @@ namespace HSMServer.Core.MonitoringServerCore
         private void RemoveProductHandler(Product product)
         {
             _userManager.RemoveProductFromUsers(product.Id);
-            // TODO: remove product from cache
         }
       
         public bool HideProduct(Product product, out string error)

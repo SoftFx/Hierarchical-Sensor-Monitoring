@@ -57,7 +57,7 @@ namespace HSMServer.Core.DataLayer
         }
 
         public List<Product> GetProducts() =>
-            _database.GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
+            GetAllProducts()?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
 
         public List<ProductEntity> GetAllProducts() 
         {
@@ -81,6 +81,12 @@ namespace HSMServer.Core.DataLayer
 
         public void RemoveSensor(string productName, string path) =>
             _database.RemoveSensor(productName, path);
+
+        public void RemoveSensor(string sensorId)
+        {
+
+        }
+
 
         public void AddSensor(SensorInfo info)
         {

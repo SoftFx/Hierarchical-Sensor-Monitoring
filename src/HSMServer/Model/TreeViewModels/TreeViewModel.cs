@@ -78,7 +78,9 @@ namespace HSMServer.Model.TreeViewModels
 
                     break;
 
-                case TransactionType.Delete: //TODO
+                case TransactionType.Delete:
+                    Nodes.TryRemove(model.Id, out _);
+
                     break;
             }
         }
@@ -106,7 +108,9 @@ namespace HSMServer.Model.TreeViewModels
 
                     break;
 
-                case TransactionType.Delete: // TODO
+                case TransactionType.Delete:
+                    Sensors.TryRemove(model.Id, out _);
+
                     break;
             }
         }

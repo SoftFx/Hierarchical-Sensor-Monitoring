@@ -80,10 +80,9 @@ namespace HSMServer.Controllers
             _treeValuesCache.AddProduct(productName);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productKey)
+        public void RemoveProduct([FromQuery(Name = "Product")] string productId)
         {
-            var name = _productManager.GetProductNameByKey(productKey);
-            _productManager.RemoveProduct(name);
+            _treeValuesCache.RemoveProduct(productId);
         }
 
         #endregion

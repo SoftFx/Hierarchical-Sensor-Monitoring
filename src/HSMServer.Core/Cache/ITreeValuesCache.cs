@@ -24,7 +24,9 @@ namespace HSMServer.Core.Cache
         List<ProductModel> GetTree();
 
         void AddProduct(string productName);
+        void RemoveProduct(string id);
 
+        void RemoveSensor(Guid sensorId);
         void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);
     }
 }

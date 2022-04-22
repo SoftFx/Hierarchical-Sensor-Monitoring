@@ -40,7 +40,7 @@ namespace HSMServer.Core.Cache
 
             (var products, var sensors, var sensorsData) = GenerateTestData();//GenerateTestDataNeedToResave();
 
-            BuildTree(products, sensors, sensorsData);
+            BuildTree(_database.GetAllProducts().Union(products).ToList(), sensors, sensorsData);
             //Initialize(products, sensors, sensorsData);
         }
 
@@ -53,10 +53,53 @@ namespace HSMServer.Core.Cache
         {
             var product = new ProductModel(productName);
 
+            _tree.TryAdd(product.Id, product);
             _productManager.AddProduct(product);
             //_database.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
+        }
+
+        public void RemoveProduct(string productId)
+        {
+            void RemoveProduct(string productId)
+            {
+                if (!_tree.TryRemove(productId, out var product))
+                    return;
+
+                foreach (var (subProductId, _) in product.SubProducts)
+                    RemoveProduct(subProductId);
+
+                foreach (var (sensorId, _) in product.Sensors)
+                    RemoveSensor(sensorId);
+
+                product.ParentProduct?.SubProducts.TryRemove(productId, out _);
+                _productManager.RemoveProduct(product);
+                //_database.RemoveProduct(product.DisplayName);
+
+                // TODO: user.RemoveProductFromUsers() - remove from every user.ProductRoles ProductRole with key = productId
+
+                ChangeProductEvent?.Invoke(product, TransactionType.Delete);
+            }
+
+            if (_tree.TryGetValue(productId, out var product))
+            {
+                RemoveProduct(productId);
+
+                if (product.ParentProduct != null)
+                    ChangeProductEvent?.Invoke(product.ParentProduct, TransactionType.Update);
+            }
+        }
+
+        public void RemoveSensor(Guid sensorId)
+        {
+            if (!_sensors.TryRemove(sensorId, out var sensor))
+                return;
+
+            sensor.ParentProduct.Sensors.TryRemove(sensorId, out _);
+            //_database.RemoveSensor(sensorId.ToString());
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)

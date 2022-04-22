@@ -74,7 +74,7 @@ namespace HSMServer.Core.Products
         public void AddProduct(ProductModel product) =>
             _products[product.DisplayName] = new Product() 
             { 
-                Id = product.Id.ToString(),
+                Id = product.Id,
                 DisplayName = product.DisplayName
             };
 
@@ -134,6 +134,16 @@ namespace HSMServer.Core.Products
             {
                 _logger.LogError(e, $"Failed to remove product, name = {name}");
             }
+        }
+
+        public void RemoveProduct(ProductModel model)
+        {
+            if (GetProductByName(model.DisplayName) == null)
+                return;
+
+            _products.Remove(model.DisplayName, out var product);
+
+            RemovedProduct?.Invoke(product);
         }
 
         public string GetProductNameByKey(string key) =>

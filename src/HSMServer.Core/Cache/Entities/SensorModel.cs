@@ -80,7 +80,7 @@ namespace HSMServer.Core.Cache.Entities
             new()
             {
                 Id = Id.ToString(),
-                ProductId = ParentProduct.Id.ToString(),
+                ProductId = ParentProduct.Id,
                 SensorName = SensorName,
                 Description = Description,
                 SensorType = (int)SensorType,
