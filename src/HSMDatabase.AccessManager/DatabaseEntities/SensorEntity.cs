@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -20,5 +21,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long ExpectedUpdateIntervalTicks { get; set; }
         public string Unit { get; set; }
         public List<ValidationParameterEntity> ValidationParameters { get; set; }
+
+        [JsonIgnore]
+        public bool IsConverted { get; set; }
     }
 }

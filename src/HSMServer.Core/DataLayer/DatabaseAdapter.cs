@@ -61,7 +61,6 @@ namespace HSMServer.Core.DataLayer
 
         public List<ProductEntity> GetAllProducts() 
         {
-            //_database.GetAllProducts();
             var result = new List<ProductEntity>();
 
             var oldEntities = _database.GetOldAllProducts();
@@ -69,7 +68,7 @@ namespace HSMServer.Core.DataLayer
 
             foreach (var oldEntity in oldEntities)
             {
-                result.Add(EntityConverter.Convert(oldEntity));
+                result.Add(EntityConverter.ConvertProductEntity(oldEntity));
             }
 
             return result;
@@ -144,6 +143,24 @@ namespace HSMServer.Core.DataLayer
                 historyDatas.AddRange(history.Select(ConvertSensorDataEntityToHistoryData));
 
             return historyDatas;
+        }
+
+        public List<SensorEntity> GetAllSensors()
+        {
+            var oldEntities = _database.GetOldAllSensors();
+            if (oldEntities == null || oldEntities.Count == 0) return null;
+
+            foreach (var oldEntity in oldEntities)
+            {
+                if (!string.IsNullOrEmpty(oldEntity.Id) 
+                    && !string.Equals(oldEntity.Id, Guid.Empty.ToString())) continue;
+
+                oldEntity.Id = Guid.NewGuid().ToString();
+                oldEntity.ProductId = Guid.Empty.ToString();
+                oldEntity.IsConverted = true;
+            }
+
+            return oldEntities;
         }
 
         #endregion

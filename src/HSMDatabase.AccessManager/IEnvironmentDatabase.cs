@@ -27,6 +27,7 @@ namespace HSMDatabase.AccessManager
         void RemoveSensorsList(string productName);
         void RemoveSensorFromList(string productName, string path);
         SensorEntity GetSensorInfo(string productName, string path);
+        List<SensorEntity> GetOldSensorsInfo();
         void RemoveSensorValues(string productName, string path);
 
         #endregion
