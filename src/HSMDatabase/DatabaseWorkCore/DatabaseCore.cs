@@ -234,6 +234,9 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddNewSensorToList(entity.ProductName, entity.Path);
             _environmentDatabase.AddSensor(entity);
         }
+
+        public List<SensorEntity> GetOldAllSensors() => _environmentDatabase.GetOldSensorsInfo();
+
         #endregion
 
         #region Environment database : Product

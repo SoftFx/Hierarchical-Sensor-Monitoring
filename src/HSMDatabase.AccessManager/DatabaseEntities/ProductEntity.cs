@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -16,6 +17,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public List<string> SensorsIds { get; init; }
 
         //ToDo: Remove
+        [JsonIgnore]
         public bool IsConverted { get; init; }
     }
 }

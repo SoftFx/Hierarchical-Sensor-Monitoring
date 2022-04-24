@@ -60,6 +60,8 @@ namespace HSMDatabase.LevelDB
             return $"{SENSOR_KEY_PREFIX}_{productName}_{path}";
         }
 
+        public static string GetSensorsInfoReadKey() => SENSOR_KEY_PREFIX;
+
         public static string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
             return

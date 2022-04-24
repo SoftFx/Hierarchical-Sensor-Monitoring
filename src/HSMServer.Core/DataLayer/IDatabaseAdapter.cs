@@ -47,6 +47,8 @@ namespace HSMServer.Core.DataLayer
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
         List<SensorInfo> GetProductSensors(Product product);
 
+        List<SensorEntity> GetAllSensors();
+
         #endregion
 
         #region User

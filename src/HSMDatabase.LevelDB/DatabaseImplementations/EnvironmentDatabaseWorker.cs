@@ -321,6 +321,28 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
+        public List<SensorEntity> GetOldSensorsInfo()
+        {
+            var key = PrefixConstants.GetSensorsInfoReadKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            var result = new List<SensorEntity>();
+            try
+            {
+                var values = _database.GetAllStartingWith(bytesKey);
+
+                foreach(var value in values)
+                {
+                    result.Add(JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value)));
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get sensors list");
+            }
+
+            return result;
+        }
+
         public void RemoveSensorValues(string productName, string path)
         {
             var key = PrefixConstants.GetSensorInfoKey(productName, path);
