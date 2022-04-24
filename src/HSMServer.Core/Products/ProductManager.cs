@@ -104,20 +104,6 @@ namespace HSMServer.Core.Products
             }
         }
 
-        public void UpdateProduct(Product product)
-        {
-            Product currentProduct = _products[product.DisplayName];
-
-            if (currentProduct == null)
-            {
-                AddProduct(product);
-                return;
-            }
-
-            currentProduct.Update(product);
-            _databaseAdapter.UpdateProduct(currentProduct);
-        }
-
         public void RemoveProduct(string name)
         {
             try

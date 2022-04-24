@@ -27,7 +27,6 @@ namespace HSMServer.Tests.Fixture
         public readonly string FirstProductName = "First_product_name";
         public readonly string SecondProductName = "Second_product_name";
         public readonly string ThirdProductName = "Third_product_name";
-        public readonly string ExtraKeyName = "Extra_key";
         
         public Product GetFirstTestProduct()
         {
@@ -54,7 +53,6 @@ namespace HSMServer.Tests.Fixture
             product.DisplayName = name;
             product.DateAdded = DateTime.Now;
             product.Id = key;
-            product.ExtraKeys = new List<ExtraProductKey>();
             return product;
         }
 

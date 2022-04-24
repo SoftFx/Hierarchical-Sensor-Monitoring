@@ -15,7 +15,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = ProductName,
                 DateAdded = DateTime.UtcNow,
                 Id = KeyGenerator.GenerateProductKey(ProductName),
-                ExtraKeys = new List<ExtraProductKey>(),
             };
     }
 }

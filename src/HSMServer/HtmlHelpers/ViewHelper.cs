@@ -20,16 +20,6 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(user, products));
         }
 
-        public static HtmlString CreateExtraKeysTable(ClaimsPrincipal claims, EditProductViewModel model)
-        {
-            var user = claims as User;
-
-            StringBuilder result = new StringBuilder();
-            result.Append(TableHelper.CreateTable(model.ProductName, user, model.ExtraKeys));
-
-            return new HtmlString(result.ToString());
-        }
-
         public static HtmlString CreateUsersRightsTable(ClaimsPrincipal claims, EditProductViewModel model)
         {
             var user = claims as User;

@@ -15,7 +15,6 @@ namespace HSMServer.Core.Products
         void AddProduct(ProductModel product);
         void RemoveProduct(string name);
         void RemoveProduct(ProductModel model);
-        void UpdateProduct(Product product);
         string GetProductNameByKey(string key);
         Product GetProductByName(string name);
         Product GetProductByKey(string key);

@@ -38,11 +38,9 @@
         public const string RemoveUserAction = "RemoveUser";
         public const string UpdateUserAction = "UpdateUser";
 
-        public const string AddExtraKeyAction = "AddExtraKey";
         public const string AddUserRightAction = "AddUserRight";
         public const string EditUserRoleAction = "EditUserRole";
         public const string RemoveUserRoleAction = "RemoveUserRole";
-        public const string RemoveExtraKeyAction = "RemoveExtraKey";
         public const string InviteAction = "Invite";
 
         public const string SaveConfigObjectAction = "SaveConfigObject";

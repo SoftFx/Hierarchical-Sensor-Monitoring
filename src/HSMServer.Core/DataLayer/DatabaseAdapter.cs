@@ -241,13 +241,6 @@ namespace HSMServer.Core.DataLayer
                 DateAdded = product.DateAdded.Ticks
             };
 
-        private static ExtraKeyEntity ConvertExtraProductKeyToEntity(ExtraProductKey key) =>
-            new()
-            {
-                Key = key.Key,
-                Name = key.Name,
-            };
-
         private static SensorEntity ConvertSensorInfoToEntity(SensorInfo info) =>
             new()
             {

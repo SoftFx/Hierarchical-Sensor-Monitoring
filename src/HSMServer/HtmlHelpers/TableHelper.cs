@@ -354,66 +354,6 @@ namespace HSMServer.HtmlHelpers
         }
         #endregion
 
-        #region [ Edit Product: Extra Key ]
-
-        public static string CreateTable(string productName, User user, List<ExtraKeyViewModel> extraKeys)
-        {
-            StringBuilder result = new StringBuilder();
-            //header template
-            result.Append("<div style='margin: 10px'>" +
-                "<div class='row justify-content-start'>" +
-                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Extra Keys</h5></div></div>");
-
-
-            result.Append("<div class='col-xxl'>");
-            //table template
-            result.Append("<table class='table table-striped'><thead><tr>" +
-                "<th scope='col'>#</th>" +
-                "<th scope='col'>Extra Key Name</th>" +
-                "<th scope='col'>Key</th>" +
-                "<th scope='col'>Action</th></tr>");
-
-            result.Append("</thead><tbody>");
-
-            //create 
-            result.Append("<tr><th>0</th>" +
-                    $"<th><input id='createKeyName' type='text' class='form-control'/>" +
-                    $"<span style='display: none;' id='new_key_span'></th>" +
-                    $"<th>---</th>" +
-                    "<th><button id='createKeyButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
-                    $"<i class='fas fa-plus'></i></button></th></tr>");
-
-            if (extraKeys == null || !extraKeys.Any())
-            {
-                result.Append("</tbody></table></div>");
-                return result.ToString();
-            }
-
-            int index = 1;
-            foreach (var extraKey in extraKeys)
-            {
-                result.Append($"<tr><th scope='row'>{index}</th>" +
-                    $"<td>{extraKey.ExtraKeyName}" +
-                    $"<input id='keyName_{extraKey.ExtraProductKey}' value='{extraKey.ExtraKeyName}' style='display: none'/></td>" +
-                    $"<td>{extraKey.ExtraProductKey} " +
-                    $"<button id='copy_{extraKey.ExtraProductKey}' data-clipboard-text='{extraKey.ExtraProductKey}' title='copy key' type='button' class='btn btn-secondary'>" +
-                    $"<i class='far fa-copy'></i></button>" +
-                    $"</td>");
-
-                result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
-                    $"type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td>");
-
-                result.Append("</tr>");
-                index++;
-            }
-
-            result.Append("</tbody></table></div>");
-            return result.ToString();
-        }
-
-        #endregion
-
         #region Sensor history tables
 
         public static string CreateHistoryTable(List<SensorHistoryData> sensorHistory, string encodedPath)

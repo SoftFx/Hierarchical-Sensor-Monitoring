@@ -231,7 +231,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.NotNull(copy);
             Assert.Equal(product.DisplayName, copy.DisplayName);
             Assert.Equal(product.Id, copy.Id);
-            //Assert.Equal(product.ExtraKeys.Count, copy.ExtraKeys.Count);
             Assert.Equal(product.DateAdded, copy.DateAdded);
             Assert.Equal(product.Sensors.Count, copy.Sensors.Count);
         }

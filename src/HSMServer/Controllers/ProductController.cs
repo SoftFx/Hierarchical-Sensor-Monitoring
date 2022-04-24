@@ -107,39 +107,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void AddExtraKey([FromBody] ExtraKeyViewModel model)
-        {
-            ExtraKeyValidator validator = new ExtraKeyValidator(_productManager);
-            var results = validator.Validate(model);
-            if (!results.IsValid)
-            {
-                TempData[TextConstants.TempDataKeyErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
-            }
-
-            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
-            model.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
-                product.DisplayName, model.ExtraKeyName);
-
-            var extraProduct = new ExtraProductKey(model.ExtraKeyName, model.ExtraProductKey);
-            if (product.ExtraKeys == null || product.ExtraKeys.Count == 0)
-                product.ExtraKeys = new List<ExtraProductKey> { extraProduct };
-            else
-                product.ExtraKeys.Add(extraProduct);
-
-            _productManager.UpdateProduct(product);
-        }
-
-        [HttpPost]
-        public void RemoveExtraKey([FromBody] ExtraKeyViewModel model)
-        {
-            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
-            product.ExtraKeys.Remove(product.ExtraKeys.First(x => x.Key.Equals(model.ExtraProductKey)));
-
-            _productManager.UpdateProduct(product);
-        }
-
-        [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
         {
             UserRightValidator validator = new UserRightValidator();
