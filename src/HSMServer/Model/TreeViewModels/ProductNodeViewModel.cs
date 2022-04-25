@@ -20,6 +20,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public int Count { get; private set; }
 
+        public bool IsAvailableForUser { get; set; }
+
 
         public ProductNodeViewModel(ProductModel model)
         {

@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Authentication;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
@@ -30,27 +30,30 @@ namespace HSMServer.Controllers
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public HomeController(ISensorsInterface sensorsInterface,
-            IUserManager userManager,
+        public HomeController(
+            ISensorsInterface sensorsInterface,
             IHistoryProcessorFactory factory,
             IProductManager productManager,
             TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
-            _userManager = userManager;
             _productManager = productManager;
             _historyProcessorFactory = factory;
             _treeViewModel = treeViewModel;
         }
 
 
-        public IActionResult Index() => View(_treeViewModel);
+        public IActionResult Index()
+        {
+            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+
+            return View(_treeViewModel);
+        }
 
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
@@ -71,7 +74,8 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            _treeViewModel.UpdateNodesCharacteristics();
+            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+
             return PartialView("_Tree", _treeViewModel);
         }
 

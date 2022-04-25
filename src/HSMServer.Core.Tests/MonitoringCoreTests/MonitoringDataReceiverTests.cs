@@ -35,15 +35,12 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             _barStorage = new BarSensorsStorage();
 
-            var userManager = new Mock<IUserManager>();
-
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseAdapterManager.DatabaseAdapter, configProviderLogger);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
-                userManager.Object,
                 _barStorage,
                 _productManager,
                 configurationProvider,

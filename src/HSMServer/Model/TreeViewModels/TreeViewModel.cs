@@ -1,5 +1,7 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Concurrent;
 
@@ -29,8 +31,13 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void UpdateNodesCharacteristics()
+        internal void UpdateNodesCharacteristics(User user)
         {
+            var userIsAdmin = UserRoleHelper.IsAllProductsTreeAllowed(user);
+            foreach (var (nodeId, node) in Nodes)
+                if (node.Parent == null)
+                    node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
+
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)
                     node.Recursion();
@@ -53,8 +60,6 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var (_, node) in Nodes)
                 foreach (var sensor in node.Sensors)
                     Sensors.TryAdd(sensor.Key, sensor.Value);
-
-            UpdateNodesCharacteristics();
         }
 
         private void ChangeProductHandler(ProductModel model, TransactionType transaction)

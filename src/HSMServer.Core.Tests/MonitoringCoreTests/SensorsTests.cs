@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public SensorsTests(SensorsFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
-            var userManager = new Mock<IUserManager>();
             var configurationProvider = new Mock<IConfigurationProvider>();
 
             var barStorage = new BarSensorsStorage();
@@ -42,7 +41,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseAdapterManager.DatabaseAdapter,
-                userManager.Object,
                 barStorage,
                 _productManager,
                 configurationProvider.Object,

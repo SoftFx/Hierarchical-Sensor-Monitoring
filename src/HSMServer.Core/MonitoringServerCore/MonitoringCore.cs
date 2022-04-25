@@ -31,13 +31,12 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private readonly IDatabaseAdapter _databaseAdapter;
         private readonly IBarSensorsStorage _barsStorage;
-        private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly ILogger<MonitoringCore> _logger;
         private readonly IUpdatesQueue _updatesQueue;
         private readonly ITreeValuesCache _treeValuesCache;
 
-        public MonitoringCore(IDatabaseAdapter databaseAdapter, IUserManager userManager, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseAdapter databaseAdapter, IBarSensorsStorage barsStorage,
             IProductManager productManager, IConfigurationProvider configurationProvider,
             IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
         {
@@ -46,10 +45,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
-            _userManager = userManager;
-
             _productManager = productManager;
-            _productManager.RemovedProduct += RemoveProductHandler;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -380,11 +376,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
 
         #region Product
-
-        private void RemoveProductHandler(Product product)
-        {
-            _userManager.RemoveProductFromUsers(product.Id);
-        }
       
         public bool HideProduct(Product product, out string error)
         {
@@ -415,9 +406,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
-
-            if (_productManager != null)
-                _productManager.RemovedProduct -= RemoveProductHandler;
         }
     }
 }

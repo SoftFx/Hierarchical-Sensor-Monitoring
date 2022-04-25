@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
@@ -19,6 +20,7 @@ namespace HSMServer.Core.Cache
     {
         private readonly IDatabaseAdapter _database;
         private readonly IProductManager _productManager;
+        private readonly IUserManager _userManager;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
@@ -28,9 +30,10 @@ namespace HSMServer.Core.Cache
         public event Action<SensorModel> UploadSensorDataEvent;
 
 
-        public TreeValuesCache(IDatabaseAdapter database, IProductManager productManager)
+        public TreeValuesCache(IDatabaseAdapter database, IUserManager userManager, IProductManager productManager)
         {
             _database = database;
+            _userManager = userManager;
             _productManager = productManager;
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
@@ -73,7 +76,7 @@ namespace HSMServer.Core.Cache
                 _productManager.RemoveProduct(product);
                 //_database.RemoveProduct(product.DisplayName);
 
-                // TODO: user.RemoveProductFromUsers() - remove from every user.ProductRoles ProductRole with key = productId
+                _userManager.RemoveProductFromUsers(product.Id);
 
                 ChangeProductEvent?.Invoke(product, TransactionType.Delete);
             }
