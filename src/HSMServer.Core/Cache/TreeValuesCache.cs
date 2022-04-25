@@ -1,10 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
-using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataValidation;
 using System;
@@ -12,8 +12,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
@@ -89,6 +87,29 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        public ProductModel GetProduct(string id)
+        {
+            if (_tree.TryGetValue(id, out var product))
+                return product;
+
+            return null;
+        }
+
+        // TODO: private method
+        public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
+
+        public List<ProductModel> GetProducts(User user)
+        {
+            if (user.IsAdmin)
+                return GetTree();
+
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                return null;
+
+            return GetTree().Where(p =>
+                ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+        }
+
         public void RemoveSensor(Guid sensorId)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
@@ -102,7 +123,7 @@ namespace HSMServer.Core.Cache
 
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
-            var parentProductName = _productManager.GetProductNameByKey(sensorValue.Key);  // TODO? get product by key from cache (_tree)?
+            var parentProductName = GetProductNameById(sensorValue.Key);
             var parentProduct = AddNonExistingProductsAndGetParentProduct(parentProductName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
@@ -260,195 +281,6 @@ namespace HSMServer.Core.Cache
             //_database.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
-        }
-
-        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestData()
-        {
-            var products = new List<ProductEntity>();
-            var sensors = new List<SensorEntity>();
-            var sensorsData = new List<SensorDataEntity>();
-
-            for (int i = 0; i < 2; ++i)
-            {
-                var product = new ProductEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    State = (int)ProductState.FullAccess,
-                    DisplayName = $"product{i}",
-                    CreationDate = DateTime.UtcNow.Ticks,
-                    SubProductsIds = new List<string>(),
-                    SensorsIds = new List<string>(),
-                };
-
-                for (int j = 0; j < 2; j++)
-                {
-                    var subProduct = new ProductEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ParentProductId = product.Id,
-                        State = (int)ProductState.FullAccess,
-                        DisplayName = $"subProduct{j}",
-                        CreationDate = DateTime.UtcNow.Ticks,
-                        SubProductsIds = new List<string>(),
-                    };
-
-                    var sensor = new SensorEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ProductId = product.Id,
-                        SensorName = $"sensor{j}",
-                        SensorType = (int)SensorType.BooleanSensor,
-                    };
-                    var sensorData = new SensorDataEntity()
-                    {
-                        Id = sensor.Id,
-                        TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensor.SensorType,
-                        TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData" }),
-                        Status = (byte)SensorStatus.Warning,
-                    };
-
-                    product.SubProductsIds.Add(subProduct.Id);
-                    product.SensorsIds.Add(sensor.Id);
-
-                    var subSubProduct = new ProductEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ParentProductId = subProduct.Id,
-                        State = (int)ProductState.FullAccess,
-                        DisplayName = $"subSubProduct",
-                        CreationDate = DateTime.UtcNow.Ticks,
-                        SensorsIds = new List<string>(),
-                    };
-
-                    subProduct.SubProductsIds.Add(subSubProduct.Id);
-
-                    var sensorForSubSubProduct = new SensorEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ProductId = subSubProduct.Id,
-                        SensorName = "sensor",
-                        SensorType = (int)SensorType.IntSensor,
-                    };
-                    var sensorForSubSubProductData = new SensorDataEntity()
-                    {
-                        Id = sensorForSubSubProduct.Id,
-                        TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensorForSubSubProduct.SensorType,
-                        TypedData = JsonSerializer.Serialize(new IntSensorData() { IntValue = 12345, Comment = "sensorData1" }),
-                        Status = (byte)SensorStatus.Ok,
-                    };
-
-                    subSubProduct.SensorsIds.Add(sensorForSubSubProduct.Id);
-
-                    products.Add(subProduct);
-                    products.Add(subSubProduct);
-
-                    sensors.Add(sensor);
-                    sensors.Add(sensorForSubSubProduct);
-
-                    sensorsData.Add(sensorData);
-                    sensorsData.Add(sensorForSubSubProductData);
-                }
-
-                products.Add(product);
-            }
-
-            return (products, sensors, sensorsData);
-        }
-
-        private static (List<ProductEntity>, List<SensorEntity>, List<SensorDataEntity>) GenerateTestDataNeedToResave()
-        {
-            var products = new List<ProductEntity>();
-            var sensors = new List<SensorEntity>();
-            var sensorsData = new List<SensorDataEntity>();
-
-            for (int i = 0; i < 2; ++i)
-            {
-                string productName = $"product{i}";
-
-                var sensor1 = new SensorEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ProductName = productName,
-                    Path = $"sensor{i}",
-                    SensorType = 0,
-                };
-                var sensor11 = new SensorEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ProductName = productName,
-                    Path = $"sensor{i}1",
-                    SensorType = 7,
-                };
-                var sensor2 = new SensorEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ProductName = productName,
-                    Path = $"subProduct/sensor{i}",
-                    SensorType = 0,
-                };
-                var sensor3 = new SensorEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ProductName = productName,
-                    Path = $"subProduct/subSubProduct/sensor{i}",
-                    SensorType = 0,
-                };
-                sensors.Add(sensor1);
-                sensors.Add(sensor11);
-                sensors.Add(sensor2);
-                sensors.Add(sensor3);
-
-                foreach (var s in sensors)
-                    s.IsConverted = true;
-
-                var sensorDaata1 = new SensorDataEntity()
-                {
-                    TimeCollected = DateTime.UtcNow,
-                    Path = sensor1.Path,
-                    DataType = (byte)sensor1.SensorType,
-                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData1" }),
-                    Status = (byte)SensorStatus.Warning,
-                };
-                var sensorDaata11 = new SensorDataEntity()
-                {
-                    TimeCollected = DateTime.UtcNow,
-                    Path = sensor11.Path,
-                    DataType = (byte)sensor11.SensorType,
-                    TypedData = JsonSerializer.Serialize(new FileSensorBytesData() { FileContent = Encoding.UTF8.GetBytes("123"), FileName = "filename", Extension = "txt", Comment = "sensorData11" }),
-                    Status = (byte)SensorStatus.Ok,
-                };
-                var sensorDaata2 = new SensorDataEntity()
-                {
-                    TimeCollected = DateTime.UtcNow,
-                    Path = sensor2.Path,
-                    DataType = (byte)sensor2.SensorType,
-                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = false, Comment = "sensorData2" }),
-                    Status = (byte)SensorStatus.Ok,
-                };
-                var sensorDaata3 = new SensorDataEntity()
-                {
-                    TimeCollected = DateTime.UtcNow,
-                    Path = sensor3.Path,
-                    DataType = (byte)sensor3.SensorType,
-                    TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = false, Comment = "sensorData3" }),
-                    Status = (byte)SensorStatus.Ok,
-                };
-                sensorsData.Add(sensorDaata1);
-                sensorsData.Add(sensorDaata11);
-                sensorsData.Add(sensorDaata2);
-                sensorsData.Add(sensorDaata3);
-
-                products.Add(new ProductEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    DisplayName = productName,
-                    IsConverted = true,
-                });
-            }
-
-            return (products, sensors, sensorsData);
         }
     }
 }

@@ -1,9 +1,10 @@
 ﻿using HSMCommon.Constants;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.MonitoringCoreInterface;
-using HSMServer.Core.Products;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -16,17 +17,22 @@ namespace HSMServer.BackgroundTask
     /// This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
     /// than a specified parameter value are deleted
     /// </summary>
-    public class OutdatedSensorService : WorkerServiceBase
+    public class OutdatedSensorService : BackgroundService
     {
         private DateTime _lastChecked;
-        private readonly TimeSpan _checkInterval = new TimeSpan(1, 0 , 0,0);
+        private readonly TimeSpan _checkInterval = new TimeSpan(1, 0, 0, 0);
+
+        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly ISensorsInterface _sensorsInterface;
         private readonly ILogger<OutdatedSensorService> _logger;
 
-        public OutdatedSensorService(IDatabaseAdapter databaseAdapter, IProductManager productManager, IConfigurationProvider configurationProvider,
-            ISensorsInterface sensorsInterface, ILogger<OutdatedSensorService> logger) : base(databaseAdapter, productManager)
+        public OutdatedSensorService(IDatabaseAdapter databaseAdapter, ITreeValuesCache treeValuesCache, IConfigurationProvider configurationProvider,
+            ISensorsInterface sensorsInterface, ILogger<OutdatedSensorService> logger)
         {
+            _databaseAdapter = databaseAdapter;
+            _treeValuesCache = treeValuesCache;
             _configurationProvider = configurationProvider;
             _sensorsInterface = sensorsInterface;
             _logger = logger;
@@ -46,13 +52,12 @@ namespace HSMServer.BackgroundTask
                     var expireInterval = TimeSpan.Parse(obj.Value);
 
                     List<(string, string)> sensorsToRemove = new List<(string, string)>();
-                    var products = _productManager.Products;
+                    var products = _treeValuesCache.GetTree();
                     foreach (var product in products)
                     {
                         var sensors = _sensorsInterface.GetProductSensors(product.DisplayName);
                         foreach (var sensor in sensors)
                         {
-                            //var lastValue = _databaseAdapter.GetLastSensorValueOld(sensor.ProductName, sensor.Path);
                             var lastValue = _databaseAdapter.GetLastSensorValue(sensor.ProductName, sensor.Path);
                             if (lastValue == null)
                                 continue;

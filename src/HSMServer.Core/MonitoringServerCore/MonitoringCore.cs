@@ -284,7 +284,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
         {
-            var productName = _productManager.GetProductNameByKey(value.Key);
+            var productName = _treeValuesCache.GetProductNameById(value.Key);
             var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
             var sensorStatus = GetSensorStatus(validationResult);
 

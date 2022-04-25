@@ -6,10 +6,8 @@ using HSMServer.Core.Configuration;
 using HSMServer.Core.Email;
 using HSMServer.Core.Encryption;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
@@ -29,17 +27,15 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : Controller
     {
-        private readonly IProductManager _productManager;
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<ProductController> _logger;
 
-        public ProductController(IProductManager productManager, IUserManager userManager, IConfigurationProvider configurationProvider,
+        public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
             IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, ILogger<ProductController> logger)
         {
-            _productManager = productManager;
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
@@ -52,11 +48,9 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            List<Product> products = null;
-            if (UserRoleHelper.IsProductCRUDAllowed(user))
-                products = _productManager.Products;
-            else
-                products = _productManager.GetProducts(user);
+            var products = UserRoleHelper.IsProductCRUDAllowed(user)
+                ? _treeValuesCache.GetTree()
+                : _treeValuesCache.GetProducts(user);
 
             products = products?.OrderBy(x => x.DisplayName).ToList();
 
@@ -68,7 +62,7 @@ namespace HSMServer.Controllers
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
-            NewProductNameValidator validator = new NewProductNameValidator(_productManager);
+            NewProductNameValidator validator = new NewProductNameValidator(_treeValuesCache);
             var results = validator.Validate(productName);
             if (!results.IsValid)
             {
@@ -90,10 +84,10 @@ namespace HSMServer.Controllers
         #region Edit Product
 
         [ProductRoleFilter(ProductRoleEnum.ProductManager)]
-        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
         {
-            var product = _productManager.GetProductCopyByKey(productKey);
-            var users = _userManager.GetViewers(productKey);
+            var product = _treeValuesCache.GetProduct(productId);
+            var users = _userManager.GetViewers(productId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || users.Any())
@@ -147,7 +141,7 @@ namespace HSMServer.Controllers
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
             //Skip empty corresponding pair
-            if (string.IsNullOrEmpty(role.Key) && role.Value == (ProductRoleEnum)0)
+            if (string.IsNullOrEmpty(role.Key) && role.Value == 0)
                 return;
 
             user.ProductsRoles.Remove(role);
@@ -183,7 +177,7 @@ namespace HSMServer.Controllers
             var (server, port, login, password, fromEmail) = GetMailConfiguration();
 
             EmailSender sender = new EmailSender(server,
-                string.IsNullOrEmpty(port) ? null : Int32.Parse(port),
+                string.IsNullOrEmpty(port) ? null : int.Parse(port),
                 login, password, fromEmail, model.Email);
 
             var link = GetLink(ticket.Id.ToString());

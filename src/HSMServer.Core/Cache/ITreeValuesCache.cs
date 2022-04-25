@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
@@ -25,6 +26,9 @@ namespace HSMServer.Core.Cache
 
         ProductModel AddProduct(string productName);
         void RemoveProduct(string id);
+        ProductModel GetProduct(string id);
+        string GetProductNameById(string id);
+        List<ProductModel> GetProducts(User user);
 
         void RemoveSensor(Guid sensorId);
         void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);

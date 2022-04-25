@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 using HSMServer.Constants;
-using HSMServer.Core.Products;
+using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -9,10 +9,10 @@ namespace HSMServer.Model.Validators
 {
     public class NewProductNameValidator : AbstractValidator<string>
     {
-        private readonly IProductManager _productManager;
-        public NewProductNameValidator(IProductManager productManager)
+        private readonly ITreeValuesCache _treeValuesCache;
+        public NewProductNameValidator(ITreeValuesCache treeValuesCache)
         {
-            _productManager = productManager;
+            _treeValuesCache = treeValuesCache;
 
             RuleFor(x => x)
                 .NotNull()
@@ -23,9 +23,10 @@ namespace HSMServer.Model.Validators
                 .WithMessage(ErrorConstants.ProductNameSymbols);
         }
 
+        // TODO: Remove IsUniqName validation after fixing saving products in db (ProductName to Id)
         private bool IsUniqueName(string name)
         {
-            var products = _productManager.Products;
+            var products = _treeValuesCache.GetTree();
 
             return products?.FirstOrDefault(x =>
                 x.DisplayName.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;

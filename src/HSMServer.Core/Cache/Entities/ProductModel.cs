@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Cache.Entities
 {
@@ -9,7 +10,7 @@ namespace HSMServer.Core.Cache.Entities
     public enum ProductState : int
     {
         Disabled = 0,
-        FullAccess = 1 << 62,
+        FullAccess = 1 << 30, // int: 2^31 - 1
     }
 
 
@@ -25,10 +26,13 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime CreationDate { get; }
 
+        [JsonIgnore]
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
+        [JsonIgnore]
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
 
+        [JsonIgnore]
         public ProductModel ParentProduct { get; private set; }
 
 
