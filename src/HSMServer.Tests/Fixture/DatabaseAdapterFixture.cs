@@ -51,7 +51,7 @@ namespace HSMServer.Tests.Fixture
         {
             Product product = new Product();
             product.DisplayName = name;
-            product.DateAdded = DateTime.Now;
+            product.CreationDate = DateTime.Now;
             product.Id = key;
             return product;
         }

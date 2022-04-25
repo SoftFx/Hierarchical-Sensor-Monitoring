@@ -63,7 +63,7 @@ namespace HSMServer.Core.DataLayer
         {
             var result = new List<ProductEntity>();
 
-            var oldEntities = _database.GetOldAllProducts();
+            var oldEntities = _database.GetAllProducts();
             if (oldEntities == null || oldEntities.Count == 0) return null;
 
             foreach (var oldEntity in oldEntities)
@@ -147,7 +147,7 @@ namespace HSMServer.Core.DataLayer
 
         public List<SensorEntity> GetAllSensors()
         {
-            var oldEntities = _database.GetOldAllSensors();
+            var oldEntities = _database.GetAllSensors();
             if (oldEntities == null || oldEntities.Count == 0) return null;
 
             foreach (var oldEntity in oldEntities)
@@ -255,7 +255,7 @@ namespace HSMServer.Core.DataLayer
             {
                 DisplayName = product.DisplayName,
                 Id = product.Id,
-                DateAdded = product.DateAdded.Ticks
+                CreationDate = product.CreationDate.Ticks
             };
 
         private static SensorEntity ConvertSensorInfoToEntity(SensorInfo info) =>

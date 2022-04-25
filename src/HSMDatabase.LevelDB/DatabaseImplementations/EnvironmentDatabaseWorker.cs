@@ -90,7 +90,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public string GetOldProductInfo(string productName)
+        public string GetProductInfoStr(string productName)
         {
             string key = PrefixConstants.GetProductInfoKey(productName);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -321,7 +321,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public List<SensorEntity> GetOldSensorsInfo()
+        public List<SensorEntity> GetSensorsInfo()
         {
             var key = PrefixConstants.GetSensorsInfoReadKey();
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);

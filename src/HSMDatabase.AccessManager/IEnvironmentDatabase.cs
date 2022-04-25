@@ -11,7 +11,7 @@ namespace HSMDatabase.AccessManager
         void AddProductToList(string productName);
         List<string> GetProductsList();
         ProductEntity GetProductInfo(string productName);
-        string GetOldProductInfo(string productName);
+        string GetProductInfoStr(string productName);
         void PutProductInfo(ProductEntity product);
         void RemoveProductInfo(string productName);
         void RemoveProductFromList(string productName);
@@ -27,7 +27,7 @@ namespace HSMDatabase.AccessManager
         void RemoveSensorsList(string productName);
         void RemoveSensorFromList(string productName, string path);
         SensorEntity GetSensorInfo(string productName, string path);
-        List<SensorEntity> GetOldSensorsInfo();
+        List<SensorEntity> GetSensorsInfo();
         void RemoveSensorValues(string productName, string path);
 
         #endregion

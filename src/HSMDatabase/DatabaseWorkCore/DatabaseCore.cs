@@ -235,7 +235,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddSensor(entity);
         }
 
-        public List<SensorEntity> GetOldAllSensors() => _environmentDatabase.GetOldSensorsInfo();
+        public List<SensorEntity> GetAllSensors() => _environmentDatabase.GetSensorsInfo();
 
         #endregion
 
@@ -269,22 +269,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return _environmentDatabase.GetProductInfo(productName);
         }
 
-        public List<ProductEntity> GetAllProducts()
-        {
-            //move OldProducts to this
-            List<ProductEntity> products = new List<ProductEntity>();
-            var productNames = _environmentDatabase.GetProductsList();
-            foreach (var productName in productNames)
-            {
-                var product = _environmentDatabase.GetProductInfo(productName);
-                if (product != null)
-                    products.Add(product);
-            }
-
-            return products;
-        }
-
-        public List<string> GetOldAllProducts()
+        public List<string> GetAllProducts()
         {
             var products = new List<string>();
             var productNames = _environmentDatabase.GetProductsList();
@@ -293,7 +278,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var productName in productNames)
             {
-                var product = _environmentDatabase.GetOldProductInfo(productName);
+                var product = _environmentDatabase.GetProductInfo(productName);
                 if (product != null)
                     products.Add(product);
             }
