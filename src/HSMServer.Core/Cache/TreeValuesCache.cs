@@ -98,16 +98,17 @@ namespace HSMServer.Core.Cache
         // TODO: private method
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public List<ProductModel> GetProducts(User user)
+        public List<ProductModel> GetProductsWithoutParent(User user)
         {
-            if (user.IsAdmin)
-                return GetTree();
+            var products = _tree.Values.Where(p => p.ParentProduct == null).ToList();
+
+            if (user == null || user.IsAdmin)
+                return products;
 
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return null;
 
-            return GetTree().Where(p =>
-                ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+            return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
         public void RemoveSensor(Guid sensorId)

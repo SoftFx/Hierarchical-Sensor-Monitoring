@@ -28,7 +28,7 @@ namespace HSMServer.Core.Cache
         void RemoveProduct(string id);
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
-        List<ProductModel> GetProducts(User user);
+        List<ProductModel> GetProductsWithoutParent(User user);
 
         void RemoveSensor(Guid sensorId);
         void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);

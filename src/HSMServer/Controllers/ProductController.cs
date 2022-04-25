@@ -48,9 +48,7 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            var products = UserRoleHelper.IsProductCRUDAllowed(user)
-                ? _treeValuesCache.GetTree()
-                : _treeValuesCache.GetProducts(user);
+            var products = _treeValuesCache.GetProductsWithoutParent(user);
 
             products = products?.OrderBy(x => x.DisplayName).ToList();
 
