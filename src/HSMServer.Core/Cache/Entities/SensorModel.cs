@@ -16,6 +16,10 @@ namespace HSMServer.Core.Cache.Entities
 
         public TimeSpan ExpectedUpdateInterval { get; }
 
+        public string ProductName { get; }
+
+        public string Path { get; }
+
         public string Description { get; private set; }
 
         public SensorType SensorType { get; private set; }
@@ -42,22 +46,28 @@ namespace HSMServer.Core.Cache.Entities
             Description = entity.Description;
             SensorType = (SensorType)entity.SensorType;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
+            ProductName = entity.ProductName;
+            Path = entity.Path;
 
-            // sorting entities in order from newest to oldest
-            //dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
-            //var newestDataEntity = dataEntities[0];
+            if (dataEntity != null)
+            {
+                // sorting entities in order from newest to oldest
+                //dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
+                //var newestDataEntity = dataEntities[0];
 
-            LastUpdateTime = dataEntity.TimeCollected;
-            Status = (SensorStatus)dataEntity.Status;
-            OriginalFileSensorContentSize = dataEntity.OriginalFileSensorContentSize;
+                LastUpdateTime = dataEntity.TimeCollected;
+                Status = (SensorStatus)dataEntity.Status;
+                OriginalFileSensorContentSize = dataEntity.OriginalFileSensorContentSize;
 
-            TypedData = dataEntity.TypedData;
+                TypedData = dataEntity.TypedData;
+            }
         }
 
         internal SensorModel(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
             Id = Guid.NewGuid();
             SensorName = GetSensorName(sensorValue.Path);
+            Path = sensorValue.Path;
 
             UpdateData(sensorValue, timeCollected, validationResult);
         }
@@ -85,6 +95,8 @@ namespace HSMServer.Core.Cache.Entities
                 Description = Description,
                 SensorType = (int)SensorType,
                 ExpectedUpdateIntervalTicks = ExpectedUpdateInterval.Ticks,
+                ProductName = ProductName,
+                Path = Path,
                 //Unit ???
                 //ValidationParameters ???
             };
@@ -94,6 +106,7 @@ namespace HSMServer.Core.Cache.Entities
             {
                 Id = Id.ToString(),
                 Status = (byte)Status,
+                Path = Path,
                 Time = SensorTime.ToUniversalTime(),
                 TimeCollected = LastUpdateTime.ToUniversalTime(),
                 Timestamp = GetTimestamp(SensorTime),

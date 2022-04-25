@@ -10,7 +10,10 @@
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
         {
-            <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+            @if (child.Count != 0)
+            {
+                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+            }
         }
 
     @if (Model.Sensors != null && !Model.Sensors.IsEmpty)

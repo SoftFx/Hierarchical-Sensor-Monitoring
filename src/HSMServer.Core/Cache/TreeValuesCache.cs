@@ -38,10 +38,10 @@ namespace HSMServer.Core.Cache
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
-            (var products, var sensors, var sensorsData) = GenerateTestData();//GenerateTestDataNeedToResave();
+            var productsFromDb = _database.GetAllProducts();
+            var sensorsFromDb = _database.GetAllSensors();
 
-            BuildTree(_database.GetAllProducts().Union(products).ToList(), sensors, sensorsData);
-            //Initialize(products, sensors, sensorsData);
+            Initialize(productsFromDb, sensorsFromDb);
         }
 
 
@@ -123,29 +123,23 @@ namespace HSMServer.Core.Cache
             UploadSensorDataEvent?.Invoke(sensor);
         }
 
-        // TODO  -> method is right after adding new property NeedToResave to product and sensor entities
-        private void Initialize(List<ProductEntity> productEntities,
-            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        private void Initialize(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
-            //BuildTree(productEntities.Where(e => !e.NeedToResave).ToList(),
-            //          sensorEntities.Where(e => !e.NeedToResave).ToList(),
-            //          sensorDataEntities);
+            BuildTree(productEntities.Where(e => !e.IsConverted).ToList(),
+                      sensorEntities.Where(e => !e.IsConverted).ToList());
 
-            //BuildTreeWithMigration(
-            //    productEntities.Where(e => e.NeedToResave).ToList(),
-            //    sensorEntities.Where(e => e.NeedToResave).ToList(),
-            //    sensorDataEntities);
+            BuildTreeWithMigration(
+                productEntities.Where(e => e.IsConverted).ToList(),
+                sensorEntities.Where(e => e.IsConverted).ToList());
         }
 
-        private void BuildTree(List<ProductEntity> productEntities,
-            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
             FillTreeByProductModels(productEntities);
 
-            var sensorDatas = sensorDataEntities.Where(d => !string.IsNullOrEmpty(d.Id)).ToDictionary(s => s.Id); // TODO: dictionary (key, list<values>) for several datas
             foreach (var sensorEntity in sensorEntities)
             {
-                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Id]);
+                var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 _sensors.TryAdd(sensor.Id, sensor);
             }
 
@@ -168,24 +162,25 @@ namespace HSMServer.Core.Cache
                 }
         }
 
-        private void BuildTreeWithMigration(List<ProductEntity> productEntities,
-            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        private SensorDataEntity GetSensorData(SensorEntity sensor) =>
+            _database.GetLastSensorValue(sensor.ProductName, sensor.Path);
+
+        private void BuildTreeWithMigration(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
             FillTreeByProductModels(productEntities);
-            FillTreeBySensorModels(sensorEntities, sensorDataEntities);
+            FillTreeBySensorModels(sensorEntities);
 
-            //ResaveEntities(productEntities, sensorEntities, sensorDataEntities);
+            //ResaveEntities(productEntities, sensorEntities);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void FillTreeBySensorModels(List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        private void FillTreeBySensorModels(List<SensorEntity> sensorEntities)
         {
-            var sensorDatas = sensorDataEntities.Where(d => !string.IsNullOrEmpty(d.Path)).ToDictionary(s => s.Path); // TODO: dictionary (key, list<values>) for several datas
             foreach (var sensorEntity in sensorEntities)
             {
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
 
-                var sensor = new SensorModel(sensorEntity, sensorDatas[sensorEntity.Path]);
+                var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
@@ -193,12 +188,10 @@ namespace HSMServer.Core.Cache
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities,
-            List<SensorEntity> sensorEntities, List<SensorDataEntity> sensorDataEntities)
+        private void ResaveEntities(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
             ResaveProducts(productEntities);
             ResaveSensors(sensorEntities);
-            ResaveSensorDatas(sensorDataEntities);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -206,7 +199,7 @@ namespace HSMServer.Core.Cache
         {
             foreach (var productEntity in productEntities)
             {
-                if (/*!productEntity.NeedToResave || */!_tree.TryGetValue(productEntity.Id, out var product))
+                if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
                     continue;
 
                 _database.UpdateProduct(product.ToProductEntity());
@@ -218,17 +211,11 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensorEntity in sensorEntities)
             {
-                if (/*!sensorEntity.NeedToResave || */!_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
+                if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
                     continue;
 
                 _database.UpdateSensor(sensor.ToSensorEntity());
             }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveSensorDatas(List<SensorDataEntity> sensorDataEntities)
-        {
-            // TODO
         }
 
 
@@ -413,8 +400,8 @@ namespace HSMServer.Core.Cache
                 sensors.Add(sensor2);
                 sensors.Add(sensor3);
 
-                //foreach (var s in sensors)
-                //    s.NeedToResave = true;
+                foreach (var s in sensors)
+                    s.IsConverted = true;
 
                 var sensorDaata1 = new SensorDataEntity()
                 {
@@ -457,7 +444,7 @@ namespace HSMServer.Core.Cache
                 {
                     Id = Guid.NewGuid().ToString(),
                     DisplayName = productName,
-                    //NeedToResave = true,
+                    IsConverted = true,
                 });
             }
 

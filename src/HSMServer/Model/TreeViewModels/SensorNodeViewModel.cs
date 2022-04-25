@@ -110,27 +110,13 @@ namespace HSMServer.Model.TreeViewModels
             Description = model.Description;
             UpdateTime = model.LastUpdateTime;
             ValidationError = model.ValidationError;
+            Product = model.ProductName;
+            Path = model.Path;
 
             ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(model.SensorType, model.TypedData);
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
             FileNameString = GetFileNameString(model.SensorType, ShortStringValue);
-        }
-
-        internal void FillProductAndPath()
-        {
-            var pathParts = new List<string>() { Name };
-
-            var parentNode = Parent;
-            while (parentNode.Parent != null)
-            {
-                pathParts.Add(parentNode.Name);
-                parentNode = parentNode.Parent;
-            }
-            pathParts.Reverse();
-
-            Path = string.Join('/', pathParts);
-            Product = parentNode.Name;
         }
 
         private static string UnitsToString(double value, string unit)

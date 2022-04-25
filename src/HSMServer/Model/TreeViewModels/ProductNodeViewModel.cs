@@ -52,8 +52,6 @@ namespace HSMServer.Model.TreeViewModels
         {
             Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;
-
-            sensor.FillProductAndPath();
         }
 
         internal void Recursion()

@@ -16,6 +16,9 @@ namespace HSMServer.Core.Converters
 
         public static string GetShortStringValue(SensorType sensorType, string typedData)
         {
+            if (typedData == null)
+                return string.Empty;
+
             switch (sensorType)
             {
                 case SensorType.BooleanSensor:
