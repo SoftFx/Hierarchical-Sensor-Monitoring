@@ -36,7 +36,7 @@ namespace HSMServer.Tests.DatabaseTests
             //Assert
             Assert.Equal(product.DisplayName, existingProduct.DisplayName);
             Assert.Equal(product.Id, existingProduct.Id);
-            Assert.Equal(product.DateAdded, existingProduct.DateAdded);
+            Assert.Equal(product.CreationDate, existingProduct.CreationDate);
         }
 
         [Fact]

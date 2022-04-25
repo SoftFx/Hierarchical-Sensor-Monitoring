@@ -13,13 +13,13 @@ namespace HSMServer.Core.Model
     {
         public string Id { get; set; }
         public string DisplayName { get; set; }
-        public DateTime DateAdded { get; set; }
+        public DateTime CreationDate { get; set; }
         [JsonIgnore]
         public ConcurrentDictionary<string, SensorInfo> Sensors { get; }
 
         public Product()
         {
-            DateAdded = DateTime.UtcNow;
+            CreationDate = DateTime.UtcNow;
             Sensors = new ConcurrentDictionary<string, SensorInfo>();
         }
 
@@ -35,7 +35,7 @@ namespace HSMServer.Core.Model
 
             Id = product.Id;
             DisplayName = product.DisplayName;
-            DateAdded = product.DateAdded;
+            CreationDate = product.CreationDate;
         }
 
         //todo update ?
@@ -45,7 +45,7 @@ namespace HSMServer.Core.Model
 
             Id = entity.Id;
             DisplayName = entity.DisplayName;
-            DateAdded = new DateTime(entity.DateAdded);
+            CreationDate = new DateTime(entity.CreationDate);
         }
 
         public void InitializeSensors(List<SensorInfo> sensors) =>

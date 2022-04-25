@@ -14,7 +14,7 @@ namespace HSMServer.Model.ViewModel
         {
             Key = product.Id;
             Name = product.DisplayName;
-            CreationDate = product.DateAdded;
+            CreationDate = product.CreationDate;
             ManagerName = manager;
         }
     }

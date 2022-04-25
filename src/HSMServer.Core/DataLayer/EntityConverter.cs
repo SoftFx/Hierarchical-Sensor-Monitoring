@@ -43,8 +43,7 @@ namespace HSMServer.Core.DataLayer
                 State = state,
                 DisplayName = name,
                 Description = desc,
-                CreationDate = creationDate.Ticks,
-                DateAdded = dateAdded.Ticks,
+                CreationDate = dateAdded.Ticks,
                 SubProductsIds = subProductsIds,
                 SensorsIds = sensorsIds,
                 IsConverted = isConverted

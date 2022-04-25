@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             new()
             {
                 DisplayName = ProductName,
-                DateAdded = DateTime.UtcNow,
+                CreationDate = DateTime.UtcNow,
                 Id = KeyGenerator.GenerateProductKey(ProductName),
             };
     }
