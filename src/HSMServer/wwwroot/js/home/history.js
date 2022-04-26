@@ -100,7 +100,6 @@ function Data(to, from, type, path) {
         $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
 
         $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
-        $('[id^="button_delete_sensor_"]').off("click").on("click", deleteSensor);
     }
 
     function requestHistoryHour() {
@@ -230,19 +229,6 @@ function Data(to, from, type, path) {
             displayGraph(data, type, graphDivId, path);
         });
     }
-}
-
-function deleteSensor() {
-    let path = this.id.substring("button_delete_sensor_".length);
-
-    $.ajax({
-        type: 'POST',
-        url: removeSensorAction + "?Selected=" + path,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true
-    });
 }
 
 
