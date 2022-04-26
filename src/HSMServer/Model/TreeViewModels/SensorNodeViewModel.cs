@@ -5,7 +5,6 @@ using HSMServer.Core.Converters;
 using HSMServer.Core.Extensions;
 using HSMServer.Helpers;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -61,6 +60,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Description { get; private set; }
 
+        public bool HasData { get; private set; }
+
         public string ShortStringValue { get; private set; }
 
         public string Path { get; private set; }
@@ -113,6 +114,7 @@ namespace HSMServer.Model.TreeViewModels
             Product = model.ProductName;
             Path = model.Path;
 
+            HasData = !string.IsNullOrEmpty(model.TypedData);
             ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(model.SensorType, model.TypedData);
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);

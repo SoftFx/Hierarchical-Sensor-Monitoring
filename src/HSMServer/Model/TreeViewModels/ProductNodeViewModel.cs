@@ -18,6 +18,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
 
+        public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
+
         public int Count { get; private set; }
 
         public bool IsAvailableForUser { get; set; }
@@ -68,7 +70,7 @@ namespace HSMServer.Model.TreeViewModels
                 }
             }
 
-            Count = count + (Sensors?.Count ?? 0);
+            Count = count + VisibleSensors.Count;
 
             ModifyUpdateTime();
             ModifyStatus();
@@ -76,8 +78,8 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ModifyUpdateTime()
         {
-            var sensorMaxTime = (Sensors?.Values?.Count ?? 0) == 0 ? null : Sensors?.Values.Max(x => x.UpdateTime);
-            var nodeMaxTime = (Nodes?.Values?.Count ?? 0) == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
+            var sensorMaxTime = VisibleSensors.Count == 0 ? null : VisibleSensors?.Max(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.Count == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
 
             if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
                 UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
@@ -89,8 +91,8 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ModifyStatus()
         {
-            var statusFromSensors = (Sensors?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Sensors.Values.Max(s => s.Status);
-            var statusFromNodes = (Nodes?.Values?.Count ?? 0) == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);
+            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Unknown : VisibleSensors.Max(s => s.Status);
+            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
         }

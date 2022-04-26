@@ -16,10 +16,10 @@
             }
         }
 
-    @if (Model.Sensors != null && !Model.Sensors.IsEmpty)
+    @if (Model.VisibleSensors != null && Model.VisibleSensors.Count != 0)
     {
         <ul>
-            @foreach (var (_, sensor) in Model.Sensors)
+            @foreach (var sensor in Model.VisibleSensors)
             {
                 <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime'
                     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime"}'>
