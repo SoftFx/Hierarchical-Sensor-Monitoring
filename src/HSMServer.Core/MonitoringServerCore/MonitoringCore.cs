@@ -120,6 +120,12 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseAdapter.AddSensor(newSensor);
         }
 
+        public void RemoveSensorsData(string productId) =>
+            _treeValuesCache.RemoveSensorsData(productId);
+
+        public void RemoveSensorData(Guid sensorId) =>
+            _treeValuesCache.RemoveSensorData(sensorId);
+
         public void RemoveSensor(string productName, string path)
         {
             var product = _productManager.GetProductByName(productName);
@@ -370,30 +376,6 @@ namespace HSMServer.Core.MonitoringServerCore
             {
                 return _defaultFileSensorData;
             }
-        }
-
-        #endregion
-
-
-        #region Product
-      
-        public bool HideProduct(Product product, out string error)
-        {
-            bool result = false;
-            error = string.Empty;
-            try
-            {
-                // TODO: remove product from cache but not remove from db
-
-                result = true;
-            }
-            catch (Exception ex)
-            {
-                result = false;
-                error = ex.Message;
-                _logger.LogError(ex, $"Failed to hide product, name = {product.DisplayName}");
-            }
-            return result;
         }
 
         #endregion

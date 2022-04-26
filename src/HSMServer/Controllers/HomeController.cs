@@ -84,24 +84,10 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.Decode(selectedId);
 
-            // TODO !!_sensorsInterface.RemoveSensors() method!!
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-            {
-                // TODO remove all subproducts and sensors from _treeViewModel (and from db)
-
-                if (node.Parent == null)
-                {
-                    var productEntity = _productManager.GetProductByName(node.Name);
-                    if (productEntity == null)
-                        return;
-
-                    _sensorsInterface.HideProduct(productEntity, out _);
-                }
-            }
+                _sensorsInterface.RemoveSensorsData(node.Id);
             else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
-            {
-                // TODO remove sensor from _treeViewModel (maybe with _sensorInterface, that help to delete sensor from db and from cache)
-            }
+                _sensorsInterface.RemoveSensorData(sensor.Id);
         }
 
         #region Update

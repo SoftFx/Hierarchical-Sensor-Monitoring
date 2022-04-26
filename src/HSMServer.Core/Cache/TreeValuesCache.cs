@@ -125,6 +125,18 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
+        public void RemoveSensorsData(string productId)
+        {
+            if (!_tree.TryGetValue(productId, out var product))
+                return;
+
+            foreach (var (subProductId, _) in product.SubProducts)
+                RemoveSensorsData(subProductId);
+
+            foreach (var (sensorId, _) in product.Sensors)
+                RemoveSensorData(sensorId);
+        }
+
         public void RemoveSensorData(Guid sensorId)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor))

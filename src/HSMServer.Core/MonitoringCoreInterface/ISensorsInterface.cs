@@ -9,6 +9,8 @@ namespace HSMServer.Core.MonitoringCoreInterface
     public interface ISensorsInterface
     {
         void AddSensor(string productName, SensorValueBase sensorValue);
+        void RemoveSensorsData(string productId);
+        void RemoveSensorData(Guid sensorId);
         void RemoveSensor(string productName, string path);
         void RemoveSensor(string product, string key, string path);
         void RemoveSensors(string product, string key, IEnumerable<string> paths);
@@ -22,8 +24,5 @@ namespace HSMServer.Core.MonitoringCoreInterface
         List<SensorHistoryData> GetAllSensorHistory(string product, string path);
 
         (byte[] content, string extension) GetFileSensorValueData(string product, string path);
-
-        //ToDo: move
-        bool HideProduct(Product product, out string error);
     }
 }
