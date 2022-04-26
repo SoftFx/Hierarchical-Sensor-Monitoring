@@ -81,11 +81,8 @@ namespace HSMServer.Core.DataLayer
         public void RemoveSensor(string productName, string path) =>
             _database.RemoveSensor(productName, path);
 
-        public void RemoveSensor(string sensorId)
-        {
-
-        }
-
+        public void RemoveSensorWithMetadata(string productName, string path) =>
+            _database.RemoveSensorWithMetadata(productName, path);
 
         public void AddSensor(SensorInfo info)
         {

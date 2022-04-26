@@ -217,6 +217,14 @@ namespace HSMDatabase.DatabaseWorkCore
             return sensors;
         }
 
+        public void RemoveSensorWithMetadata(string productName, string path)
+        {
+            _environmentDatabase.RemoveSensor(productName, path);
+            _environmentDatabase.RemoveSensorFromList(productName, path);
+
+            RemoveSensor(productName, path);
+        }
+
         public void RemoveSensor(string productName, string path)
         {
             //TAM-90: Do not delete metadata when delete sensors

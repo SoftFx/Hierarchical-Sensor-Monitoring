@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 
 namespace HSMServer.Core.MonitoringCoreInterface
