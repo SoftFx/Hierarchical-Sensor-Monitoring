@@ -278,7 +278,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var productName in productNames)
             {
-                var product = _environmentDatabase.GetProductInfo(productName);
+                var product = _environmentDatabase.GetProductInfoStr(productName);
                 if (product != null)
                     products.Add(product);
             }
