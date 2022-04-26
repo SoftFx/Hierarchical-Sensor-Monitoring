@@ -22,6 +22,7 @@ using System.Threading;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -173,6 +174,9 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _databaseAdapter.UpdateSensor(existingInfo);
         }
+
+        public void UpdateSensor(UpdatedSensor updatedSensor) =>
+            _treeValuesCache.UpdateSensor(updatedSensor);
 
         public bool IsSensorRegistered(string productName, string path) =>
             _productManager.GetProductByName(productName)?.Sensors.ContainsKey(path) ?? false;

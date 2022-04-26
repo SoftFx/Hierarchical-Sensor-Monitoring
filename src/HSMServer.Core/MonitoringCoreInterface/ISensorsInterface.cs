@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 
@@ -15,6 +16,7 @@ namespace HSMServer.Core.MonitoringCoreInterface
         void RemoveSensor(string product, string key, string path);
         void RemoveSensors(string product, string key, IEnumerable<string> paths);
         void UpdateSensorInfo(SensorInfo newInfo);
+        void UpdateSensor(UpdatedSensor newSensor);
         bool IsSensorRegistered(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
         List<SensorInfo> GetProductSensors(string productName);

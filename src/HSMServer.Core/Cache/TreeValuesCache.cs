@@ -114,6 +114,18 @@ namespace HSMServer.Core.Cache
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
+        public void UpdateSensor(UpdatedSensor updatedSensor)
+        {
+            if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
+                return;
+
+            sensor.Update(updatedSensor);
+            _productManager.GetProductByName(sensor.ProductName)?.AddOrUpdateSensor(sensor);
+            //_database.UpdateSensor(sensor.ToSensorEntity());
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+        }
+
         public void RemoveSensor(Guid sensorId)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))

@@ -14,13 +14,15 @@ namespace HSMServer.Core.Cache.Entities
 
         public string SensorName { get; }
 
-        public TimeSpan ExpectedUpdateInterval { get; }
-
         public string ProductName { get; }
 
         public string Path { get; }
 
         public string Description { get; private set; }
+
+        public TimeSpan ExpectedUpdateInterval { get; private set; }
+
+        public string Unit { get; private set; }
 
         public SensorType SensorType { get; private set; }
 
@@ -46,6 +48,7 @@ namespace HSMServer.Core.Cache.Entities
             Description = entity.Description;
             SensorType = (SensorType)entity.SensorType;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
+            Unit = entity.Unit;
             ProductName = entity.ProductName;
             Path = entity.Path;
 
@@ -72,6 +75,13 @@ namespace HSMServer.Core.Cache.Entities
             UpdateData(sensorValue, timeCollected, validationResult);
         }
 
+
+        internal void Update(UpdatedSensor sensor)
+        {
+            Description = sensor.Description;
+            ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval);
+            Unit = sensor.Unit;
+        }
 
         internal void UpdateData(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
@@ -103,9 +113,9 @@ namespace HSMServer.Core.Cache.Entities
                 Description = Description,
                 SensorType = (int)SensorType,
                 ExpectedUpdateIntervalTicks = ExpectedUpdateInterval.Ticks,
+                Unit = Unit,
                 ProductName = ProductName,
                 Path = Path,
-                //Unit ???
                 //ValidationParameters ???
             };
 

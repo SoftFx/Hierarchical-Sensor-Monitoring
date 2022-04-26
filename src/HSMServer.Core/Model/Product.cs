@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Attributes;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Concurrent;
@@ -53,6 +54,16 @@ namespace HSMServer.Core.Model
 
         public void AddOrUpdateSensor(SensorInfo sensor) =>
             Sensors[sensor.Path] = sensor;
+
+        public void AddOrUpdateSensor(SensorModel sensor) =>
+            Sensors[sensor.Path] = new SensorInfo
+            {
+                ProductName = sensor.ProductName,
+                ExpectedUpdateInterval = sensor.ExpectedUpdateInterval,
+                Unit = sensor.Unit,
+                Path = sensor.Path,
+                Description = sensor.Description
+            };
 
         public bool RemoveSensor(string path) =>
             Sensors.TryRemove(path, out _);

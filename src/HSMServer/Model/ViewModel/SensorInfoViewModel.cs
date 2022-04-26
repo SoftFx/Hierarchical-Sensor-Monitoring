@@ -1,23 +1,34 @@
-﻿using HSMServer.Core.Model.Sensor;
+﻿using HSMServer.Model.TreeViewModels;
+using System;
 
 namespace HSMServer.Model.ViewModel
 {
     public class SensorInfoViewModel
     {
-        public string Path { get; set; }
-        public string ProductName { get; set; }
-        public string Description { get; set; }
-        public string ExpectedUpdateInterval { get; set; }
-        public string Unit { get; set; }
-        public string SensorType { get; set; }
-        public SensorInfoViewModel(SensorInfo info)
+        public Guid Id { get; }
+
+        public string Path { get; }
+
+        public string ProductName { get; }
+
+        public string SensorType { get; }
+
+        public string Description { get; private set; }
+
+        public string ExpectedUpdateInterval { get; private set; }
+
+        public string Unit { get; private set; }
+
+
+        public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
-            Path = info.Path;
-            ProductName = info.ProductName;
-            Description = info.Description;
-            ExpectedUpdateInterval = info.ExpectedUpdateInterval.ToString();
-            Unit = info.Unit;
-            SensorType = info.SensorType.ToString();
+            Id = sensor.Id;
+            Path = sensor.Path;
+            ProductName = sensor.Product;
+            Description = sensor.Description;
+            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval.ToString();
+            Unit = sensor.Unit;
+            SensorType = sensor.SensorType.ToString();
         }
 
         public void Update(UpdateSensorInfoViewModel updateModel)

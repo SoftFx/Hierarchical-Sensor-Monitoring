@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
@@ -270,26 +271,33 @@ namespace HSMServer.Controllers
         #region Sensor info
 
         [HttpGet]
-        public HtmlString GetSensorInfo([FromQuery(Name = "Path")] string encodedPath)
+        public HtmlString GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            var info = _sensorsInterface.GetSensorInfo(product, path);
-            if (info == null)
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return new HtmlString(string.Empty);
 
-            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
-            return ViewHelper.CreateSensorInfoTable(viewModel);
+            return ViewHelper.CreateSensorInfoTable(new SensorInfoViewModel(sensor));
         }
 
         [HttpPost]
         public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
         {
-            ParseProductAndPath(updateModel.EncodedPath, out var product, out var path);
-            var info = _sensorsInterface.GetSensorInfo(product, path);
-            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updateModel.EncodedId), out var sensor))
+                return;
+
+            var viewModel = new SensorInfoViewModel(sensor);
             viewModel.Update(updateModel);
-            var infoFromViewModel = CreateModelFromViewModel(viewModel);
-            _sensorsInterface.UpdateSensorInfo(infoFromViewModel);
+
+            _sensorsInterface.UpdateSensor(
+                new UpdatedSensor
+                {
+                    Id = sensor.Id,
+                    Product = viewModel.ProductName,
+                    Path = viewModel.Path,
+                    Description = viewModel.Description,
+                    ExpectedUpdateInterval = viewModel.ExpectedUpdateInterval,
+                    Unit = viewModel.Unit
+                });
         }
 
         #endregion
@@ -334,20 +342,6 @@ namespace HSMServer.Controllers
             if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
-        }
-
-        private static SensorInfo CreateModelFromViewModel(SensorInfoViewModel viewModel)
-        {
-            var result = new SensorInfo
-            {
-                ProductName = viewModel.ProductName,
-                ExpectedUpdateInterval = TimeSpan.Parse(viewModel.ExpectedUpdateInterval),
-                Unit = viewModel.Unit,
-                Path = viewModel.Path,
-                Description = viewModel.Description
-            };
-
-            return result;
         }
     }
 }

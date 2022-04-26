@@ -15,7 +15,6 @@ namespace HSMServer.Model.TreeViewModels
 
         private readonly TimeSpan _minimumUpdateInterval = new(0, 0, 5, 0);
 
-        private TimeSpan _expectedUpdateInterval;
         private bool _isSensorValueOutdated;
 
         private string _validationError;
@@ -31,8 +30,8 @@ namespace HSMServer.Model.TreeViewModels
             {
                 var lastUpdateInterval = DateTime.UtcNow - UpdateTime;
 
-                if (lastUpdateInterval < _minimumUpdateInterval || _expectedUpdateInterval == TimeSpan.Zero ||
-                    lastUpdateInterval < _expectedUpdateInterval)
+                if (lastUpdateInterval < _minimumUpdateInterval || ExpectedUpdateInterval == TimeSpan.Zero ||
+                    lastUpdateInterval < ExpectedUpdateInterval)
                 {
                     _isSensorValueOutdated = false;
                     return base.Status;
@@ -72,6 +71,10 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsPlottingSupported { get; private set; }
 
+        internal TimeSpan ExpectedUpdateInterval { get; private set; }
+
+        internal string Unit { get; private set; }
+
 
         public SensorNodeViewModel(SensorModel model)
         {
@@ -103,7 +106,7 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(SensorModel model)
         {
-            _expectedUpdateInterval = model.ExpectedUpdateInterval;
+            ExpectedUpdateInterval = model.ExpectedUpdateInterval;
 
             Name = model.SensorName;
             SensorType = model.SensorType;
@@ -113,6 +116,7 @@ namespace HSMServer.Model.TreeViewModels
             ValidationError = model.ValidationError;
             Product = model.ProductName;
             Path = model.Path;
+            Unit = model.Unit;
 
             HasData = !string.IsNullOrEmpty(model.TypedData);
             ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(model.SensorType, model.TypedData);
