@@ -86,6 +86,14 @@ namespace HSMServer.Core.Cache.Entities
             Status = sensorStatus > sensorValue.Status ? sensorStatus : sensorValue.Status;
         }
 
+        internal void ClearData()
+        {
+            LastUpdateTime = DateTime.MinValue;
+            Status = SensorStatus.Unknown;
+            OriginalFileSensorContentSize = 0;
+            TypedData = null;
+        }
+
         internal SensorEntity ToSensorEntity() =>
             new()
             {

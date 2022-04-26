@@ -120,9 +120,25 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ParentProduct.Sensors.TryRemove(sensorId, out _);
-            //_database.RemoveSensor(sensorId.ToString());
+            //_database.RemoveSensor(sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
+        }
+
+        public void RemoveSensorData(Guid sensorId)
+        {
+            if (!_sensors.TryGetValue(sensorId, out var sensor))
+                return;
+
+            sensor.ClearData();
+
+            // TODO: delete removing from productManager
+            var product = _productManager.GetProductByName(sensor.ProductName);
+            product.RemoveSensor(sensor.Path);
+
+            //_database.RemoveSensor(sensor.ProductName, sensor.Path);
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
@@ -198,6 +214,15 @@ namespace HSMServer.Core.Cache
             //ResaveEntities(productEntities, sensorEntities);
         }
 
+        private void FillTreeByProductModels(List<ProductEntity> productEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void FillTreeBySensorModels(List<SensorEntity> sensorEntities)
         {
@@ -209,47 +234,6 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
-        {
-            ResaveProducts(productEntities);
-            ResaveSensors(sensorEntities);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveProducts(List<ProductEntity> productEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
-                    continue;
-
-                _database.UpdateProduct(product.ToProductEntity());
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveSensors(List<SensorEntity> sensorEntities)
-        {
-            foreach (var sensorEntity in sensorEntities)
-            {
-                if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
-                    continue;
-
-                _database.UpdateSensor(sensor.ToSensorEntity());
-            }
-        }
-
-
-        private void FillTreeByProductModels(List<ProductEntity> productEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
             }
         }
 
@@ -285,6 +269,37 @@ namespace HSMServer.Core.Cache
             //_database.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveEntities(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
+        {
+            ResaveProducts(productEntities);
+            ResaveSensors(sensorEntities);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveProducts(List<ProductEntity> productEntities)
+        {
+            foreach (var productEntity in productEntities)
+            {
+                if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
+                    continue;
+
+                _database.UpdateProduct(product.ToProductEntity());
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveSensors(List<SensorEntity> sensorEntities)
+        {
+            foreach (var sensorEntity in sensorEntities)
+            {
+                if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
+                    continue;
+
+                _database.UpdateSensor(sensor.ToSensorEntity());
+            }
         }
     }
 }
