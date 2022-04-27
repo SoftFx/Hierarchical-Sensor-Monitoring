@@ -227,10 +227,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public FileResult GetFile([FromQuery(Name = "Selected")] string selectedSensor)
         {
-            var path = SensorPathHelper.Decode(selectedSensor);
-            int index = path.IndexOf('/');
-            var product = path.Substring(0, index);
-            path = path.Substring(index + 1, path.Length - index - 1);
+            ParseProductAndPath(selectedSensor, out var product, out var path);
 
             var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
 
@@ -242,10 +239,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string selectedSensor)
         {
-            var path = SensorPathHelper.Decode(selectedSensor);
-            int index = path.IndexOf('/');
-            var product = path.Substring(0, index);
-            path = path.Substring(index + 1, path.Length - index - 1);
+            ParseProductAndPath(selectedSensor, out var product, out var path);
 
             var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
 
