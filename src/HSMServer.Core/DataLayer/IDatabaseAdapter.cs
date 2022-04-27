@@ -35,6 +35,7 @@ namespace HSMServer.Core.DataLayer
         void RemoveSensor(string productName, string path);
         void RemoveSensorWithMetadata(string productName, string path);
         void AddSensor(SensorInfo info);
+        void AddSensor(SensorEntity sensor);
         void UpdateSensor(SensorInfo info);
         void UpdateSensor(SensorEntity sensor);
         void PutSensorData(SensorDataEntity data, string productName);

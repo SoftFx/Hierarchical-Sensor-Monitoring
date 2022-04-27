@@ -312,21 +312,6 @@ namespace HSMServer.Controllers
             product = sensor?.Product;
         }
 
-        private static void ParseProductPathAndSensor(string encodedPath, out string product,
-            out string path, out string sensor)
-        {
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            product = decodedPath[..decodedPath.IndexOf('/')];
-
-            var withoutProduct = decodedPath[(product.Length + 1)..];
-            sensor = withoutProduct[(withoutProduct.LastIndexOf('/') + 1)..];
-
-            if (withoutProduct.Contains('/'))
-                path = withoutProduct.Substring(0, withoutProduct.Length - sensor.Length - 1);
-            else
-                path = string.Empty;
-        }
-
         private static PeriodType GetPeriodType(DateTime from, DateTime to)
         {
             var difference = to - from;

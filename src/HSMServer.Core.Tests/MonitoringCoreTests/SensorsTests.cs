@@ -374,7 +374,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
             var originalContent = sensorValue.FileContent;
 
-            _monitoringCore.AddFileSensor(sensorValue);
+            _monitoringCore.AddSensorValue(sensorValue);
 
             Assert.NotEqual(sensorValue.FileContent, originalContent);
 

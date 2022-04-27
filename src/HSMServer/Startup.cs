@@ -13,7 +13,6 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModels;
-using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -63,7 +62,6 @@ namespace HSMServer
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
 
             services.AddHostedService<OutdatedSensorService>();

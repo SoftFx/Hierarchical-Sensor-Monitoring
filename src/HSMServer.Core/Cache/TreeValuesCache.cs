@@ -167,23 +167,25 @@ namespace HSMServer.Core.Cache
 
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
-            var parentProductName = GetProductNameById(sensorValue.Key);
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(parentProductName, sensorValue.Path);
+            var productName = GetProductNameById(sensorValue.Key);
+            if (string.IsNullOrEmpty(productName))
+                return;
+
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.SensorName == newSensorValueName).Value;
             if (sensor == null)
             {
-                sensor = new SensorModel(sensorValue, timeCollected, validationResult);
+                sensor = new SensorModel(sensorValue, productName, timeCollected, validationResult);
                 parentProduct.AddSensor(sensor);
 
-                _sensors.TryAdd(sensor.Id, sensor);
-                ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
+                AddSensor(sensor);
             }
             else
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
 
-            //_database.PutSensorData(sensor.ToSensorDataEntity(), parentProductName); // TODO: save to db
+            _database.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
             UploadSensorDataEvent?.Invoke(sensor);
         }
@@ -293,6 +295,15 @@ namespace HSMServer.Core.Cache
             //_database.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
+        }
+
+        private void AddSensor(SensorModel sensor)
+        {
+            _sensors.TryAdd(sensor.Id, sensor);
+            _productManager.GetProductByName(sensor.ProductName)?.AddOrUpdateSensor(sensor);
+            _database.AddSensor(sensor.ToSensorEntity());
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

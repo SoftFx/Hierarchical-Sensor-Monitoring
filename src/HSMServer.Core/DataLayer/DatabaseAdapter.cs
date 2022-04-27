@@ -90,6 +90,8 @@ namespace HSMServer.Core.DataLayer
             _database.AddSensor(entity);
         }
 
+        public void AddSensor(SensorEntity sensor) => _database.AddSensor(sensor);
+
         public void UpdateSensor(SensorInfo info)
         {
             SensorEntity entity = ConvertSensorInfoToEntity(info);

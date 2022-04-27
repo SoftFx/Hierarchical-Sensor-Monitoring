@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 
@@ -66,10 +67,12 @@ namespace HSMServer.Core.Cache.Entities
             }
         }
 
-        internal SensorModel(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        internal SensorModel(SensorValueBase sensorValue, string productName,
+            DateTime timeCollected, ValidationResult validationResult)
         {
             Id = Guid.NewGuid();
             SensorName = GetSensorName(sensorValue.Path);
+            ProductName = productName;
             Path = sensorValue.Path;
 
             UpdateData(sensorValue, timeCollected, validationResult);
@@ -85,6 +88,12 @@ namespace HSMServer.Core.Cache.Entities
 
         internal void UpdateData(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
         {
+            if (sensorValue is FileSensorBytesValue fileSensor)
+            {
+                OriginalFileSensorContentSize = fileSensor.FileContent.Length;
+                sensorValue = fileSensor.CompressContent();
+            }
+
             Description = sensorValue.Description;
             SensorType = SensorTypeFactory.GetSensorType(sensorValue);
             TypedData = TypedDataFactory.GetTypedData(sensorValue);
@@ -130,6 +139,7 @@ namespace HSMServer.Core.Cache.Entities
                 Timestamp = GetTimestamp(SensorTime),
                 TypedData = TypedData,
                 DataType = (byte)SensorType,
+                OriginalFileSensorContentSize = OriginalFileSensorContentSize,
             };
 
 

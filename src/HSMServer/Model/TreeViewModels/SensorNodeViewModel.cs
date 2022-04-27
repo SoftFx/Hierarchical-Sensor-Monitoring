@@ -119,7 +119,7 @@ namespace HSMServer.Model.TreeViewModels
             Unit = model.Unit;
 
             HasData = !string.IsNullOrEmpty(model.TypedData);
-            ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(model.SensorType, model.TypedData);
+            ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(model.SensorType, model.TypedData, model.OriginalFileSensorContentSize);
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
             FileNameString = GetFileNameString(model.SensorType, ShortStringValue);

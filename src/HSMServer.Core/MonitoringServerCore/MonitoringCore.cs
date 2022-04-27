@@ -2,13 +2,11 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
@@ -26,7 +24,7 @@ using HSMServer.Core.Cache.Entities;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IDisposable
+    public class MonitoringCore : ISensorsInterface, IDisposable
     {
         private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
 
@@ -63,12 +61,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
         {
             foreach (var value in sensorValues)
-            {
-                if (value is FileSensorBytesValue fileSensorBytesValue)
-                    AddFileSensor(fileSensorBytesValue);
-                else
-                    AddSensorValue(value);
-            }
+                AddSensorValue(value);
         }
 
         #region Sensor saving
@@ -191,33 +184,11 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!CheckValidationResult(value, validationResult))
                     return;
 
-                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
-
-                if (!ProcessBarSensorValue(value, sensorData))
+                var productName = _treeValuesCache.GetProductNameById(value.Key);
+                if (!ProcessBarSensorValue(value, productName, timeCollected))
                     return;
 
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);
-                //SaveSensorValue(value.Convert(timeCollected, sensorData.Status), sensorData.Product);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
-        }
-
-        public void AddFileSensor(FileSensorBytesValue value)
-        {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-
-                var validationResult = value.Validate();
-                if (!CheckValidationResult(value, validationResult))
-                    return;
-
-                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
-
-                SaveSensorValue(value.ConvertWithContentCompression(timeCollected, sensorData.Status), sensorData.Product);
             }
             catch (Exception e)
             {
@@ -246,70 +217,27 @@ namespace HSMServer.Core.MonitoringServerCore
             return true;
         }
 
-        private SensorData RegisterAndGetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
-        {
-            var sensorData = GetSensorData(value, timeCollected, validationResult);
-
-            return sensorData;
-        }
-
-        private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
+        private bool ProcessBarSensorValue(SensorValueBase value, string product, DateTime timeCollected)
         {
             if (value is BarSensorValueBase barSensorValue)
-                return ProcessBarSensorValue(barSensorValue, sensorData);
+                return ProcessBarSensorValue(barSensorValue, product, timeCollected);
             else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
-                return ProcessBarSensorValue(unitedSensorValue.Convert(), sensorData);
+                return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
 
             return true;
         }
 
-        private bool ProcessBarSensorValue(BarSensorValueBase value, SensorData sensorData)
+        private bool ProcessBarSensorValue(BarSensorValueBase value, string product, DateTime timeCollected)
         {
             if (value.EndTime == DateTime.MinValue)
             {
-                _barsStorage.Add(value, sensorData);
+                _barsStorage.Add(value, product, timeCollected);
                 return false;
             }
 
-            _barsStorage.Remove(sensorData.Product, value.Path);
+            _barsStorage.Remove(product, value.Path);
             return true;
         }
-
-        private Model.Sensor.TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
-        {
-            var transactionType = Model.Sensor.TransactionType.Update;
-
-            if (!IsSensorRegistered(productName, value.Path))
-            {
-                AddSensor(productName, value);
-                transactionType = Model.Sensor.TransactionType.Add;
-            }
-
-            return transactionType;
-        }
-
-        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
-        {
-            var productName = _treeValuesCache.GetProductNameById(value.Key);
-            var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
-            var sensorStatus = GetSensorStatus(validationResult);
-
-            var sensorData = value.Convert(productName, timeCollected, transactionType);
-            sensorData.Status = sensorStatus > sensorData.Status ? sensorStatus : sensorData.Status;
-            sensorData.ValidationError = validationResult.Error;
-
-            return sensorData;
-        }
-
-        public static SensorStatus GetSensorStatus(SensorsDataValidation.ValidationResult validationResult) =>
-            validationResult.ResultType switch
-            {
-                ResultType.Unknown => SensorStatus.Unknown,
-                ResultType.Ok => SensorStatus.Ok,
-                ResultType.Warning => SensorStatus.Warning,
-                ResultType.Error => SensorStatus.Error,
-                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
-            };
 
         #endregion
 
