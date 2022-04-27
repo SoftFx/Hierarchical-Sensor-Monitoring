@@ -64,7 +64,8 @@ namespace HSMServer.Core.DataLayer
             var result = new List<ProductEntity>();
 
             var oldEntities = _database.GetAllProducts();
-            if (oldEntities == null || oldEntities.Count == 0) return null;
+            if (oldEntities == null || oldEntities.Count == 0) 
+                return result;
 
             foreach (var oldEntity in oldEntities)
             {
@@ -147,12 +148,14 @@ namespace HSMServer.Core.DataLayer
         public List<SensorEntity> GetAllSensors()
         {
             var oldEntities = _database.GetAllSensors();
-            if (oldEntities == null || oldEntities.Count == 0) return null;
+            if (oldEntities == null || oldEntities.Count == 0) 
+                return new List<SensorEntity>();
 
             foreach (var oldEntity in oldEntities)
             {
                 if (!string.IsNullOrEmpty(oldEntity.Id) 
-                    && !string.Equals(oldEntity.Id, Guid.Empty.ToString())) continue;
+                    && !string.Equals(oldEntity.Id, Guid.Empty.ToString())) 
+                    continue;
 
                 oldEntity.Id = Guid.NewGuid().ToString();
                 oldEntity.ProductId = Guid.Empty.ToString();
