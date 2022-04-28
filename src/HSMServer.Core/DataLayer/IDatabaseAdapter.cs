@@ -21,10 +21,15 @@ namespace HSMServer.Core.DataLayer
 
         void RemoveProduct(string productName);
         void AddProduct(Product product);
+        void AddProductNew(Product product);
         void AddProduct(ProductEntity product);
+        void AddProductNew(ProductEntity entity);
         void UpdateProduct(Product product);
+        void UpdateProductNew(Product product);
         void UpdateProduct(ProductEntity product);
+        void UpdateProductNew(ProductEntity entity);
         Product GetProduct(string productName);
+        Product GetProductNew(string id);
         List<Product> GetProducts();
         List<ProductEntity> GetAllProducts();
 
