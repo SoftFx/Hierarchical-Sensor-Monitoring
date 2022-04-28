@@ -322,6 +322,7 @@ namespace HSMServer.Core.Cache
                     continue;
 
                 _database.UpdateProduct(product.ToProductEntity());
+                //_database.UpdateProductNew(product.ToProductEntity());
             }
         }
 

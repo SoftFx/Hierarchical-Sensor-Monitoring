@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using Microsoft.Extensions.Logging;
@@ -80,7 +79,7 @@ namespace HSMServer.Core.Products
 
         public Product AddProduct(string name)
         {
-            string key = KeyGenerator.GenerateProductKey(name);
+            string key = Guid.NewGuid().ToString();
 
             _logger.LogInformation($"Created product key = '{key}' for product = '{name}'");
 

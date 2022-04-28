@@ -2,7 +2,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -30,17 +29,17 @@ namespace HSMServer.Tests.Fixture
         
         public Product GetFirstTestProduct()
         {
-            return CreateProduct(FirstProductName, KeyGenerator.GenerateProductKey(FirstProductName));
+            return CreateProduct(FirstProductName, Guid.NewGuid().ToString());
         }
 
         public Product GetSecondTestProduct()
         {
-            return CreateProduct(SecondProductName, KeyGenerator.GenerateProductKey(SecondProductName));
+            return CreateProduct(SecondProductName, Guid.NewGuid().ToString());
         }
 
         public Product GetThirdTestProduct()
         {
-            return CreateProduct(ThirdProductName, KeyGenerator.GenerateProductKey(ThirdProductName));
+            return CreateProduct(ThirdProductName, Guid.NewGuid().ToString());
         }
 
         public List<Product> GetProductsList()
@@ -168,7 +167,7 @@ namespace HSMServer.Tests.Fixture
         {
             Role = ProductRoleEnum.ProductManager.ToString(),
             ExpirationDate = DateTime.Now.AddMinutes(30),
-            ProductKey = KeyGenerator.GenerateProductKey("Name for testing"),
+            ProductKey = Guid.NewGuid().ToString(),
         };
         public RegistrationTicket CreateRegistrationTicket()
         {

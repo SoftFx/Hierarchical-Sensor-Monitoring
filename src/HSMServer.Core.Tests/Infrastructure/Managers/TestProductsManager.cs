@@ -1,7 +1,5 @@
-﻿using HSMServer.Core.Keys;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -14,7 +12,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 DisplayName = ProductName,
                 CreationDate = DateTime.UtcNow,
-                Id = KeyGenerator.GenerateProductKey(ProductName),
+                Id = Guid.NewGuid().ToString(),
             };
     }
 }

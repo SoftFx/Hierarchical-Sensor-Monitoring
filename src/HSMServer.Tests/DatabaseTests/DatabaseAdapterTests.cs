@@ -1,12 +1,9 @@
 ﻿using HSMServer.Tests.Fixture;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Core.Keys;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using Xunit;
 using Assert = Xunit.Assert;
@@ -58,23 +55,6 @@ namespace HSMServer.Tests.DatabaseTests
             //Assert
             Assert.Null(correspondingProduct);
         }
-
-        [Fact]
-        public void ListMustReturnAddedProduct()
-        {
-            //Arrange
-            var product = _databaseFixture.GetThirdTestProduct();
-
-            //Act
-            _databaseFixture.DatabaseAdapter.AddProduct(product);
-            var list = _databaseFixture.GetProductsList();
-            Debug.Print($"List of {list.Count} products received");
-
-            //Assert
-            Assert.Contains(list, p => p.DisplayName == product.DisplayName && p.Id == product.Id);
-        }
-
- 
 
         #endregion
 
