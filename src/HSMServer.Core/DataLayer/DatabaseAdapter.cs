@@ -38,7 +38,6 @@ namespace HSMServer.Core.DataLayer
         public void RemoveProduct(string productName) =>
             _database.RemoveProduct(productName);
 
-        //ToDo: next iteration
         public void RemoveProductNew(string id) =>
             _database.RemoveProductNew(id);
 

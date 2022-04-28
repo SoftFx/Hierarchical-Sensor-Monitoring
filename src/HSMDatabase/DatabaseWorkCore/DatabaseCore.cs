@@ -261,15 +261,10 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        //ToDo: next iteration
         public void RemoveProductNew(string id)
         {
-            throw new NotImplementedException();
-
             _environmentDatabase.RemoveProductInfoNew(id);
             _environmentDatabase.RemoveProductFromList(id);
-
-            //sensors
         }
 
         public void UpdateProduct(ProductEntity productEntity)
