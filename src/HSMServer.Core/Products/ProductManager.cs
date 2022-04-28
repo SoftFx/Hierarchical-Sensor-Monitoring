@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -70,13 +69,6 @@ namespace HSMServer.Core.Products
             AddProduct(product);
         }
 
-        public void AddProduct(ProductModel product) =>
-            _products[product.DisplayName] = new Product() 
-            { 
-                Id = product.Id,
-                DisplayName = product.DisplayName
-            };
-
         public Product AddProduct(string name)
         {
             string key = Guid.NewGuid().ToString();
@@ -119,16 +111,6 @@ namespace HSMServer.Core.Products
             {
                 _logger.LogError(e, $"Failed to remove product, name = {name}");
             }
-        }
-
-        public void RemoveProduct(ProductModel model)
-        {
-            if (GetProductByName(model.DisplayName) == null)
-                return;
-
-            _products.Remove(model.DisplayName, out var product);
-
-            RemovedProduct?.Invoke(product);
         }
 
         public string GetProductNameByKey(string key) =>

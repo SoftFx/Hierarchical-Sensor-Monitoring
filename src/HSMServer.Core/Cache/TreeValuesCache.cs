@@ -6,7 +6,6 @@ using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Products;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Concurrent;
@@ -19,7 +18,6 @@ namespace HSMServer.Core.Cache
     public sealed class TreeValuesCache : ITreeValuesCache
     {
         private readonly IDatabaseAdapter _database;
-        private readonly IProductManager _productManager;
         private readonly IUserManager _userManager;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
@@ -30,11 +28,10 @@ namespace HSMServer.Core.Cache
         public event Action<SensorModel> UploadSensorDataEvent;
 
 
-        public TreeValuesCache(IDatabaseAdapter database, IUserManager userManager, IProductManager productManager)
+        public TreeValuesCache(IDatabaseAdapter database, IUserManager userManager)
         {
             _database = database;
             _userManager = userManager;
-            _productManager = productManager;
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
@@ -73,7 +70,6 @@ namespace HSMServer.Core.Cache
                     RemoveSensor(sensorId);
 
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
-                _productManager.RemoveProduct(product);
                 _database.RemoveProductNew(product.Id);
 
                 _userManager.RemoveProductFromUsers(product.Id);
@@ -86,7 +82,11 @@ namespace HSMServer.Core.Cache
                 RemoveProduct(productId);
 
                 if (product.ParentProduct != null)
+                {
+                    _database.UpdateProductNew(product.ParentProduct.ToProductEntity());
+
                     ChangeProductEvent?.Invoke(product.ParentProduct, TransactionType.Update);
+                }
             }
         }
 
@@ -98,7 +98,6 @@ namespace HSMServer.Core.Cache
             return null;
         }
 
-        // TODO: private method
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
         public List<ProductModel> GetProductsWithoutParent(User user)
@@ -120,7 +119,6 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-            _productManager.GetProductByName(sensor.ProductName)?.AddOrUpdateSensor(sensor);
             _database.UpdateSensor(sensor.ToSensorEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
@@ -155,11 +153,6 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearData();
-
-            // TODO: delete removing from productManager
-            var product = _productManager.GetProductByName(sensor.ProductName);
-            product.RemoveSensor(sensor.Path);
-
             _database.RemoveSensor(sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
@@ -198,6 +191,10 @@ namespace HSMServer.Core.Cache
             BuildTreeWithMigration(
                 productEntities.Where(e => e.IsConverted).ToList(),
                 sensorEntities.Where(e => e.IsConverted).ToList());
+
+            var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
+            if (productEntities.Count == 0 || monitoringProduct == null)
+                AddSelfMonitoringProduct();
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
@@ -267,7 +264,7 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
-            var parentProduct = _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == productName).Value;
+            var parentProduct = GetProductByName(productName);
             if (parentProduct == null)
                 parentProduct = AddProduct(productName);
 
@@ -282,6 +279,7 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
+                    _database.UpdateProductNew(parentProduct.ToProductEntity());
                 }
 
                 parentProduct = subProduct;
@@ -290,10 +288,21 @@ namespace HSMServer.Core.Cache
             return parentProduct;
         }
 
+        /// <returns>"true" product (without parent) with name = name</returns>
+        private ProductModel GetProductByName(string name) =>
+            _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void AddSelfMonitoringProduct()
+        {
+            var product = new ProductModel(CommonConstants.SelfMonitoringProductKey);
+
+            AddProduct(product);
+        }
+
         private void AddProduct(ProductModel product)
         {
             _tree.TryAdd(product.Id, product);
-            _productManager.AddProduct(product);
             _database.AddProductNew(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
@@ -302,7 +311,6 @@ namespace HSMServer.Core.Cache
         private void AddSensor(SensorModel sensor)
         {
             _sensors.TryAdd(sensor.Id, sensor);
-            _productManager.GetProductByName(sensor.ProductName)?.AddOrUpdateSensor(sensor);
             _database.AddSensor(sensor.ToSensorEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);

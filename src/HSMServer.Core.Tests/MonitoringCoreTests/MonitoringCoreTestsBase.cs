@@ -39,7 +39,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             var userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, userManagerLogger);
-            _valuesCache = new TreeValuesCache(_databaseAdapterManager.DatabaseAdapter, userManager, _productManager);
+            _valuesCache = new TreeValuesCache(_databaseAdapterManager.DatabaseAdapter, userManager);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }

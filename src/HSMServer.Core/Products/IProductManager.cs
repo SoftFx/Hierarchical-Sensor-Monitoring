@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Products
 {
@@ -11,9 +9,7 @@ namespace HSMServer.Core.Products
         //ToDo: change to GetProducts(User)
         List<Product> Products { get; }
         Product AddProduct(string name);
-        void AddProduct(ProductModel product);
         void RemoveProduct(string name);
-        void RemoveProduct(ProductModel model);
         string GetProductNameByKey(string key);
         Product GetProductByName(string name);
         Product GetProductByKey(string key);
