@@ -20,6 +20,7 @@ namespace HSMServer.Core.DataLayer
         #region Product
 
         void RemoveProduct(string productName);
+        void RemoveProductNew(string id);
         void AddProduct(Product product);
         void AddProductNew(Product product);
         void AddProduct(ProductEntity product);

@@ -74,7 +74,7 @@ namespace HSMServer.Core.Cache
 
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
                 _productManager.RemoveProduct(product);
-                //_database.RemoveProduct(product.DisplayName);
+                _database.RemoveProductNew(product.Id);
 
                 _userManager.RemoveProductFromUsers(product.Id);
 
@@ -121,7 +121,7 @@ namespace HSMServer.Core.Cache
 
             sensor.Update(updatedSensor);
             _productManager.GetProductByName(sensor.ProductName)?.AddOrUpdateSensor(sensor);
-            //_database.UpdateSensor(sensor.ToSensorEntity());
+            _database.UpdateSensor(sensor.ToSensorEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -132,7 +132,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ParentProduct.Sensors.TryRemove(sensorId, out _);
-            //_database.RemoveSensorWithMetadata(sensor.ProductName, sensor.Path);
+            _database.RemoveSensorWithMetadata(sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
@@ -160,7 +160,7 @@ namespace HSMServer.Core.Cache
             var product = _productManager.GetProductByName(sensor.ProductName);
             product.RemoveSensor(sensor.Path);
 
-            //_database.RemoveSensor(sensor.ProductName, sensor.Path);
+            _database.RemoveSensor(sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -237,7 +237,7 @@ namespace HSMServer.Core.Cache
             FillTreeByProductModels(productEntities);
             FillTreeBySensorModels(sensorEntities);
 
-            //ResaveEntities(productEntities, sensorEntities);
+            ResaveEntities(productEntities, sensorEntities);
         }
 
         private void FillTreeByProductModels(List<ProductEntity> productEntities)
@@ -260,12 +260,14 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 _sensors.TryAdd(sensor.Id, sensor);
+
+                _database.UpdateProductNew(parentProduct.ToProductEntity());
             }
         }
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
-            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
+            var parentProduct = _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == productName).Value;
             if (parentProduct == null)
                 parentProduct = AddProduct(productName);
 
@@ -292,7 +294,7 @@ namespace HSMServer.Core.Cache
         {
             _tree.TryAdd(product.Id, product);
             _productManager.AddProduct(product);
-            //_database.AddProduct(product.ToProductEntity());
+            _database.AddProductNew(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
@@ -321,8 +323,7 @@ namespace HSMServer.Core.Cache
                 if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
                     continue;
 
-                _database.UpdateProduct(product.ToProductEntity());
-                //_database.UpdateProductNew(product.ToProductEntity());
+                _database.UpdateProductNew(product.ToProductEntity());
             }
         }
 

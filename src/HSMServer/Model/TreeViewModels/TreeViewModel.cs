@@ -12,9 +12,9 @@ namespace HSMServer.Model.TreeViewModels
         private readonly ITreeValuesCache _treeValuesCache;
 
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; }
+        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
-        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
 
         public TreeViewModel(ITreeValuesCache valuesCache)
@@ -23,9 +23,6 @@ namespace HSMServer.Model.TreeViewModels
             _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
             _treeValuesCache.UploadSensorDataEvent += UploadSensorDataHandler;
-
-            Nodes = new ConcurrentDictionary<string, ProductNodeViewModel>();
-            Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
 
             BuildTree();
         }
