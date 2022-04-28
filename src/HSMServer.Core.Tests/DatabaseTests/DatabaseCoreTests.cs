@@ -492,7 +492,8 @@ namespace HSMServer.Core.Tests
         {
             Assert.NotNull(actualConfig);
             Assert.Equal(expectedConfig.Name, expectedConfig.Name);
-            Assert.Equal(expectedConfig.Description, actualConfig.Description);
+            //Entity doesn't have this field
+            //Assert.Equal(expectedConfig.Description, actualConfig.Description);
             Assert.Equal(expectedConfig.Value, actualConfig.Value);
         }
 
