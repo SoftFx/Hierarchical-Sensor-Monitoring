@@ -95,19 +95,25 @@ namespace HSMServer.Core.DataLayer
                 }
             }
 
+            var newEntities = new List<ProductEntity>();
             if (convertedEntities != null && convertedEntities.Count > 0)
             {
                 foreach (var convertedEntity in convertedEntities)
                 {
                     var entity = EntityConverter.ConvertProductEntity(convertedEntity);
-                    if (dictionary.ContainsKey(entity.DisplayName))
+                    var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId)
+                        || Guid.Empty.Equals(entity.ParentProductId);
+
+                    if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
                         dictionary.Remove(entity.DisplayName);
+
+                    newEntities.Add(entity);
                 }
             }
 
-            if (dictionary.Count == 0) return null;
+            newEntities.AddRange(dictionary?.Values);
 
-            return dictionary.Values.ToList();
+            return newEntities;
         }
 
         #endregion

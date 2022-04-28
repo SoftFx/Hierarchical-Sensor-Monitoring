@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -23,9 +24,8 @@ namespace HSMServer.Core.DataLayer
 
             var authorId = Guid.Empty.ToString();
             var parentId = Guid.Empty.ToString();
-            const int state = 0;
+            const int state = (int)ProductState.FullAccess;
             var desc = string.Empty;
-            var creationDate = DateTime.MinValue;
             var subProductsIds = new List<string>();
             var sensorsIds = new List<string>();
             const bool isConverted = true;
