@@ -38,21 +38,43 @@ namespace HSMServer.Core.DataLayer
         public void RemoveProduct(string productName) =>
             _database.RemoveProduct(productName);
 
+        //ToDo: next iteration
+        public void RemoveProductNew(string id) =>
+            _database.RemoveProductNew(id);
+
         public void AddProduct(Product product)
         {
             var entity = ConvertProductToEntity(product);
             _database.AddProduct(entity);
         }
 
+        public void AddProductNew(Product product)
+        {
+            var entity = ConvertProductToEntity(product);
+            _database.AddProductNew(entity);
+        }
+
         public void AddProduct(ProductEntity product) => _database.AddProduct(product);
+
+        public void AddProductNew(ProductEntity entity) => _database.AddProductNew(entity);
 
         public void UpdateProduct(Product product) => AddProduct(product);
 
+        public void UpdateProductNew(Product product) => AddProductNew(product);
+
         public void UpdateProduct(ProductEntity product) => _database.AddProduct(product);
+
+        public void UpdateProductNew(ProductEntity entity) => _database.AddProductNew(entity);
 
         public Product GetProduct(string productName)
         {
             var entity = _database.GetProduct(productName);
+            return entity != null ? new Product(entity) : null;
+        }
+
+        public Product GetProductNew(string id)
+        {
+            var entity = _database.GetProductNew(id);
             return entity != null ? new Product(entity) : null;
         }
 
@@ -61,18 +83,32 @@ namespace HSMServer.Core.DataLayer
 
         public List<ProductEntity> GetAllProducts() 
         {
-            var result = new List<ProductEntity>();
-
-            var oldEntities = _database.GetAllProducts();
-            if (oldEntities == null || oldEntities.Count == 0) 
-                return result;
-
-            foreach (var oldEntity in oldEntities)
+            var dictionary = new Dictionary<string, ProductEntity>();
+            
+            var oldEntities = _database.GetAllProductsOld();
+            var convertedEntities = _database.GetAllProductsNew();
+            if (oldEntities != null && oldEntities.Count > 0)
             {
-                result.Add(EntityConverter.ConvertProductEntity(oldEntity));
+                foreach (var oldEntity in oldEntities)
+                {
+                    var entity = EntityConverter.ConvertProductEntity(oldEntity);
+                    dictionary.Add(entity.DisplayName, entity);
+                }
             }
 
-            return result;
+            if (convertedEntities != null && convertedEntities.Count > 0)
+            {
+                foreach (var convertedEntity in convertedEntities)
+                {
+                    var entity = EntityConverter.ConvertProductEntity(convertedEntity);
+                    if (dictionary.ContainsKey(entity.DisplayName))
+                        dictionary.Remove(entity.DisplayName);
+                }
+            }
+
+            if (dictionary.Count == 0) return null;
+
+            return dictionary.Values.ToList();
         }
 
         #endregion

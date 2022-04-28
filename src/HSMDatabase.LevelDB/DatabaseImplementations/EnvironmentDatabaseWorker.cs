@@ -20,6 +20,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Products
 
+        //ToDo: use like ID
         public void AddProductToList(string productName)
         {
             var key = PrefixConstants.GetProductsListKey();
@@ -90,6 +91,28 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
+        public ProductEntity GetProductInfoNew(string id)
+        {
+            var key = PrefixConstants.GetProductInfoKeyById(id);
+            var bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read product info");
+                }
+
+                return JsonSerializer.Deserialize<ProductEntity>(Encoding.UTF8.GetString(value));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for product {id}");
+            }
+
+            return null;
+        }
+
         public string GetProductInfoStr(string productName)
         {
             string key = PrefixConstants.GetProductInfoKey(productName);
@@ -112,6 +135,28 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
+        public string GetProductInfoStrNew(string id)
+        {
+            string key = PrefixConstants.GetProductInfoKeyById(id);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                bool isRead = _database.TryRead(bytesKey, out byte[] value);
+                if (!isRead)
+                {
+                    throw new ServerDatabaseException("Failed to read product info");
+                }
+
+                return Encoding.UTF8.GetString(value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for product {id}");
+            }
+
+            return null;
+        }
+
         public void PutProductInfo(ProductEntity product)
         {
             string key = PrefixConstants.GetProductInfoKey(product.DisplayName);
@@ -125,6 +170,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to put product info for {product.DisplayName}");
+            }
+        }
+
+        public void PutProductInfoNew(ProductEntity product)
+        {
+            var key = PrefixConstants.GetProductInfoKeyById(product.Id);
+            var bytesKey = Encoding.UTF8.GetBytes(key);
+            var stringData = JsonSerializer.Serialize(product);
+            var bytesValue = Encoding.UTF8.GetBytes(stringData);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put product info for {product.Id}");
             }
         }
 
@@ -142,6 +203,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public void RemoveProductInfoNew(string id)
+        {
+            string key = PrefixConstants.GetProductInfoKeyById(id);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for product {id}");
+            }
+        }
+
+        //ToDo: use like ID
         public void RemoveProductFromList(string productName)
         {
             var key = PrefixConstants.GetProductsListKey();

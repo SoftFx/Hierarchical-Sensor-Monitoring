@@ -261,6 +261,17 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        //ToDo: next iteration
+        public void RemoveProductNew(string id)
+        {
+            throw new NotImplementedException();
+
+            _environmentDatabase.RemoveProductInfoNew(id);
+            _environmentDatabase.RemoveProductFromList(id);
+
+            //sensors
+        }
+
         public void UpdateProduct(ProductEntity productEntity)
         {
             AddProduct(productEntity);
@@ -272,21 +283,36 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.PutProductInfo(productEntity);
         }
 
+        public void AddProductNew(ProductEntity productEntity)
+        {
+            _environmentDatabase.AddProductToList(productEntity.Id);
+            _environmentDatabase.PutProductInfoNew(productEntity);
+        }
+
         public ProductEntity GetProduct(string productName)
         {
             return _environmentDatabase.GetProductInfo(productName);
         }
 
-        public List<string> GetAllProducts()
+        public ProductEntity GetProductNew(string id) =>
+            _environmentDatabase.GetProductInfoNew(id);
+
+        public List<string> GetAllProductsOld() => 
+            GetBaseAllProducts(_environmentDatabase.GetProductInfoStr);
+
+        public List<string> GetAllProductsNew() =>
+            GetBaseAllProducts(_environmentDatabase.GetProductInfoStrNew);
+
+        private List<string> GetBaseAllProducts(Func<string, string> getProductInfo)
         {
             var products = new List<string>();
-            var productNames = _environmentDatabase.GetProductsList();
+            var keys = _environmentDatabase.GetProductsList();
 
-            if (productNames == null || productNames.Count == 0) return null;
+            if (keys == null || keys.Count == 0) return null;
 
-            foreach (var productName in productNames)
+            foreach (var key in keys)
             {
-                var product = _environmentDatabase.GetProductInfoStr(productName);
+                var product = getProductInfo(key);               
                 if (product != null)
                     products.Add(product);
             }
