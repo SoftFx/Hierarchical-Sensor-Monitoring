@@ -498,11 +498,13 @@ namespace HSMServer.Core.Tests
         }
 
         private User GetUser(string username) => 
-            _databaseCore.GetUsers().FirstOrDefault(u => u.Equals(username));
+            _databaseCore.GetUsers().FirstOrDefault(u => u.UserName.Equals(username));
 
         private static int GetCountItemsOnPage(int count, int pageNumber, int pageSize)
         {
-            count--;
+            pageNumber--;
+
+            if (pageSize == 0) return 0;
 
             if (pageNumber == count / pageSize)
                 return count % pageSize;
