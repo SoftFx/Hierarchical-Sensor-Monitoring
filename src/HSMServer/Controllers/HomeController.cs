@@ -6,7 +6,6 @@ using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
-using HSMServer.Core.Products;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
@@ -31,7 +30,6 @@ namespace HSMServer.Controllers
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
         private readonly TreeViewModel _treeViewModel;
 
@@ -39,11 +37,9 @@ namespace HSMServer.Controllers
         public HomeController(
             ISensorsInterface sensorsInterface,
             IHistoryProcessorFactory factory,
-            IProductManager productManager,
             TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
-            _productManager = productManager;
             _historyProcessorFactory = factory;
             _treeViewModel = treeViewModel;
         }

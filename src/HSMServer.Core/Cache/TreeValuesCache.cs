@@ -174,6 +174,7 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
+                _database.UpdateProductNew(parentProduct.ToProductEntity());
             }
             else
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
