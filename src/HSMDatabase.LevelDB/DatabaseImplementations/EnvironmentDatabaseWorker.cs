@@ -119,13 +119,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                bool isRead = _database.TryRead(bytesKey, out byte[] value);
-                if (!isRead)
-                {
-                    throw new ServerDatabaseException("Failed to read product info");
-                }
-
-                return Encoding.UTF8.GetString(value);
+                return _database.TryRead(bytesKey, out byte[] value) ? Encoding.UTF8.GetString(value) : null;
             }
             catch (Exception e)
             {
@@ -141,13 +135,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                bool isRead = _database.TryRead(bytesKey, out byte[] value);
-                if (!isRead)
-                {
-                    throw new ServerDatabaseException("Failed to read product info");
-                }
-
-                return Encoding.UTF8.GetString(value);
+                return _database.TryRead(bytesKey, out byte[] value) ? Encoding.UTF8.GetString(value) : null;
             }
             catch (Exception e)
             {
