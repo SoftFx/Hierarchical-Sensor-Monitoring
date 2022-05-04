@@ -1,5 +1,5 @@
 using HSMServer.Core.DataLayer;
-
+using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -15,15 +15,15 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public DatabaseAdapterManager(string databaseFolder)
         {
-            ++_dbNumber;
+            var number = Interlocked.Increment(ref _dbNumber);
 
             DatabaseFolder = databaseFolder;
             DatabaseAdapter = new DatabaseAdapter(
                 new DatabaseSettings()
                 {
                     DatabaseFolder = databaseFolder,
-                    EnvironmentDatabaseName = $"EnvironmentData{_dbNumber}",
-                    MonitoringDatabaseName = $"MonitoringData{_dbNumber}",
+                    EnvironmentDatabaseName = $"EnvironmentData{number}_{Thread.CurrentThread.ManagedThreadId}",
+                    MonitoringDatabaseName = $"MonitoringData{number}_{Thread.CurrentThread.ManagedThreadId}",
                 });
         }
 

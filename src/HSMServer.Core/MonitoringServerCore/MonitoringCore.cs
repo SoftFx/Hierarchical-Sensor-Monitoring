@@ -51,7 +51,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _treeValuesCache = treeValuesCache;
 
-            Thread.Sleep(5000);
+            Thread.Sleep(1000);
 
             _logger.LogInformation("Monitoring core initialized");
 
