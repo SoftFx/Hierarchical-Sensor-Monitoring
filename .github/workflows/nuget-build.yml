@@ -41,7 +41,7 @@ jobs:
         run: dotnet restore src/HSMDataCollector/HSMDataCollector.sln
 
       - name: Build Sensor objects
-        run: dotnet build src/HSMDataCollector/HSMDataCollector.sln -c Release
+        run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -c Release
 
       - name: Pack package
         run: dotnet pack src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -p:PackageID=HSMDataCollector.HSMDataCollector -c Release --no-build
