@@ -31,4 +31,4 @@ jobs:
         run: dotnet build src/HSMSensorDataObjects/HSMSensorDataObjects.csproj --configuration Release
 
       - name: Push nuget package
-        run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: nuget push HSMDataCollector.HSMSensorDataObjects*.nupkg ${{ secrets.NUGETKEY }} -Source https://api.nuget.org/v3/index.json
