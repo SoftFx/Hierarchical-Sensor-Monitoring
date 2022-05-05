@@ -101,7 +101,7 @@ namespace HSMDataCollector.Core
             }
 
             Thread.Sleep(TimeSpan.FromSeconds(1));
-            
+
             foreach (var pair in _nameToSensor)
             {
                 if (pair.Value.HasLastValue)
@@ -120,7 +120,7 @@ namespace HSMDataCollector.Core
                 //SendData(allData);
                 SendMonitoringData(allData);
             }
-            
+
             _client?.Dispose();
             _isStopped = true;
             _logger?.Info("DataCollector successfully stopped.");
@@ -137,23 +137,23 @@ namespace HSMDataCollector.Core
 
         public void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
-            
+
         }
         public void InitializeOsMonitoring(bool isUpdated, string specificPath = null)
         {
             if (isUpdated)
-                InitializeWindowsUpdateMonitoring(new TimeSpan(24,0,0), new TimeSpan(30,0,0,0), specificPath);
+                InitializeWindowsUpdateMonitoring(new TimeSpan(24, 0, 0), new TimeSpan(30, 0, 0, 0), specificPath);
         }
 
         public void MonitorServiceAlive(string specificPath)
         {
             var path = $"{specificPath ?? TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
 
-           _logger?.Info($"Initialize {path} sensor...");
+            _logger?.Info($"Initialize {path} sensor...");
 
-            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path, 
+            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path,
                 _productKey, _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15),
-                SensorType.BooleanSensor, () => true,_isLogging);
+                SensorType.BooleanSensor, () => true, _isLogging);
             AddNewSensor(aliveSensor, aliveSensor.Path);
         }
 
@@ -200,7 +200,7 @@ namespace HSMDataCollector.Core
             return CreateInstantValueSensorInternal<string>(path, description, SensorType.StringSensor);
         }
 
-        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description, 
+        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description,
             SensorType sensorType)
         {
             var existingSensor = GetExistingSensor(path);
@@ -266,7 +266,7 @@ namespace HSMDataCollector.Core
             }
 
             BarSensor<int> sensor = new BarSensor<int>(path, _productKey, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
-                timeout, smallPeriod,  description);
+                timeout, smallPeriod, description);
             AddNewSensor(sensor, path);
             return sensor;
         }
@@ -523,7 +523,7 @@ namespace HSMDataCollector.Core
         private void AddNewSensor(ISensor sensor, string path)
         {
             _nameToSensor[path] = sensor;
-            
+
             _logger?.Info($"Added new sensor {path}");
             //_nameToSensor.AddOrUpdate(path, sensor);
         }

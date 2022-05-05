@@ -9,13 +9,13 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>HSMDataCollector</RootNamespace>
     <AssemblyName>HSMDataCollector</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <IsPackable>true</IsPackable>
     <TargetFrameworkProfile />
-    <!-- <PackageId>HSMDataCollector.HSMDataCollector</PackageId> -->
-    <!-- <Authors>vitali.vasilevich</Authors> -->
-    <!-- <Company>SoftFX</Company> -->
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -34,21 +34,30 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <PropertyGroup>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <IsPackable>true</IsPackable>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <NoStdLib>true</NoStdLib>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <NoStdLib>true</NoStdLib>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
   </PropertyGroup>
   <!-- <Target Name="Pack" Condition="'$(Configuration)' == 'Release' "> -->
   <!-- <Exec WorkingDirectory="$(BaseDir)" Command="$(NuGetExePath) pack -OutputDirectory $(OutDir) -Symbols -Prop Configuration=$(Configuration);TargetPath=$(OutDir)$(AssemblyName)$(TargetExt)" /> -->
   <!-- </Target> -->
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=10.0.1, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>Lib\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="NLog">
-      <HintPath>Lib\NLog.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Management" />
@@ -99,12 +108,9 @@
     <Compile Include="TextConstants.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\HSMSensorDataObjects\HSMSensorDataObjects.csproj">
-      <Project>{56418540-b151-4ff4-ac7f-05d5c4e3d07a}</Project>
-      <Name>HSMSensorDataObjects</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects">
+      <Version>2.1.30</Version>
+    </PackageReference>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies">
       <Version>1.0.0</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -113,6 +119,12 @@
     <PackageReference Include="Microsoft.VisualBasic">
       <Version>10.3.0</Version>
     </PackageReference>
+    <PackageReference Include="Newtonsoft.Json">
+      <Version>10.0.3</Version>
+    </PackageReference>
+    <PackageReference Include="NLog">
+      <Version>4.7.9</Version>
+    </PackageReference>
     <PackageReference Include="System.Management">
       <Version>6.0.0</Version>
     </PackageReference>
@@ -120,7 +132,9 @@
       <Version>4.3.0</Version>
     </PackageReference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="HSMDataCollector.nuspec" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="Pack">
   </Target>
