@@ -24,7 +24,7 @@ jobs:
         run: echo "RELEASE_VERSION=${{ needs.version.outputs.version-tag }}" >> $GITHUB_ENV
 
       - name: Restore dependencies, build and pack package
-        run: dotnet pack .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj -p:PackageID=HSMDataCollector.HSMSensorDataObjects -c Release
+        run: dotnet pack /src/HSMSensorDataObjects/HSMSensorDataObjects.csproj -p:PackageID=HSMDataCollector.HSMSensorDataObjects -c Release
 
       - name: Push nuget package
         run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMDataCollector.HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
