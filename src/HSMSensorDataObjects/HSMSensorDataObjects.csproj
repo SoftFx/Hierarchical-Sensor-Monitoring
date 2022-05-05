@@ -3,7 +3,7 @@
   <PropertyGroup Label="NuGet package definition">
     <id>HSMDataCollector.HSMSensorDataObjects</id>
     <title>HSMDataCollector.HSMSensorDataObjects</title>
-    <TargetFrameworks>netstandard2.0;net461;net472;net48</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <Platforms>AnyCPU</Platforms>
     <Version>2.1.31</Version>
     <Authors>HSM team</Authors>
