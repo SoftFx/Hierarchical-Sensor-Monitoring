@@ -11,20 +11,11 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>
+	<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Remove="nlog.config" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="HSMServer.xml" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="HSMServer.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
