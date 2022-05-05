@@ -24,14 +24,27 @@ jobs:
         run: echo "RELEASE_VERSION=${{ needs.version.outputs.version-tag }}" >> $GITHUB_ENV
 
 
+      # - name: Update nugets and dependecies
+      #   run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
+
+      # - name: Build Sensor objects
+      #   run: dotnet build src/HSMSensorDataObjects/HSMSensorDataObjects.csproj -c Release
+
+      # - name: Pack package
+      #   run: dotnet pack src/HSMSensorDataObjects/HSMSensorDataObjects.csproj -p:PackageID=HSMDataCollector.HSMSensorDataObjects -c Release --no-build
+
+      # - name: Push nuget package
+      #   run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMDataCollector.HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+
+
       - name: Update nugets and dependecies
-        run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
+        run: dotnet restore src/HSMDataCollector/HSMDataCollector.sln
 
       - name: Build Sensor objects
-        run: dotnet build src/HSMSensorDataObjects/HSMSensorDataObjects.csproj --configuration Release
+        run: dotnet build src/HSMDataCollector/HSMDataCollector.sln -c Release
 
       - name: Pack package
-        run: dotnet pack src/HSMSensorDataObjects/HSMSensorDataObjects.csproj -p:PackageID=HSMDataCollector.HSMSensorDataObjects -c Release --no-build
+        run: dotnet pack src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -p:PackageID=HSMDataCollector.HSMDataCollector -c Release --no-build
 
       - name: Push nuget package
-        run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMDataCollector.HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push src/HSMDataCollector/HSMDataCollector/bin/Release/HSMDataCollector.HSMDataCollector*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
