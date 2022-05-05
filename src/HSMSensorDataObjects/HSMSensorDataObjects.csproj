@@ -2,7 +2,6 @@
 
   <PropertyGroup Label="NuGet package definition">
     <id>HSMDataCollector.HSMSensorDataObjects</id>
-    <title>HSMDataCollector.HSMSensorDataObjects</title>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <Platforms>AnyCPU</Platforms>
     <Version>2.1.31</Version>
@@ -11,6 +10,7 @@
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 	<Copyright>Copyright © 2022</Copyright>
-	<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	<IsPackable>true</IsPackable>
+	<Description>Data objects for HSMDataCollector</Description>
   </PropertyGroup>
 </Project>
