@@ -5,13 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.31" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMDatabase\HSMDatabase.csproj" />
-    <ProjectReference Include="..\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 
 </Project>
