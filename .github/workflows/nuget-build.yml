@@ -6,29 +6,7 @@ on:
         - develop
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    outputs:
-      version-tag: ${{ steps.get-tag.outputs.parsedTag }}
-    steps:
-      - name: set raw tag
-        run: echo "RAW_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-
-      - name: split-by
-        id: split
-        uses: rishabhgupta/split-by@v1.0.1
-        with:
-          string: '${{ env.RAW_TAG }}'
-          split-by: 'v'
-
-      - name: print tag
-        run: echo ${{ steps.split.outputs._1 }}
-
-      - id: get-tag
-        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._1 }}"
-
   build_NuGet:
-    needs: [version]
     runs-on: ubuntu-latest
     environment: Nuget
     steps:
@@ -47,7 +25,7 @@ jobs:
 
 
       - name: Update nugets and dependecies
-        uses: dotnet restore .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj
+        run: dotnet restore .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj
 
       - name: Build Sensor objects
         run: dotnet build .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj --configuration Release
