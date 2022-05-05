@@ -25,10 +25,10 @@ jobs:
 
 
       - name: Update nugets and dependecies
-        run: dotnet restore .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj
+        run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
 
       - name: Build Sensor objects
-        run: dotnet build .\src\HSMSensorDataObjects\HSMSensorDataObjects.csproj --configuration Release
+        run: dotnet build src/HSMSensorDataObjects/HSMSensorDataObjects.csproj --configuration Release
 
       - name: Push nuget package
-        run: dotnet nuget push .\src\HSMSensorDataObjects\bin\Release\HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
