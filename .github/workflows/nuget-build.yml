@@ -2,6 +2,8 @@ name: DataCollector Nuget package build
 
 on:
   push:
+      branches:
+        - develop
 
 jobs:
   version:
