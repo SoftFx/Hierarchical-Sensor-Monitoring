@@ -47,6 +47,7 @@ jobs:
     - name: Build
       run: dotnet build src/HSMServer/HSMServer.sln -c Release --output '${{ github.workspace }}/Release' --no-restore
 
+
   #   - name: Test
   #     run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
 
