@@ -30,7 +30,7 @@ jobs:
   #       run: echo "::set-output name=parsedTag::${{ steps.split.outputs._2 }}"
 
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: Setup .NET Core
@@ -42,7 +42,7 @@ jobs:
       run: dotnet restore src/HSMServer/HSMServer.sln --force
 
     - name: Build
-      run: dotnet build src/HSMServer/HSMServer.sln -c Release --output '${{ github.workspace }}\Release' --no-restore
+      run: dotnet build src/HSMServer/HSMServer.sln -c Release --output '${{ github.workspace }}/Release' --no-restore
 
   #   - name: Test
   #     run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
@@ -50,7 +50,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        path: ${{ github.workspace }}\Release
+        path: ${{ github.workspace }}/Release
         name: Release
 
   # publish:
