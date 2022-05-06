@@ -1,5 +1,4 @@
 ﻿using HSMCommon;
-using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using System;
@@ -11,16 +10,9 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         internal static Product CreateProduct(string name) => new () 
         {
-            Name = name,
-            DateAdded = DateTime.Now,
-            Key = KeyGenerator.GenerateProductKey(name),
-            ExtraKeys = new List<ExtraProductKey>()
-        };
-
-        internal static ExtraProductKey CreateExtraKey(string productName, string extraKeyName) => new()
-        {
-            Key = KeyGenerator.GenerateExtraProductKey(productName, extraKeyName),
-            Name = extraKeyName
+            DisplayName = name,
+            CreationDate = DateTime.Now,
+            Id = Guid.NewGuid().ToString()
         };
 
         internal static User CreateUser(string name) => new () 
@@ -34,7 +26,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         { 
             Role = nameof(ProductRoleEnum.ProductManager),
             ExpirationDate = DateTime.UtcNow.AddMinutes(30),
-            ProductKey = KeyGenerator.GenerateProductKey(RandomGenerator.GetRandomString())
+            ProductKey = Guid.NewGuid().ToString()
         };
 
         internal static ConfigurationObject CreateConfiguration(string name) => new()

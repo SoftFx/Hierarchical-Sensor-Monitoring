@@ -93,45 +93,6 @@ namespace HSMServer.Core.Tests
             }
         }
 
-        [Fact]
-        [Trait("Category", "OneExtraKey")]
-        public void AddExtraKeyTest()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var product = DatabaseCoreFactory.CreateProduct(name);
-            var extraKey = DatabaseCoreFactory.CreateExtraKey(name, RandomGenerator.GetRandomString());
-            product.ExtraKeys = new List<ExtraProductKey> { extraKey };
-
-            _databaseCore.UpdateProduct(product);
-
-            FullProductTest(product, _databaseCore.GetProduct(name));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralExtraKey")]
-        public void AddSeveralExtraKeyTest(int count)
-        {
-            var name = RandomGenerator.GetRandomString();
-            var product = DatabaseCoreFactory.CreateProduct(name);
-            var extraKeys = new List<ExtraProductKey>(count);
-
-            for (int i = 0; i < count; i++)
-            {
-                extraKeys.Add(DatabaseCoreFactory.CreateExtraKey(name, RandomGenerator.GetRandomString()));
-            }
-
-            product.ExtraKeys = extraKeys;
-            _databaseCore.UpdateProduct(product);
-
-            FullProductTest(product, _databaseCore.GetProduct(name));
-        }
-
         #endregion
 
         #region [ User Tests ]
@@ -215,7 +176,8 @@ namespace HSMServer.Core.Tests
             var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
 
             _databaseCore.AddUser(user);
-            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key, ProductRoleEnum.ProductManager));
+            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
+                ProductRoleEnum.ProductManager));
             _databaseCore.UpdateUser(user);
 
             FullUserTest(user, GetUser(name));
@@ -240,7 +202,7 @@ namespace HSMServer.Core.Tests
                 var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
-                user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Key, role));
+                user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
             }
 
             _databaseCore.UpdateUser(user);
@@ -433,25 +395,9 @@ namespace HSMServer.Core.Tests
         private static void FullProductTest(Product expectedProduct, Product actualProduct)
         {
             Assert.NotNull(actualProduct);
-            Assert.Equal(expectedProduct.Name, actualProduct.Name);
-            Assert.Equal(expectedProduct.Key, actualProduct.Key);
-            Assert.Equal(expectedProduct.DateAdded, actualProduct.DateAdded);
-            Assert.Equal(expectedProduct.ExtraKeys.Count, actualProduct.ExtraKeys.Count);
-
-            if (expectedProduct.ExtraKeys.Count > 0)
-            {
-                expectedProduct.ExtraKeys.OrderBy(ek => ek.Name);
-                actualProduct.ExtraKeys.OrderBy(ek => ek.Name);
-
-                for (int i=0; i < expectedProduct.ExtraKeys.Count; i++)
-                {
-                    var expectedExtraKey = expectedProduct.ExtraKeys[i];
-                    var actualExtraKey = actualProduct.ExtraKeys[i];
-
-                    Assert.Equal(expectedExtraKey.Key, actualExtraKey.Key);
-                    Assert.Equal(expectedExtraKey.Name, actualExtraKey.Name);
-                }
-            }
+            Assert.Equal(expectedProduct.DisplayName, actualProduct.DisplayName);
+            Assert.Equal(expectedProduct.Id, actualProduct.Id);
+            Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate);
         }
 
         private static void FullUserTest(User expectedUser, User actualUser)

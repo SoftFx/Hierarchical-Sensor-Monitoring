@@ -2,14 +2,11 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
@@ -20,49 +17,42 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using System.Threading.Tasks;
 using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IMonitoringDataReceiver, ISensorsInterface, IMonitoringUpdatesReceiver, IDisposable
+
+    public class MonitoringCore : ISensorsInterface, IDisposable
     {
         private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IBarSensorsStorage _barsStorage;
-        private readonly IMonitoringQueueManager _queueManager;
-        private readonly IUserManager _userManager;
         private readonly IProductManager _productManager;
         private readonly ILogger<MonitoringCore> _logger;
-        private readonly IValuesCache _valuesCache;
         private readonly IUpdatesQueue _updatesQueue;
+        private readonly ITreeValuesCache _treeValuesCache;
 
-        public MonitoringCore(IDatabaseCore databaseCore, IUserManager userManager, IBarSensorsStorage barsStorage,
-            IProductManager productManager, IConfigurationProvider configurationProvider,
-            IValuesCache valuesVCache, IUpdatesQueue updatesQueue, ILogger<MonitoringCore> logger)
+        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage,
+        IProductManager productManager, IConfigurationProvider configurationProvider,
+        IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseCore = databaseCore;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
-            _userManager = userManager;
-            _userManager.UpdateUserEvent += UpdateUserEventHandler;
-
-            _queueManager = new MonitoringQueueManager();
-
             _productManager = productManager;
-            _productManager.RemovedProduct += RemoveProductHandler;
-
-            _valuesCache = valuesVCache;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
+            _treeValuesCache = treeValuesCache;
+
             Thread.Sleep(5000);
-            FillValuesCache();
 
             _logger.LogInformation("Monitoring core initialized");
 
@@ -72,30 +62,8 @@ namespace HSMServer.Core.MonitoringServerCore
         private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
         {
             foreach (var value in sensorValues)
-            {
-                if (value is FileSensorBytesValue fileSensorBytesValue)
-                    AddFileSensor(fileSensorBytesValue);
-                else
-                    AddSensorValue(value);
-            }
-        }
 
-        private void FillValuesCache()
-        {
-            var productsList = _productManager.Products;
-            foreach (var product in productsList)
-            {
-                var sensors = GetProductSensors(product.Name);
-                foreach (var sensor in sensors)
-                {
-                    //var lastVal = _databaseAdapter.GetLastSensorValueOld(product.Name, sensor.Path);
-                    var lastVal = _databaseCore.GetLastSensorValue(product.Name, sensor.Path);
-                    if (lastVal != null)
-                    {
-                        _valuesCache.AddValue(product.Name, lastVal.Convert(sensor, product.Name));
-                    }
-                }
-            }
+                AddSensorValue(value);
         }
 
         #region Sensor saving
@@ -137,16 +105,6 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseCore.PutSensorData(dataObject, productName);
         }
 
-        /// <summary>
-        /// Use this method for sensors, for which only last value is stored
-        /// </summary>
-        /// <param name="dataObject"></param>
-        /// <param name="productName"></param>
-        private void SaveOneValueSensorValue(SensorDataEntity dataObject, string productName)
-        {
-            //Task.Run(() => _databaseAdapter.PutOneValueSensorDataOld(dataObject, productName));
-            Task.Run(() => _databaseCore.PutSensorData(dataObject, productName));
-        }
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
@@ -159,6 +117,12 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseCore.AddSensor(newSensor);
         }
 
+        public void RemoveSensorsData(string productId) =>
+            _treeValuesCache.RemoveSensorsData(productId);
+
+        public void RemoveSensorData(Guid sensorId) =>
+            _treeValuesCache.RemoveSensorData(sensorId);
+
         public void RemoveSensor(string productName, string path)
         {
             var product = _productManager.GetProductByName(productName);
@@ -166,6 +130,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             try
             {
+                // TODO: remove sensor value from cache
                 product.RemoveSensor(path);
                 _databaseCore.RemoveSensor(productName, path);
             }
@@ -179,18 +144,7 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             try
             {
-                DateTime timeCollected = DateTime.UtcNow;
-
-                SensorData updateMessage = new SensorData();
-                updateMessage.Product = product;
-                updateMessage.Key = key;
-                updateMessage.Path = path;
-                updateMessage.TransactionType = TransactionType.Delete;
-                updateMessage.Time = timeCollected;
-
-                _queueManager.AddSensorData(updateMessage);
                 RemoveSensor(product, path);
-                _valuesCache.RemoveSensorValue(product, path);
             }
             catch (Exception e)
             {
@@ -217,6 +171,9 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseCore.UpdateSensor(existingInfo);
         }
 
+        public void UpdateSensor(UpdatedSensor updatedSensor) =>
+            _treeValuesCache.UpdateSensor(updatedSensor);
+
         public bool IsSensorRegistered(string productName, string path) =>
             _productManager.GetProductByName(productName)?.Sensors.ContainsKey(path) ?? false;
 
@@ -230,32 +187,12 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!CheckValidationResult(value, validationResult))
                     return;
 
-                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
-
-                if (!ProcessBarSensorValue(value, sensorData))
+                var productName = _treeValuesCache.GetProductNameById(value.Key);
+                if (!ProcessBarSensorValue(value, productName, timeCollected))
                     return;
 
-                SaveSensorValue(value.Convert(timeCollected, sensorData.Status), sensorData.Product);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{value?.Path}'");
-            }
-        }
 
-        public void AddFileSensor(FileSensorBytesValue value)
-        {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-
-                var validationResult = value.Validate();
-                if (!CheckValidationResult(value, validationResult))
-                    return;
-
-                var sensorData = RegisterAndGetSensorData(value, timeCollected, validationResult);
-
-                SaveSensorValue(value.ConvertWithContentCompression(timeCollected, sensorData.Status), sensorData.Product);
+                _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);
             }
             catch (Exception e)
             {
@@ -284,99 +221,33 @@ namespace HSMServer.Core.MonitoringServerCore
             return true;
         }
 
-        private SensorData RegisterAndGetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
+        private bool ProcessBarSensorValue(SensorValueBase value, string product, DateTime timeCollected)
         {
-            var sensorData = GetSensorData(value, timeCollected, validationResult);
 
-            _queueManager.AddSensorData(sensorData);
-            _valuesCache.AddValue(sensorData.Product, sensorData);
-
-            return sensorData;
-        }
-
-        private bool ProcessBarSensorValue(SensorValueBase value, SensorData sensorData)
-        {
             if (value is BarSensorValueBase barSensorValue)
-                return ProcessBarSensorValue(barSensorValue, sensorData);
+
+                return ProcessBarSensorValue(barSensorValue, product, timeCollected);
             else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
-                return ProcessBarSensorValue(unitedSensorValue.Convert(), sensorData);
+
+                return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
 
             return true;
         }
 
-        private bool ProcessBarSensorValue(BarSensorValueBase value, SensorData sensorData)
+
+        private bool ProcessBarSensorValue(BarSensorValueBase value, string product, DateTime timeCollected)
         {
             if (value.EndTime == DateTime.MinValue)
             {
-                _barsStorage.Add(value, sensorData);
+                _barsStorage.Add(value, product, timeCollected);
                 return false;
             }
 
-            _barsStorage.Remove(sensorData.Product, value.Path);
+            _barsStorage.Remove(product, value.Path);
             return true;
         }
 
-        private TransactionType AddSensorIfNotRegisteredAndGetTransactionType(string productName, SensorValueBase value)
-        {
-            var transactionType = TransactionType.Update;
-
-            if (!IsSensorRegistered(productName, value.Path))
-            {
-                AddSensor(productName, value);
-                transactionType = TransactionType.Add;
-            }
-
-            return transactionType;
-        }
-
-        private SensorData GetSensorData(SensorValueBase value, DateTime timeCollected, SensorsDataValidation.ValidationResult validationResult)
-        {
-            var productName = _productManager.GetProductNameByKey(value.Key);
-            var transactionType = AddSensorIfNotRegisteredAndGetTransactionType(productName, value);
-            var sensorStatus = GetSensorStatus(validationResult);
-
-            var sensorData = value.Convert(productName, timeCollected, transactionType);
-            sensorData.Status = sensorStatus > sensorData.Status ? sensorStatus : sensorData.Status;
-            sensorData.ValidationError = validationResult.Error;
-
-            return sensorData;
-        }
-
-        public static SensorStatus GetSensorStatus(SensorsDataValidation.ValidationResult validationResult) =>
-            validationResult.ResultType switch
-            {
-                ResultType.Unknown => SensorStatus.Unknown,
-                ResultType.Ok => SensorStatus.Ok,
-                ResultType.Warning => SensorStatus.Warning,
-                ResultType.Error => SensorStatus.Error,
-                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
-            };
-
         #endregion
-
-        public List<SensorData> GetSensorUpdates(User user)
-        {
-            return _queueManager.GetUserUpdates(user);
-        }
-
-        public List<SensorData> GetSensorsTree(User user)
-        {
-            if (!_queueManager.IsUserRegistered(user))
-            {
-                _queueManager.AddUserSession(user);
-            }
-
-            List<SensorData> result = new List<SensorData>();
-            var productsList = _productManager.Products;
-            //Show available products only
-            if (!UserRoleHelper.IsAllProductsTreeAllowed(user))
-                productsList = productsList.Where(p =>
-                ProductRoleHelper.IsAvailable(p.Key, user.ProductsRoles)).ToList();
-
-            result.AddRange(_valuesCache.GetValues(productsList.Select(p => p.Name).ToList()));
-
-            return result;
-        }
 
         public List<SensorInfo> GetProductSensors(string productName) =>
             _productManager.GetProductByName(productName)?.Sensors.Values.ToList();
@@ -450,58 +321,6 @@ namespace HSMServer.Core.MonitoringServerCore
         #endregion
 
 
-        #region Product
-
-        private void RemoveProductHandler(Product product)
-        {
-            var updateMessage = new SensorData
-            {
-                Product = product.Name,
-                Path = string.Empty,
-                TransactionType = TransactionType.Delete,
-                Time = DateTime.UtcNow
-            };
-
-            _userManager.RemoveProductFromUsers(product.Key);
-            _queueManager.AddSensorData(updateMessage);
-            _valuesCache.RemoveProduct(product.Name);
-        }
-      
-        public bool HideProduct(Product product, out string error)
-        {
-            bool result = false;
-            error = string.Empty;
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-                SensorData updateMessage = new SensorData();
-                updateMessage.Product = product.Name;
-                updateMessage.TransactionType = TransactionType.Delete;
-                updateMessage.Time = timeCollected;
-
-                _queueManager.AddSensorData(updateMessage);
-
-                result = true;
-            }
-            catch (Exception ex)
-            {
-                result = false;
-                error = ex.Message;
-                _logger.LogError(ex, $"Failed to hide product, name = {product.Name}");
-            }
-            return result;
-        }
-
-        #endregion
-
-        private void UpdateUserEventHandler(User user) =>
-            _queueManager.AddSensorDataForUser(user, new() { TransactionType = TransactionType.UpdateTree });
-
-        public void AddUpdate(SensorData update)
-        {
-            _queueManager.AddSensorData(update);
-        }
-
         public void Dispose()
         {
             var lastBarsValues = _barsStorage.GetAllLastValues();
@@ -510,13 +329,7 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
-            _queueManager?.Dispose();
 
-            if (_productManager != null)
-                _productManager.RemovedProduct -= RemoveProductHandler;
-
-            if (_userManager != null)
-                _userManager.UpdateUserEvent -= UpdateUserEventHandler;         
         }
     }
 }

@@ -1,7 +1,5 @@
-﻿using HSMServer.Core.Keys;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -12,10 +10,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static Product TestProduct { get; } =
             new()
             {
-                Name = ProductName,
-                DateAdded = DateTime.UtcNow,
-                Key = KeyGenerator.GenerateProductKey(ProductName),
-                ExtraKeys = new List<ExtraProductKey>(),
+                DisplayName = ProductName,
+                CreationDate = DateTime.UtcNow,
+                Id = Guid.NewGuid().ToString(),
             };
     }
 }

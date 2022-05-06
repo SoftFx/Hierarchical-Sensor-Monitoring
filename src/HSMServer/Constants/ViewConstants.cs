@@ -17,18 +17,16 @@
 
         public const string IndexAction = "Index";
         public const string UpdateAction = "Update";
-        public const string UpdateTreeAction = "UpdateTree";
-        public const string UpdateInvisibleListsAction = "UpdateInvisibleLists";
-        public const string UpdateSelectedListAction = "UpdateSelectedList";
-        public const string AddNewSensorsAction = "AddNewSensors";
+        public const string UpdateSelectedNodeAction = "UpdateSelectedNode";
 
         public const string GetSensorInfoAction = "GetSensorInfo";
         public const string UpdateSensorInfoAction = "UpdateSensorInfo";
 
+        public const string SelectNodeAction = "SelectNode";
+        public const string RefreshTreeAction = "RefreshTree";
+
         public const string RemoveProductAction = "RemoveProduct";
         public const string RemoveNodeAction = "RemoveNode";
-        public const string RemoveSensorAction = "RemoveSensor";
-        public const string RemoveSensorsAction = "RemoveSensors";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";
@@ -39,11 +37,9 @@
         public const string RemoveUserAction = "RemoveUser";
         public const string UpdateUserAction = "UpdateUser";
 
-        public const string AddExtraKeyAction = "AddExtraKey";
         public const string AddUserRightAction = "AddUserRight";
         public const string EditUserRoleAction = "EditUserRole";
         public const string RemoveUserRoleAction = "RemoveUserRole";
-        public const string RemoveExtraKeyAction = "RemoveExtraKey";
         public const string InviteAction = "Invite";
 
         public const string SaveConfigObjectAction = "SaveConfigObject";

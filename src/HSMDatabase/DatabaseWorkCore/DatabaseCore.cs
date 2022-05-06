@@ -20,7 +20,6 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private readonly IDatabaseSettings _databaseSettings;
 
-
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
             _databaseSettings = dbSettings ?? new DatabaseSettings();
@@ -29,7 +28,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
             OpenAllExistingSensorDatabases();
         }
-
 
         private void OpenAllExistingSensorDatabases()
         {
@@ -206,7 +204,11 @@ namespace HSMDatabase.DatabaseWorkCore
         public void AddSensor(SensorInfo info)
         {
             SensorEntity entity = info.ConvertToEntity();
+            AddSensor(entity);
+        }
 
+        public void AddSensor(SensorEntity entity)
+        {
             _environmentDatabase.AddNewSensorToList(entity.ProductName, entity.Path);
             _environmentDatabase.AddSensor(entity);
         }
@@ -223,20 +225,26 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        public void RemoveSensorWithMetadata(string productName, string path) 
+        {
+            _environmentDatabase.RemoveSensor(productName, path);
+            _environmentDatabase.RemoveSensorFromList(productName, path);
+
+            RemoveSensor(productName, path);
+        }
+
         public void UpdateSensor(SensorInfo info) => AddSensor(info);
+
+        public void UpdateSensor(SensorEntity entity) => AddSensor(entity);
 
         public void PutSensorData(SensorDataEntity data, string productName) =>
             AddSensorValue(data, productName);
-
-        public SensorDataEntity GetLastSensorValue(string productName, string path) =>
-            GetLatestSensorValue(productName, path);
 
         public SensorInfo GetSensorInfo(string productName, string path)
         {
             SensorEntity entity = _environmentDatabase.GetSensorInfo(productName, path);
             return entity != null ? new SensorInfo(entity) : null;
         }
-
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
             SensorDataEntity entity = GetLatestSensorValue(productName, path);
@@ -280,6 +288,26 @@ namespace HSMDatabase.DatabaseWorkCore
             return historyDatas;
         }
 
+        public List<SensorEntity> GetAllSensors()
+        {
+            var oldEntities = _environmentDatabase.GetSensorsInfo();
+            if (oldEntities == null || oldEntities.Count == 0)
+                return new List<SensorEntity>();
+
+            foreach (var oldEntity in oldEntities)
+            {
+                if (!string.IsNullOrEmpty(oldEntity.Id)
+                    && !string.Equals(oldEntity.Id, Guid.Empty.ToString()))
+                    continue;
+
+                oldEntity.Id = Guid.NewGuid().ToString();
+                oldEntity.ProductId = Guid.Empty.ToString();
+                oldEntity.IsConverted = true;
+            }
+
+            return oldEntities;
+        }
+
         #endregion
 
         #region Environment database : Product
@@ -287,9 +315,25 @@ namespace HSMDatabase.DatabaseWorkCore
         public void AddProduct(Product product)
         {
             ProductEntity entity = product.ConvertToEntity();
+            AddProduct(entity);
+        }
 
-            _environmentDatabase.AddProductToList(entity.Name);
+        public void AddProduct(ProductEntity entity)
+        {
+            _environmentDatabase.AddProductToList(entity.DisplayName);
             _environmentDatabase.PutProductInfo(entity);
+        }
+
+        public void AddProductNew(Product product)
+        {
+            ProductEntity entity = product.ConvertToEntity();
+            AddProductNew(entity);
+        }
+
+        public void AddProductNew(ProductEntity entity)
+        {
+            _environmentDatabase.AddProductToList(entity.Id);
+            _environmentDatabase.PutProductInfoNew(entity);
         }
 
         public void RemoveProduct(string productName)
@@ -306,9 +350,27 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateProduct(Product product) => AddProduct(product);
 
+        public void UpdateProduct(ProductEntity entity) => AddProduct(entity);
+
+        public void UpdateProductNew(Product product) => AddProductNew(product);
+
+        public void UpdateProductNew(ProductEntity entity) => AddProductNew(entity);
+
+        public void RemoveProductNew(string id)
+        {
+            _environmentDatabase.RemoveProductInfoNew(id);
+            _environmentDatabase.RemoveProductFromList(id);
+        }
+
         public Product GetProduct(string productName)
         {
             ProductEntity entity = _environmentDatabase.GetProductInfo(productName);
+            return entity != null ? new Product(entity) : null;
+        }
+
+        public Product GetProductNew(string id) 
+        {
+            ProductEntity entity = _environmentDatabase.GetProductInfoNew(id);
             return entity != null ? new Product(entity) : null;
         }
 
@@ -324,6 +386,64 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return products?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
+        }
+        private List<string> GetAllProductsOld() => 
+            GetBaseAllProducts(_environmentDatabase.GetProductInfoStr);
+
+        private List<string> GetAllProductsNew() =>
+            GetBaseAllProducts(_environmentDatabase.GetProductInfoStrNew);
+
+        private List<string> GetBaseAllProducts(Func<string, string> getProductInfo)
+        {
+            var products = new List<string>();
+            var keys = _environmentDatabase.GetProductsList();
+
+            if (keys == null || keys.Count == 0) return null;
+
+            foreach (var key in keys)
+            {
+                var product = getProductInfo(key);               
+                if (product != null)
+                    products.Add(product);
+            }
+
+            return products;
+        }
+
+        public List<ProductEntity> GetAllProducts()
+        {
+            var dictionary = new Dictionary<string, ProductEntity>();
+
+            var oldEntities = GetAllProductsOld();
+            var convertedEntities = GetAllProductsNew();
+            if (oldEntities != null && oldEntities.Count > 0)
+            {
+                foreach (var oldEntity in oldEntities)
+                {
+                    var entity = EntityConverter.ConvertProductEntity(oldEntity);
+                    dictionary.Add(entity.DisplayName, entity);
+                }
+            }
+
+            var newEntities = new List<ProductEntity>();
+            if (convertedEntities != null && convertedEntities.Count > 0)
+            {
+                foreach (var convertedEntity in convertedEntities)
+                {
+                    var entity = EntityConverter.ConvertProductEntity(convertedEntity);
+                    var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId)
+                        || Guid.Empty.Equals(entity.ParentProductId);
+
+                    if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
+                        dictionary.Remove(entity.DisplayName);
+
+                    newEntities.Add(entity);
+                }
+            }
+
+            newEntities.AddRange(dictionary?.Values);
+
+            return newEntities;
         }
 
         #endregion

@@ -9,10 +9,43 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Converters
 {
-    internal static class SensorDataPropertiesBuilder
+    public static class SensorDataPropertiesBuilder
     {
         private const double SizeDenominator = 1024.0;
 
+
+        public static string GetShortStringValue(SensorType sensorType, string typedData, int originalFileSensorSize)
+        {
+            if (typedData == null)
+                return string.Empty;
+
+            switch (sensorType)
+            {
+                case SensorType.BooleanSensor:
+                    BoolSensorData boolData = JsonSerializer.Deserialize<BoolSensorData>(typedData);
+                    return boolData.BoolValue.ToString();
+                case SensorType.IntSensor:
+                    IntSensorData intData = JsonSerializer.Deserialize<IntSensorData>(typedData);
+                    return intData.IntValue.ToString();
+                case SensorType.DoubleSensor:
+                    DoubleSensorData doubleData = JsonSerializer.Deserialize<DoubleSensorData>(typedData);
+                    return doubleData.DoubleValue.ToString();
+                case SensorType.StringSensor:
+                    StringSensorData stringData = JsonSerializer.Deserialize<StringSensorData>(typedData);
+                    return stringData.StringValue;
+                case SensorType.IntegerBarSensor:
+                    IntBarSensorData intBarData = JsonSerializer.Deserialize<IntBarSensorData>(typedData);
+                    return GetBarSensorsShortString(intBarData.Min, intBarData.Mean, intBarData.Max, intBarData.Count, intBarData.LastValue);
+                case SensorType.DoubleBarSensor:
+                    DoubleBarSensorData doubleBarData = JsonSerializer.Deserialize<DoubleBarSensorData>(typedData);
+                    return GetBarSensorsShortString(doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
+                case SensorType.FileSensorBytes:
+                    FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(typedData);
+                    return GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, GetFileSensorBytesOriginalSize(fileSensorBytesData, originalFileSensorSize));
+            }
+
+            return null;
+        }
 
         internal static string GetStringValue(SensorValueBase sensorValue, DateTime timeCollected) =>
             sensorValue switch
@@ -69,7 +102,7 @@ namespace HSMServer.Core.Converters
                 case SensorType.FileSensorBytes:
                     FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
                     return GetFileSensorsString(dataEntity.TimeCollected, fileSensorBytesData.Comment, fileSensorBytesData.FileName,
-                                                fileSensorBytesData.Extension, GetFileSensorBytesOriginalSize(dataEntity, fileSensorBytesData));
+                                                fileSensorBytesData.Extension, GetFileSensorBytesOriginalSize(fileSensorBytesData, dataEntity.OriginalFileSensorContentSize));
             }
 
             return null;
@@ -99,14 +132,14 @@ namespace HSMServer.Core.Converters
                     return GetBarSensorsShortString(doubleBarData.Min, doubleBarData.Mean, doubleBarData.Max, doubleBarData.Count, doubleBarData.LastValue);
                 case SensorType.FileSensorBytes:
                     FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
-                    return GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, GetFileSensorBytesOriginalSize(dataEntity, fileSensorBytesData));
+                    return GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, GetFileSensorBytesOriginalSize(fileSensorBytesData, dataEntity.OriginalFileSensorContentSize));
             }
 
             return null;
         }
 
-        private static int GetFileSensorBytesOriginalSize(SensorDataEntity entity, FileSensorBytesData data) =>
-            entity.OriginalFileSensorContentSize == 0 ? data.FileContent?.Length ?? 0 : entity.OriginalFileSensorContentSize;
+        private static int GetFileSensorBytesOriginalSize(FileSensorBytesData data, int originalSize) =>
+            originalSize == 0 ? data.FileContent?.Length ?? 0 : originalSize;
 
 
         private static string GetStringValue(BoolSensorValue value, DateTime timeCollected) =>

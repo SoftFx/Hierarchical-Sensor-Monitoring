@@ -40,6 +40,8 @@ namespace HSMDatabase.LevelDB
             return $"{PRODUCT_INFO_PREFIX}_{productName}";
         }
 
+        public static string GetProductInfoKeyById(string id) => id;
+
         public static string GetUniqueConfigurationObjectKey(string objectName)
         {
             return $"{CONFIGURATION_OBJECT_PREFIX}_{objectName}";
@@ -59,6 +61,8 @@ namespace HSMDatabase.LevelDB
         {
             return $"{SENSOR_KEY_PREFIX}_{productName}_{path}";
         }
+
+        public static string GetSensorsInfoReadKey() => SENSOR_KEY_PREFIX;
 
         public static string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {

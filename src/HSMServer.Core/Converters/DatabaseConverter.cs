@@ -22,17 +22,10 @@ namespace HSMServer.Core.Converters
         public static ProductEntity ConvertToEntity(this Product product) =>
             new()
             {
-                Name = product.Name,
-                Key = product.Key,
-                DateAdded = product.DateAdded,
-                ExtraKeys = product.ExtraKeys?.Select(p => p.ConvertToEntity())?.ToList(),
-            };
-
-        public static ExtraKeyEntity ConvertToEntity(this ExtraProductKey key) =>
-            new()
-            {
-                Key = key.Key,
-                Name = key.Name,
+                DisplayName = product.DisplayName,
+                Id = product.Id,
+                CreationDate = product.CreationDate.Ticks,
+                
             };
 
         public static SensorEntity ConvertToEntity(this SensorInfo  info) =>

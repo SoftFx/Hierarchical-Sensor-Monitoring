@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Model;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Products;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +13,19 @@ namespace HSMServer.ApiControllers
     [Route("api/[controller]")]
     public class ViewController : Controller
     {
-        private readonly IProductManager _productManager;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly IUserManager _userManager;
 
-        public ViewController(IProductManager productManager, IUserManager userManager)
+        public ViewController(ITreeValuesCache treeValuesCache, IUserManager userManager)
         {
-            _productManager = productManager;
+            _treeValuesCache = treeValuesCache;
             _userManager = userManager;
         }
 
         [HttpGet(nameof(GetAllProducts))]
-        public ActionResult<List<Product>> GetAllProducts()
+        public ActionResult<List<ProductModel>> GetAllProducts()
         {
-            return _productManager.Products;
+            return _treeValuesCache.GetTree();
         }
 
         [HttpGet(nameof(GetUsersNotAdmin))]

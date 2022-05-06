@@ -20,20 +20,32 @@ namespace HSMServer.Core.DataLayer
         #region Product
 
         void RemoveProduct(string productName);
+        void RemoveProductNew(string id);
         void AddProduct(Product product);
+        void AddProduct(ProductEntity entity);
+        void AddProductNew(Product product);
+        void AddProductNew(ProductEntity entity);
         void UpdateProduct(Product product);
+        void UpdateProduct(ProductEntity entity);
+        void UpdateProductNew(Product product);
+        void UpdateProductNew(ProductEntity entity);
         Product GetProduct(string productName);
+        Product GetProductNew(string id);
         List<Product> GetProducts();
+        List<ProductEntity> GetAllProducts();
 
         #endregion
 
         #region Sensors
 
         void RemoveSensor(string productName, string path);
+        void RemoveSensorWithMetadata(string productName, string path);
         void AddSensor(SensorInfo info);
+        void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorInfo info);
+        void UpdateSensor(SensorEntity entity);
         void PutSensorData(SensorDataEntity data, string productName);
-        SensorDataEntity GetLastSensorValue(string productName, string path);
+        SensorDataEntity GetLatestSensorValue(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
         List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
@@ -42,6 +54,7 @@ namespace HSMServer.Core.DataLayer
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
         List<SensorInfo> GetProductSensors(string  productName);
 
+        List<SensorEntity> GetAllSensors();
         #endregion
 
         #region User

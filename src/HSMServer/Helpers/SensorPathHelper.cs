@@ -7,18 +7,26 @@ namespace HSMServer.Helpers
     {
         public static string Encode(string path)
         {
-            //return HttpUtility.UrlEncode(Convert.ToBase64String(
-            //Encoding.Unicode.GetBytes(path)));
             return (Convert.ToBase64String(Encoding.Unicode.GetBytes(path)))
                 .Replace('=', '_').Replace('+', '-').Replace(':', '/');
         }
 
         public static string Decode(string path)
         {
-            //return Encoding.Unicode.GetString(Convert.FromBase64String(
-            //HttpUtility.UrlDecode(path)));
             path = path.Replace('/', ':').Replace('-', '+').Replace('_', '=');
             return Encoding.Unicode.GetString(Convert.FromBase64String(path));
+        }
+
+        public static string EncodeGuid(Guid id)
+        {
+            return (Convert.ToBase64String(Encoding.Unicode.GetBytes(id.ToString())))
+                .Replace('=', '_').Replace('+', '-').Replace(':', '/');
+        }
+
+        public static Guid DecodeGuid(string id)
+        {
+            id = id.Replace('/', ':').Replace('-', '+').Replace('_', '=');
+            return Guid.Parse(Encoding.Unicode.GetString(Convert.FromBase64String(id)));
         }
     }
 }
