@@ -163,18 +163,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public long GetSensorSize(string productName, string path)
-        {
-            long size = 0L;
-            var databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases)
-            {
-                size += database.GetSensorSize(productName, path);
-            }
-
-            return size;
-        }
-
         public void AddSensorValue(SensorDataEntity entity, string productName)
         {
             var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
@@ -245,6 +233,7 @@ namespace HSMDatabase.DatabaseWorkCore
             SensorEntity entity = _environmentDatabase.GetSensorInfo(productName, path);
             return entity != null ? new SensorInfo(entity) : null;
         }
+
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
             SensorDataEntity entity = GetLatestSensorValue(productName, path);
@@ -348,24 +337,12 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        public void UpdateProduct(Product product) => AddProduct(product);
-
-        public void UpdateProduct(ProductEntity entity) => AddProduct(entity);
-
-        public void UpdateProductNew(Product product) => AddProductNew(product);
-
-        public void UpdateProductNew(ProductEntity entity) => AddProductNew(entity);
+        public void UpdateProduct(ProductEntity entity) => AddProductNew(entity);
 
         public void RemoveProductNew(string id)
         {
             _environmentDatabase.RemoveProductInfoNew(id);
             _environmentDatabase.RemoveProductFromList(id);
-        }
-
-        public Product GetProduct(string productName)
-        {
-            ProductEntity entity = _environmentDatabase.GetProductInfo(productName);
-            return entity != null ? new Product(entity) : null;
         }
 
         public Product GetProductNew(string id) 
@@ -466,7 +443,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<User> GetUsers() => GetUsers(_environmentDatabase.ReadUsers().ToList());
         
-
         public List<User> GetUsersPage(int page, int pageSize) =>
             GetUsers(_environmentDatabase.ReadUsersPage(page, pageSize).ToList());
 

@@ -31,9 +31,9 @@ namespace HSMServer.Core.Tests
         {
             var name = RandomGenerator.GetRandomString();
             var product = DatabaseCoreFactory.CreateProduct(name);
-            _databaseCore.AddProduct(product);
+            _databaseCore.AddProductNew(product);
 
-            FullProductTest(product, _databaseCore.GetProduct(name));
+            FullProductTest(product, _databaseCore.GetProductNew(product.Id));
         }
 
         [Theory]
@@ -50,9 +50,9 @@ namespace HSMServer.Core.Tests
             {
                 var name = RandomGenerator.GetRandomString();
                 var product = DatabaseCoreFactory.CreateProduct(name);
-                _databaseCore.AddProduct(product);
+                _databaseCore.AddProductNew(product);
 
-                FullProductTest(product, _databaseCore.GetProduct(name));
+                FullProductTest(product, _databaseCore.GetProductNew(product.Id));
             }
         }
 
@@ -63,11 +63,11 @@ namespace HSMServer.Core.Tests
             var name = RandomGenerator.GetRandomString();
             var product = DatabaseCoreFactory.CreateProduct(name);
 
-            _databaseCore.AddProduct(product);
-            Assert.NotNull(_databaseCore.GetProduct(name));
+            _databaseCore.AddProductNew(product);
+            Assert.NotNull(_databaseCore.GetProductNew(product.Id));
             
-            _databaseCore.RemoveProduct(name);
-            Assert.Null(_databaseCore.GetProduct(name));
+            _databaseCore.RemoveProductNew(product.Id);
+            Assert.Null(_databaseCore.GetProductNew(product.Id));
         }
 
         [Theory]
@@ -85,11 +85,11 @@ namespace HSMServer.Core.Tests
                 var name = RandomGenerator.GetRandomString();
                 var product = DatabaseCoreFactory.CreateProduct(name);
 
-                _databaseCore.AddProduct(product);
-                Assert.NotNull(_databaseCore.GetProduct(name));
+                _databaseCore.AddProductNew(product);
+                Assert.NotNull(_databaseCore.GetProductNew(product.Id));
 
-                _databaseCore.RemoveProduct(name);
-                Assert.Null(_databaseCore.GetProduct(name));
+                _databaseCore.RemoveProductNew(product.Id);
+                Assert.Null(_databaseCore.GetProductNew(product.Id));
             }
         }
 

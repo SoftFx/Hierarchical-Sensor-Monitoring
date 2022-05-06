@@ -83,7 +83,7 @@ namespace HSMServer.Core.Cache
 
                 if (product.ParentProduct != null)
                 {
-                    _databaseCore.UpdateProductNew(product.ParentProduct.ToProductEntity());
+                    _databaseCore.UpdateProduct(product.ParentProduct.ToProductEntity());
 
                     ChangeProductEvent?.Invoke(product.ParentProduct, TransactionType.Update);
                 }
@@ -174,7 +174,7 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
-                _databaseCore.UpdateProductNew(parentProduct.ToProductEntity());
+                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
             }
             else
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
@@ -262,7 +262,7 @@ namespace HSMServer.Core.Cache
 
                 _sensors.TryAdd(sensor.Id, sensor);
 
-                _databaseCore.UpdateProductNew(parentProduct.ToProductEntity());
+                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
             }
         }
 
@@ -283,7 +283,7 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
-                    _databaseCore.UpdateProductNew(parentProduct.ToProductEntity());
+                    _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
                 }
 
                 parentProduct = subProduct;
@@ -335,7 +335,7 @@ namespace HSMServer.Core.Cache
                 if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
                     continue;
 
-                _databaseCore.UpdateProductNew(product.ToProductEntity());
+                _databaseCore.UpdateProduct(product.ToProductEntity());
             }
         }
 
