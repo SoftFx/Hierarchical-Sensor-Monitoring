@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Cache.Entities
 {
@@ -26,13 +25,10 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime CreationDate { get; }
 
-        [JsonIgnore]
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
-        [JsonIgnore]
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
 
-        [JsonIgnore]
         public ProductModel ParentProduct { get; private set; }
 
 
@@ -57,6 +53,11 @@ namespace HSMServer.Core.Cache.Entities
             State = ProductState.FullAccess;
             DisplayName = name;
             CreationDate = DateTime.UtcNow;
+        }
+
+        public ProductModel(string key, string name) : this(name)
+        {
+            Id = key;
         }
 
 

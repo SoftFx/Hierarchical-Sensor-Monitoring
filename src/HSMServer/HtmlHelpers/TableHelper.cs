@@ -114,15 +114,15 @@ namespace HSMServer.HtmlHelpers
             var response = _client.GetAsync(
                 $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetAllProducts)}").Result;
 
-            List<Product> products = null;
+            Dictionary<string, string> products = null;
             if (response.IsSuccessStatusCode)
             {
-                products = response.Content.ReadAsAsync<List<Product>>().Result;
+                products = response.Content.ReadAsAsync<Dictionary<string, string>>().Result;
             }
 
             foreach (var right in productsRights)
             {
-                var name = products?.FirstOrDefault(p => p.Id.Equals(right.Key))?.DisplayName;
+                var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key)).Value;
                 result.AppendLine($"{name ?? right.Key} ({right.Value})<br>");
             }
 

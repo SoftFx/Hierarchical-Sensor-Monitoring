@@ -54,8 +54,9 @@ namespace HSMServer
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
+
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
-            services.AddSingleton<IProductManager, ProductManager>();
+            services.AddSingleton<IProductManager>(_ => null);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();

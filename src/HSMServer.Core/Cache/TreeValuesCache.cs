@@ -174,6 +174,7 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
+                _databaseCore.UpdateProductNew(parentProduct.ToProductEntity());
             }
             else
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
@@ -251,6 +252,9 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensorEntity in sensorEntities)
             {
+                if (sensorEntity.Path == null)
+                    continue;
+
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
 
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
@@ -295,7 +299,7 @@ namespace HSMServer.Core.Cache
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AddSelfMonitoringProduct()
         {
-            var product = new ProductModel(CommonConstants.SelfMonitoringProductKey);
+            var product = new ProductModel(CommonConstants.SelfMonitoringProductKey, CommonConstants.SelfMonitoringProductName);
 
             AddProduct(product);
         }
@@ -340,6 +344,9 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensorEntity in sensorEntities)
             {
+                if (sensorEntity.Path == null)
+                    _databaseCore.RemoveSensorWithMetadata(sensorEntity.ProductName, sensorEntity.Path);
+
                 if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
                     continue;
 
