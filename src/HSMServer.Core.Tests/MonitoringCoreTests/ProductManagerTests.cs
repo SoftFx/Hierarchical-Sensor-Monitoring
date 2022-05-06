@@ -5,7 +5,6 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System.Collections.Generic;
-using System.Linq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -19,13 +18,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private delegate string GetProductNameByKey(string key);
         private delegate Product GetProduct(string value);
 
-
         public ProductManagerTests(ProductManagerFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture) 
         {
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, CommonMoqs.CreateNullLogger<UserManager>());
         }
-
 
         [Fact]
         [Trait("Category", "One")]
@@ -49,7 +46,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             FullRemoveProductTest(name, key, _productManager.GetProductByName, _productManager.GetProductByKey,
                 _productManager.GetProductNameByKey);
         }
- 
 
         [Fact]
         [Trait("Category", "GetCopy")]
@@ -127,8 +123,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             FullGetSeveralProductsTest(products, _productManager.GetProductCopyByKey);
         }
 
-
-
         [Theory]
         [InlineData(3)]
         [InlineData(10)]
@@ -190,8 +184,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Null(name);
         }
 
-
-
         private static void FullSeveralProductsTest(List<string> names, GetProduct getProductByName,
             GetProduct getProductByKey, GetProductNameByKey getNameByKey)
         {
@@ -222,8 +214,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return product;
         }
 
-
-
         private static void TestGetProductCopy(Product product, GetProduct getProductByKey)
         {
             var copy = getProductByKey?.Invoke(product.Id);
@@ -243,8 +233,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(key, product.Id);
             Assert.Equal(name, product.DisplayName);
         }
-
-
 
         private static void TestProductNameByKey(string productName, string key, GetProductNameByKey getProductNameByKey)
         {

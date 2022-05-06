@@ -8,17 +8,17 @@ namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class DatabaseCoreFactory
     {
-        internal static Product CreateProduct(string name) => new () 
+        internal static Product CreateProduct() => new () 
         {
-            DisplayName = name,
+            DisplayName = RandomGenerator.GetRandomString(),
             CreationDate = DateTime.Now,
             Id = Guid.NewGuid().ToString()
         };
 
-        internal static User CreateUser(string name) => new () 
+        internal static User CreateUser() => new () 
         {
-            UserName = name,
-            Password = HashComputer.ComputePasswordHash(name),
+            UserName = RandomGenerator.GetRandomString(),
+            Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
             IsAdmin = false
         };
 

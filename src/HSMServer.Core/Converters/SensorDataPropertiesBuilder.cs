@@ -13,7 +13,6 @@ namespace HSMServer.Core.Converters
     {
         private const double SizeDenominator = 1024.0;
 
-
         public static string GetShortStringValue(SensorType sensorType, string typedData, int originalFileSensorSize)
         {
             if (typedData == null)
@@ -141,7 +140,6 @@ namespace HSMServer.Core.Converters
         private static int GetFileSensorBytesOriginalSize(FileSensorBytesData data, int originalSize) =>
             originalSize == 0 ? data.FileContent?.Length ?? 0 : originalSize;
 
-
         private static string GetStringValue(BoolSensorValue value, DateTime timeCollected) =>
             GetSimpleSensorsString(timeCollected, value.Comment, value.BoolValue);
 
@@ -183,7 +181,6 @@ namespace HSMServer.Core.Converters
             }
         }
 
-
         private static string GetShortStringValue(BoolSensorValue value) => value.BoolValue.ToString();
 
         private static string GetShortStringValue(IntSensorValue value) => value.IntValue.ToString();
@@ -220,7 +217,6 @@ namespace HSMServer.Core.Converters
                     return string.Empty;
             }
         }
-
 
         private static string GetSimpleSensorsString<T>(DateTime timeCollected, string comment, T value) =>
             $"Time: {timeCollected.ToUniversalTime():G}. Value = {value}" +
@@ -274,7 +270,6 @@ namespace HSMServer.Core.Converters
             return $"{gb:#,##0.0} GB";
         }
     }
-
 
     public static class StringExtensions
     {

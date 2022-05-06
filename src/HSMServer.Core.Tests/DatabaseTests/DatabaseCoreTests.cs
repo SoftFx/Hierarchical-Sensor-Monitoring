@@ -14,13 +14,11 @@ namespace HSMServer.Core.Tests
     public class DatabaseCoreTests : DatabaseCoreTestsBase<DatabaseCoreFixture>
     {
         private readonly IDatabaseCore _databaseCore;
-        private readonly DatabaseCoreFixture _fixture;
 
         public DatabaseCoreTests(DatabaseCoreFixture fixture, DatabaseRegisterFixture registerFixture) 
             : base(fixture, registerFixture)
         {
             _databaseCore = _databaseCoreManager.DatabaseCore;
-            _fixture = fixture;
         }
 
         #region [ Product Tests ]
@@ -29,8 +27,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProduct")]
         public void AddProductTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var product = DatabaseCoreFactory.CreateProduct(name);
+            var product = DatabaseCoreFactory.CreateProduct();
             _databaseCore.AddProductNew(product);
 
             FullProductTest(product, _databaseCore.GetProductNew(product.Id));
@@ -48,8 +45,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i=0; i < count; i++)
             {
-                var name = RandomGenerator.GetRandomString();
-                var product = DatabaseCoreFactory.CreateProduct(name);
+                var product = DatabaseCoreFactory.CreateProduct();
                 _databaseCore.AddProductNew(product);
 
                 FullProductTest(product, _databaseCore.GetProductNew(product.Id));
@@ -60,8 +56,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRemove")]
         public void RemoveProductTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var product = DatabaseCoreFactory.CreateProduct(name);
+            var product = DatabaseCoreFactory.CreateProduct();
 
             _databaseCore.AddProductNew(product);
             Assert.NotNull(_databaseCore.GetProductNew(product.Id));
@@ -82,8 +77,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var name = RandomGenerator.GetRandomString();
-                var product = DatabaseCoreFactory.CreateProduct(name);
+                var product = DatabaseCoreFactory.CreateProduct();
 
                 _databaseCore.AddProductNew(product);
                 Assert.NotNull(_databaseCore.GetProductNew(product.Id));
@@ -101,11 +95,10 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneUser")]
         public void AddUserTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var user = DatabaseCoreFactory.CreateUser(name);
+            var user = DatabaseCoreFactory.CreateUser();
             _databaseCore.AddUser(user);
 
-            var actualUser = GetUser(name);
+            var actualUser = GetUser(user.UserName);
 
             FullUserTest(user, actualUser);
         }
@@ -122,11 +115,10 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var name = RandomGenerator.GetRandomString();
-                var user = DatabaseCoreFactory.CreateUser(name);
+                var user = DatabaseCoreFactory.CreateUser();
                 _databaseCore.AddUser(user);
 
-                var actualUser = GetUser(name);
+                var actualUser = GetUser(user.UserName);
 
                 FullUserTest(user, actualUser);
             }
@@ -136,13 +128,12 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneUserRemove")]
         public void RemoveUserTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var user = DatabaseCoreFactory.CreateUser(name);
+            var user = DatabaseCoreFactory.CreateUser();
 
             _databaseCore.AddUser(user);
             _databaseCore.RemoveUser(user);
 
-            Assert.Null(GetUser(name));
+            Assert.Null(GetUser(user.UserName));
         }
 
         [Theory]
@@ -157,13 +148,12 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var name = RandomGenerator.GetRandomString();
-                var user = DatabaseCoreFactory.CreateUser(name);
+                var user = DatabaseCoreFactory.CreateUser();
 
                 _databaseCore.AddUser(user);
                 _databaseCore.RemoveUser(user);
 
-                Assert.Null(GetUser(name));
+                Assert.Null(GetUser(user.UserName));
             }
         }
 
@@ -171,16 +161,15 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRole")]
         public void AddProductRoleTest()
         {
-            var name = RandomGenerator.GetRandomString();
-            var user = DatabaseCoreFactory.CreateUser(name);
-            var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
+            var user = DatabaseCoreFactory.CreateUser();
+            var product = DatabaseCoreFactory.CreateProduct();
 
             _databaseCore.AddUser(user);
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
                 ProductRoleEnum.ProductManager));
             _databaseCore.UpdateUser(user);
 
-            FullUserTest(user, GetUser(name));
+            FullUserTest(user, GetUser(user.UserName));
         }
 
         [Theory]
@@ -193,20 +182,19 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "SeveralProductRoles")]
         public void SeveralProductRolesTest(int count) 
         {
-            var name = RandomGenerator.GetRandomString();
-            var user = DatabaseCoreFactory.CreateUser(name);
+            var user = DatabaseCoreFactory.CreateUser();
             _databaseCore.AddUser(user);
 
             for (int i = 0; i < count; i++)
             {
-                var product = DatabaseCoreFactory.CreateProduct(RandomGenerator.GetRandomString());
+                var product = DatabaseCoreFactory.CreateProduct();
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
                 user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
             }
 
             _databaseCore.UpdateUser(user);
-            var actualUser = GetUser(name);
+            var actualUser = GetUser(user.UserName);
             FullUserTest(user, actualUser);
         }
 
@@ -222,8 +210,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var name = RandomGenerator.GetRandomString();
-                var user = DatabaseCoreFactory.CreateUser(name);
+                var user = DatabaseCoreFactory.CreateUser();
 
                 _databaseCore.AddUser(user);
             }

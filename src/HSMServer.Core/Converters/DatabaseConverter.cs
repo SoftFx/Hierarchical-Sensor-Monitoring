@@ -25,7 +25,6 @@ namespace HSMServer.Core.Converters
                 DisplayName = product.DisplayName,
                 Id = product.Id,
                 CreationDate = product.CreationDate.Ticks,
-                
             };
 
         public static SensorEntity ConvertToEntity(this SensorInfo  info) =>

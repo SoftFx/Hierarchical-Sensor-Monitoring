@@ -26,14 +26,12 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private delegate SensorInfo GetSensorInfo(string productName, string path);
         private delegate List<SensorInfo> GetAllSensorInfo(string productName);
 
-
         public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
             _barStorage = new BarSensorsStorage();
 
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
-
             var configurationProvider = new ConfigurationProvider(_databaseCoreManager.DatabaseCore, configProviderLogger);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
@@ -46,7 +44,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                 _valuesCache,
                 monitoringLogger);
         }
-
 
         [Theory]
         [InlineData(SensorType.BooleanSensor)]
@@ -87,7 +84,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             Assert.Equal(sensorValue, lastBarValue.Value);
         }
 
-
         [Theory]
         [InlineData(SensorType.BooleanSensor)]
         [InlineData(SensorType.IntSensor)]
@@ -111,7 +107,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                                    _databaseCoreManager.DatabaseCore.GetProductSensors);
         }
 
-
         [Theory]
         [InlineData(10)]
         [InlineData(50)]
@@ -130,7 +125,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                                    _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
                                                    _databaseCoreManager.DatabaseCore.GetProductSensors);
         }
-
 
         [Theory]
         [InlineData(SensorType.BooleanSensor)]
@@ -187,7 +181,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                                    _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
                                                    _databaseCoreManager.DatabaseCore.GetProductSensors);
         }
-
 
         private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, /*GetValuesFromCache getCachedValues,*/
             GetSensorHistoryData getSensorHistoryData, GetSensorInfo getSensorInfo)

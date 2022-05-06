@@ -23,7 +23,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected MonitoringCore _monitoringCore;
 
-
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {
             _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
@@ -40,7 +39,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             var userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, userManager);
-
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }
     }

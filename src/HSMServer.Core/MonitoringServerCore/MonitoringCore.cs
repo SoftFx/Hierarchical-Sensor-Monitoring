@@ -24,7 +24,6 @@ using HSMServer.Core.Cache.Entities;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-
     public class MonitoringCore : ISensorsInterface, IDisposable
     {
         private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
@@ -104,7 +103,6 @@ namespace HSMServer.Core.MonitoringServerCore
             //await Task.Run(() => _databaseAdapter.PutSensorData(dataObject, productName));
             _databaseCore.PutSensorData(dataObject, productName);
         }
-
 
         public void AddSensor(string productName, SensorValueBase sensorValue)
         {
@@ -191,7 +189,6 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!ProcessBarSensorValue(value, productName, timeCollected))
                     return;
 
-
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);
             }
             catch (Exception e)
@@ -223,7 +220,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
         private bool ProcessBarSensorValue(SensorValueBase value, string product, DateTime timeCollected)
         {
-
             if (value is BarSensorValueBase barSensorValue)
 
                 return ProcessBarSensorValue(barSensorValue, product, timeCollected);

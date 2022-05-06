@@ -19,7 +19,6 @@ namespace HSMServer.Model.ViewModel
 
         public string Unit { get; private set; }
 
-
         public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
             Id = sensor.Id;

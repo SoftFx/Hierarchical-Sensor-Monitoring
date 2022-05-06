@@ -15,7 +15,6 @@ namespace HSMServer.BackgroundTask
     /// This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
     /// than a specified parameter value are deleted
     /// </summary>
-
     public class OutdatedSensorService : BackgroundService
     {
         private DateTime _lastChecked;
@@ -56,7 +55,6 @@ namespace HSMServer.BackgroundTask
 
                         sensorsToRemove.Add(sensor.Id);
                     }
-
 
                     foreach (var sensorId in sensorsToRemove)
                         _treeValuesCache.RemoveSensorData(sensorId);
