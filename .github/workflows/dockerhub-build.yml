@@ -40,6 +40,8 @@ jobs:
 
     - name: Clear all nuget caches
       run: dotnet nuget locals all --clear
+
+    - name: Clear global nuget caches
       run: dotnet nuget locals global-packages --clear
 
     - name: Install dependencies
