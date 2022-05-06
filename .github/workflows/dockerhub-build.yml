@@ -37,7 +37,7 @@ jobs:
         dotnet-version: 5.0.x
 
     - name: Install dependencies
-      run: dotnet restore src/HSMServer/HSMServer.sln
+      run: dotnet restore src/HSMServer/HSMServer.sln --force
 
     - name: Build
       run: dotnet build src/HSMServer/HSMServer.sln -c Release --output '${{ github.workspace }}\Release' --no-restore
