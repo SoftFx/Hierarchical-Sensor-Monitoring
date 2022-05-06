@@ -25,7 +25,7 @@ jobs:
 
 
       # - name: Update nugets and dependecies
-      #   run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj
+      #   run: dotnet restore src/HSMSensorDataObjects/HSMSensorDataObjects.csproj --force
 
       # - name: Build Sensor objects
       #   run: dotnet build src/HSMSensorDataObjects/HSMSensorDataObjects.csproj -c Release
@@ -38,10 +38,10 @@ jobs:
 
 
       - name: Update nugets and dependecies
-        run: dotnet restore src/HSMDataCollector/HSMDataCollector.sln
+        run: dotnet restore src/HSMDataCollector/HSMDataCollector.sln --force
 
       - name: Build Sensor objects
-        run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -c Release
+        run: dotnet build src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -c Release --no-restore
 
       - name: Pack package
         run: dotnet pack src/HSMDataCollector/HSMDataCollector/HSMDataCollector.csproj -p:PackageID=HSMDataCollector.HSMDataCollector -c Release --no-build
