@@ -36,7 +36,6 @@ jobs:
       # - name: Push nuget package
       #   run: dotnet nuget push src/HSMSensorDataObjects/bin/Release/HSMDataCollector.HSMSensorDataObjects*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
 
-
       - name: Update nugets and dependecies
         run: dotnet restore src/HSMDataCollector/HSMDataCollector.sln --force
 
