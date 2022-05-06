@@ -48,7 +48,7 @@ jobs:
   #     run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: ${{ github.workspace }}\Release
         name: Release
