@@ -38,6 +38,9 @@ jobs:
       with:
         dotnet-version: 5.0.x
 
+    - name: Clear all nuget caches
+      run: dotnet nuget locals all --clear
+
     - name: Install dependencies
       run: dotnet restore src/HSMServer/HSMServer.sln --force
 
