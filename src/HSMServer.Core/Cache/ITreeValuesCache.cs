@@ -14,13 +14,12 @@ namespace HSMServer.Core.Cache
         Delete,
     }
 
-
     public interface ITreeValuesCache
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<SensorModel, TransactionType> ChangeSensorEvent;
         event Action<SensorModel> UploadSensorDataEvent;
-
+        
 
         List<ProductModel> GetTree();
         List<SensorModel> GetSensors();

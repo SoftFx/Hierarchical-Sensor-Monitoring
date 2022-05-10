@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     [Collection("Database collection")]
     public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
-        private protected readonly DatabaseAdapterManager _databaseAdapterManager;
+        private protected readonly DatabaseCoreManager _databaseCoreManager;
         private protected readonly SensorValuesFactory _sensorValuesFactory;
         private protected readonly SensorValuesTester _sensorValuesTester;
 
@@ -26,20 +26,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {
-            _databaseAdapterManager = new DatabaseAdapterManager(fixture.DatabasePath);
-            _databaseAdapterManager.AddTestProduct();
+            _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
 
-            dbRegisterFixture.RegisterDatabase(_databaseAdapterManager);
+            dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
             _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.DisplayName);
 
             var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseAdapterManager.DatabaseAdapter, productManagerLogger);
+            _productManager = new ProductManager(_databaseCoreManager.DatabaseCore, productManagerLogger);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
-            var userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, userManagerLogger);
-            _valuesCache = new TreeValuesCache(_databaseAdapterManager.DatabaseAdapter, userManager);
+            var userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, userManager);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }

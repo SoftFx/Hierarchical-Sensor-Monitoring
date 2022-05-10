@@ -1,9 +1,12 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
+using HSMDatabase.DatabaseWorkCore;
 using HSMServer.BackgroundTask;
+using HSMServer.Certificates;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
@@ -51,7 +54,8 @@ namespace HSMServer
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-            services.AddSingleton(CertificatesConfig.DatabaseAdapter);
+
+            services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
             services.AddSingleton<IProductManager>(_ => null);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();

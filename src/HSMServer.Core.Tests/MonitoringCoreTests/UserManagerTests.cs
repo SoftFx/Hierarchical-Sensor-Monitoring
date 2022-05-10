@@ -25,7 +25,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
-            _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, CommonMoqs.CreateNullLogger<UserManager>());
         }
 
 
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUserAsync(users,
                                     _userManager.GetUserByUserName,
-                                    _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                    _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -73,7 +73,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            new() { defaultUserFromDB },
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            users,
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -126,7 +126,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            actualUpdatedUsers,
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -137,7 +137,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUserAsync(new() { _testUser },
                                     _userManager.GetUserByUserName,
-                                    _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                    _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -151,7 +151,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
                                                   _userManager.GetUser,
                                                   _userManager.GetUserByUserName,
-                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                                  _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -169,7 +169,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestRemovedDefaultUserAsync(users,
                                                   _userManager.GetUser,
                                                   _userManager.GetUserByUserName,
-                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                                  _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -432,7 +432,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             await Task.Delay(200);
 
-            return _databaseAdapterManager.DatabaseAdapter.GetUsers();
+            return _databaseCoreManager.DatabaseCore.GetUsers();
         }
 
         private void AddUsers(params User[] users)

@@ -16,13 +16,13 @@ namespace HSMServer.BackgroundTask
         private DateTime _lastReported;
         private readonly TimeSpan _checkInterval = new TimeSpan(0,0, 5, 0);
         private readonly ILogger<DatabaseMonitoringService> _logger;
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly IDataCollectorFacade _dataCollector;
 
-        public DatabaseMonitoringService(IDatabaseAdapter databaseAdapter, IDataCollectorFacade dataCollector,
+        public DatabaseMonitoringService(IDatabaseCore databaseCore, IDataCollectorFacade dataCollector,
             ILogger<DatabaseMonitoringService> logger)
         {
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _dataCollector = dataCollector;
             _logger = logger;
             _logger.LogInformation("Database monitoring service initialized");
@@ -31,9 +31,9 @@ namespace HSMServer.BackgroundTask
         {
             do
             {
-                _dataCollector.ReportDatabaseSize(_databaseAdapter.GetDatabaseSize());
-                _dataCollector.ReportMonitoringDataSize(_databaseAdapter.GetMonitoringDataSize());
-                _dataCollector.ReportEnvironmentDataSize(_databaseAdapter.GetEnvironmentDatabaseSize());
+                _dataCollector.ReportDatabaseSize(_databaseCore.GetDatabaseSize());
+                _dataCollector.ReportMonitoringDataSize(_databaseCore.GetMonitoringDataSize());
+                _dataCollector.ReportEnvironmentDataSize(_databaseCore.GetEnvironmentDatabaseSize());
 
                 await Task.Delay(_checkInterval, stoppingToken);
 

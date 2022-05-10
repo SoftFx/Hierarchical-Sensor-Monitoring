@@ -18,15 +18,16 @@ namespace HSMServer.BackgroundTask
     public class OutdatedSensorService : BackgroundService
     {
         private DateTime _lastChecked;
+
         private readonly TimeSpan _checkInterval = new TimeSpan(1, 0, 0, 0);
 
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IConfigurationProvider _configurationProvider;
+
         private readonly ILogger<OutdatedSensorService> _logger;
 
         public OutdatedSensorService(ITreeValuesCache treeValuesCache,
-            IConfigurationProvider configurationProvider, ILogger<OutdatedSensorService> logger)
-        {
+            IConfigurationProvider configurationProvider, ILogger<OutdatedSensorService> logger)        {
             _treeValuesCache = treeValuesCache;
             _configurationProvider = configurationProvider;
             _logger = logger;

@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.DataLayer
 {
-    public interface IDatabaseAdapter : IDisposable
+    public interface IDatabaseCore : IDisposable
     {
         #region Size
 
@@ -22,14 +22,10 @@ namespace HSMServer.Core.DataLayer
         void RemoveProduct(string productName);
         void RemoveProductNew(string id);
         void AddProduct(Product product);
+        void AddProduct(ProductEntity entity);
         void AddProductNew(Product product);
-        void AddProduct(ProductEntity product);
         void AddProductNew(ProductEntity entity);
-        void UpdateProduct(Product product);
-        void UpdateProductNew(Product product);
-        void UpdateProduct(ProductEntity product);
-        void UpdateProductNew(ProductEntity entity);
-        Product GetProduct(string productName);
+        void UpdateProduct(ProductEntity entity);
         Product GetProductNew(string id);
         List<Product> GetProducts();
         List<ProductEntity> GetAllProducts();
@@ -41,21 +37,20 @@ namespace HSMServer.Core.DataLayer
         void RemoveSensor(string productName, string path);
         void RemoveSensorWithMetadata(string productName, string path);
         void AddSensor(SensorInfo info);
-        void AddSensor(SensorEntity sensor);
+        void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorInfo info);
-        void UpdateSensor(SensorEntity sensor);
+        void UpdateSensor(SensorEntity entity);
         void PutSensorData(SensorDataEntity data, string productName);
-        SensorDataEntity GetLastSensorValue(string productName, string path);
+        SensorDataEntity GetLatestSensorValue(string productName, string path);
         SensorInfo GetSensorInfo(string productName, string path);
         List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
-        List<SensorInfo> GetProductSensors(Product product);
+        List<SensorInfo> GetProductSensors(string  productName);
 
         List<SensorEntity> GetAllSensors();
-
         #endregion
 
         #region User
