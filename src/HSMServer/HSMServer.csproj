@@ -4,10 +4,11 @@
     <TargetFramework>net5.0</TargetFramework>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
     <UserSecretsId>a4cdf004-6f82-4fe4-b26d-ecc4e174bb5d</UserSecretsId>
+	<DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DocumentationFile>$(MSBuildThisFileDirectory)\bin\$(Configuration)\$(TargetFramework)\HSMServer.xml</DocumentationFile>
+    <!--<DocumentationFile>$(MSBuildThisFileDirectory)\bin\$(Configuration)\$(TargetFramework)\HSMServer.xml</DocumentationFile>-->
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>

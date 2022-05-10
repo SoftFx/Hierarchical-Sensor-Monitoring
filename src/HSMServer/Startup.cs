@@ -74,7 +74,7 @@ namespace HSMServer
             services.ConfigureSwaggerGen(options =>
             {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
-                var xmlPath = Path.Combine(basePath, "HSMServer.xml");
+                var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
                 options.IncludeXmlComments(xmlPath, true);
                 options.DocumentFilter<SwaggerIgnoreFilter>();
             });
