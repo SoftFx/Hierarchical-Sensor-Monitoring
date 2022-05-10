@@ -19,6 +19,7 @@ namespace HSMServer.Model.TreeViewModels
 
         private string _validationError;
 
+
         public Guid Id { get; }
 
         public string EncodedId => SensorPathHelper.EncodeGuid(Id);
@@ -74,12 +75,14 @@ namespace HSMServer.Model.TreeViewModels
 
         internal string Unit { get; private set; }
 
+
         public SensorNodeViewModel(SensorModel model)
         {
             Id = model.Id;
 
             Update(model);
         }
+
 
         public string GetTimeAgo(TimeSpan time)
         {

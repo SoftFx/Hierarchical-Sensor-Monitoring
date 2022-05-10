@@ -27,6 +27,7 @@ namespace HSMServer.Core.Cache
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
         public event Action<SensorModel> UploadSensorDataEvent;
 
+
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
         {
             _databaseCore = databaseCore;
@@ -40,6 +41,7 @@ namespace HSMServer.Core.Cache
 
             Initialize(productsFromDb, sensorsFromDb);
         }
+
 
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 

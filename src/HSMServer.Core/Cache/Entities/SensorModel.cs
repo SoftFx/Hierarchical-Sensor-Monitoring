@@ -41,6 +41,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel ParentProduct { get; set; }
 
+
         internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = Guid.Parse(entity.Id);
@@ -76,6 +77,7 @@ namespace HSMServer.Core.Cache.Entities
 
             UpdateData(sensorValue, timeCollected, validationResult);
         }
+
 
         internal void Update(UpdatedSensor sensor)
         {
@@ -139,6 +141,7 @@ namespace HSMServer.Core.Cache.Entities
                 DataType = (byte)SensorType,
                 OriginalFileSensorContentSize = OriginalFileSensorContentSize,
             };
+
 
         private static string GetSensorName(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
 

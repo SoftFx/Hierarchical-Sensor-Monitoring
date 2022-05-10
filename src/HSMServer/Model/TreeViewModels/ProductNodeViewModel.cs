@@ -24,6 +24,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsAvailableForUser { get; set; }
 
+
         public ProductNodeViewModel(ProductModel model)
         {
             Id = model.Id;
@@ -38,6 +39,7 @@ namespace HSMServer.Model.TreeViewModels
                 AddSensor(sensorVM);
             }
         }
+
 
         internal void Update(ProductModel model)
         {

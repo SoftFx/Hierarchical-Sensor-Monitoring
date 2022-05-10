@@ -19,6 +19,7 @@ namespace HSMServer.Core.Cache
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<SensorModel, TransactionType> ChangeSensorEvent;
         event Action<SensorModel> UploadSensorDataEvent;
+        
 
         List<ProductModel> GetTree();
         List<SensorModel> GetSensors();

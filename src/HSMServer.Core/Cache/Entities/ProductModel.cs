@@ -12,6 +12,7 @@ namespace HSMServer.Core.Cache.Entities
         FullAccess = 1 << 30, // int: 2^31 - 1
     }
 
+
     public sealed class ProductModel
     {
         public string Id { get; }
@@ -29,6 +30,7 @@ namespace HSMServer.Core.Cache.Entities
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
 
         public ProductModel ParentProduct { get; private set; }
+
 
         public ProductModel()
         {
@@ -57,6 +59,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             Id = key;
         }
+
 
         internal void AddSubProduct(ProductModel product)
         {
