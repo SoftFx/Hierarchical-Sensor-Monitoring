@@ -5,7 +5,6 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Email;
 using HSMServer.Core.Encryption;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
@@ -84,6 +83,9 @@ namespace HSMServer.Controllers
         [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
         {
+            // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
+            TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
+
             var product = _treeValuesCache.GetProduct(productId);
             var users = _userManager.GetViewers(productId);
 

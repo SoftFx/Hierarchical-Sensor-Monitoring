@@ -69,7 +69,7 @@
         </div>
     </div>
 
-    @ViewHelper.CreateUsersRightsTable(Context.User, Model)
+    @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
 </div>
 
 <script>

@@ -1,16 +1,12 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.ApiControllers;
-using HSMServer.Constants;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using HSMServer.Helpers;
@@ -19,15 +15,8 @@ namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
-        private static readonly HttpClientHandler _clientHandler = new HttpClientHandler()
-        {
-            ServerCertificateCustomValidationCallback =
-            (sender, cert, chain, sslPolicyErrors) => { return true; }
-        };
-        private static readonly HttpClient _client = new HttpClient(_clientHandler);
-
         #region [ Users ]
-        public static string CreateTable(User user, List<UserViewModel> users)
+        public static string CreateTable(User user, List<UserViewModel> users, Dictionary<string, string> products)
         {
             StringBuilder result = new StringBuilder();
 
@@ -76,7 +65,7 @@ namespace HSMServer.HtmlHelpers
 
                 result.Append("/></td>");    
 
-                result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles)}</td>");
+                result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles, products)}</td>");
 
                 result.Append("<td style='width: 25%'>");
                 if (UserRoleHelper.IsUserCRUDAllowed(user))
@@ -104,21 +93,13 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateUserProductsList(List<KeyValuePair<string, ProductRoleEnum>> productsRights)
+        private static string CreateUserProductsList(List<KeyValuePair<string, ProductRoleEnum>> productsRights,
+            Dictionary<string, string> products)
         {
             StringBuilder result = new StringBuilder();
 
             if (productsRights == null || !productsRights.Any())
                 return "---";
-
-            var response = _client.GetAsync(
-                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetAllProducts)}").Result;
-
-            Dictionary<string, string> products = null;
-            if (response.IsSuccessStatusCode)
-            {
-                products = response.Content.ReadAsAsync<Dictionary<string, string>>().Result;
-            }
 
             foreach (var right in productsRights)
             {
@@ -213,7 +194,7 @@ namespace HSMServer.HtmlHelpers
         #region [ Edit Product: User Right ]
 
         public static string CreateTable(string productName, User user,
-            List<KeyValuePair<UserViewModel, ProductRoleEnum>> usersRights)
+            List<KeyValuePair<UserViewModel, ProductRoleEnum>> usersRights, List<User> notAdminUsers)
         {
             StringBuilder result = new StringBuilder();
             //header template
@@ -235,7 +216,7 @@ namespace HSMServer.HtmlHelpers
             var usedUsers = usersRights.Select(ur => ur.Key)?.ToList();
             //create 
             result.Append("<tr><th>0</th>" +
-                    $"<th>{CreateUserSelect(usedUsers)}" +
+                    $"<th>{CreateUserSelect(usedUsers, notAdminUsers)}" +
                     $"<span style='display: none;' id='new_user_span'></th>" +
                     $"<th>{CreateProductRoleSelect()}</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
@@ -279,26 +260,17 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateUserSelect(List<UserViewModel> usedUsers)
+        private static string CreateUserSelect(List<UserViewModel> usedUsers, List<User> notAdminUsers)
         {
-            var response = _client.GetAsync(
-                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetUsersNotAdmin)}").Result;
-
-            List<User> users = null;
-            if (response.IsSuccessStatusCode)
-            {
-                users = response.Content.ReadAsAsync<List<User>>().Result;
-            }
-
-            RemovedUsedUsers(users, usedUsers);
+            RemovedUsedUsers(notAdminUsers, usedUsers);
 
             StringBuilder result = new StringBuilder();
             
-            if (users != null && users.Any())
+            if (notAdminUsers != null && notAdminUsers.Count != 0)
             {
                 result.Append("<select class='form-select' id='createUser'>");
 
-                foreach (var user in users)
+                foreach (var user in notAdminUsers)
                     result.Append($"<option value='{user.Id}'>{user.UserName}</option>");
             }
             else result.Append("<select disabled class='form-select' id='createUser'>");
