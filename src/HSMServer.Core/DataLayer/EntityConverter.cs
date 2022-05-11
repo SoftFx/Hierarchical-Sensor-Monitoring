@@ -30,8 +30,8 @@ namespace HSMServer.Core.DataLayer
             var newEntity = new ProductEntity
             {
                 Id = key,
-                AuthorId = Guid.Empty.ToString(),
-                ParentProductId = Guid.Empty.ToString(),
+                AuthorId = string.Empty,
+                ParentProductId = string.Empty,
                 State = (int)ProductState.FullAccess,
                 DisplayName = name,
                 Description = string.Empty,
@@ -55,7 +55,7 @@ namespace HSMServer.Core.DataLayer
         //    }
 
         //    var id = Guid.NewGuid().ToString();
-        //    var productId = Guid.Empty.ToString();
+        //    var productId = string.Empty;
         //    var path = string.Empty;
         //    var productName = string.Empty;
         //    var sensorName = string.Empty;

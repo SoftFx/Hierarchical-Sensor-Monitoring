@@ -285,12 +285,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var oldEntity in oldEntities)
             {
-                if (!string.IsNullOrEmpty(oldEntity.Id)
-                    && !string.Equals(oldEntity.Id, Guid.Empty.ToString()))
+                if (!string.IsNullOrEmpty(oldEntity.Id))
                     continue;
 
-                oldEntity.Id = Guid.NewGuid().ToString();
-                oldEntity.ProductId = Guid.Empty.ToString();
+                oldEntity.Id = string.Empty;
+                oldEntity.ProductId = string.Empty;
                 oldEntity.IsConverted = true;
             }
 
@@ -408,8 +407,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 foreach (var convertedEntity in convertedEntities)
                 {
                     var entity = EntityConverter.ConvertProductEntity(convertedEntity);
-                    var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId)
-                        || Guid.Empty.Equals(entity.ParentProductId);
+                    var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId);
 
                     if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
                         dictionary.Remove(entity.DisplayName);
