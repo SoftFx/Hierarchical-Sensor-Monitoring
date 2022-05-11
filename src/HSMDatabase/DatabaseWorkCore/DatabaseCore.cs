@@ -189,11 +189,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Sensor
 
-        public void AddSensor(SensorInfo info)
-        {
-            SensorEntity entity = info.ConvertToEntity();
-            AddSensor(entity);
-        }
+        public void AddSensor(SensorInfo info) =>
+            AddSensor(info.ConvertToEntity());
 
         public void AddSensor(SensorEntity entity)
         {
@@ -374,11 +371,9 @@ namespace HSMDatabase.DatabaseWorkCore
             var products = new List<string>();
             var keys = _environmentDatabase.GetProductsList();
 
-            if (keys == null || keys.Count == 0) return null;
-
             foreach (var key in keys)
             {
-                var product = getProductInfo(key);               
+                var product = getProductInfo(key);        
                 if (product != null)
                     products.Add(product);
             }
@@ -392,31 +387,25 @@ namespace HSMDatabase.DatabaseWorkCore
 
             var oldEntities = GetAllProductsOld();
             var convertedEntities = GetAllProductsNew();
-            if (oldEntities != null && oldEntities.Count > 0)
+            foreach (var oldEntity in oldEntities)
             {
-                foreach (var oldEntity in oldEntities)
-                {
-                    var entity = EntityConverter.ConvertProductEntity(oldEntity);
-                    dictionary.Add(entity.DisplayName, entity);
-                }
+                var entity = EntityConverter.ConvertProductEntity(oldEntity);
+                dictionary.Add(entity.DisplayName, entity);
             }
 
             var newEntities = new List<ProductEntity>();
-            if (convertedEntities != null && convertedEntities.Count > 0)
+            foreach (var convertedEntity in convertedEntities)
             {
-                foreach (var convertedEntity in convertedEntities)
-                {
-                    var entity = EntityConverter.ConvertProductEntity(convertedEntity);
-                    var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId);
+                var entity = EntityConverter.ConvertProductEntity(convertedEntity);
+                var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId);
 
-                    if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
-                        dictionary.Remove(entity.DisplayName);
+                if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
+                    dictionary.Remove(entity.DisplayName);
 
-                    newEntities.Add(entity);
-                }
+                newEntities.Add(entity);
             }
 
-            newEntities.AddRange(dictionary?.Values);
+            newEntities.AddRange(dictionary.Values);
 
             return newEntities;
         }

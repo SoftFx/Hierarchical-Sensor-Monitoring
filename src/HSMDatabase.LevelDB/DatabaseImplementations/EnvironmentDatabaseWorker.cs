@@ -84,8 +84,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public ProductEntity GetProductInfoNew(string id)
         {
-            var key = PrefixConstants.GetProductInfoKeyById(id);
-            var bytesKey = Encoding.UTF8.GetBytes(key);
+            var bytesKey = Encoding.UTF8.GetBytes(id);
             try
             {
                 return _database.TryRead(bytesKey, out byte[] value)
@@ -117,8 +116,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public string GetProductInfoStrNew(string id)
         {
-            string key = PrefixConstants.GetProductInfoKeyById(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
             try
             {
                 return _database.TryRead(bytesKey, out byte[] value) ? Encoding.UTF8.GetString(value) : null;
@@ -149,8 +147,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void PutProductInfoNew(ProductEntity product)
         {
-            var key = PrefixConstants.GetProductInfoKeyById(product.Id);
-            var bytesKey = Encoding.UTF8.GetBytes(key);
+            var bytesKey = Encoding.UTF8.GetBytes(product.Id);
             var stringData = JsonSerializer.Serialize(product);
             var bytesValue = Encoding.UTF8.GetBytes(stringData);
             try
@@ -179,8 +176,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void RemoveProductInfoNew(string id)
         {
-            string key = PrefixConstants.GetProductInfoKeyById(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
             try
             {
                 _database.Delete(bytesKey);
