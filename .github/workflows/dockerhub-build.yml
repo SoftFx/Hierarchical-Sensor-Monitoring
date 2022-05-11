@@ -36,23 +36,23 @@ jobs:
       with:
         dotnet-version: 5.0.x
 
-    - name: Clear all nuget caches
-      run: dotnet nuget locals all -c
-
-    - name: Install dependencies
+   - name: Install dependencies
       run: dotnet restore src/HSMServer/HSMServer.sln --force
 
-    - name: Build
-      run: dotnet build src/HSMServer/HSMServer.sln -c Release --output '${{ github.workspace }}/Release' --no-restore
+    - name: Build Solution
+      run: dotnet build src/HSMServer/HSMServer.sln -c Release --no-restore
 
     - name: Test
       run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
 
+    - name: Build HSMServer
+      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/HSMServerOutput --no-restore
+
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        path: ${{ github.workspace }}/Release
-        name: Release
+        path: ${{ github.workspace }}/HSMServerOutput
+        name: HSMServer
 
   publish:
     runs-on: ubuntu-latest
