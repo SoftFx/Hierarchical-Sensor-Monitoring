@@ -27,7 +27,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {
             _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
-
+            _databaseCoreManager.AddTestProduct();
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);

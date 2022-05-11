@@ -35,5 +35,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             DatabaseCore.Dispose();
             DatabaseCore = null;
         }
+
+        internal void AddTestProduct() =>
+            DatabaseCore.AddProduct(TestProductsManager.TestProduct);
     }
 }
