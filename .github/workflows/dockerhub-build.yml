@@ -36,7 +36,7 @@ jobs:
       with:
         dotnet-version: 5.0.x
 
-   - name: Install dependencies
+    - name: Install dependencies
       run: dotnet restore src/HSMServer/HSMServer.sln --force
 
     - name: Build Solution
