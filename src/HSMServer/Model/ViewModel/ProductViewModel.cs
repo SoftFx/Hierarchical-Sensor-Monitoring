@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class ProductViewModel
+    public record ProductViewModel
     {
         public string Key { get; }
         public string Name { get; }

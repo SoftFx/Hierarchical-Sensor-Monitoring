@@ -22,7 +22,27 @@ namespace HSMServer.Model.TreeViewModels
 
         public Guid Id { get; }
 
-        public string EncodedId => SensorPathHelper.EncodeGuid(Id);
+        public string EncodedId { get; }
+
+        public SensorType SensorType { get; private set; }
+
+        public string Description { get; private set; }
+
+        public bool HasData { get; private set; }
+
+        public string ShortStringValue { get; private set; }
+
+        public string Path { get; private set; }
+
+        public string Product { get; private set; }
+
+        public string FileNameString { get; private set; }
+
+        public bool IsPlottingSupported { get; private set; }
+
+        internal TimeSpan ExpectedUpdateInterval { get; private set; }
+
+        internal string Unit { get; private set; }
 
         public override SensorStatus Status
         {
@@ -55,30 +75,11 @@ namespace HSMServer.Model.TreeViewModels
             private set => _validationError = value;
         }
 
-        public SensorType SensorType { get; private set; }
-
-        public string Description { get; private set; }
-
-        public bool HasData { get; private set; }
-
-        public string ShortStringValue { get; private set; }
-
-        public string Path { get; private set; }
-
-        public string Product { get; private set; }
-
-        public string FileNameString { get; private set; }
-
-        public bool IsPlottingSupported { get; private set; }
-
-        internal TimeSpan ExpectedUpdateInterval { get; private set; }
-
-        internal string Unit { get; private set; }
-
 
         public SensorNodeViewModel(SensorModel model)
         {
             Id = model.Id;
+            EncodedId = SensorPathHelper.EncodeGuid(Id);
 
             Update(model);
         }

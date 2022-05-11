@@ -36,10 +36,7 @@ namespace HSMServer.Core.Cache
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
 
-            var productsFromDb = _databaseCore.GetAllProducts();
-            var sensorsFromDb = _databaseCore.GetAllSensors();
-
-            Initialize(productsFromDb, sensorsFromDb);
+            Initialize();
         }
 
 
@@ -92,10 +89,8 @@ namespace HSMServer.Core.Cache
 
         public ProductModel GetProduct(string id)
         {
-            if (_tree.TryGetValue(id, out var product))
-                return product;
-
-            return null;
+            _tree.TryGetValue(id, out var product);
+            return product;
         }
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
@@ -113,7 +108,7 @@ namespace HSMServer.Core.Cache
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
-        public void UpdateSensor(UpdatedSensor updatedSensor)
+        public void UpdateSensor(SensorUpdate updatedSensor)
         {
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
                 return;
@@ -184,8 +179,11 @@ namespace HSMServer.Core.Cache
             UploadSensorDataEvent?.Invoke(sensor);
         }
 
-        private void Initialize(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
+        private void Initialize()
         {
+            var productEntities = _databaseCore.GetAllProducts();
+            var sensorEntities = _databaseCore.GetAllSensors();
+
             BuildTree(productEntities.Where(e => !e.IsConverted).ToList(),
                       sensorEntities.Where(e => !e.IsConverted).ToList());
 

@@ -36,8 +36,8 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ITreeValuesCache _treeValuesCache;
 
         public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage,
-        IProductManager productManager, IConfigurationProvider configurationProvider,
-        IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
+            IProductManager productManager, IConfigurationProvider configurationProvider,
+            IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseCore = databaseCore;
@@ -61,7 +61,6 @@ namespace HSMServer.Core.MonitoringServerCore
         private void UpdatesQueueNewItemsHandler(IEnumerable<SensorValueBase> sensorValues)
         {
             foreach (var value in sensorValues)
-
                 AddSensorValue(value);
         }
 
@@ -169,7 +168,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseCore.UpdateSensor(existingInfo);
         }
 
-        public void UpdateSensor(UpdatedSensor updatedSensor) =>
+        public void UpdateSensor(SensorUpdate updatedSensor) =>
             _treeValuesCache.UpdateSensor(updatedSensor);
 
         public bool IsSensorRegistered(string productName, string path) =>
@@ -221,15 +220,12 @@ namespace HSMServer.Core.MonitoringServerCore
         private bool ProcessBarSensorValue(SensorValueBase value, string product, DateTime timeCollected)
         {
             if (value is BarSensorValueBase barSensorValue)
-
                 return ProcessBarSensorValue(barSensorValue, product, timeCollected);
             else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
-
                 return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
 
             return true;
         }
-
 
         private bool ProcessBarSensorValue(BarSensorValueBase value, string product, DateTime timeCollected)
         {
@@ -325,7 +321,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
-
         }
     }
 }

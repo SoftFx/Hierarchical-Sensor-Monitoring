@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public class UpdatedSensorDataViewModel
+    public record UpdatedSensorDataViewModel
     {
         public string Id { get; }
 

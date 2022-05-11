@@ -14,12 +14,13 @@ namespace HSMServer.Core.Cache
         Delete,
     }
 
+
     public interface ITreeValuesCache
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<SensorModel, TransactionType> ChangeSensorEvent;
         event Action<SensorModel> UploadSensorDataEvent;
-        
+
 
         List<ProductModel> GetTree();
         List<SensorModel> GetSensors();
@@ -30,7 +31,7 @@ namespace HSMServer.Core.Cache
         string GetProductNameById(string id);
         List<ProductModel> GetProductsWithoutParent(User user);
 
-        void UpdateSensor(UpdatedSensor updatedSensor);
+        void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
