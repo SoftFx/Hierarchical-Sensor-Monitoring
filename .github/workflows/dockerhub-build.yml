@@ -46,12 +46,12 @@ jobs:
       run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
 
     - name: Build HSMServer
-      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/HSMServerOutput --no-restore
+      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release --no-restore
 
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        path: ${{ github.workspace }}/HSMServerOutput
+        path: ${{ github.workspace }}/Release
         name: HSMServer
 
   publish:
@@ -68,7 +68,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: HSMServer
-          path: ${{ github.workspace }}/HSMServerOutput
+          path: ${{ github.workspace }}/Release
 
       - name: Add product version file
         uses: DamianReeves/write-file-action@master
