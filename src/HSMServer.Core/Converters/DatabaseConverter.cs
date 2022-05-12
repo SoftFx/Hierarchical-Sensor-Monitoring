@@ -19,13 +19,6 @@ namespace HSMServer.Core.Converters
             OriginalFileSensorContentSize = entity.OriginalFileSensorContentSize,
         };
 
-        public static ValidationParameterEntity ConvertToEntity(this SensorValidationParameter validationParameter) =>
-            new()
-            {
-                ValidationValue = validationParameter.ValidationValue,
-                ParameterType = (int)validationParameter.ValidationType
-            };
-
         public static UserEntity ConvertToEntity(this User user) =>
             new()
             {
