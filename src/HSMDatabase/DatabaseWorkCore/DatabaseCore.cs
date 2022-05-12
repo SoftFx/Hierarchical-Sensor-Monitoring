@@ -297,40 +297,16 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Product
 
-        public void AddProduct(Product product)
-        {
-            ProductEntity entity = product.ConvertToEntity();
-            AddProduct(entity);
-        }
-
         public void AddProduct(ProductEntity entity)
         {
             _environmentDatabase.AddProductToList(entity.DisplayName);
             _environmentDatabase.PutProductInfo(entity);
         }
 
-        public void AddProductNew(Product product)
-        {
-            ProductEntity entity = product.ConvertToEntity();
-            AddProductNew(entity);
-        }
-
         public void AddProductNew(ProductEntity entity)
         {
             _environmentDatabase.AddProductToList(entity.Id);
             _environmentDatabase.PutProductInfoNew(entity);
-        }
-
-        public void RemoveProduct(string productName)
-        {
-            _environmentDatabase.RemoveProductInfo(productName);
-            _environmentDatabase.RemoveProductFromList(productName);
-            var sensorsList = _environmentDatabase.GetSensorsList(productName);
-            _environmentDatabase.RemoveSensorsList(productName);
-            foreach (var sensor in sensorsList)
-            {
-                RemoveSensor(productName, sensor);
-            }
         }
 
         public void UpdateProduct(ProductEntity entity) => AddProductNew(entity);
@@ -341,25 +317,6 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveProductFromList(id);
         }
 
-        public Product GetProductNew(string id) 
-        {
-            ProductEntity entity = _environmentDatabase.GetProductInfoNew(id);
-            return entity != null ? new Product(entity) : null;
-        }
-
-        public List<Product> GetProducts()
-        {
-            var products = new List<ProductEntity>();
-            var productNames = _environmentDatabase.GetProductsList();
-            foreach (var productName in productNames)
-            {
-                var product = _environmentDatabase.GetProductInfo(productName);
-                if (product != null)
-                    products.Add(product);
-            }
-
-            return products?.Select(e => new Product(e))?.ToList() ?? new List<Product>();
-        }
         private List<string> GetAllProductsOld() => 
             GetBaseAllProducts(_environmentDatabase.GetProductInfoStr);
 

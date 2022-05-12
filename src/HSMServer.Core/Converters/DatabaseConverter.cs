@@ -19,14 +19,6 @@ namespace HSMServer.Core.Converters
             OriginalFileSensorContentSize = entity.OriginalFileSensorContentSize,
         };
 
-        public static ProductEntity ConvertToEntity(this Product product) =>
-            new()
-            {
-                DisplayName = product.DisplayName,
-                Id = product.Id,
-                CreationDate = product.CreationDate.Ticks,
-            };
-
         public static SensorEntity ConvertToEntity(this SensorInfo  info) =>
             new()
             {

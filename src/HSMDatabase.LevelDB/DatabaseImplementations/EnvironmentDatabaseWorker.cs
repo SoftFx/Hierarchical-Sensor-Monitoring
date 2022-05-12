@@ -65,23 +65,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public ProductEntity GetProductInfo(string productName)
-        {
-            string key = PrefixConstants.GetProductInfoKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value) ?
-                    JsonSerializer.Deserialize<ProductEntity>(Encoding.UTF8.GetString(value)) : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read info for product {productName}");
-            }
-
-            return null;
-        }
-
         public ProductEntity GetProductInfoNew(string id)
         {
             var bytesKey = Encoding.UTF8.GetBytes(id);
@@ -157,20 +140,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to put product info for {product.Id}");
-            }
-        }
-
-        public void RemoveProductInfo(string productName)
-        {
-            string key = PrefixConstants.GetProductInfoKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove info for product {productName}");
             }
         }
 
