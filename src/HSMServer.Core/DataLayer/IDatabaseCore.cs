@@ -31,19 +31,15 @@ namespace HSMServer.Core.DataLayer
 
         void RemoveSensor(string productName, string path);
         void RemoveSensorWithMetadata(string productName, string path);
-        void AddSensor(SensorInfo info);
         void AddSensor(SensorEntity entity);
-        void UpdateSensor(SensorInfo info);
         void UpdateSensor(SensorEntity entity);
         void PutSensorData(SensorDataEntity data, string productName);
         SensorDataEntity GetLatestSensorValue(string productName, string path);
-        SensorInfo GetSensorInfo(string productName, string path);
         List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
         List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
-        List<SensorInfo> GetProductSensors(string productName);
 
         List<SensorEntity> GetAllSensors();
         #endregion

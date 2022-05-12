@@ -189,9 +189,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Sensor
 
-        public void AddSensor(SensorInfo info) =>
-            AddSensor(info.ConvertToEntity());
-
         public void AddSensor(SensorEntity entity)
         {
             _environmentDatabase.AddNewSensorToList(entity.ProductName, entity.Path);
@@ -218,37 +215,15 @@ namespace HSMDatabase.DatabaseWorkCore
             RemoveSensor(productName, path);
         }
 
-        public void UpdateSensor(SensorInfo info) => AddSensor(info);
-
         public void UpdateSensor(SensorEntity entity) => AddSensor(entity);
 
         public void PutSensorData(SensorDataEntity data, string productName) =>
             AddSensorValue(data, productName);
 
-        public SensorInfo GetSensorInfo(string productName, string path)
-        {
-            SensorEntity entity = _environmentDatabase.GetSensorInfo(productName, path);
-            return entity != null ? new SensorInfo(entity) : null;
-        }
-
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
             SensorDataEntity entity = GetLatestSensorValue(productName, path);
             return entity != null ? entity.ConvertToHistoryData() : null;
-        }
-
-        public List<SensorInfo> GetProductSensors(string productName)
-        {
-            var sensors = new List<SensorEntity>();
-            List<string> sensorPaths = _environmentDatabase.GetSensorsList(productName);
-            foreach (var path in sensorPaths)
-            {
-                SensorEntity sensorEntity = _environmentDatabase.GetSensorInfo(productName, path);
-                if (sensorEntity != null)
-                    sensors.Add(sensorEntity);
-            }
-
-            return sensors?.Select(e => new SensorInfo(e)).ToList() ?? new List<SensorInfo>();
         }
 
         public List<SensorHistoryData> GetAllSensorHistory(string productName, string path) =>

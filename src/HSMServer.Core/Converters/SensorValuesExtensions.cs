@@ -1,11 +1,9 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model.Sensor;
 using System;
 using System.Text.Json;
 
@@ -37,16 +35,6 @@ namespace HSMServer.Core.Converters
             return dataEntity;
         }
 
-        public static SensorInfo Convert(this SensorValueBase sensorValue, string productName) =>
-            new()
-            {
-                Path = sensorValue.Path,
-                Description = sensorValue.Description,
-                ProductName = productName,
-                SensorType = SensorTypeFactory.GetSensorType(sensorValue),
-                SensorName = ExtractSensor(sensorValue.Path),
-            };
-
         public static BarSensorValueBase Convert(this UnitedSensorValue value) =>
             BuildBarSensorValue(value)?.FillBarSensorValueCommonSettings(value);
 
@@ -56,9 +44,6 @@ namespace HSMServer.Core.Converters
             var timeSpan = dateTime - DateTime.UnixEpoch;
             return (long)timeSpan.TotalSeconds;
         }
-
-        private static string ExtractSensor(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
-
 
         private static BarSensorValueBase BuildBarSensorValue(UnitedSensorValue unitedSensorValue) =>
             unitedSensorValue.Type switch

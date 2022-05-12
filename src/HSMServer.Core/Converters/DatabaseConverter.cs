@@ -19,19 +19,6 @@ namespace HSMServer.Core.Converters
             OriginalFileSensorContentSize = entity.OriginalFileSensorContentSize,
         };
 
-        public static SensorEntity ConvertToEntity(this SensorInfo  info) =>
-            new()
-            {
-                Description = info.Description,
-                Path = info.Path,
-                ProductName = info.ProductName,
-                SensorName = info.SensorName,
-                SensorType = (int)info.SensorType,
-                Unit = info.Unit,
-                ExpectedUpdateIntervalTicks = info.ExpectedUpdateInterval.Ticks,
-                ValidationParameters = info.ValidationParameters?.Select(i => i.ConvertToEntity())?.ToList(),
-            };
-
         public static ValidationParameterEntity ConvertToEntity(this SensorValidationParameter validationParameter) =>
             new()
             {
@@ -39,7 +26,7 @@ namespace HSMServer.Core.Converters
                 ParameterType = (int)validationParameter.ValidationType
             };
 
-        public static UserEntity ConvertToEntity(this User  user) =>
+        public static UserEntity ConvertToEntity(this User user) =>
             new()
             {
                 UserName = user.UserName,
@@ -51,7 +38,7 @@ namespace HSMServer.Core.Converters
                 ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
             };
 
-        public static ConfigurationEntity ConvertToEntity(this ConfigurationObject  obj) =>
+        public static ConfigurationEntity ConvertToEntity(this ConfigurationObject obj) =>
             new()
             {
                 Value = obj.Value,

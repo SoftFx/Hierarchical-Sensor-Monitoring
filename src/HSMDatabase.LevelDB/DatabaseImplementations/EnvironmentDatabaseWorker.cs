@@ -333,20 +333,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public void RemoveSensorValues(string productName, string path)
-        {
-            var key = PrefixConstants.GetSensorInfoKey(productName, path);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.DeleteAllStartingWith(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove sensor values for {productName}/{path}");
-            }
-        }
-
         #endregion
 
         #region User
