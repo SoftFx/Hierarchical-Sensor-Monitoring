@@ -138,9 +138,9 @@ namespace HSMServer.Core.Converters
             return null;
         }
 
+
         private static int GetFileSensorBytesOriginalSize(FileSensorBytesData data, int originalSize) =>
             originalSize == 0 ? data.FileContent?.Length ?? 0 : originalSize;
-
 
         private static string GetStringValue(BoolSensorValue value, DateTime timeCollected) =>
             GetSimpleSensorsString(timeCollected, value.Comment, value.BoolValue);

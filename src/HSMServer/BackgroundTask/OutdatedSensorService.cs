@@ -18,6 +18,7 @@ namespace HSMServer.BackgroundTask
     public class OutdatedSensorService : BackgroundService
     {
         private DateTime _lastChecked;
+
         private readonly TimeSpan _checkInterval = new TimeSpan(1, 0, 0, 0);
 
         private readonly ITreeValuesCache _treeValuesCache;

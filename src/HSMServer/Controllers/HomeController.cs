@@ -279,7 +279,7 @@ namespace HSMServer.Controllers
             viewModel.Update(updateModel);
 
             _sensorsInterface.UpdateSensor(
-                new UpdatedSensor
+                new SensorUpdate
                 {
                     Id = sensor.Id,
                     Product = viewModel.ProductName,

@@ -7,11 +7,12 @@
   <ItemGroup>
     <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.31" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
+    <PackageReference Include="NLog" Version="4.7.10" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
-    <ProjectReference Include="..\HSMDatabase\HSMDatabase.csproj" />
+    <ProjectReference Include="..\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
   </ItemGroup>
 
 </Project>

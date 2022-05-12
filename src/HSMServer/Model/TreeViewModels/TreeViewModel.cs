@@ -77,12 +77,10 @@ namespace HSMServer.Model.TreeViewModels
                         return;
 
                     product.Update(model);
-
                     break;
 
                 case TransactionType.Delete:
                     Nodes.TryRemove(model.Id, out _);
-
                     break;
             }
         }
@@ -99,7 +97,6 @@ namespace HSMServer.Model.TreeViewModels
                     parent.AddSensor(newSensor);
 
                     Sensors.TryAdd(newSensor.Id, newSensor);
-
                     break;
 
                 case TransactionType.Update:
@@ -107,12 +104,10 @@ namespace HSMServer.Model.TreeViewModels
                         return;
 
                     sensor.Update(model);
-
                     break;
 
                 case TransactionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
-
                     break;
             }
         }

@@ -70,7 +70,7 @@ namespace HSMServer.Core.Cache.Entities
 
         internal void AddSensor(SensorModel sensor)
         {
-            sensor.ParentProduct = this;
+            sensor.AddParent(this);
 
             Sensors.TryAdd(sensor.Id, sensor);
         }

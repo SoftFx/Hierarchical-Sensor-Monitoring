@@ -1,7 +1,8 @@
 ﻿using HSMCommon;
 using HSMCommon.Certificates;
 using HSMCommon.Constants;
-using HSMServer.Core.DataLayer;
+using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Core.Model;
 using NLog;
 using System;
 using System.Globalization;
@@ -11,7 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
 
-namespace HSMServer.Core.Configuration
+namespace HSMServer.Certificates
 {
     public static class CertificatesConfig
     {
@@ -51,7 +52,7 @@ namespace HSMServer.Core.Configuration
             }
         }
 
-        public static IDatabaseAdapter DatabaseAdapter { get; private set; }
+        public static DatabaseCore DatabaseCore { get; private set; }
 
         public static X509Certificate2 ServerCertificate =>
             _serverCertificate ??= ReadServerCertificate();
@@ -66,7 +67,7 @@ namespace HSMServer.Core.Configuration
         public static void InitializeConfig()
         {
             _logger = LogManager.GetCurrentClassLogger();
-            DatabaseAdapter = new DatabaseAdapter();
+            DatabaseCore = new DatabaseCore();
 
             InitializeIndependentConstants();
 
@@ -157,8 +158,8 @@ namespace HSMServer.Core.Configuration
         {
             if (!_isFirstLaunch)
             {
-                var pwdParam =
-                    DatabaseAdapter.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
+                ConfigurationObject pwdParam =
+                    DatabaseCore.GetConfigurationObject(ConfigurationConstants.ServerCertificatePassword);
 
                 return pwdParam != null
                     ? new X509Certificate2(_serverCertificatePath, pwdParam.Value)

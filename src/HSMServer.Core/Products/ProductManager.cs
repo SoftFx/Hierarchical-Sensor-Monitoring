@@ -13,7 +13,7 @@ namespace HSMServer.Core.Products
 {
     public class ProductManager : IProductManager
     {
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ProductManager> _logger;
         private readonly ConcurrentDictionary<string, Product> _products;
 
@@ -21,10 +21,10 @@ namespace HSMServer.Core.Products
 
         public event Action<Product> RemovedProduct;
 
-        public ProductManager(IDatabaseAdapter databaseAdapter, ILogger<ProductManager> logger)
+        public ProductManager(IDatabaseCore databaseCore, ILogger<ProductManager> logger)
         {
             _logger = logger;
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _products = new ConcurrentDictionary<string, Product>();
 
             InitializeProducts();
@@ -44,12 +44,12 @@ namespace HSMServer.Core.Products
 
         private void InitializeProducts()
         {
-            var existingProducts = _databaseAdapter.GetProducts();
+            var existingProducts = _databaseCore.GetProducts();
             foreach (var product in existingProducts)
             {
                 _products[product.DisplayName] = product;
 
-                var sensors = _databaseAdapter.GetProductSensors(product);
+                var sensors = _databaseCore.GetProductSensors(product.DisplayName);
                 product.InitializeSensors(sensors);
             }
 
@@ -85,7 +85,7 @@ namespace HSMServer.Core.Products
         {
             try
             {
-                _databaseAdapter.AddProduct(product);
+                _databaseCore.AddProduct(product);
 
                 _products[product.DisplayName] = product;
             }
@@ -102,7 +102,7 @@ namespace HSMServer.Core.Products
                 if (GetProductByName(name) == null) 
                     return;
 
-                _databaseAdapter.RemoveProduct(name);
+                _databaseCore.RemoveProduct(name);
                 _products.Remove(name, out var product);
 
                 RemovedProduct?.Invoke(product);

@@ -39,6 +39,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+    <ProjectReference Include="..\HSMDatabase\HSMDatabase.csproj" />
     <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
   </ItemGroup>
 

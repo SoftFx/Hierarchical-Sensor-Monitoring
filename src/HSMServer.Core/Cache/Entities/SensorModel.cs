@@ -39,7 +39,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ValidationError { get; private set; }
 
-        public ProductModel ParentProduct { get; set; }
+        public ProductModel ParentProduct { get; private set; }
 
 
         internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
@@ -79,7 +79,9 @@ namespace HSMServer.Core.Cache.Entities
         }
 
 
-        internal void Update(UpdatedSensor sensor)
+        internal void AddParent(ProductModel product) => ParentProduct = product;
+
+        internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description;
             ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval);

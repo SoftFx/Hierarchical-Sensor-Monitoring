@@ -6,10 +6,10 @@ namespace HSMServer.Core.Registration
 {
     public class RegistrationTicketManager : IRegistrationTicketManager
     {
-        private readonly IDatabaseAdapter _databaseAdapter;
-        public RegistrationTicketManager(IDatabaseAdapter databaseAdapter)
+        private readonly IDatabaseCore _databaseCore;
+        public RegistrationTicketManager(IDatabaseCore databaseCore)
         {
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             //MigrateTicketsToNewDatabase();
         }
 
@@ -28,19 +28,19 @@ namespace HSMServer.Core.Registration
         public RegistrationTicket GetTicket(Guid id)
         {
             //return _databaseAdapter.ReadRegistrationTicketOld(id);
-            return _databaseAdapter.ReadRegistrationTicket(id);
+            return _databaseCore.ReadRegistrationTicket(id);
         }
 
         public void AddTicket(RegistrationTicket ticket)
         {
             //_databaseAdapter.WriteRegistrationTicketOld(ticket);
-            _databaseAdapter.WriteRegistrationTicket(ticket);
+            _databaseCore.WriteRegistrationTicket(ticket);
         }
 
         public void RemoveTicket(Guid id)
         {
             //_databaseAdapter.RemoveRegistrationTicketOld(id);
-            _databaseAdapter.RemoveRegistrationTicket(id);
+            _databaseCore.RemoveRegistrationTicket(id);
         }
     }
 }
