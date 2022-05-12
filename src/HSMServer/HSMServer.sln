@@ -1,5 +1,4 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMCommon", "..\HSMCommon\HSMCommon.csproj", "{72BC57D1-2582-4AA4-B078-AC1B7648CFCE}"
 EndProject
@@ -29,7 +28,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Benchmark", "Benchmark", "{
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BenchmarkPlatform", "..\BenchmarkPlatform\BenchmarkPlatform.csproj", "{2DDD3441-EF64-4090-9E57-E83F25413999}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerformanceTest", "..\PerformanceTest\PerformanceTest.csproj", "{BF4BB1F7-0180-4388-9393-5407B132AD4C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PerformanceTest", "..\PerformanceTest\PerformanceTest.csproj", "{BF4BB1F7-0180-4388-9393-5407B132AD4C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

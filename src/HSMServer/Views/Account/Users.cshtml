@@ -19,7 +19,7 @@
             <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
 
-        @ViewHelper.CreateUserList(Context.User, Model)
+        @ViewHelper.CreateUserList(Context.User, Model, TempData[TextConstants.TempDataProductsText])
     </div>
 </div>
 

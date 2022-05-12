@@ -1,32 +1,36 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31105.61
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32421.90
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDataCollector", "HSMDataCollector\HSMDataCollector.csproj", "{83C0F461-62FC-49D6-941B-B225007B3834}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "HSMDataCollector\HSMDataCollector.csproj", "{83C0F461-62FC-49D6-941B-B225007B3834}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{56418540-B151-4FF4-AC7F-05D5C4E3D07A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDataCollector.Tests", "HSMDataCollector.Tests\HSMDataCollector.Tests.csproj", "{785E3A92-D50E-4234-B543-8FA8C3E2F18E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector.Tests", "HSMDataCollector.Tests\HSMDataCollector.Tests.csproj", "{785E3A92-D50E-4234-B543-8FA8C3E2F18E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{83C0F461-62FC-49D6-941B-B225007B3834}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{83C0F461-62FC-49D6-941B-B225007B3834}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83C0F461-62FC-49D6-941B-B225007B3834}.Debug|x64.ActiveCfg = Debug|x64
+		{83C0F461-62FC-49D6-941B-B225007B3834}.Debug|x64.Build.0 = Debug|x64
 		{83C0F461-62FC-49D6-941B-B225007B3834}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{83C0F461-62FC-49D6-941B-B225007B3834}.Release|Any CPU.Build.0 = Release|Any CPU
-		{56418540-B151-4FF4-AC7F-05D5C4E3D07A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{56418540-B151-4FF4-AC7F-05D5C4E3D07A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{56418540-B151-4FF4-AC7F-05D5C4E3D07A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{56418540-B151-4FF4-AC7F-05D5C4E3D07A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83C0F461-62FC-49D6-941B-B225007B3834}.Release|x64.ActiveCfg = Release|x64
+		{83C0F461-62FC-49D6-941B-B225007B3834}.Release|x64.Build.0 = Release|x64
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Debug|x64.ActiveCfg = Debug|x64
+		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Debug|x64.Build.0 = Debug|x64
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|x64.ActiveCfg = Release|x64
+		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

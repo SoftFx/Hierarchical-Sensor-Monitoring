@@ -8,6 +8,7 @@ using HSMServer.Core.Encryption;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication;
@@ -29,13 +30,15 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly TreeViewModel _treeViewModel;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager)
+            IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
         {
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
+            _treeViewModel = treeViewModel;
         }
 
         #region Login
@@ -127,7 +130,7 @@ namespace HSMServer.Controllers
             {
                 products = new List<KeyValuePair<string, ProductRoleEnum>>()
                     { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey,
-                    (ProductRoleEnum)Int32.Parse(model.Role))};
+                    (ProductRoleEnum)int.Parse(model.Role))};
             }
 
             _userManager.AddUser(model.Username, null, null,
@@ -147,6 +150,10 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin(true)]
         public IActionResult Users()
         {
+            // TODO: use ViewComponent and remove using TempData for passing products
+            TempData[TextConstants.TempDataProductsText] =
+                _treeViewModel.Nodes.Values.ToDictionary(product => product.Id, product => product.Name);
+
             var users = _userManager.GetUsers().OrderBy(x => x.UserName);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
@@ -191,7 +198,7 @@ namespace HSMServer.Controllers
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Index", "Home");
         }
-        
+
         private async Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
