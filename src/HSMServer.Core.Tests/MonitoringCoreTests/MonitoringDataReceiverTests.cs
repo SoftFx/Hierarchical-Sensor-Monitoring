@@ -39,7 +39,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             _monitoringCore = new MonitoringCore(
                 _databaseCoreManager.DatabaseCore,
                 _barStorage,
-                _productManager,
                 configurationProvider,
                 _updatesQueue,
                 _valuesCache,
