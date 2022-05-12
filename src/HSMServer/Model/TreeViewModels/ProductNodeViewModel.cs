@@ -12,7 +12,7 @@ namespace HSMServer.Model.TreeViewModels
     {
         public string Id { get; }
 
-        public string EncodedId => SensorPathHelper.Encode(Id);
+        public string EncodedId { get; }
 
         public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; }
 
@@ -28,16 +28,14 @@ namespace HSMServer.Model.TreeViewModels
         public ProductNodeViewModel(ProductModel model)
         {
             Id = model.Id;
+            EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
 
             Nodes = new ConcurrentDictionary<string, ProductNodeViewModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)
-            {
-                var sensorVM = new SensorNodeViewModel(sensor);
-                AddSensor(sensorVM);
-            }
+                AddSensor(new SensorNodeViewModel(sensor));
         }
 
 

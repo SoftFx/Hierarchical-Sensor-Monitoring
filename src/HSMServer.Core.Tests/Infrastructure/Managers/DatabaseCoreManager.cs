@@ -1,24 +1,26 @@
+using HSMDatabase.DatabaseWorkCore;
+using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
 using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal class DatabaseAdapterManager
+    internal class DatabaseCoreManager
     {
         private static int _dbNumber;
 
 
         public string DatabaseFolder { get; }
 
-        public DatabaseAdapter DatabaseAdapter { get; private set; }
+        public IDatabaseCore DatabaseCore { get; private set; }
 
 
-        public DatabaseAdapterManager(string databaseFolder)
+        public DatabaseCoreManager(string databaseFolder)
         {
             var number = Interlocked.Increment(ref _dbNumber);
 
             DatabaseFolder = databaseFolder;
-            DatabaseAdapter = new DatabaseAdapter(
+            DatabaseCore = new DatabaseCore(
                 new DatabaseSettings()
                 {
                     DatabaseFolder = databaseFolder,
@@ -30,11 +32,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal void ClearDatabase()
         {
-            DatabaseAdapter.Dispose();
-            DatabaseAdapter = null;
+            DatabaseCore.Dispose();
+            DatabaseCore = null;
         }
 
         internal void AddTestProduct() =>
-            DatabaseAdapter.AddProduct(TestProductsManager.TestProduct);
+            DatabaseCore.AddProduct(TestProductsManager.TestProduct);
     }
 }

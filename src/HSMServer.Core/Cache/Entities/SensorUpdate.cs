@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Cache.Entities
 {
-    public class UpdatedSensor
+    public class SensorUpdate
     {
         public Guid Id { get; init; }
 

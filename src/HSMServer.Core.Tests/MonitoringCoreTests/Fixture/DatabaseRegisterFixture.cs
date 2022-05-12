@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 
     public class DatabaseRegisterFixture : IDisposable
     {
-        private readonly List<DatabaseAdapterManager> _createdDatabases = new(1 << 8);
+        private readonly List<DatabaseCoreManager> _createdDatabases = new(1 << 8);
 
 
         public void Dispose()
@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
                 FileManager.SafeRemoveFolder(folder);
         }
 
-        internal void RegisterDatabase(DatabaseAdapterManager dbAdapterManager) =>
+        internal void RegisterDatabase(DatabaseCoreManager dbAdapterManager) =>
             _createdDatabases.Add(dbAdapterManager);
     }
 }

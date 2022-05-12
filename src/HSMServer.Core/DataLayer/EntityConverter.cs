@@ -22,14 +22,6 @@ namespace HSMServer.Core.DataLayer
             var key = Guid.NewGuid().ToString();
             var dateAdded = DateTime.MinValue;
 
-            var authorId = Guid.Empty.ToString();
-            var parentId = Guid.Empty.ToString();
-            const int state = (int)ProductState.FullAccess;
-            var desc = string.Empty;
-            var subProductsIds = new List<string>();
-            var sensorsIds = new List<string>();
-            const bool isConverted = true;
-
             name = rootElement.TryGetProperty("Name", out var jsonName) ? jsonName.GetString() : name;
             key = rootElement.TryGetProperty("Key", out var jsonKey) ? jsonKey.GetString() : key;
             dateAdded = rootElement.TryGetProperty("DateAdded", out var jsonAdded) ? 
@@ -38,15 +30,15 @@ namespace HSMServer.Core.DataLayer
             var newEntity = new ProductEntity
             {
                 Id = key,
-                AuthorId = authorId,
-                ParentProductId = parentId,
-                State = state,
+                AuthorId = string.Empty,
+                ParentProductId = string.Empty,
+                State = (int)ProductState.FullAccess,
                 DisplayName = name,
-                Description = desc,
+                Description = string.Empty,
                 CreationDate = dateAdded.Ticks,
-                SubProductsIds = subProductsIds,
-                SensorsIds = sensorsIds,
-                IsConverted = isConverted
+                SubProductsIds = new List<string>(),
+                SensorsIds = new List<string>(),
+                IsConverted = true
             };
 
             return newEntity;
@@ -63,7 +55,7 @@ namespace HSMServer.Core.DataLayer
         //    }
 
         //    var id = Guid.NewGuid().ToString();
-        //    var productId = Guid.Empty.ToString();
+        //    var productId = string.Empty;
         //    var path = string.Empty;
         //    var productName = string.Empty;
         //    var sensorName = string.Empty;

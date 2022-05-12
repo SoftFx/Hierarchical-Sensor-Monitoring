@@ -2,7 +2,6 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
@@ -35,12 +34,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             : base(fixture, registerFixture)
         {
             var configurationProvider = new Mock<IConfigurationProvider>();
-
             var barStorage = new BarSensorsStorage();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
-                _databaseAdapterManager.DatabaseAdapter,
+                _databaseCoreManager.DatabaseCore,
                 barStorage,
                 _productManager,
                 configurationProvider.Object,
@@ -68,7 +66,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                    _monitoringCore.IsSensorRegistered,
                                    _monitoringCore.GetSensorInfo,
                                    _monitoringCore.GetProductSensors,
-                                   _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                   _databaseCoreManager.DatabaseCore.GetSensorInfo,
                                    _sensorValuesTester);
             }
         }
@@ -84,7 +82,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                           _monitoringCore.IsSensorRegistered,
                                           _monitoringCore.GetSensorInfo,
                                           _monitoringCore.GetProductSensors,
-                                          _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                          _databaseCoreManager.DatabaseCore.GetSensorInfo);
         }
 
         [Theory]
@@ -108,7 +106,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _monitoringCore.UpdateSensorInfo(updatedSensorInfo);
 
                 Assert.True(_monitoringCore.IsSensorRegistered(_testProductName, sensorValuePath));
-                FullTestUpdatedSensorInfo(updatedSensorInfo, _databaseAdapterManager.DatabaseAdapter.GetSensorInfo(_testProductName, sensorValuePath), sensorValue);
+                FullTestUpdatedSensorInfo(updatedSensorInfo, _databaseCoreManager.DatabaseCore.GetSensorInfo(_testProductName, sensorValuePath), sensorValue);
                 FullTestUpdatedSensorInfo(updatedSensorInfo, _monitoringCore.GetSensorInfo(_testProductName, sensorValuePath), sensorValue);
                 FullTestUpdatedSensorInfo(updatedSensorInfo, _monitoringCore.GetProductSensors(_testProductName).FirstOrDefault(s => s.Path == sensorValuePath), sensorValue);
             }
@@ -127,7 +125,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                           _monitoringCore.IsSensorRegistered,
                                           _monitoringCore.GetSensorInfo,
                                           _monitoringCore.GetProductSensors,
-                                          _databaseAdapterManager.DatabaseAdapter.GetSensorInfo);
+                                          _databaseCoreManager.DatabaseCore.GetSensorInfo);
         }
 
         [Theory]
@@ -154,8 +152,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                       _monitoringCore.GetSensorInfo,
                                       _monitoringCore.GetProductSensors,
                                       //_valuesCache.GetValues,
-                                      _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
-                                      _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                      _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                      _databaseCoreManager.DatabaseCore.GetSensorInfo,
                                       _sensorValuesTester);
         }
 
@@ -173,8 +171,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                   _monitoringCore.GetSensorInfo,
                                   _monitoringCore.GetProductSensors,
                                   //_valuesCache.GetValues,
-                                  _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
-                                  _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                  _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                  _databaseCoreManager.DatabaseCore.GetSensorInfo,
                                   _sensorValuesTester);
         }
 
@@ -192,8 +190,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                   _monitoringCore.GetSensorInfo,
                                   _monitoringCore.GetProductSensors,
                                   //_valuesCache.GetValues,
-                                  _databaseAdapterManager.DatabaseAdapter.GetAllSensorHistory,
-                                  _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                                  _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                  _databaseCoreManager.DatabaseCore.GetSensorInfo,
                                   _sensorValuesTester);
         }
 
@@ -210,7 +208,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                _monitoringCore.IsSensorRegistered,
                                _monitoringCore.GetSensorInfo,
                                _monitoringCore.GetProductSensors,
-                               _databaseAdapterManager.DatabaseAdapter.GetSensorInfo,
+                               _databaseCoreManager.DatabaseCore.GetSensorInfo,
                                _sensorValuesTester);
         }
 
@@ -458,7 +456,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var dataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(type);
 
-            _databaseAdapterManager.DatabaseAdapter.PutSensorData(dataEntity, TestProductsManager.ProductName);
+            _databaseCoreManager.DatabaseCore.PutSensorData(dataEntity, TestProductsManager.ProductName);
 
             switch (dataEntity.DataType)
             {

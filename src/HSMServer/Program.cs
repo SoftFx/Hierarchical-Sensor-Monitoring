@@ -1,5 +1,5 @@
 using HSMCommon.Constants;
-using HSMServer.Core.Configuration;
+using HSMServer.Certificates;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;

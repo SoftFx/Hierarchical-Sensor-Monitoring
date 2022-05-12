@@ -19,19 +19,13 @@ namespace HSMServer.Core.Model.Authentication
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
         public User(string userName) : this()
         {
-            Id = Guid.NewGuid();
             UserName = userName;
         }
         public User()
         {
+            Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
         }
-
-        //public User(string userName, string thumbprint) : this()
-        //{
-        //    UserName = userName;
-        //    CertificateThumbprint = thumbprint;
-        //}
 
         public User(User user)
         {

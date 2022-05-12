@@ -13,7 +13,7 @@ namespace HSMServer.Core.Configuration
     {
         #region Private fields
 
-        private readonly IDatabaseAdapter _databaseAdapter;
+        private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ConfigurationProvider> _logger;
         private ClientVersionModel _clientVersion;
         private string _clientAppFolderPath;
@@ -27,10 +27,10 @@ namespace HSMServer.Core.Configuration
 
         #endregion
 
-        public ConfigurationProvider(IDatabaseAdapter databaseAdapter, ILogger<ConfigurationProvider> logger)
+        public ConfigurationProvider(IDatabaseCore databaseCore, ILogger<ConfigurationProvider> logger)
         {
             _logger = logger;
-            _databaseAdapter = databaseAdapter;
+            _databaseCore = databaseCore;
             _logger.LogInformation("ConfigurationProvider initialized.");
         }
 
@@ -47,18 +47,18 @@ namespace HSMServer.Core.Configuration
         public void AddConfigurationObject(string name, string value)
         {
             var config = new ConfigurationObject() { Name = name, Value = value };
-            _databaseAdapter.WriteConfigurationObject(config);
+            _databaseCore.WriteConfigurationObject(config);
         }
 
         public void SetConfigurationObjectToDefault(string name)
         {
-            _databaseAdapter.RemoveConfigurationObject(name);
+            _databaseCore.RemoveConfigurationObject(name);
         }
 
         ///Use 'name' from ConfigurationConstants! 
         public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
         {
-            var currentObject = _databaseAdapter.GetConfigurationObject(name);
+            var currentObject = _databaseCore.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
                 ConfigurationConstants.GetDefault(name), ConfigurationConstants.GetDescription(name));
         }
@@ -81,7 +81,7 @@ namespace HSMServer.Core.Configuration
 
         public ConfigurationObject ReadConfigurationObject(string name)
         {
-            var objectFromDB = _databaseAdapter.GetConfigurationObject(name);
+            var objectFromDB = _databaseCore.GetConfigurationObject(name);
             if (objectFromDB != null)
             {
                 objectFromDB.Description = ConfigurationConstants.GetDescription(name);
