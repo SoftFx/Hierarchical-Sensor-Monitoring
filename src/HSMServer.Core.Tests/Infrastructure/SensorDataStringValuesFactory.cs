@@ -1,5 +1,4 @@
 ﻿using System;
-using HSMServer.Core.Converters;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -25,5 +24,12 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static string GetBarSensorsShortString<T>(T min, T mean, T max, int count, T lastValue) where T : struct =>
             $"Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {lastValue}.";
+    }
+
+
+    public static class StringExtensions
+    {
+        public static string AddComment(this string source, string comment) =>
+             $"{source}{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
     }
 }
