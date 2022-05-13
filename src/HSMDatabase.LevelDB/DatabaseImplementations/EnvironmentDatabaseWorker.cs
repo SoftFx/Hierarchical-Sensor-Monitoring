@@ -212,6 +212,120 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+        #region AccessKey
+
+        public void AddAccessKeyToList(string id) 
+        {
+            var key = PrefixConstants.GetAccessKeyListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                var currentList = _database.TryRead(bytesKey, out var value)
+                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new List<string>();
+
+                if (!currentList.Contains(id))
+                    currentList.Add(id);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add AccessKey {id} to list");
+            }
+        }
+
+        public List<string> GetAccessKeyList()
+        {
+            string listKey = PrefixConstants.GetAccessKeyListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
+            var result = new List<string>();
+            try
+            {
+                var keys = _database.TryRead(bytesKey, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new List<string>();
+
+                result.AddRange(keys);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get AccessKeys list");
+            }
+
+            return result;
+        }
+
+        public void RemoveAccessKeyFromList(string id)
+        {
+            var key = PrefixConstants.GetAccessKeyListKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+            try
+            {
+                var currentList = _database.TryRead(bytesKey, out byte[] value)
+                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new List<string>();
+
+                currentList.Remove(id);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove AccessKey {id} from list");
+            }
+        }
+
+        public void AddAccessKey(AccessKeyEntity entity)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            var stringData = JsonSerializer.Serialize(entity);
+            var bytesValue = Encoding.UTF8.GetBytes(stringData);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put AccessKey for {entity.Id}");
+            }
+        }
+
+        public void RemoveAccessKey(string id) 
+        {
+            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove AccessKey by {id}");
+            }
+        }
+
+        public AccessKeyEntity GetAccessKey(string id)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                return _database.TryRead(bytesKey, out byte[] value)
+                    ? JsonSerializer.Deserialize<AccessKeyEntity>(Encoding.UTF8.GetString(value)) : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read AccessKey by {id}");
+            }
+
+            return null;
+        }
+
+        #endregion
+
         #region Sensors
 
         public void RemoveSensor(string productName, string path)
