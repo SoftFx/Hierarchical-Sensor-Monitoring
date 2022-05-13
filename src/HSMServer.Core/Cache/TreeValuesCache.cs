@@ -79,11 +79,7 @@ namespace HSMServer.Core.Cache
                 RemoveProduct(productId);
 
                 if (product.ParentProduct != null)
-                {
-                    _databaseCore.UpdateProduct(product.ParentProduct.ToProductEntity());
-
-                    ChangeProductEvent?.Invoke(product.ParentProduct, TransactionType.Update);
-                }
+                    UpdateProduct(product.ParentProduct);
             }
         }
 
@@ -169,10 +165,17 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
-                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
+                UpdateProduct(parentProduct);
             }
             else
+            {
+                bool isMetadataUpdated = sensor.IsSensorMetadataUpdated(sensorValue);
+
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
+
+                if (isMetadataUpdated)
+                    _databaseCore.UpdateSensor(sensor.ToSensorEntity());
+            }
 
             _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
@@ -281,7 +284,7 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
-                    _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
+                    UpdateProduct(parentProduct);
                 }
 
                 parentProduct = subProduct;
@@ -316,6 +319,13 @@ namespace HSMServer.Core.Cache
             _databaseCore.AddSensor(sensor.ToSensorEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
+        }
+
+        private void UpdateProduct(ProductModel product)
+        {
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

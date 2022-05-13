@@ -107,6 +107,9 @@ namespace HSMServer.Core.Cache.Entities
             Status = sensorStatus > sensorValue.Status ? sensorStatus : sensorValue.Status;
         }
 
+        internal bool IsSensorMetadataUpdated(SensorValueBase sensorValue) =>
+            sensorValue.Description != Description || SensorTypeFactory.GetSensorType(sensorValue) != SensorType;
+
         internal void ClearData()
         {
             LastUpdateTime = DateTime.MinValue;
