@@ -79,11 +79,7 @@ namespace HSMServer.Core.Cache
                 RemoveProduct(productId);
 
                 if (product.ParentProduct != null)
-                {
-                    _databaseCore.UpdateProduct(product.ParentProduct.ToProductEntity());
-
-                    ChangeProductEvent?.Invoke(product.ParentProduct, TransactionType.Update);
-                }
+                    UpdateProduct(product.ParentProduct);
             }
         }
 
@@ -169,10 +165,17 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
-                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
+                UpdateProduct(parentProduct);
             }
             else
+            {
+                bool isMetadataUpdated = sensor.IsSensorMetadataUpdated(sensorValue);
+
                 sensor.UpdateData(sensorValue, timeCollected, validationResult);
+
+                if (isMetadataUpdated)
+                    _databaseCore.UpdateSensor(sensor.ToSensorEntity());
+            }
 
             _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
@@ -253,7 +256,7 @@ namespace HSMServer.Core.Cache
                 if (sensorEntity.Path == null)
                     continue;
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path, false);
 
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 parentProduct.AddSensor(sensor);
@@ -264,7 +267,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        // TODO: remove 'updateParent' parameter after removing methods for migration
+        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath, bool updateParent = true)
         {
             var parentProduct = GetProductByName(productName);
             if (parentProduct == null)
@@ -281,7 +285,8 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
-                    _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
+                    if (updateParent)
+                        UpdateProduct(parentProduct);
                 }
 
                 parentProduct = subProduct;
@@ -316,6 +321,13 @@ namespace HSMServer.Core.Cache
             _databaseCore.AddSensor(sensor.ToSensorEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
+        }
+
+        private void UpdateProduct(ProductModel product)
+        {
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
