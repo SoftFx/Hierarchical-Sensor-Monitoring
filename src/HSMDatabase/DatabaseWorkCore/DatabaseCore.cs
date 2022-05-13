@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using HSMDatabase.AccessManager;
+﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
@@ -11,6 +7,10 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -163,12 +163,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public void AddSensorValue(SensorDataEntity entity, string productName)
-        {
-            var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
-            database.PutSensorData(entity, productName);
-        }
-
         public SensorDataEntity GetLatestSensorValue(string productName, string path)
         {
             List<ISensorsDatabase> databases = _sensorsDatabases.GetAllDatabases();
@@ -189,16 +183,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Sensor
 
-        public void AddSensor(SensorEntity entity)
-        {
+        public void AddSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
-        }
 
         public void RemoveSensor(string productName, string path)
         {
             //TAM-90: Do not delete metadata when delete sensors
             //_environmentDatabase.RemoveSensor(productName, path);
-            //_environmentDatabase.RemoveSensorFromList(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
             {
@@ -206,7 +197,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        public void RemoveSensorWithMetadata(string productName, string path) 
+        public void RemoveSensorWithMetadata(string productName, string path)
         {
             _environmentDatabase.RemoveSensor(productName, path);
 
@@ -215,8 +206,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateSensor(SensorEntity entity) => AddSensor(entity);
 
-        public void PutSensorData(SensorDataEntity data, string productName) =>
-            AddSensorValue(data, productName);
+        public void PutSensorData(SensorDataEntity entity, string productName)
+        {
+            var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
+            database.PutSensorData(entity, productName);
+        }
 
         public SensorHistoryData GetOneValueSensorValue(string productName, string path)
         {
@@ -272,86 +266,32 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddProduct(ProductEntity entity)
         {
-            _environmentDatabase.AddProductToList(entity.DisplayName);
-            _environmentDatabase.PutProductInfo(entity);
-        }
-
-        public void AddProductNew(ProductEntity entity)
-        {
             _environmentDatabase.AddProductToList(entity.Id);
-            _environmentDatabase.PutProductInfoNew(entity);
+            _environmentDatabase.PutProduct(entity);
         }
 
-        public void UpdateProduct(ProductEntity entity) => AddProductNew(entity);
+        public void UpdateProduct(ProductEntity entity) =>
+            _environmentDatabase.PutProduct(entity);
 
-        public void RemoveProductNew(string id)
+        public void RemoveProduct(string id)
         {
-            _environmentDatabase.RemoveProductInfoNew(id);
+            _environmentDatabase.RemoveProduct(id);
             _environmentDatabase.RemoveProductFromList(id);
-        }
-
-        private List<string> GetAllProductsOld() => 
-            GetBaseAllProducts(_environmentDatabase.GetProductInfoStr);
-
-        private List<string> GetAllProductsNew() =>
-            GetBaseAllProducts(_environmentDatabase.GetProductInfoStrNew);
-
-        private List<string> GetBaseAllProducts(Func<string, string> getProductInfo)
-        {
-            var products = new List<string>();
-            var keys = _environmentDatabase.GetProductsList();
-
-            foreach (var key in keys)
-            {
-                var product = getProductInfo(key);        
-                if (product != null)
-                    products.Add(product);
-            }
-
-            return products;
         }
 
         public List<ProductEntity> GetAllProducts()
         {
-            var dictionary = new Dictionary<string, ProductEntity>();
-            var oldProductEntityNames = new List<string>();
+            var keys = _environmentDatabase.GetProductsList();
 
-            var oldEntities = GetAllProductsOld();
-            var convertedEntities = GetAllProductsNew();
-            foreach (var oldEntity in oldEntities)
+            var productEntities = new List<ProductEntity>(keys.Count);
+            foreach (var key in keys)
             {
-                var entity = EntityConverter.ConvertProductEntity(oldEntity);
-                dictionary.Add(entity.DisplayName, entity);
-                oldProductEntityNames.Add(entity.DisplayName);
+                var product = _environmentDatabase.GetProduct(key);
+                if (product != null)
+                    productEntities.Add(product);
             }
 
-            var newEntities = new List<ProductEntity>();
-            foreach (var convertedEntity in convertedEntities)
-            {
-                var entity = EntityConverter.ConvertProductEntity(convertedEntity);
-                var isParentProduct = string.IsNullOrEmpty(entity.ParentProductId);
-
-                if (isParentProduct && dictionary.ContainsKey(entity.DisplayName))
-                    dictionary.Remove(entity.DisplayName);
-
-                newEntities.Add(entity);
-            }
-
-            newEntities.AddRange(dictionary.Values);
-
-            RemoveOldProducts(oldProductEntityNames);
-
-            return newEntities;
-        }
-
-        private void RemoveOldProducts(List<string> oldProductEntityNames)
-        {
-            foreach (var productName in oldProductEntityNames)
-            {
-                _environmentDatabase.RemoveProductInfo(productName);
-                _environmentDatabase.RemoveProductFromList(productName);
-                _environmentDatabase.RemoveSensorsList(productName);
-            }    
+            return productEntities;
         }
 
         #endregion
@@ -373,7 +313,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateUser(User user) => AddUser(user);
 
         public List<User> GetUsers() => GetUsers(_environmentDatabase.ReadUsers().ToList());
-        
+
         public List<User> GetUsersPage(int page, int pageSize) =>
             GetUsers(_environmentDatabase.ReadUsersPage(page, pageSize).ToList());
 
@@ -404,7 +344,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.WriteConfigurationObject(entity);
         }
 
-        public void RemoveConfigurationObject(string name) => 
+        public void RemoveConfigurationObject(string name) =>
             _environmentDatabase.RemoveConfigurationObject(name);
 
         #endregion
@@ -417,7 +357,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return entity != null ? new RegistrationTicket(entity) : null;
         }
 
-        public void RemoveRegistrationTicket(Guid id) => 
+        public void RemoveRegistrationTicket(Guid id) =>
             _environmentDatabase.RemoveRegistrationTicket(id);
 
         public void WriteRegistrationTicket(RegistrationTicket ticket)

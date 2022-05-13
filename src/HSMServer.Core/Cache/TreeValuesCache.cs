@@ -67,7 +67,7 @@ namespace HSMServer.Core.Cache
                     RemoveSensor(sensorId);
 
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
-                _databaseCore.RemoveProductNew(product.Id);
+                _databaseCore.RemoveProduct(product.Id);
 
                 _userManager.RemoveProductFromUsers(product.Id);
 
@@ -308,7 +308,7 @@ namespace HSMServer.Core.Cache
         private void AddProduct(ProductModel product)
         {
             _tree.TryAdd(product.Id, product);
-            _databaseCore.AddProductNew(product.ToProductEntity());
+            _databaseCore.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
