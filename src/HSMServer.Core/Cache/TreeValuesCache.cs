@@ -182,26 +182,27 @@ namespace HSMServer.Core.Cache
             UploadSensorDataEvent?.Invoke(sensor);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Initialize()
         {
             var productEntities = _databaseCore.GetAllProducts();
             var sensorEntities = _databaseCore.GetAllSensors();
 
-            BuildTree(productEntities.Where(e => !e.IsConverted).ToList(),
-                      sensorEntities.Where(e => !e.IsConverted).ToList());
-
-            BuildTreeWithMigration(
-                productEntities.Where(e => e.IsConverted).ToList(),
-                sensorEntities.Where(e => e.IsConverted).ToList());
+            BuildTree(productEntities, sensorEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
-            FillTreeByProductModels(productEntities);
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
 
             foreach (var sensorEntity in sensorEntities)
             {
@@ -228,45 +229,11 @@ namespace HSMServer.Core.Cache
                 }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
 
-        private void BuildTreeWithMigration(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
-        {
-            FillTreeByProductModels(productEntities);
-            FillTreeBySensorModels(sensorEntities);
-
-            ResaveEntities(productEntities, sensorEntities);
-        }
-
-        private void FillTreeByProductModels(List<ProductEntity> productEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
-            }
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void FillTreeBySensorModels(List<SensorEntity> sensorEntities)
-        {
-            foreach (var sensorEntity in sensorEntities)
-            {
-                if (sensorEntity.Path == null)
-                    continue;
-
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
-
-                var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
-                parentProduct.AddSensor(sensor);
-
-                _sensors.TryAdd(sensor.Id, sensor);
-
-                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
-            }
-        }
-
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
             var parentProduct = GetProductByName(productName);
@@ -326,40 +293,6 @@ namespace HSMServer.Core.Cache
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
-        {
-            ResaveProducts(productEntities);
-            ResaveSensors(sensorEntities);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveProducts(List<ProductEntity> productEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
-                    continue;
-
-                _databaseCore.UpdateProduct(product.ToProductEntity());
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveSensors(List<SensorEntity> sensorEntities)
-        {
-            foreach (var sensorEntity in sensorEntities)
-            {
-                if (sensorEntity.Path == null)
-                    _databaseCore.RemoveSensorWithMetadata(sensorEntity.ProductName, sensorEntity.Path);
-
-                if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
-                    continue;
-
-                _databaseCore.UpdateSensor(sensor.ToSensorEntity());
-            }
         }
     }
 }
