@@ -194,7 +194,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensor(SensorEntity entity)
         {
-            _environmentDatabase.AddNewSensorToList(entity.ProductName, entity.Path);
             _environmentDatabase.AddSensor(entity);
         }
 
@@ -213,7 +212,6 @@ namespace HSMDatabase.DatabaseWorkCore
         public void RemoveSensorWithMetadata(string productName, string path) 
         {
             _environmentDatabase.RemoveSensor(productName, path);
-            _environmentDatabase.RemoveSensorFromList(productName, path);
 
             RemoveSensor(productName, path);
         }
@@ -384,6 +382,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public List<ProductEntity> GetAllProducts()
         {
             var dictionary = new Dictionary<string, ProductEntity>();
+            var oldProductEntityNames = new List<string>();
 
             var oldEntities = GetAllProductsOld();
             var convertedEntities = GetAllProductsNew();
@@ -391,6 +390,7 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var entity = EntityConverter.ConvertProductEntity(oldEntity);
                 dictionary.Add(entity.DisplayName, entity);
+                oldProductEntityNames.Add(entity.DisplayName);
             }
 
             var newEntities = new List<ProductEntity>();
@@ -407,7 +407,19 @@ namespace HSMDatabase.DatabaseWorkCore
 
             newEntities.AddRange(dictionary.Values);
 
+            RemoveOldProducts(oldProductEntityNames);
+
             return newEntities;
+        }
+
+        private void RemoveOldProducts(List<string> oldProductEntityNames)
+        {
+            foreach (var productName in oldProductEntityNames)
+            {
+                _environmentDatabase.RemoveProductInfo(productName);
+                _environmentDatabase.RemoveProductFromList(productName);
+                _environmentDatabase.RemoveSensorsList(productName);
+            }    
         }
 
         #endregion

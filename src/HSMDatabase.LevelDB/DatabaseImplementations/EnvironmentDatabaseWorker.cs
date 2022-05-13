@@ -265,6 +265,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
+        // TODO: delete add/update/remove sensor to list (after resaving products this list doesn't exists and isn't used)
         public void AddNewSensorToList(string productName, string path)
         {
             var key = PrefixConstants.GetSensorsListKey(productName);

@@ -256,7 +256,7 @@ namespace HSMServer.Core.Cache
                 if (sensorEntity.Path == null)
                     continue;
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path, false);
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
 
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 parentProduct.AddSensor(sensor);
@@ -267,8 +267,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        // TODO: remove 'updateParent' parameter after removing methods for migration
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath, bool updateParent = true)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
             var parentProduct = GetProductByName(productName);
             if (parentProduct == null)
@@ -285,8 +284,7 @@ namespace HSMServer.Core.Cache
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
-                    if (updateParent)
-                        UpdateProduct(parentProduct);
+                    UpdateProduct(parentProduct);
                 }
 
                 parentProduct = subProduct;
