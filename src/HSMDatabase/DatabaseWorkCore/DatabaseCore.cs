@@ -285,7 +285,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (!string.IsNullOrEmpty(oldEntity.Id))
                     continue;
 
-                oldEntity.Id = string.Empty;
+                oldEntity.Id = Guid.NewGuid().ToString();
                 oldEntity.ProductId = string.Empty;
                 oldEntity.IsConverted = true;
             }
