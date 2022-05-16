@@ -27,7 +27,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
-            ProductId = Guid.Parse(entity.ProductId);
+            ProductId = entity.ProductId;
             IsLocked = entity.IsLocked;
             KeyRole = (KeyRolesEnum)entity.KeyRole;
             DisplayName = entity.DisplayName;
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Cache.Entities
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
-                ProductId = ProductId.ToString(),
+                ProductId = ProductId,
                 IsLocked = IsLocked,
                 KeyRole = (byte)KeyRole,
                 DisplayName = DisplayName,
