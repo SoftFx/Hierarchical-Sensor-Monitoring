@@ -8,9 +8,9 @@ namespace HSMServer.Core.Cache.Entities
     {
         public Guid Id { get; init; }
 
-        public string AuthorId { get; } //ToDo: UserModel ?
+        public string AuthorId { get; }
 
-        public ProductModel Product { get; set; }
+        public string ProductId { get; set; }
 
         public bool IsLocked { get; }
 
@@ -27,6 +27,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
+            ProductId = Guid.Parse(entity.ProductId);
             IsLocked = entity.IsLocked;
             KeyRole = (KeyRolesEnum)entity.KeyRole;
             DisplayName = entity.DisplayName;
@@ -34,12 +35,13 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
+
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
-                ProductId = Product.Id,
+                ProductId = ProductId.ToString(),
                 IsLocked = IsLocked,
                 KeyRole = (byte)KeyRole,
                 DisplayName = DisplayName,
