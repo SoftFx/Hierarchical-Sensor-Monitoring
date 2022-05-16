@@ -80,13 +80,6 @@
         userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
-    let keyErrorText = '@TempData[TextConstants.TempDataKeyErrorText]';
-    if (keyErrorText !== undefined) {
-        let keyErrorSpan = document.getElementById('new_key_span');
-        keyErrorSpan.textContent = keyErrorText;
-        keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-    }
-
     let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
     if (inviteErrorText !== undefined) {
         let inviteErrorSpan = document.getElementById('new_invite_span');
