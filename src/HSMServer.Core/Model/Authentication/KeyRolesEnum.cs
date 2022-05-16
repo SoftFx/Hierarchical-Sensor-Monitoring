@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model.Authentication
     }
 
     [SwaggerIgnore]
-    public enum KeyRolesEnum
+    public enum KeyRolesEnum : byte
     {
         Viewer,
         Feeder,
