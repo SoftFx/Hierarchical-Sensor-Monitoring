@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Core.Products;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -17,7 +16,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private protected readonly SensorValuesFactory _sensorValuesFactory;
         private protected readonly SensorValuesTester _sensorValuesTester;
 
-        protected readonly ProductManager _productManager;
         protected readonly TreeValuesCache _valuesCache;
         protected readonly IUpdatesQueue _updatesQueue;
 
@@ -32,9 +30,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
             _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.DisplayName);
-
-            var productManagerLogger = CommonMoqs.CreateNullLogger<ProductManager>();
-            _productManager = new ProductManager(_databaseCoreManager.DatabaseCore, productManagerLogger);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             var userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);

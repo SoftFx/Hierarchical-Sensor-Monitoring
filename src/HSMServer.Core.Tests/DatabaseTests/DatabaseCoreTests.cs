@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.DataLayer;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.DatabaseTests;
@@ -15,7 +16,7 @@ namespace HSMServer.Core.Tests
     {
         private readonly IDatabaseCore _databaseCore;
 
-        public DatabaseCoreTests(DatabaseCoreFixture fixture, DatabaseRegisterFixture registerFixture) 
+        public DatabaseCoreTests(DatabaseCoreFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
             _databaseCore = _databaseCoreManager.DatabaseCore;
@@ -28,9 +29,9 @@ namespace HSMServer.Core.Tests
         public void AddProductTest()
         {
             var product = DatabaseCoreFactory.CreateProduct();
-            _databaseCore.AddProductNew(product);
+            _databaseCore.AddProduct(product);
 
-            FullProductTest(product, _databaseCore.GetProductNew(product.Id));
+            FullProductTest(product, _databaseCore.GetProduct(product.Id));
         }
 
         [Theory]
@@ -43,12 +44,12 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "SeveralProduct")]
         public void AddSeveralProductsTest(int count)
         {
-            for (int i=0; i < count; i++)
+            for (int i = 0; i < count; i++)
             {
                 var product = DatabaseCoreFactory.CreateProduct();
-                _databaseCore.AddProductNew(product);
+                _databaseCore.AddProduct(product);
 
-                FullProductTest(product, _databaseCore.GetProductNew(product.Id));
+                FullProductTest(product, _databaseCore.GetProduct(product.Id));
             }
         }
 
@@ -58,11 +59,11 @@ namespace HSMServer.Core.Tests
         {
             var product = DatabaseCoreFactory.CreateProduct();
 
-            _databaseCore.AddProductNew(product);
-            Assert.NotNull(_databaseCore.GetProductNew(product.Id));
-            
-            _databaseCore.RemoveProductNew(product.Id);
-            Assert.Null(_databaseCore.GetProductNew(product.Id));
+            _databaseCore.AddProduct(product);
+            Assert.NotNull(_databaseCore.GetProduct(product.Id));
+
+            _databaseCore.RemoveProduct(product.Id);
+            Assert.Null(_databaseCore.GetProduct(product.Id));
         }
 
         [Theory]
@@ -79,11 +80,11 @@ namespace HSMServer.Core.Tests
             {
                 var product = DatabaseCoreFactory.CreateProduct();
 
-                _databaseCore.AddProductNew(product);
-                Assert.NotNull(_databaseCore.GetProductNew(product.Id));
+                _databaseCore.AddProduct(product);
+                Assert.NotNull(_databaseCore.GetProduct(product.Id));
 
-                _databaseCore.RemoveProductNew(product.Id);
-                Assert.Null(_databaseCore.GetProductNew(product.Id));
+                _databaseCore.RemoveProduct(product.Id);
+                Assert.Null(_databaseCore.GetProduct(product.Id));
             }
         }
 
@@ -180,7 +181,7 @@ namespace HSMServer.Core.Tests
         [InlineData(500)]
         [InlineData(1000)]
         [Trait("Category", "SeveralProductRoles")]
-        public void SeveralProductRolesTest(int count) 
+        public void SeveralProductRolesTest(int count)
         {
             var user = DatabaseCoreFactory.CreateUser();
             _databaseCore.AddUser(user);
@@ -363,7 +364,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "SeveralRemoveConfigurationObject")]
         public void SeveralRemoveConfigurationObject(int count)
         {
-            for(int i = 0; i < count; i++)
+            for (int i = 0; i < count; i++)
             {
                 var name = RandomGenerator.GetRandomString();
                 var config = DatabaseCoreFactory.CreateConfiguration(name);
@@ -379,12 +380,18 @@ namespace HSMServer.Core.Tests
 
         #region [ Private methods ]
 
-        private static void FullProductTest(Product expectedProduct, Product actualProduct)
+        private static void FullProductTest(ProductEntity expectedProduct, ProductEntity actualProduct)
         {
             Assert.NotNull(actualProduct);
-            Assert.Equal(expectedProduct.DisplayName, actualProduct.DisplayName);
             Assert.Equal(expectedProduct.Id, actualProduct.Id);
+            Assert.Equal(expectedProduct.AuthorId, actualProduct.AuthorId);
+            Assert.Equal(expectedProduct.ParentProductId, actualProduct.ParentProductId);
+            Assert.Equal(expectedProduct.DisplayName, actualProduct.DisplayName);
+            Assert.Equal(expectedProduct.State, actualProduct.State);
+            Assert.Equal(expectedProduct.Description, actualProduct.Description);
             Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate);
+            Assert.Equal(expectedProduct.SubProductsIds, actualProduct.SubProductsIds);
+            Assert.Equal(expectedProduct.SensorsIds, actualProduct.SensorsIds);
         }
 
         private static void FullUserTest(User expectedUser, User actualUser)
@@ -401,7 +408,7 @@ namespace HSMServer.Core.Tests
                 expectedUser.ProductsRoles.OrderBy(pr => pr.Key);
                 actualUser.ProductsRoles.OrderBy(pr => pr.Key);
 
-                for (int i=0; i < expectedUser.ProductsRoles.Count; i++)
+                for (int i = 0; i < expectedUser.ProductsRoles.Count; i++)
                 {
                     var expectedRole = expectedUser.ProductsRoles[i];
                     var actualRole = actualUser.ProductsRoles[i];
@@ -430,7 +437,7 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedConfig.Value, actualConfig.Value);
         }
 
-        private User GetUser(string username) => 
+        private User GetUser(string username) =>
             _databaseCore.GetUsers().FirstOrDefault(u => u.UserName.Equals(username));
 
         private static int GetCountItemsOnPage(int count, int pageNumber, int pageSize)

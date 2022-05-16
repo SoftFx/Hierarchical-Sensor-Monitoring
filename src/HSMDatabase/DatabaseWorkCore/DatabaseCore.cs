@@ -279,6 +279,9 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveProductFromList(id);
         }
 
+        public ProductEntity GetProduct(string id) =>
+            _environmentDatabase.GetProduct(id);
+
         public List<ProductEntity> GetAllProducts()
         {
             var keys = _environmentDatabase.GetProductsList();

@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -7,12 +7,12 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         internal const string ProductName = "TestProduct";
 
-        internal static Product TestProduct { get; } =
+        internal static ProductEntity TestProduct { get; } =
             new()
             {
-                DisplayName = ProductName,
-                CreationDate = DateTime.UtcNow,
                 Id = Guid.NewGuid().ToString(),
+                DisplayName = ProductName,
+                CreationDate = DateTime.UtcNow.Ticks,
             };
     }
 }

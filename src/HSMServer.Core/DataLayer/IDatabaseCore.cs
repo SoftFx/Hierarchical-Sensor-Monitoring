@@ -22,6 +22,7 @@ namespace HSMServer.Core.DataLayer
         void AddProduct(ProductEntity entity);
         void UpdateProduct(ProductEntity entity);
         void RemoveProduct(string id);
+        ProductEntity GetProduct(string id);
         List<ProductEntity> GetAllProducts();
 
         #endregion

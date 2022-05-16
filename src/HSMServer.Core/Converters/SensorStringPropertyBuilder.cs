@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Converters
 {
-    public static class SensorDataPropertiesBuilder
+    public static class SensorStringPropertyBuilder
     {
         private const double SizeDenominator = 1024.0;
 

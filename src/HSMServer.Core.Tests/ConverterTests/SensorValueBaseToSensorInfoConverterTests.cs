@@ -23,47 +23,47 @@ namespace HSMServer.Core.Tests.ConverterTests
         }
 
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "Simple")]
-        public void SensorValueToSensorInfoConverterTest(SensorType type)
-        {
-            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[InlineData(SensorType.FileSensorBytes)]
+        //[Trait("Category", "Simple")]
+        //public void SensorValueToSensorInfoConverterTest(SensorType type)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
-            var sensorInfo = sensorValue.Convert(_productName);
+        //    var sensorInfo = sensorValue.Convert(_productName);
 
-            _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
-        }
+        //    _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfo);
+        //}
 
-        [Fact]
-        [Trait("Category", "With complex path")]
-        public void FileSensorValueToSensorInfoConverter_WithComplexPath_Test()
-        {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-            sensorValue.Path = GetSensorPath(_productName, sensorValue.Path);
+        //[Fact]
+        //[Trait("Category", "With complex path")]
+        //public void FileSensorValueToSensorInfoConverter_WithComplexPath_Test()
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    sensorValue.Path = GetSensorPath(_productName, sensorValue.Path);
 
-            var sensorInfo = sensorValue.Convert(_productName);
+        //    var sensorInfo = sensorValue.Convert(_productName);
 
-            Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
-        }
+        //    Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
+        //}
 
-        [Fact]
-        [Trait("Category", "With complex path")]
-        public void FileSensorValueToSensorInfoConverter_WithComplexPath2_Test()
-        {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-            sensorValue.Path = null;
+        //[Fact]
+        //[Trait("Category", "With complex path")]
+        //public void FileSensorValueToSensorInfoConverter_WithComplexPath2_Test()
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    sensorValue.Path = null;
 
-            var sensorInfo = sensorValue.Convert(_productName);
+        //    var sensorInfo = sensorValue.Convert(_productName);
 
-            Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
-        }
+        //    Assert.Equal(GetSensorName(sensorValue.Path), sensorInfo.SensorName);
+        //}
 
 
         private static string GetSensorPath(string productName, string sensorName) =>
