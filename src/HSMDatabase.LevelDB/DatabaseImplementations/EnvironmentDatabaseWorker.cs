@@ -220,9 +220,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                var currentList = _database.TryRead(bytesKey, out var value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
+                var currentList = GetAccessKeyList();
 
                 if (!currentList.Contains(id))
                     currentList.Add(id);
@@ -264,9 +262,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                var currentList = _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
+                var currentList = GetAccessKeyList();
 
                 currentList.Remove(id);
 
