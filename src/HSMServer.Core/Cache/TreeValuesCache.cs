@@ -201,7 +201,7 @@ namespace HSMServer.Core.Cache
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
-            FillTreeByProductModels(productEntities);
+            var productsToResave = FillTreeByProductModels(productEntities);
 
             foreach (var sensorEntity in sensorEntities)
             {
@@ -226,6 +226,8 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
+
+            ResaveProducts(productsToResave);
         }
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
@@ -239,13 +241,20 @@ namespace HSMServer.Core.Cache
             ResaveEntities(productEntities, sensorEntities);
         }
 
-        private void FillTreeByProductModels(List<ProductEntity> productEntities)
+        private List<string> FillTreeByProductModels(List<ProductEntity> productEntities)
         {
+            var productsToResave = new List<string>();
+
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
                 _tree.TryAdd(product.Id, product);
+
+                if (!productEntity.IsConverted && productEntity.ParentProductId?.Length == 0)
+                    productsToResave.Add(productEntity.Id);
             }
+
+            return productsToResave;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -341,6 +350,18 @@ namespace HSMServer.Core.Cache
             foreach (var productEntity in productEntities)
             {
                 if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
+                    continue;
+
+                _databaseCore.UpdateProduct(product.ToProductEntity());
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ResaveProducts(List<string> productIds)
+        {
+            foreach (var productId in productIds)
+            {
+                if (!_tree.TryGetValue(productId, out var product))
                     continue;
 
                 _databaseCore.UpdateProduct(product.ToProductEntity());
