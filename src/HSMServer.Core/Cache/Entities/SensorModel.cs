@@ -59,6 +59,7 @@ namespace HSMServer.Core.Cache.Entities
                 //dataEntities.Sort((entity1, entity2) => entity2.Time.CompareTo(entity1.Time));
                 //var newestDataEntity = dataEntities[0];
 
+                SensorTime = dataEntity.Time;
                 LastUpdateTime = dataEntity.TimeCollected;
                 Status = (SensorStatus)dataEntity.Status;
                 OriginalFileSensorContentSize = dataEntity.OriginalFileSensorContentSize;
@@ -136,7 +137,6 @@ namespace HSMServer.Core.Cache.Entities
         internal SensorDataEntity ToSensorDataEntity() =>
             new()
             {
-                Id = Id.ToString(),
                 Status = (byte)Status,
                 Path = Path,
                 Time = SensorTime.ToUniversalTime(),
