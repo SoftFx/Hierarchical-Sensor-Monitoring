@@ -75,7 +75,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(GetSensorValueType(expected), actual.SensorType);
             Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
             Assert.Contains(expected.Comment, actual.TypedData);
-            Assert.Equal(JsonSerializer.Serialize(GetSensorValueTypedData(expected)), actual.TypedData);
+            Assert.Equal(GetSensorValueTypedDataString(expected), actual.TypedData);
         }
 
         internal static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual, DateTime timeCollected)
@@ -84,7 +84,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal((byte)expected.Status, actual.Status);
-            Assert.Equal(JsonSerializer.Serialize(GetSensorValueTypedData(expected)), actual.TypedData);
+            Assert.Equal(GetSensorValueTypedDataString(expected), actual.TypedData);
             Assert.Equal(expected.Time, actual.Time);
             Assert.Equal(timeCollected, actual.TimeCollected);
             Assert.Equal((long)timeSpan.TotalSeconds, actual.Timestamp);
@@ -251,6 +251,9 @@ namespace HSMServer.Core.Tests.Infrastructure
                     return string.Empty;
             }
         }
+
+        internal static string GetSensorValueTypedDataString(SensorValueBase sensorValue) =>
+            JsonSerializer.Serialize(GetSensorValueTypedData(sensorValue));
 
         private static object GetSensorValueTypedData(SensorValueBase sensorValue) =>
             sensorValue switch

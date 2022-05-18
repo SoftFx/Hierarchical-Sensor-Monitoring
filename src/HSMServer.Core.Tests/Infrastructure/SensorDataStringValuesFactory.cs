@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Constants;
+using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -27,9 +28,21 @@ namespace HSMServer.Core.Tests.Infrastructure
     }
 
 
-    public static class StringExtensions
+    internal static class StringExtensions
     {
-        public static string AddComment(this string source, string comment) =>
+        internal static string AddComment(this string source, string comment) =>
              $"{source}{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
+
+        internal static string GetSensorName(this string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
+    }
+
+
+    internal static class DateTimeExtension
+    {
+        internal static long GetTimestamp(this DateTime dateTime)
+        {
+            var timeSpan = dateTime - DateTime.UnixEpoch;
+            return (long)timeSpan.TotalSeconds;
+        }
     }
 }

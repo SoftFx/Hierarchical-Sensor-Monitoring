@@ -35,7 +35,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         [Fact]
-        [Trait("Category", "Products initialization")]
+        [Trait("Category", "Initialization")]
         public async void ProductsInitializationTest()
         {
             await Task.Delay(1000);
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
-        [Trait("Category", "Sensors initialization")]
+        [Trait("Category", "Initialization")]
         public async void SensorsInitializationTest()
         {
             await Task.Delay(1000);
@@ -81,74 +81,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(expected.Count, actual.Count);
 
             foreach (var expectedProduct in expected)
-            {
-                var actualProduct = actualDict[expectedProduct.Id];
-
-                Assert.NotNull(actualProduct);
-                Assert.Equal(expectedProduct.Id, actualProduct.Id);
-                Assert.Equal(expectedProduct.ParentProductId, actualProduct.ParentProduct?.Id);
-                Assert.Equal(expectedProduct.DisplayName, actualProduct.DisplayName);
-                Assert.Equal(expectedProduct.State, (int)actualProduct.State);
-                Assert.Equal(expectedProduct.Description, actualProduct.Description);
-                Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate.Ticks);
-
-                var actualSubProducts = actualProduct.SubProducts.Select(p => p.Key).ToList();
-                var expectedSubProducts = expectedProduct.SubProductsIds;
-                expectedSubProducts.Sort();
-                actualSubProducts.Sort();
-
-                Assert.Equal(expectedSubProducts, actualSubProducts);
-
-                var actualSensors = actualProduct.Sensors.Select(p => p.Key.ToString()).ToList();
-                var expectedSensors = expectedProduct.SensorsIds;
-                expectedSensors.Sort();
-                actualSensors.Sort();
-
-                Assert.Equal(expectedSensors, actualSensors);
-            }
+                ModelsTester.TestProductModel(expectedProduct, actualDict[expectedProduct.Id]);
         }
 
         private void TestSensors(List<SensorEntity> expected, List<SensorModel> actual)
         {
-            long GetTimestamp(DateTime dateTime)
-            {
-                var timeSpan = dateTime - DateTime.UnixEpoch;
-                return (long)timeSpan.TotalSeconds;
-            }
-
-
-            var actualDict = actual.ToDictionary(s => s.Id);
-
             Assert.Equal(expected.Count, actual.Count);
 
+            var actualDict = actual.ToDictionary(s => s.Id);
             foreach (var expectedSensor in expected)
             {
                 var actualSensor = actualDict[Guid.Parse(expectedSensor.Id)];
-
-                Assert.NotNull(actual);
-                Assert.Equal(expectedSensor.Id, actualSensor.Id.ToString());
-                Assert.Equal(expectedSensor.ProductId, actualSensor.ParentProduct.Id);
-                Assert.Equal(expectedSensor.SensorName, actualSensor.SensorName);
-                Assert.Equal(expectedSensor.ProductName, actualSensor.ProductName);
-                Assert.Equal(expectedSensor.Path, actualSensor.Path);
-                Assert.Equal(expectedSensor.Description, actualSensor.Description);
-                Assert.Equal(expectedSensor.ExpectedUpdateIntervalTicks, actualSensor.ExpectedUpdateInterval.Ticks);
-                Assert.Equal(expectedSensor.Unit, actualSensor.Unit);
-                Assert.Equal(expectedSensor.SensorType, (int)actualSensor.SensorType);
-                Assert.True(string.IsNullOrEmpty(actualSensor.ValidationError));
-
                 var expectedSensorData = _databaseCoreManager.DatabaseCore.GetLatestSensorValue(expectedSensor.ProductName, expectedSensor.Path);
 
-                Assert.NotNull(expectedSensorData);
-                Assert.Equal(expectedSensorData.Path, actualSensor.Path);
-                Assert.Equal(expectedSensorData.DataType, (byte)actualSensor.SensorType);
-                Assert.Equal(expectedSensorData.Time, actualSensor.SensorTime);
-                if (expectedSensorData.Timestamp != 0)
-                    Assert.Equal(expectedSensorData.Timestamp, GetTimestamp(actualSensor.SensorTime));
-                Assert.Equal(expectedSensorData.TimeCollected, actualSensor.LastUpdateTime);
-                Assert.Equal(expectedSensorData.Status, (byte)actualSensor.Status);
-                Assert.Equal(expectedSensorData.TypedData, actualSensor.TypedData);
-                Assert.Equal(expectedSensorData.OriginalFileSensorContentSize, actualSensor.OriginalFileSensorContentSize);
+                ModelsTester.TestSensorModel(expectedSensor, actualSensor);
+                ModelsTester.TestSensorModel(expectedSensorData, actualSensor);
             }
         }
 
@@ -161,28 +108,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             for (int i = 0; i < 2; ++i)
             {
-                var product = new ProductEntity()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    State = (int)ProductState.FullAccess,
-                    DisplayName = $"product{i}",
-                    CreationDate = DateTime.UtcNow.Ticks,
-                    SubProductsIds = new List<string>(1 << 1),
-                    SensorsIds = new List<string>(1 << 1),
-                };
+                var product = EntitiesFactory.BuildProductEntity($"product{i}", null);
 
                 for (int j = 0; j < 2; j++)
                 {
-                    var subProduct = new ProductEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ParentProductId = product.Id,
-                        State = (int)ProductState.FullAccess,
-                        DisplayName = $"subProduct{j}",
-                        CreationDate = DateTime.UtcNow.Ticks,
-                        SubProductsIds = new List<string>(1 << 1),
-                        SensorsIds = new List<string>(0),
-                    };
+                    var subProduct = EntitiesFactory.BuildProductEntity($"subProduct{j}", product.Id);
 
                     var sensor = new SensorEntity()
                     {
@@ -202,21 +132,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Status = (byte)SensorStatus.Warning,
                     };
 
-                    product.SubProductsIds.Add(subProduct.Id);
-                    product.SensorsIds.Add(sensor.Id);
+                    product.AddSubProduct(subProduct.Id);
+                    product.AddSensor(sensor.Id);
 
-                    var subSubProduct = new ProductEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ParentProductId = subProduct.Id,
-                        State = (int)ProductState.FullAccess,
-                        DisplayName = $"subSubProduct",
-                        CreationDate = DateTime.UtcNow.Ticks,
-                        SubProductsIds = new List<string>(0),
-                        SensorsIds = new List<string>(1 << 1),
-                    };
+                    var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct", subProduct.Id);
 
-                    subProduct.SubProductsIds.Add(subSubProduct.Id);
+                    subProduct.AddSubProduct(subSubProduct.Id);
 
                     var sensorForSubSubProduct = new SensorEntity()
                     {
@@ -236,7 +157,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Status = (byte)SensorStatus.Ok,
                     };
 
-                    subSubProduct.SensorsIds.Add(sensorForSubSubProduct.Id);
+                    subSubProduct.AddSensor(sensorForSubSubProduct.Id);
 
                     products.Add(subProduct);
                     products.Add(subSubProduct);
