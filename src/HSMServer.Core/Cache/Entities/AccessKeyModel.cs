@@ -6,11 +6,11 @@ namespace HSMServer.Core.Cache.Entities
 {
     public sealed class AccessKeyModel
     {
-        public Guid Id { get; init; }
+        public Guid Id { get; }
 
         public string AuthorId { get; }
 
-        public string ProductId { get; set; }
+        public string ProductId { get; }
 
         public bool IsLocked { get; }
 
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
-            ProductId = entity.ProductId ?? string.Empty;
+            ProductId = entity.ProductId;
             IsLocked = entity.IsLocked;
             KeyRole = (KeyRolesEnum)entity.KeyRole;
             DisplayName = entity.DisplayName;

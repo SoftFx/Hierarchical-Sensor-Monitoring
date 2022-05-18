@@ -255,8 +255,11 @@ namespace HSMServer.Core.Cache
                 var key = new AccessKeyModel(keyEntity);
                 _keys.TryAdd(key.Id, key);
 
-                _tree.TryGetValue(key.ProductId, out var product);
-                product.AddAccessKey(key);
+                if (key.ProductId != null)
+                {
+                    _tree.TryGetValue(key.ProductId, out var product);
+                    product.AddAccessKey(key);
+                }
             }
         }
 
