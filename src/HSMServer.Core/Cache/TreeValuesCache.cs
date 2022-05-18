@@ -110,6 +110,9 @@ namespace HSMServer.Core.Cache
 
         public void AddAccessKey(AccessKeyModel key)
         {
+            if (_keys.ContainsKey(key.Id)) 
+                return;
+
             _keys.TryAdd(key.Id, key);
             AddAccessKeyToProduct(key);
 
@@ -121,13 +124,9 @@ namespace HSMServer.Core.Cache
             if (!_keys.TryGetValue(id, out var key))
                 return;
 
-            if (key.ProductId != null)
-            {
-                _tree.TryGetValue(key.ProductId, out var product);
-                if (product != null)
-                    product.AccessKeys.TryRemove(new KeyValuePair<Guid, AccessKeyModel>(id, key));
-            }
-
+            if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+                product.AccessKeys.TryRemove(id, out _);
+            
             _databaseCore.RemoveAccessKey(id.ToString());
         }
 
@@ -142,7 +141,7 @@ namespace HSMServer.Core.Cache
             if (!_keys.TryGetValue(updatedKey.Id, out var key))
                 return;
 
-            key.Update(updatedKey);
+            _keys[updatedKey.Id] = updatedKey;
             _databaseCore.UpdateAccessKey(updatedKey.ToAccessKeyEntity());
         }
 
@@ -441,11 +440,8 @@ namespace HSMServer.Core.Cache
 
         private void AddAccessKeyToProduct(AccessKeyModel key)
         {
-            if (key.ProductId != null)
-            {
-                _tree.TryGetValue(key.ProductId, out var product);
+            if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
                 product.AddAccessKey(key);
-            }
         }
     }
 }

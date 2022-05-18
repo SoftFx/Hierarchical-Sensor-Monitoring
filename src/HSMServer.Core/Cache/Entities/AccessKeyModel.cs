@@ -12,15 +12,15 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
-        public bool IsLocked { get; private set; }
+        public bool IsLocked { get; }
 
-        public KeyRolesEnum KeyRole { get; private set; }
+        public KeyRolesEnum KeyRole { get; }
 
-        public string DisplayName { get; private set; }
+        public string DisplayName { get; }
 
         public DateTime CreationTime { get; }
 
-        public DateTime ExpirationTime { get; private set; }
+        public DateTime ExpirationTime { get; }
 
 
         public AccessKeyModel(AccessKeyEntity entity)
@@ -33,14 +33,6 @@ namespace HSMServer.Core.Cache.Entities
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
-        }
-
-        internal void Update(AccessKeyModel key)
-        {
-            IsLocked = key.IsLocked;
-            KeyRole = key.KeyRole;
-            DisplayName = key.DisplayName;
-            ExpirationTime = key.ExpirationTime;
         }
 
         internal AccessKeyEntity ToAccessKeyEntity() =>
