@@ -84,7 +84,7 @@ namespace HSMServer.Core.Cache.Entities
             {
                 Id = Id,
                 //AuthorId ???
-                ParentProductId = ParentProduct?.Id ?? string.Empty,
+                ParentProductId = ParentProduct?.Id,
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,

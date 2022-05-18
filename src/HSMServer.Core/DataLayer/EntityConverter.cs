@@ -30,11 +30,11 @@ namespace HSMServer.Core.DataLayer
             var newEntity = new ProductEntity
             {
                 Id = key,
-                AuthorId = string.Empty,
-                ParentProductId = string.Empty,
+                AuthorId = null,
+                ParentProductId = null,
                 State = (int)ProductState.FullAccess,
                 DisplayName = name,
-                Description = string.Empty,
+                Description = null,
                 CreationDate = dateAdded.Ticks,
                 SubProductsIds = new List<string>(),
                 SensorsIds = new List<string>(),
