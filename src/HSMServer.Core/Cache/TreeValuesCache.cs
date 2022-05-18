@@ -260,7 +260,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private List<string> FillTreeByProductModels(List<ProductEntity> productEntities)        {
+        private List<string> FillTreeByProductModels(List<ProductEntity> productEntities)        
+        {
             var productsToResave = new List<string>();
 
             foreach (var productEntity in productEntities)
