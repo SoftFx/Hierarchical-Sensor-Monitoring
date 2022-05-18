@@ -259,6 +259,7 @@ namespace HSMServer.Core.Cache
                 product.AddAccessKey(key);
             }
         }
+
         private List<string> FillTreeByProductModels(List<ProductEntity> productEntities)        {
             var productsToResave = new List<string>();
 
