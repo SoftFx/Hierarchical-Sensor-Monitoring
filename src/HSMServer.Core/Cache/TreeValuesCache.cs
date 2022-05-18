@@ -108,6 +108,44 @@ namespace HSMServer.Core.Cache
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
+        public void AddAccessKey(AccessKeyModel key)
+        {
+            _keys.TryAdd(key.Id, key);
+            AddAccessKeyToProduct(key);
+
+            _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
+        }
+
+        public void RemoveAccessKey(Guid id)
+        {
+            if (!_keys.TryGetValue(id, out var key))
+                return;
+
+            if (key.ProductId != null)
+            {
+                _tree.TryGetValue(key.ProductId, out var product);
+                if (product != null)
+                    product.AccessKeys.TryRemove(new KeyValuePair<Guid, AccessKeyModel>(id, key));
+            }
+
+            _databaseCore.RemoveAccessKey(id.ToString());
+        }
+
+        public AccessKeyModel GetAccessKey(Guid id)
+        {
+            _keys.TryGetValue(id, out var key);
+            return key;
+        }
+
+        public void UpdateAccessKey(AccessKeyModel updatedKey)
+        {
+            if (!_keys.TryGetValue(updatedKey.Id, out var key))
+                return;
+
+            key.Update(updatedKey);
+            _databaseCore.UpdateAccessKey(updatedKey.ToAccessKeyEntity());
+        }
+
         public void UpdateSensor(SensorUpdate updatedSensor)
         {
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
@@ -255,11 +293,7 @@ namespace HSMServer.Core.Cache
                 var key = new AccessKeyModel(keyEntity);
                 _keys.TryAdd(key.Id, key);
 
-                if (key.ProductId != null)
-                {
-                    _tree.TryGetValue(key.ProductId, out var product);
-                    product.AddAccessKey(key);
-                }
+                AddAccessKeyToProduct(key);
             }
         }
 
@@ -402,6 +436,15 @@ namespace HSMServer.Core.Cache
                     continue;
 
                 _databaseCore.UpdateSensor(sensor.ToSensorEntity());
+            }
+        }
+
+        private void AddAccessKeyToProduct(AccessKeyModel key)
+        {
+            if (key.ProductId != null)
+            {
+                _tree.TryGetValue(key.ProductId, out var product);
+                product.AddAccessKey(key);
             }
         }
     }

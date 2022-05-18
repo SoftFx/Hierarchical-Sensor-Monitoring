@@ -32,6 +32,11 @@ namespace HSMServer.Core.Cache
         string GetProductNameById(string id);
         List<ProductModel> GetProductsWithoutParent(User user);
 
+        void AddAccessKey(AccessKeyModel key);
+        void RemoveAccessKey(Guid id);
+        AccessKeyModel GetAccessKey(Guid id);
+        void UpdateAccessKey(AccessKeyModel key);
+
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
