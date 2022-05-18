@@ -24,6 +24,7 @@ namespace HSMServer.Core.Cache
 
         List<ProductModel> GetTree();
         List<SensorModel> GetSensors();
+        List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName);
         void RemoveProduct(string id);

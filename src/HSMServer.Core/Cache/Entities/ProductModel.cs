@@ -25,6 +25,8 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime CreationDate { get; }
 
+        public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
+
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
         public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
@@ -34,6 +36,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel()
         {
+            AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
             SubProducts = new ConcurrentDictionary<string, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorModel>();
         }
@@ -60,6 +63,7 @@ namespace HSMServer.Core.Cache.Entities
             Id = key;
         }
 
+        internal void AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {

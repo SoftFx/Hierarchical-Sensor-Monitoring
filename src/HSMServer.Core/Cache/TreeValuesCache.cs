@@ -22,6 +22,7 @@ namespace HSMServer.Core.Cache
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
+        private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
@@ -35,6 +36,7 @@ namespace HSMServer.Core.Cache
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
+            _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
         }
@@ -43,6 +45,8 @@ namespace HSMServer.Core.Cache
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
         public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+
+        public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
         public ProductModel AddProduct(string productName)
         {
@@ -186,6 +190,7 @@ namespace HSMServer.Core.Cache
         {
             var productEntities = _databaseCore.GetAllProducts();
             var sensorEntities = _databaseCore.GetAllSensors();
+            var accessKeysEntities = _databaseCore.GetAccessKeys();
 
             BuildTree(productEntities.Where(e => !e.IsConverted).ToList(),
                       sensorEntities.Where(e => !e.IsConverted).ToList());
@@ -197,6 +202,8 @@ namespace HSMServer.Core.Cache
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
+
+            BuildKeys(accessKeysEntities.ToList());
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
@@ -237,6 +244,18 @@ namespace HSMServer.Core.Cache
             FillTreeBySensorModels(sensorEntities);
 
             ResaveEntities(productEntities, sensorEntities);
+        }
+
+        private void BuildKeys(List<AccessKeyEntity> entities) 
+        {
+            foreach(var keyEntity in entities)
+            {
+                var key = new AccessKeyModel(keyEntity);
+                _keys.TryAdd(key.Id, key);
+
+                _tree.TryGetValue(key.ProductId, out var product);
+                product.AddAccessKey(key);
+            }
         }
 
         private void FillTreeByProductModels(List<ProductEntity> productEntities)
