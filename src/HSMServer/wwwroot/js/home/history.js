@@ -19,12 +19,21 @@ function Data(to, from, type, path) {
 
 //Initialization
 {
-    function initializeDataHistoryRequests() {
-        $('[id^="collapse"]').off('show.bs.collapse').on('show.bs.collapse', accordionClicked);
+    function initialize() {
+        initializeSensorAccordion();
+        initializeFileSensorEvents();
+        initializeInfoLinks();
+    }
+
+    function initializeSensorAccordion() {
+        $('[id^="collapse"]').off('show.bs.collapse', accordionClicked)
+        $('[id^="collapse"]').on('show.bs.collapse', accordionClicked);
 
         InitializePeriodRequests();
         initializeTabLinksRequests();
+    }
 
+    function initializeFileSensorEvents() {
         $('[id^="button_view_"]').off("click", viewFile);
         $('[id^="button_view_"]').on("click", viewFile);
 
@@ -83,22 +92,14 @@ function Data(to, from, type, path) {
     }
 
     function InitializePeriodRequests() {
-
         $('[id^="radio_hour_"]').off("click").on("click", requestHistoryHour);
-
         $('[id^="radio_day_"]').off("click").on("click", requestHistoryDay);
-
         $('[id^="radio_three_days_"]').off("click").on("click", requestHistoryThreeDays);
-
         $('[id^="radio_week_"]').off("click").on("click", requestHistoryWeek);
-
         $('[id^="radio_month_"]').off("click").on("click", requestHistoryMonth);
-
         $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
 
         $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
-
-        $('[id^="button_delete_sensor_"]').off("click").on("click", deleteSensor);
     }
 
     function requestHistoryHour() {
@@ -228,19 +229,6 @@ function Data(to, from, type, path) {
             displayGraph(data, type, graphDivId, path);
         });
     }
-}
-
-function deleteSensor() {
-    let path = this.id.substring("button_delete_sensor_".length);
-
-    $.ajax({
-        type: 'POST',
-        url: removeSensorAction + "?Selected=" + path,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true
-    });
 }
 
 

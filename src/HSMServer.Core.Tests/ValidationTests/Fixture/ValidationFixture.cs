@@ -10,7 +10,7 @@ namespace HSMServer.Core.Tests.ValidationTests
     {
         public ValidationFixture()
         {
-            var databaseMoq = new Mock<IDatabaseAdapter>();
+            var databaseMoq = new Mock<IDatabaseCore>();
             databaseMoq.Setup(d => d.GetConfigurationObject(It.IsAny<string>())).Returns<string>(null);
 
             var configLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();

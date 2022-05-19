@@ -1,10 +1,10 @@
 ﻿using HSMCommon.Attributes;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
@@ -12,71 +12,60 @@ namespace HSMServer.Core.Model
     [SwaggerIgnore]
     public class Product
     {
-        public string Key { get; set; }
-        public string Name { get; set; }
-        public DateTime DateAdded { get; set; }
-        public List<ExtraProductKey> ExtraKeys { get; set; }
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public DateTime CreationDate { get; set; }
         [JsonIgnore]
         public ConcurrentDictionary<string, SensorInfo> Sensors { get; }
 
         public Product()
         {
-            DateAdded = DateTime.UtcNow;
-            ExtraKeys = new List<ExtraProductKey>();
+            CreationDate = DateTime.UtcNow;
             Sensors = new ConcurrentDictionary<string, SensorInfo>();
         }
 
         public Product(string key, string name) : this()
         {
-            Key = key;
-            Name = name;
+            Id = key;
+            DisplayName = name;
         }
 
         public Product(Product product) : this()
         {
             if (product == null) return;
 
-            Key = product.Key;
-            Name = product.Name;
-            DateAdded = product.DateAdded;
-            AddExtraKeys(product.ExtraKeys);
+            Id = product.Id;
+            DisplayName = product.DisplayName;
+            CreationDate = product.CreationDate;
         }
 
+        //todo update ?
         public Product(ProductEntity entity) : this()
         {
             if (entity == null) return;
 
-            Key = entity.Key;
-            Name = entity.Name;
-            DateAdded = entity.DateAdded;
-
-            if (entity.ExtraKeys != null && entity.ExtraKeys.Count > 0)
-            {
-                ExtraKeys.AddRange(entity.ExtraKeys.Select(e => new ExtraProductKey(e)));
-            }
-        }
-
-        public void Update(Product product)
-        {
-            if (this == product) return; 
-
-            ExtraKeys = new List<ExtraProductKey>();
-            AddExtraKeys(product.ExtraKeys);
+            Id = entity.Id;
+            DisplayName = entity.DisplayName;
+            CreationDate = new DateTime(entity.CreationDate);
         }
 
         public void InitializeSensors(List<SensorInfo> sensors) =>
             sensors.ForEach(s => Sensors[s.Path] = s);
 
-        public void AddOrUpdateSensor(SensorInfo sensor) => 
+        public void AddOrUpdateSensor(SensorInfo sensor) =>
             Sensors[sensor.Path] = sensor;
+
+        public void AddOrUpdateSensor(SensorModel sensor) =>
+            Sensors[sensor.Path] = new SensorInfo
+            {
+                ProductName = sensor.ProductName,
+                ExpectedUpdateInterval = sensor.ExpectedUpdateInterval,
+                Unit = sensor.Unit,
+                Path = sensor.Path,
+                Description = sensor.Description
+            };
 
         public bool RemoveSensor(string path) =>
             Sensors.TryRemove(path, out _);
-
-        public void AddExtraKeys(List<ExtraProductKey> keys)
-        {
-            if (keys != null && keys.Count > 0)
-                ExtraKeys.AddRange(keys);
-        }
     }
 }

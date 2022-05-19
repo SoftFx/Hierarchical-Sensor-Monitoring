@@ -59,7 +59,7 @@ namespace HSMServer.Core.Authentication
                 _userManager._userNames.TryAdd(user.UserName, user.Id);
 
             protected override void DatabaseAction(User user) =>
-                _userManager._databaseAdapter.AddUser(user);
+                _userManager._databaseCore.AddUser(user);
         }
 
 
@@ -76,7 +76,7 @@ namespace HSMServer.Core.Authentication
                 _userManager._userNames.TryRemove(user.UserName, out var _);
 
             protected override void DatabaseAction(User user) =>
-                _userManager._databaseAdapter.RemoveUser(user);
+                _userManager._databaseCore.RemoveUser(user);
         }
 
 
@@ -104,7 +104,7 @@ namespace HSMServer.Core.Authentication
                 if (!_userManager._users.TryGetValue(user.Id, out var existingUser))
                     return;
 
-                _userManager._databaseAdapter.UpdateUser(existingUser);
+                _userManager._databaseCore.UpdateUser(existingUser);
             }
         }
     }

@@ -11,30 +11,6 @@ namespace HSMServer.HtmlHelpers
 {
     public static class ViewHelper
     {
-        #region Sensors tree
-
-        public static HtmlString CreateTree(TreeViewModel model)
-        {
-            return new HtmlString(TreeHelper.CreateTree(model));
-        }
-
-        public static HtmlString UpdateTree(TreeViewModel model)
-        {
-            return new HtmlString(TreeHelper.UpdateTree(model));
-        }
-
-        public static HtmlString CreateFullLists(TreeViewModel model)
-        {
-            return new HtmlString(ListHelper.CreateFullLists(model));
-        }
-
-        public static HtmlString CreateNotSelectedLists(string selectedPath, TreeViewModel model)
-        {
-            return new HtmlString(ListHelper.CreateNotSelectedLists(selectedPath, model));
-        }
-
-        #endregion
-
         #region Product
 
         public static HtmlString CreateProductList(ClaimsPrincipal claims, List<ProductViewModel> products)
@@ -44,22 +20,13 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(user, products));
         }
 
-        public static HtmlString CreateExtraKeysTable(ClaimsPrincipal claims, EditProductViewModel model)
+        public static HtmlString CreateUsersRightsTable(ClaimsPrincipal claims, EditProductViewModel model, object users)
         {
             var user = claims as User;
+            var notAdminUsers = users as List<User>;
 
             StringBuilder result = new StringBuilder();
-            result.Append(TableHelper.CreateTable(model.ProductName, user, model.ExtraKeys));
-
-            return new HtmlString(result.ToString());
-        }
-
-        public static HtmlString CreateUsersRightsTable(ClaimsPrincipal claims, EditProductViewModel model)
-        {
-            var user = claims as User;
-
-            StringBuilder result = new StringBuilder();
-            result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights));
+            result.Append(TableHelper.CreateTable(model.ProductName, user, model.UsersRights, notAdminUsers));
 
             return new HtmlString(result.ToString());
         }
@@ -79,11 +46,12 @@ namespace HSMServer.HtmlHelpers
         }
         #endregion
 
-        public static HtmlString CreateUserList(ClaimsPrincipal claims, List<UserViewModel> users)
+        public static HtmlString CreateUserList(ClaimsPrincipal claims, List<UserViewModel> users, object products)
         {
             var user = claims as User;
+            var productsDict = products as Dictionary<string, string>;
 
-            return new HtmlString(TableHelper.CreateTable(user, users));
+            return new HtmlString(TableHelper.CreateTable(user, users, productsDict));
         }
 
         public static HtmlString CreateConfigurationObjectsTable(List<ConfigurationObjectViewModel> configurationObjects)

@@ -11,8 +11,6 @@
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
     var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
-    var addExtraKey = "@Html.Raw(Url.Action(ViewConstants.AddExtraKeyAction, ViewConstants.ProductController))";
-    var deleteExtraKey = "@Html.Raw(Url.Action(ViewConstants.RemoveExtraKeyAction, ViewConstants.ProductController))";
     var invite = "@Html.Raw(Url.Action(ViewConstants.InviteAction, ViewConstants.ProductController))";
 </script>
 
@@ -38,8 +36,6 @@
 <input id="productKey" value="@Model.ProductKey" style="display: none" />
 
 <div class="container row justify-content-center">
-    @ViewHelper.CreateExtraKeysTable(Context.User, Model)
-
     <div style="margin: 10px">
         <div class="row justify-content-start">
             <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
@@ -73,7 +69,7 @@
         </div>
     </div>
 
-    @ViewHelper.CreateUsersRightsTable(Context.User, Model)
+    @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
 </div>
 
 <script>
@@ -82,13 +78,6 @@
         let userErrorSpan = document.getElementById('new_user_span');
         userErrorSpan.textContent = userErrorText;
         userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-    }
-
-    let keyErrorText = '@TempData[TextConstants.TempDataKeyErrorText]';
-    if (keyErrorText !== undefined) {
-        let keyErrorSpan = document.getElementById('new_key_span');
-        keyErrorSpan.textContent = keyErrorText;
-        keyErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
     let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
@@ -238,69 +227,4 @@
         });
     });
 
-</script>
-
-<script>
-    function createKeyData(productKey, keyName, extraKey) {
-        return { "ExtraProductKey": extraKey, "ProductKey": productKey, "ExtraKeyName": keyName }
-    }
-
-    //create key
-    $('#createKeyButton').on('click', function () {
-        keyName = $('#createKeyName').val();
-        productKey = $('#productKey').val();
-
-        data = createKeyData(productKey, keyName, null);
-
-        $.ajax({
-            type: 'POST',
-            url: addExtraKey,
-            data: JSON.stringify(data),
-            contentType: 'application/json',
-            cache: false,
-            async: true,
-            success: function () {
-                document.location.reload();
-            }
-        });
-    });
-
-    //delete key
-    $('[id^=deleteKey_]').on('click', function () {
-        extraProductKey = this.id.substring('deleteKey_'.length, this.id.length);
-        productKey = $('#productKey').val();
-        extraProductName = $('#keyName_' + extraProductKey).val();
-
-        var data = createKeyData(productKey, extraProductName, extraProductKey);
-
-        $('#modalDeleteLabel').empty();
-        $('#modalDeleteLabel').append('Remove extra key');
-        $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + extraProductName + '" extra key?');
-
-        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-        modal.show();
-
-        //modal confirm
-        $('#confirmDeleteButton').on('click', function () {
-            modal.hide();
-
-            $.ajax({
-                type: 'POST',
-                url: deleteExtraKey,
-                data: JSON.stringify(data),
-                contentType: 'application/json',
-                cache: false,
-                async: true,
-                success: function () {
-                    document.location.reload();
-                }
-            });
-        });
-
-        //modal close
-        $('#closeDeleteButton').on('click', function () {
-            modal.hide();
-        });
-    });
 </script>

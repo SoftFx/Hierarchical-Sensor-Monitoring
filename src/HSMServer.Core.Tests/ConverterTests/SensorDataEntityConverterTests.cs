@@ -96,6 +96,18 @@ namespace HSMServer.Core.Tests.ConverterTests
 
         [Fact]
         [Trait("Category", "to SensorData without SensorInfo")]
+        public void SensorDataEntityToSensorDataConverter_FileSensorWithOriginalSize_Test()
+        {
+            var sensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(SensorType.FileSensorBytes);
+            sensorDataEntity.OriginalFileSensorContentSize = RandomGenerator.GetRandomInt(positive: true);
+
+            var data = sensorDataEntity.Convert(_productName);
+
+            TestFileSensorBytesTypedData(sensorDataEntity, data);
+        }
+
+        [Fact]
+        [Trait("Category", "to SensorData without SensorInfo")]
         public void SensorDataEntityToSensorDataConverter_FileSensorToFileSensorBytes_WithoutSensorInfo_Test()
         {
             var fileSensorDataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(SensorType.FileSensor);
@@ -178,14 +190,22 @@ namespace HSMServer.Core.Tests.ConverterTests
                     break;
 
                 case SensorType.FileSensorBytes:
-                    FileSensorBytesData fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(expected.TypedData);
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.TimeCollected, fileSensorBytesData.Comment, fileSensorBytesData.FileName, fileSensorBytesData.Extension, fileSensorBytesData.FileContent.Length),
-                                 actual.StringValue);
-                    Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(fileSensorBytesData.FileName, fileSensorBytesData.Extension, fileSensorBytesData.FileContent.Length),
-                                 actual.ShortStringValue);
+                    TestFileSensorBytesTypedData(expected, actual);
                     break;
             }
         }
+
+        private static void TestFileSensorBytesTypedData(SensorDataEntity expected, SensorData actual)
+        {
+            FileSensorBytesData data = JsonSerializer.Deserialize<FileSensorBytesData>(expected.TypedData);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsString(expected.TimeCollected, data.Comment, data.FileName, data.Extension, GetFilesensorBytesDataContentLength(expected, data)),
+                         actual.StringValue);
+            Assert.Equal(SensorDataStringValuesFactory.GetFileSensorsShortString(data.FileName, data.Extension, GetFilesensorBytesDataContentLength(expected, data)),
+                         actual.ShortStringValue);
+        }
+
+        private static int GetFilesensorBytesDataContentLength(SensorDataEntity dataEntity, FileSensorBytesData data) =>
+            dataEntity.OriginalFileSensorContentSize == 0 ? data.FileContent?.Length ?? 0 : dataEntity.OriginalFileSensorContentSize;
 
 
         private static (SensorDataEntity, SensorInfo) BuildDatasForTests(SensorType sensorType, bool withComment = true)

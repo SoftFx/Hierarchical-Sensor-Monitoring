@@ -1,24 +1,24 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
+using HSMServer.Certificates;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
-using HSMServer.Model.ViewModel;
-using HSMServer.Services;
-using HSMServer.SignalR;
+using HSMServer.Model.TreeViewModels;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
@@ -53,26 +53,22 @@ namespace HSMServer
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-            services.AddSingleton(CertificatesConfig.DatabaseAdapter);
-            services.AddSingleton<IProductManager, ProductManager>();
-            services.AddSingleton<CertificateManager>();
+
+            services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
+            services.AddSingleton<IProductManager>(_ => null);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
-            services.AddSingleton<ISignalRSessionsManager, SignalRSessionsManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
-            services.AddSingleton<IValuesCache, ValuesCache>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
+            services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
+            services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+            services.AddSingleton<TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<IMonitoringDataReceiver>(x => x.GetRequiredService<MonitoringCore>());
             services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<IMonitoringUpdatesReceiver>(x => x.GetRequiredService<MonitoringCore>());
-            services.AddSingleton<ITreeViewManager, TreeViewManager>();
-            services.AddSingleton<IClientMonitoringService, ClientMonitoringService>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
-            services.AddHostedService<SensorsExpirationService>();
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
@@ -81,7 +77,7 @@ namespace HSMServer
             services.ConfigureSwaggerGen(options =>
             {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
-                var xmlPath = Path.Combine(basePath, "HSMServer.xml");
+                var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
                 options.IncludeXmlComments(xmlPath, true);
                 options.DocumentFilter<SwaggerIgnoreFilter>();
             });
@@ -101,7 +97,7 @@ namespace HSMServer
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, (app.ApplicationServices.GetService<MonitoringCore>(), app.ApplicationServices.GetService<ITreeViewManager>()));
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -124,9 +120,6 @@ namespace HSMServer
             app.UseUserProcessor();
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<MonitoringDataHub>("/monitoring",
-                    options => options.Transports = HttpTransportType.ServerSentEvents); //only server can send messages
-
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute(
                     name: "default",
@@ -146,13 +139,10 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        private void OnShutdown(object services)
+        private void OnShutdown(object service)
         {
-            if (services is (MonitoringCore monitoringCore, ITreeViewManager treeViewManager))
-            {
+            if (service is MonitoringCore monitoringCore)
                 monitoringCore.Dispose();
-                treeViewManager.Dispose();
-            }
 
             // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();

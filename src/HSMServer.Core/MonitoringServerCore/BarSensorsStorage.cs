@@ -1,7 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -23,19 +22,19 @@ namespace HSMServer.Core.MonitoringServerCore
             _checkOutdatedTimer = new Timer(CheckOutdatedCallback, null, timerSpan, timerSpan);
         }
 
-        public void Add<T>(T value, SensorData sensorData) where T: BarSensorValueBase
+        public void Add<T>(T value, string product, DateTime timeCollected) where T : BarSensorValueBase
         {
             ExtendedBarSensorData data = new()
             {
-                ProductName = sensorData.Product,
-                TimeCollected = sensorData.Time,
+                ProductName = product,
+                TimeCollected = timeCollected,
                 ValueType = GetSensorType(value),
                 Value = value
             };
 
             lock (_syncObject)
             {
-                _lastValues[(sensorData.Product, value.Path)] = data;
+                _lastValues[(product, value.Path)] = data;
             }
         }
 

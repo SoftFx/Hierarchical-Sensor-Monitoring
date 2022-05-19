@@ -1,15 +1,15 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringHistoryProcessor.Processor;
-using HSMServer.Core.Products;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Html;
@@ -30,268 +30,83 @@ namespace HSMServer.Controllers
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
         private readonly ISensorsInterface _sensorsInterface;
-        private readonly ITreeViewManager _treeManager;
-        private readonly IUserManager _userManager;
-        private readonly IProductManager _productManager;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
+        private readonly TreeViewModel _treeViewModel;
 
 
-        public HomeController(ISensorsInterface sensorsInterface, ITreeViewManager treeManager,
-            IUserManager userManager, IHistoryProcessorFactory factory, IProductManager productManager)
+        public HomeController(
+            ISensorsInterface sensorsInterface,
+            IHistoryProcessorFactory factory,
+            TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
-            _treeManager = treeManager;
-            _userManager = userManager;
-            _productManager = productManager;
             _historyProcessorFactory = factory;
+            _treeViewModel = treeViewModel;
         }
 
 
         public IActionResult Index()
         {
-            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
-            var tree = _treeManager.GetTreeViewModel(user);
-            if (tree == null)
-            {
-                var result = _sensorsInterface.GetSensorsTree(user);
-                tree = new TreeViewModel(result);
-                _treeManager.AddOrCreate(user, tree);
-            }
+            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
 
-            return View(tree);
+            return View(_treeViewModel);
         }
 
         [HttpPost]
-        public void RemoveNode([FromQuery(Name = "Selected")] string encodedPath)
+        public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            if (encodedPath.Contains("sensor_"))
-            {
-                encodedPath = encodedPath.Substring("sensor_".Length);
-            }
+            if (string.IsNullOrEmpty(selectedId))
+                return PartialView("_TreeNodeSensors", null);
 
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            var user = HttpContext.User as User ?? _userManager.GetUserByUserName(HttpContext.User.Identity?.Name);
+            var decodedId = SensorPathHelper.Decode(selectedId);
 
-            if (decodedPath.Contains('/'))
-            {
-                //remove node
-                ParseProductAndPath(encodedPath, out var product, out var path);
-                var model = _treeManager.GetTreeViewModel(user).Clone();
-                var node = model.GetNode(decodedPath);
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                return PartialView("_TreeNodeSensors", node);
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                return PartialView("_TreeNodeSensors", sensor);
 
-                var paths = new List<string>(1 << 2);
-                if (node == null) //remove single sensor
-                {
-                    ParseProductPathAndSensor(encodedPath, out product, out path, out var sensor);
-                    node = string.IsNullOrEmpty(path) ?
-                        model.GetNode(product) : model.GetNode($"{product}/{path}");
-
-                    if (node != null)
-                    {
-                        if (string.IsNullOrEmpty(path))
-                            paths.Add(sensor);
-                        else
-                            paths.Add($"{path}/{sensor}");
-                    }
-                }
-                else //remove sensors
-                    GetSensorsPaths(node, paths);
-
-                var productEntity = _productManager.GetProductByName(product);
-
-                _sensorsInterface.RemoveSensors(product, productEntity.Key, paths);
-            }
-
-            else
-            {
-                //remove product
-                var productEntity = _productManager.GetProductByName(decodedPath);
-                if (productEntity == null)
-                    return;
-
-                _sensorsInterface.HideProduct(productEntity, out _);
-            }
+            return PartialView("_TreeNodeSensors", null);
         }
 
-        private void GetSensorsPaths(NodeViewModel node, List<string> paths)
+        [HttpPost]
+        public IActionResult RefreshTree()
         {
-            var path = node.Path[(node.Path.IndexOf('/') + 1)..];
+            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
 
-            if (node.Sensors != null && !node.Sensors.IsEmpty)
-                foreach (var (name, _) in node.Sensors)
-                    paths.Add($"{path}/{name}");
+            return PartialView("_Tree", _treeViewModel);
+        }
 
-            if (node.Nodes != null && !node.Nodes.IsEmpty)
-                foreach (var (_, child) in node.Nodes)
-                    GetSensorsPaths(child, paths);
+        [HttpPost]
+        public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var decodedId = SensorPathHelper.Decode(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                _sensorsInterface.RemoveSensorsData(node.Id);
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                _sensorsInterface.RemoveSensorData(sensor.Id);
         }
 
         #region Update
 
         [HttpPost]
-        public HtmlString UpdateTree([FromBody] List<SensorData> sensors)
+        public ActionResult UpdateSelectedNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
+            if (string.IsNullOrEmpty(selectedId))
+                return Json(string.Empty);
 
-            var model = oldModel;
+            var decodedId = SensorPathHelper.Decode(selectedId);
+            var updatedSensorsData = new List<UpdatedSensorDataViewModel>();
 
-            if (sensors != null && sensors.Count > 0)
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-            else
-                oldModel.UpdateNodeCharacteristics();
-
-            return ViewHelper.UpdateTree(model.Clone());
-        }
-
-        private static void PrintTree(NodeViewModel node, StringBuilder str,
-            string indent, bool isLast)
-        {
-            str.Append($"{indent} +- node: {node.Name} path: {node.Path}\n");
-            indent += isLast ? "\t" : "|\t";
-
-            if (node.Nodes != null && node.Nodes.Count > 0)
-            {
-                int i = 0;
-
-                foreach (var (_, child) in node.Nodes)
-                {
-                    PrintTree(child, str, indent, i == node.Nodes.Count - 1);
-                    i++;
-                }
-            }
-
-
-            if (node.Sensors != null && node.Sensors.Count > 0)
-                foreach (var (name, _) in node.Sensors)
-                    str.Append($"{indent}--sensor: {name}\n");
-        }
-
-        [HttpPost]
-        public HtmlString UpdateInvisibleLists([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
-
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
-            {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            return ViewHelper.CreateNotSelectedLists(formattedPath, model.Clone());
-        }
-
-        [HttpPost]
-        public ActionResult UpdateSelectedList([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return Json("");
-
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
-            {
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                        sensor.TransactionType = TransactionType.Update;
-                }
-
-                model = oldModel.Update(sensors);
-            }
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var path = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            var formattedPath = SensorPathHelper.Decode(path);
-            //var nodePath = formattedPath.Substring(0, formattedPath.LastIndexOf('/'));
-            var nodePath = formattedPath;
-
-            var node = model.Clone().GetNode(nodePath);
-
-            var result = new List<SensorDataViewModel>(node?.Sensors?.Count ?? 0);
-            if (node?.Sensors != null)
                 foreach (var (_, sensor) in node.Sensors)
-                    result.Add(new SensorDataViewModel(selectedList, sensor));
+                    updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
+            }
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
 
-            return Json(result);
-        }
-
-        [HttpPost]
-        public HtmlString AddNewSensors([FromQuery(Name = "Selected")] string selectedList,
-            [FromBody] List<SensorData> sensors)
-        {
-            var user = HttpContext.User as User;
-            var oldModel = _treeManager.GetTreeViewModel(user);
-            if (oldModel == null)
-                return new HtmlString("");
-
-            var model = oldModel;
-            if (sensors != null && sensors.Count > 0)
-                model = oldModel.Update(sensors);
-
-            if (selectedList == null) selectedList = string.Empty;
-
-            int index = selectedList.IndexOf('_');
-            var formattedPath = selectedList.Substring(index + 1, selectedList.Length - index - 1);
-            var path = SensorPathHelper.Decode(formattedPath);
-
-            var node = model.GetNode(path);
-            var result = new StringBuilder(1 << 2);
-            if (node?.Sensors != null)
-                foreach (var (_, sensor) in node.Sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Add)
-                    {
-                        sensor.TransactionType = TransactionType.Update;
-                        result.Append(ListHelper.CreateSensor(path, sensor));
-                    }
-                }
-
-            return new HtmlString(result.ToString());
-        }
-
-        [HttpPost]
-        public List<string> RemoveSensors([FromBody] List<SensorData> sensors)
-        {
-            var ids = new List<string>();
-
-            if (sensors != null && sensors.Count > 0)
-                foreach (var sensor in sensors)
-                {
-                    if (sensor.TransactionType == TransactionType.Delete)
-                        ids.Add(SensorPathHelper.Encode($"{sensor.Product}/{sensor.Path}"));
-                }
-
-            return ids;
-
+            return Json(updatedSensorsData);
         }
 
         #endregion
@@ -408,10 +223,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public FileResult GetFile([FromQuery(Name = "Selected")] string selectedSensor)
         {
-            var path = SensorPathHelper.Decode(selectedSensor);
-            int index = path.IndexOf('/');
-            var product = path.Substring(0, index);
-            path = path.Substring(index + 1, path.Length - index - 1);
+            ParseProductAndPath(selectedSensor, out var product, out var path);
 
             var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
 
@@ -423,10 +235,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string selectedSensor)
         {
-            var path = SensorPathHelper.Decode(selectedSensor);
-            int index = path.IndexOf('/');
-            var product = path.Substring(0, index);
-            path = path.Substring(index + 1, path.Length - index - 1);
+            ParseProductAndPath(selectedSensor, out var product, out var path);
 
             var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
 
@@ -452,51 +261,45 @@ namespace HSMServer.Controllers
         #region Sensor info
 
         [HttpGet]
-        public HtmlString GetSensorInfo([FromQuery(Name = "Path")] string encodedPath)
+        public HtmlString GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
-            var info = _sensorsInterface.GetSensorInfo(product, path);
-            if (info == null)
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return new HtmlString(string.Empty);
 
-            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
-            return ViewHelper.CreateSensorInfoTable(viewModel);
+            return ViewHelper.CreateSensorInfoTable(new SensorInfoViewModel(sensor));
         }
 
         [HttpPost]
         public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
         {
-            ParseProductAndPath(updateModel.EncodedPath, out var product, out var path);
-            var info = _sensorsInterface.GetSensorInfo(product, path);
-            SensorInfoViewModel viewModel = new SensorInfoViewModel(info);
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updateModel.EncodedId), out var sensor))
+                return;
+
+            var viewModel = new SensorInfoViewModel(sensor);
             viewModel.Update(updateModel);
-            var infoFromViewModel = CreateModelFromViewModel(viewModel);
-            _sensorsInterface.UpdateSensorInfo(infoFromViewModel);
+
+            _sensorsInterface.UpdateSensor(
+                new SensorUpdate
+                {
+                    Id = sensor.Id,
+                    Product = viewModel.ProductName,
+                    Path = viewModel.Path,
+                    Description = viewModel.Description,
+                    ExpectedUpdateInterval = viewModel.ExpectedUpdateInterval,
+                    Unit = viewModel.Unit
+                });
         }
 
         #endregion
 
-        private static void ParseProductAndPath(string encodedPath, out string product, out string path)
+        private void ParseProductAndPath(string encodedId, out string product, out string path)
         {
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            int index = decodedPath.IndexOf('/');
-            product = decodedPath.Substring(0, index);
-            path = decodedPath.Substring(index + 1, decodedPath.Length - index - 1);
-        }
+            var decodedId = SensorPathHelper.DecodeGuid(encodedId);
 
-        private static void ParseProductPathAndSensor(string encodedPath, out string product,
-            out string path, out string sensor)
-        {
-            var decodedPath = SensorPathHelper.Decode(encodedPath);
-            product = decodedPath[..decodedPath.IndexOf('/')];
+            _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
-            var withoutProduct = decodedPath[(product.Length + 1)..];
-            sensor = withoutProduct[(withoutProduct.LastIndexOf('/') + 1)..];
-
-            if (withoutProduct.Contains('/'))
-                path = withoutProduct.Substring(0, withoutProduct.Length - sensor.Length - 1);
-            else
-                path = string.Empty;
+            path = sensor?.Path;
+            product = sensor?.Product;
         }
 
         private static PeriodType GetPeriodType(DateTime from, DateTime to)
@@ -514,20 +317,6 @@ namespace HSMServer.Controllers
             if (difference.TotalHours > 1)
                 return PeriodType.Day;
             return PeriodType.Hour;
-        }
-
-        private static SensorInfo CreateModelFromViewModel(SensorInfoViewModel viewModel)
-        {
-            var result = new SensorInfo
-            {
-                ProductName = viewModel.ProductName,
-                ExpectedUpdateInterval = TimeSpan.Parse(viewModel.ExpectedUpdateInterval),
-                Unit = viewModel.Unit,
-                Path = viewModel.Path,
-                Description = viewModel.Description
-            };
-
-            return result;
         }
     }
 }

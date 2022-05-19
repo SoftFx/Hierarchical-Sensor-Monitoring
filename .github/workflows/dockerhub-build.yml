@@ -1,87 +1,93 @@
 name: Dockerhub image build and publish
 
-on:  
+on:
   push:
     tags:
       - server-v[0-9]+.[0-9]+.[0-9]+
-      
+
 jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
       version-tag: ${{ steps.get-tag.outputs.parsedTag }}
-    steps:      
+    steps:
       - name: set raw tag
-        run: echo "RAW_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV       
-        
+        run: echo "RAW_TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
       - name: split-by
         id: split
-        uses: rishabhgupta/split-by@v1.0.1        
+        uses: rishabhgupta/split-by@v1.0.1
         with:
           string: '${{ env.RAW_TAG }}'
           split-by: 'v'
-          
+
       - name: print tag
         run: echo ${{ steps.split.outputs._2 }}
-        
+
       - id: get-tag
-        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._2 }}"      
+        run: echo "::set-output name=parsedTag::${{ steps.split.outputs._2 }}"
 
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2          
+    - uses: actions/checkout@v2
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 5.0.x
-    
+
+    - name: Clear all nuget caches
+      run: dotnet nuget locals all -c
+
     - name: Install dependencies
-      run: dotnet restore src/HSMServer/HSMServer.sln
-      
-    - name: Build
-      run: dotnet build src/HSMServer/HSMServer.sln --configuration Release --no-restore --output '${{ github.workspace }}\Release'  
-      
+      run: dotnet restore src/HSMServer/HSMServer.sln --force
+
+    - name: Build Solution
+      run: dotnet build src/HSMServer/HSMServer.sln -c Release --no-restore
+
     - name: Test
-      run: dotnet test --no-restore --verbosity normal src/HSMServer/HSMServer.sln
-      
+      run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
+
+    - name: Build HSMServer
+      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release --no-restore
+
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        path: ${{ github.workspace }}\Release
-        name: Release            
-  
+        path: ${{ github.workspace }}/Release
+        name: HSMServer
+
   publish:
     runs-on: ubuntu-latest
     needs: [build, version]
     environment: DockerHub
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Set env
         run: echo "RELEASE_VERSION=${{ needs.version.outputs.version-tag }}" >> $GITHUB_ENV
-          
+
       - name: Download artifact
         uses: actions/download-artifact@v2
-        with: 
-          name: Release
+        with:
+          name: HSMServer
           path: ${{ github.workspace }}/Release
-          
+
       - name: Add product version file
         uses: DamianReeves/write-file-action@master
-        with: 
+        with:
            path: ${{ github.workspace }}/Release/version.txt
            contents: "${{ env.RELEASE_VERSION }}"
-           write-mode: overwrite    
-       
+           write-mode: overwrite
+
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: ${{ github.workspace }}/Release
-        
+
       - name: Push to Docker Hub
-        uses: elgohr/Publish-Docker-Github-Action@master              
+        uses: elgohr/Publish-Docker-Github-Action@master
         with:
           name: hsmonitoring/hierarchical_sensor_monitoring
           username: ${{ secrets.DOCKERHUBUSERNAME }}
-          password: ${{ secrets.DOCKERHUBTOKEN }}      
-          tags: "${{ env.RELEASE_VERSION }}"  
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+          tags: "${{ env.RELEASE_VERSION }}"

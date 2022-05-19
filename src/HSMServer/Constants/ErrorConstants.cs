@@ -17,9 +17,6 @@
         public const string PasswordMinLength = "Password min lenght is 8 characters.";
         public const string PasswordsEquals = "Password and second password must be equals.";
 
-        public const string ExtraKeyNameNotNull = "Extra key name must be not null.";
-        public const string ExtraKeyNameUnique = "Extra key name must be unique.";
-
         public const string UserNotNull = "User must be not null.";
 
         public const string ExpirationDateNotNull = "Expiration date must be not null.";

@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Products
 {
@@ -9,10 +8,8 @@ namespace HSMServer.Core.Products
     {
         //ToDo: change to GetProducts(User)
         List<Product> Products { get; }
-        event Action<Product> RemovedProduct;
         Product AddProduct(string name);
         void RemoveProduct(string name);
-        void UpdateProduct(Product product);
         string GetProductNameByKey(string key);
         Product GetProductByName(string name);
         Product GetProductByKey(string key);

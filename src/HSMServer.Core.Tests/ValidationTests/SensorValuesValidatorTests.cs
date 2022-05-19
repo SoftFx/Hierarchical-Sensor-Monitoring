@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         private const int MaxUnitedSensorValueDataSize = 1024;
 
 
-        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Key);
+        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
 
 
         [Fact]

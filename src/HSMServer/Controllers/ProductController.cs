@@ -1,14 +1,12 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Constants;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Email;
 using HSMServer.Core.Encryption;
-using HSMServer.Core.Helpers;
-using HSMServer.Core.Keys;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Validators;
@@ -28,19 +26,19 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : Controller
     {
-        private readonly IProductManager _productManager;
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<ProductController> _logger;
 
-        public ProductController(IProductManager productManager, IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ILogger<ProductController> logger)
+        public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
+            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, ILogger<ProductController> logger)
         {
-            _productManager = productManager;
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
+            _treeValuesCache = treeValuesCache;
             _logger = logger;
         }
 
@@ -49,23 +47,19 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            List<Product> products = null;
-            if (UserRoleHelper.IsProductCRUDAllowed(user))
-                products = _productManager.Products;
-            else
-                products = _productManager.GetProducts(user);
+            var products = _treeValuesCache.GetProductsWithoutParent(user);
 
-            products = products?.OrderBy(x => x.Name).ToList();
+            products = products?.OrderBy(x => x.DisplayName).ToList();
 
             var result = products?.Select(x => new ProductViewModel(
-                _userManager.GetManagers(x.Key).FirstOrDefault()?.UserName ?? "---", x)).ToList();
+                _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
 
             return View(result);
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
         {
-            NewProductNameValidator validator = new NewProductNameValidator(_productManager);
+            NewProductNameValidator validator = new NewProductNameValidator(_treeValuesCache);
             var results = validator.Validate(productName);
             if (!results.IsValid)
             {
@@ -74,21 +68,12 @@ namespace HSMServer.Controllers
             }
 
             TempData.Remove(TextConstants.TempDataErrorText);
-            _productManager.AddProduct(productName);
+            _treeValuesCache.AddProduct(productName);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productKey)
+        public void RemoveProduct([FromQuery(Name = "Product")] string productId)
         {
-            var name = _productManager.GetProductNameByKey(productKey);
-            _productManager.RemoveProduct(name);
-        }
-
-        [HttpPost]
-        public void UpdateProduct([FromBody] ProductViewModel model)
-        {
-            Product product = GetModelFromViewModel(model);
-
-            _productManager.UpdateProduct(product);
+            _treeValuesCache.RemoveProduct(productId);
         }
 
         #endregion
@@ -96,53 +81,23 @@ namespace HSMServer.Controllers
         #region Edit Product
 
         [ProductRoleFilter(ProductRoleEnum.ProductManager)]
-        public IActionResult EditProduct([FromQuery(Name = "Product")] string productKey)
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
         {
-            var product = _productManager.GetProductCopyByKey(productKey);
-            var users = _userManager.GetViewers(productKey);
+            // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
+            TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
+
+            var product = _treeValuesCache.GetProduct(productId);
+            var users = _userManager.GetViewers(productId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || users.Any())
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(product.Key)).Value));
+                        user.ProductsRoles.First(x => x.Key.Equals(product.Id)).Value));
                 }
 
             return View(new EditProductViewModel(product, pairs));
-        }
-
-        [HttpPost]
-        public void AddExtraKey([FromBody] ExtraKeyViewModel model)
-        {
-            ExtraKeyValidator validator = new ExtraKeyValidator(_productManager);
-            var results = validator.Validate(model);
-            if (!results.IsValid)
-            {
-                TempData[TextConstants.TempDataKeyErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
-            }
-
-            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
-            model.ExtraProductKey = KeyGenerator.GenerateExtraProductKey(
-                product.Name, model.ExtraKeyName);
-
-            var extraProduct = new ExtraProductKey(model.ExtraKeyName, model.ExtraProductKey);
-            if (product.ExtraKeys == null || product.ExtraKeys.Count == 0)
-                product.ExtraKeys = new List<ExtraProductKey> { extraProduct };
-            else
-                product.ExtraKeys.Add(extraProduct);
-
-            _productManager.UpdateProduct(product);
-        }
-
-        [HttpPost]
-        public void RemoveExtraKey([FromBody] ExtraKeyViewModel model)
-        {
-            Product product = _productManager.GetProductCopyByKey(model.ProductKey);
-            product.ExtraKeys.Remove(product.ExtraKeys.First(x => x.Key.Equals(model.ExtraProductKey)));
-
-            _productManager.UpdateProduct(product);
         }
 
         [HttpPost]
@@ -186,7 +141,7 @@ namespace HSMServer.Controllers
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
             //Skip empty corresponding pair
-            if (string.IsNullOrEmpty(role.Key) && role.Value == (ProductRoleEnum)0)
+            if (string.IsNullOrEmpty(role.Key) && role.Value == 0)
                 return;
 
             user.ProductsRoles.Remove(role);
@@ -222,7 +177,7 @@ namespace HSMServer.Controllers
             var (server, port, login, password, fromEmail) = GetMailConfiguration();
 
             EmailSender sender = new EmailSender(server,
-                string.IsNullOrEmpty(port) ? null : Int32.Parse(port),
+                string.IsNullOrEmpty(port) ? null : int.Parse(port),
                 login, password, fromEmail, model.Email);
 
             var link = GetLink(ticket.Id.ToString());
@@ -274,8 +229,5 @@ namespace HSMServer.Controllers
 
             return string.Empty;
         }
-
-        private Product GetModelFromViewModel(ProductViewModel productViewModel) =>
-            _productManager.GetProductCopyByKey(productViewModel.Key);
     }
 }

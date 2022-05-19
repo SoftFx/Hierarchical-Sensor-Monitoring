@@ -29,7 +29,7 @@ namespace HSMServer.Core.Helpers
             return user.IsAdmin;
         }
 
-        public static bool IsAdminPageAllowed(User user)
+        public static bool IsConfigurationPageAllowed(User user)
         {
             return user.IsAdmin;
         }

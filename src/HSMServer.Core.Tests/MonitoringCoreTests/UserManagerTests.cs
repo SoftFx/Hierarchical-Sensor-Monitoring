@@ -25,7 +25,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
-            _userManager = new UserManager(_databaseAdapterManager.DatabaseAdapter, CommonMoqs.CreateNullLogger<UserManager>());
+            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, CommonMoqs.CreateNullLogger<UserManager>());
         }
 
 
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUserAsync(users,
                                     _userManager.GetUserByUserName,
-                                    _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                    _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -73,7 +73,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            new() { defaultUserFromDB },
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            users,
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -126,7 +126,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                            actualUpdatedUsers,
                                            _userManager.GetUser,
                                            _userManager.GetUserByUserName,
-                                           _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                           _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -137,7 +137,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUserAsync(new() { _testUser },
                                     _userManager.GetUserByUserName,
-                                    _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                    _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -151,7 +151,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
                                                   _userManager.GetUser,
                                                   _userManager.GetUserByUserName,
-                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                                  _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Theory]
@@ -169,7 +169,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestRemovedDefaultUserAsync(users,
                                                   _userManager.GetUser,
                                                   _userManager.GetUserByUserName,
-                                                  _databaseAdapterManager.DatabaseAdapter.GetUsers);
+                                                  _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
@@ -200,13 +200,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
-            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Key);
+            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Id);
 
             var result = _userManager.GetUsers().ToList();
 
             for (int i = 0; i < result.Count; i++)
             {
-                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Key);
+                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Id);
                 Assert.Equal(default, actual);
             }
         }
@@ -217,7 +217,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Key);
+            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -229,7 +229,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Key);
+            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -284,7 +284,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users")]
         public void GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Key);
+            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Id);
 
 
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
@@ -432,7 +432,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             await Task.Delay(200);
 
-            return _databaseAdapterManager.DatabaseAdapter.GetUsers();
+            return _databaseCoreManager.DatabaseCore.GetUsers();
         }
 
         private void AddUsers(params User[] users)

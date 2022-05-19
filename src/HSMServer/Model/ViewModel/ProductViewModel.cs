@@ -1,20 +1,20 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Cache.Entities;
 using System;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class ProductViewModel
+    public record ProductViewModel
     {
-        public string Key { get; set; }
-        public string Name { get; set; }
-        public DateTime CreationDate { get; set; }
-        public string ManagerName { get; set; }
+        public string Key { get; }
+        public string Name { get; }
+        public DateTime CreationDate { get; }
+        public string ManagerName { get; }
 
-        public ProductViewModel(string manager, Product product)
+        public ProductViewModel(string manager, ProductModel product)
         {
-            Key = product.Key;
-            Name = product.Name;
-            CreationDate = product.DateAdded;
+            Key = product.Id;
+            Name = product.DisplayName;
+            CreationDate = product.CreationDate;
             ManagerName = manager;
         }
     }

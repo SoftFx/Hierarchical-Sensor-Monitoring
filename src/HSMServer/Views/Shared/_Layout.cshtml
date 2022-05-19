@@ -69,12 +69,12 @@
                                 </li>
                             }
 
-                            @if (UserRoleHelper.IsAdminPageAllowed((User)Context.User))
+                            @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
                             {
                                 <li class="nav-item">
                                     <a class="nav-link"
-                                       href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AdminController)">
-                                        Admin
+                                       href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
+                                        Configuration
                                     </a>
                                 </li>
                             }

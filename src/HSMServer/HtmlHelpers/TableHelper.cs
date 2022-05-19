@@ -1,16 +1,12 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.ApiControllers;
-using HSMServer.Constants;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using HSMServer.Helpers;
@@ -19,15 +15,8 @@ namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
-        private static readonly HttpClientHandler _clientHandler = new HttpClientHandler()
-        {
-            ServerCertificateCustomValidationCallback =
-            (sender, cert, chain, sslPolicyErrors) => { return true; }
-        };
-        private static readonly HttpClient _client = new HttpClient(_clientHandler);
-
         #region [ Users ]
-        public static string CreateTable(User user, List<UserViewModel> users)
+        public static string CreateTable(User user, List<UserViewModel> users, Dictionary<string, string> products)
         {
             StringBuilder result = new StringBuilder();
 
@@ -76,7 +65,7 @@ namespace HSMServer.HtmlHelpers
 
                 result.Append("/></td>");    
 
-                result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles)}</td>");
+                result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles, products)}</td>");
 
                 result.Append("<td style='width: 25%'>");
                 if (UserRoleHelper.IsUserCRUDAllowed(user))
@@ -104,25 +93,17 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateUserProductsList(List<KeyValuePair<string, ProductRoleEnum>> productsRights)
+        private static string CreateUserProductsList(List<KeyValuePair<string, ProductRoleEnum>> productsRights,
+            Dictionary<string, string> products)
         {
             StringBuilder result = new StringBuilder();
 
             if (productsRights == null || !productsRights.Any())
                 return "---";
 
-            var response = _client.GetAsync(
-                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetAllProducts)}").Result;
-
-            List<Product> products = null;
-            if (response.IsSuccessStatusCode)
-            {
-                products = response.Content.ReadAsAsync<List<Product>>().Result;
-            }
-
             foreach (var right in productsRights)
             {
-                var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key))?.Name;
+                var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key)).Value;
                 result.AppendLine($"{name ?? right.Key} ({right.Value})<br>");
             }
 
@@ -213,7 +194,7 @@ namespace HSMServer.HtmlHelpers
         #region [ Edit Product: User Right ]
 
         public static string CreateTable(string productName, User user,
-            List<KeyValuePair<UserViewModel, ProductRoleEnum>> usersRights)
+            List<KeyValuePair<UserViewModel, ProductRoleEnum>> usersRights, List<User> notAdminUsers)
         {
             StringBuilder result = new StringBuilder();
             //header template
@@ -235,7 +216,7 @@ namespace HSMServer.HtmlHelpers
             var usedUsers = usersRights.Select(ur => ur.Key)?.ToList();
             //create 
             result.Append("<tr><th>0</th>" +
-                    $"<th>{CreateUserSelect(usedUsers)}" +
+                    $"<th>{CreateUserSelect(usedUsers, notAdminUsers)}" +
                     $"<span style='display: none;' id='new_user_span'></th>" +
                     $"<th>{CreateProductRoleSelect()}</th>" +
                     "<th><button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
@@ -279,26 +260,17 @@ namespace HSMServer.HtmlHelpers
             return result.ToString();
         }
 
-        private static string CreateUserSelect(List<UserViewModel> usedUsers)
+        private static string CreateUserSelect(List<UserViewModel> usedUsers, List<User> notAdminUsers)
         {
-            var response = _client.GetAsync(
-                $"{ViewConstants.ApiServer}/api/view/{nameof(ViewController.GetUsersNotAdmin)}").Result;
-
-            List<User> users = null;
-            if (response.IsSuccessStatusCode)
-            {
-                users = response.Content.ReadAsAsync<List<User>>().Result;
-            }
-
-            RemovedUsedUsers(users, usedUsers);
+            RemovedUsedUsers(notAdminUsers, usedUsers);
 
             StringBuilder result = new StringBuilder();
             
-            if (users != null && users.Any())
+            if (notAdminUsers != null && notAdminUsers.Count != 0)
             {
                 result.Append("<select class='form-select' id='createUser'>");
 
-                foreach (var user in users)
+                foreach (var user in notAdminUsers)
                     result.Append($"<option value='{user.Id}'>{user.UserName}</option>");
             }
             else result.Append("<select disabled class='form-select' id='createUser'>");
@@ -352,66 +324,6 @@ namespace HSMServer.HtmlHelpers
 
             return result.ToString();
         }
-        #endregion
-
-        #region [ Edit Product: Extra Key ]
-
-        public static string CreateTable(string productName, User user, List<ExtraKeyViewModel> extraKeys)
-        {
-            StringBuilder result = new StringBuilder();
-            //header template
-            result.Append("<div style='margin: 10px'>" +
-                "<div class='row justify-content-start'>" +
-                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Extra Keys</h5></div></div>");
-
-
-            result.Append("<div class='col-xxl'>");
-            //table template
-            result.Append("<table class='table table-striped'><thead><tr>" +
-                "<th scope='col'>#</th>" +
-                "<th scope='col'>Extra Key Name</th>" +
-                "<th scope='col'>Key</th>" +
-                "<th scope='col'>Action</th></tr>");
-
-            result.Append("</thead><tbody>");
-
-            //create 
-            result.Append("<tr><th>0</th>" +
-                    $"<th><input id='createKeyName' type='text' class='form-control'/>" +
-                    $"<span style='display: none;' id='new_key_span'></th>" +
-                    $"<th>---</th>" +
-                    "<th><button id='createKeyButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>" +
-                    $"<i class='fas fa-plus'></i></button></th></tr>");
-
-            if (extraKeys == null || !extraKeys.Any())
-            {
-                result.Append("</tbody></table></div>");
-                return result.ToString();
-            }
-
-            int index = 1;
-            foreach (var extraKey in extraKeys)
-            {
-                result.Append($"<tr><th scope='row'>{index}</th>" +
-                    $"<td>{extraKey.ExtraKeyName}" +
-                    $"<input id='keyName_{extraKey.ExtraProductKey}' value='{extraKey.ExtraKeyName}' style='display: none'/></td>" +
-                    $"<td>{extraKey.ExtraProductKey} " +
-                    $"<button id='copy_{extraKey.ExtraProductKey}' data-clipboard-text='{extraKey.ExtraProductKey}' title='copy key' type='button' class='btn btn-secondary'>" +
-                    $"<i class='far fa-copy'></i></button>" +
-                    $"</td>");
-
-                result.Append($"<td><button id='deleteKey_{extraKey.ExtraProductKey}' style='margin-left: 5px' " +
-                    $"type='button' class='btn btn-secondary' title='delete'>" +
-                    $"<i class='fas fa-trash-alt'></i></button></td>");
-
-                result.Append("</tr>");
-                index++;
-            }
-
-            result.Append("</tbody></table></div>");
-            return result.ToString();
-        }
-
         #endregion
 
         #region Sensor history tables
@@ -660,43 +572,43 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
 
-            string encodedPath = SensorPathHelper.Encode($"{sensorInfo.ProductName}/{sensorInfo.Path}");
+            string encodedId = SensorPathHelper.EncodeGuid(sensorInfo.Id);
             result.Append("<div style='margin: 10px'><div class='row justify-content-start'><div class='col-md-auto'>" +
                           $"<h5 style='margin: 10px 20px 10px;'>{sensorInfo.ProductName}/{sensorInfo.Path}</h5><div>" +
-                          $"{CreateEditButtonForInfo(encodedPath)}{CreateSaveButtonForInfo(encodedPath)}" +
-                          $"{CreateResetButtonForInfo(encodedPath)}</div></div></div></div>");
+                          $"{CreateEditButtonForInfo(encodedId)}{CreateSaveButtonForInfo(encodedId)}" +
+                          $"{CreateResetButtonForInfo(encodedId)}</div></div></div></div>");
             result.Append("<table class='table table-bordered'><tbody>");
             result.Append($"<tr><td>Product</td><td>{sensorInfo.ProductName}</td></tr>");
             result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
             result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
             result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
                           "title='Time format: dd.hh:mm:ss min value 00:05:00'></i></td><td><input disabled type='text' " +
-                          $"class='form-control' style='max-width:300px' id='interval_{encodedPath}' " +
+                          $"class='form-control' style='max-width:300px' id='interval_{encodedId}' " +
                           $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
             result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
-                          $" id='description_{encodedPath}' value='{sensorInfo.Description}'></td></tr>");
+                          $" id='description_{encodedId}' value='{sensorInfo.Description}'></td></tr>");
             result.Append("<tr><td>Unit</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
-                          $" id='unit_{encodedPath}' value='{sensorInfo.Unit}'></td></tr>");
+                          $" id='unit_{encodedId}' value='{sensorInfo.Unit}'></td></tr>");
 
             result.Append("</div>");
             return result.ToString();
         }
 
-        public static string CreateEditButtonForInfo(string encodedPath)
+        public static string CreateEditButtonForInfo(string encodedId)
         {
-            return $"<button id='editInfo_{encodedPath}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+            return $"<button id='editInfo_{encodedId}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
                    " title='edit meta info'><i class='fas fa-edit'></i></button>";
         }
 
-        public static string CreateSaveButtonForInfo(string encodedPath)
+        public static string CreateSaveButtonForInfo(string encodedId)
         {
-            return $"<button disabled id='saveInfo_{encodedPath}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+            return $"<button disabled id='saveInfo_{encodedId}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
                    " title='save meta info'><i class='fas fa-check'></i></button>";
         }
 
-        public static string CreateResetButtonForInfo(string encodedPath)
+        public static string CreateResetButtonForInfo(string encodedId)
         {
-            return $"<button disabled style='margin-left: 5px' id='revertInfo_{encodedPath}' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
+            return $"<button disabled style='margin-left: 5px' id='revertInfo_{encodedId}' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
                 " title='revert changes'><i class='fas fa-times'></i></button></td></tr>";
         }
         #endregion

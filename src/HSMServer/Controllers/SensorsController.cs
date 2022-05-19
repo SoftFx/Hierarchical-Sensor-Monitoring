@@ -2,7 +2,7 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
-using HSMServer.Core.MonitoringCoreInterface;
+using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -26,38 +26,18 @@ namespace HSMServer.Controllers
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;
-        private readonly IMonitoringDataReceiver _dataReceiver;
+        private readonly IUpdatesQueue _updatesQueue;
         private readonly IDataCollectorFacade _dataCollector;
-        public SensorsController(IMonitoringDataReceiver dataReceiver, IDataCollectorFacade dataCollector,
+
+
+        public SensorsController(IUpdatesQueue updatesQueue, IDataCollectorFacade dataCollector,
             ILogger<SensorsController> logger)
         {
-            _dataReceiver = dataReceiver;
+            _updatesQueue = updatesQueue;
             _dataCollector = dataCollector;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Receives value of bool sensor
-        /// </summary>
-        /// <param name="sensorValue"></param>
-        /// <returns></returns>
-        //[HttpPost("bool")]
-        //[Consumes(MediaTypeNames.Application.Json)]
-        //[ProducesResponseType(StatusCodes.Status200OK)]
-        //[ProducesResponseType(StatusCodes.Status400BadRequest)]
-        //public async Task<IActionResult> Post([FromBody] BoolSensorValue sensorValue)
-        //{
-        //    try
-        //    {
-        //        await _dataReceiver.AddSensorValueAsync(sensorValue);
-        //        return Ok(sensorValue);
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        _logger.LogError(e, "Failed to put data!");
-        //        return BadRequest(sensorValue);
-        //    }
-        //}
 
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -68,7 +48,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -92,7 +72,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -116,7 +96,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -140,7 +120,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -164,7 +144,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -188,7 +168,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -212,7 +192,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue.ConvertToFileSensorBytes());
+                _updatesQueue.AddItem(sensorValue.ConvertToFileSensorBytes());
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -237,7 +217,7 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _dataReceiver.AddSensorValue(sensorValue);
+                _updatesQueue.AddItem(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -262,8 +242,10 @@ namespace HSMServer.Controllers
                 try
                 {
                     var valuesList = values.ToList();
+
                     _dataCollector.ReportSensorsCount(valuesList.Count);
-                    _dataReceiver.AddSensorsValues(valuesList);
+                    _updatesQueue.AddItems(valuesList.Select(v => v.Convert()).ToList());
+
                     return Ok(values);
                 }
                 catch (Exception e)
@@ -283,14 +265,14 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
         {
-            if (values == null || !values.Any())
+            if (values == null || values.Count == 0)
                 return BadRequest();
-
 
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
-                _dataReceiver.AddSensorsValues(values);
+                _updatesQueue.AddItems(values.Cast<SensorValueBase>().ToList());
+
                 return Ok(values);
             }
             catch (Exception e)
