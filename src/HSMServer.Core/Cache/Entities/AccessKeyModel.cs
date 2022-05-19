@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Authentication;
 using System;
 
@@ -35,6 +36,19 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
+        private AccessKeyModel(ProductModel product)
+        {
+            Id = Guid.NewGuid();
+            AuthorId = product.AuthorId;
+            ProductId = product.Id;
+            IsLocked = false;
+            KeyRole = KeyRolesEnum.Admin;
+            DisplayName = CommonConstants.DefaultAccessKey;
+            CreationTime = DateTime.UtcNow;
+            ExpirationTime = DateTime.MaxValue;
+        }
+
+
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()
             {
@@ -47,5 +61,7 @@ namespace HSMServer.Core.Cache.Entities
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks
             };
+
+        internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
     }
 }

@@ -19,6 +19,8 @@
         public const string ClientVersionFileName = "version.txt";
         public const string ClientAppFolderName = "Client";
 
+        public const string DefaultAccessKey = "DefaultKey";
+
         public const char SensorPathSeparator = '/';
     }
 }

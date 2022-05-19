@@ -125,8 +125,11 @@ namespace HSMServer.Core.Cache
                 return;
 
             if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+            {
                 product.AccessKeys.TryRemove(id, out _);
-            
+                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+            }
+
             _databaseCore.RemoveAccessKey(id.ToString());
         }
 
@@ -241,6 +244,8 @@ namespace HSMServer.Core.Cache
                 AddSelfMonitoringProduct();
 
             BuildKeys(accessKeysEntities.ToList());
+
+            GenerateDefaultAccessKeys();
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
@@ -293,6 +298,17 @@ namespace HSMServer.Core.Cache
                 _keys.TryAdd(key.Id, key);
 
                 AddAccessKeyToProduct(key);
+            }
+        }
+
+        private void GenerateDefaultAccessKeys()
+        {
+            foreach(var product in _tree.Values)
+            {
+                if (product.AccessKeys.Count > 0) 
+                    continue;
+
+                AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
         }
 
@@ -441,7 +457,10 @@ namespace HSMServer.Core.Cache
         private void AddAccessKeyToProduct(AccessKeyModel key)
         {
             if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+            {
                 product.AddAccessKey(key);
+                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+            }
         }
     }
 }

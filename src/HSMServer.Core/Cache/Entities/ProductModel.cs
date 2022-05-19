@@ -17,6 +17,8 @@ namespace HSMServer.Core.Cache.Entities
     {
         public string Id { get; }
 
+        public string AuthorId { get; }
+
         public string DisplayName { get; }
 
         public string Description { get; }
@@ -44,6 +46,7 @@ namespace HSMServer.Core.Cache.Entities
         public ProductModel(ProductEntity entity) : this()
         {
             Id = entity.Id;
+            AuthorId = entity.AuthorId;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -83,7 +86,7 @@ namespace HSMServer.Core.Cache.Entities
             new()
             {
                 Id = Id,
-                //AuthorId ???
+                AuthorId = AuthorId,
                 ParentProductId = ParentProduct?.Id,
                 State = (int)State,
                 DisplayName = DisplayName,
