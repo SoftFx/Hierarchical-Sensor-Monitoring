@@ -2,14 +2,18 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.DataLayer;
 using HSMServer.Core.Converters;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.Products;
+using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -17,10 +21,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using HSMServer.Core.SensorsDataValidation;
-using HSMServer.Core.SensorsUpdatesQueue;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
@@ -75,21 +75,21 @@ namespace HSMServer.Core.MonitoringServerCore
             switch (extendedData.ValueType)
             {
                 case SensorType.IntegerBarSensor:
-                {
-                    var typedValue = extendedData.Value as IntBarSensorValue;
-                    typedValue.EndTime = DateTime.UtcNow;
-                    SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
-                    SaveSensorValue(obj, extendedData.ProductName);
-                    break;
-                }
+                    {
+                        var typedValue = extendedData.Value as IntBarSensorValue;
+                        typedValue.EndTime = DateTime.UtcNow;
+                        SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
+                        SaveSensorValue(obj, extendedData.ProductName);
+                        break;
+                    }
                 case SensorType.DoubleBarSensor:
-                {
-                    var typedValue = extendedData.Value as DoubleBarSensorValue;
-                    typedValue.EndTime = DateTime.UtcNow;
-                    SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
-                    SaveSensorValue(obj, extendedData.ProductName);
-                    break;
-                }
+                    {
+                        var typedValue = extendedData.Value as DoubleBarSensorValue;
+                        typedValue.EndTime = DateTime.UtcNow;
+                        SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
+                        SaveSensorValue(obj, extendedData.ProductName);
+                        break;
+                    }
             }
         }
         /// <summary>
@@ -185,7 +185,8 @@ namespace HSMServer.Core.MonitoringServerCore
                     return;
 
                 var productName = _treeValuesCache.GetProductNameById(value.Key);
-                if (!ProcessBarSensorValue(value, productName, timeCollected))
+
+                if (productName != null && !ProcessBarSensorValue(value, productName, timeCollected))
                     return;
 
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);
