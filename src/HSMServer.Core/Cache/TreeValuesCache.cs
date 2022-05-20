@@ -110,13 +110,8 @@ namespace HSMServer.Core.Cache
 
         public void AddAccessKey(AccessKeyModel key)
         {
-            if (_keys.ContainsKey(key.Id)) 
-                return;
-
-            _keys.TryAdd(key.Id, key);
-            AddAccessKeyToProduct(key);
-
-            _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
+            if (AddKeyToTree(key))
+                _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
         }
 
         public void RemoveAccessKey(Guid id)
@@ -130,13 +125,7 @@ namespace HSMServer.Core.Cache
                 ChangeProductEvent?.Invoke(product, TransactionType.Update);
             }
 
-            _databaseCore.RemoveAccessKey(id.ToString());
-        }
-
-        public AccessKeyModel GetAccessKey(Guid id)
-        {
-            _keys.TryGetValue(id, out var key);
-            return key;
+            _databaseCore.RemoveAccessKey(id);
         }
 
         public void UpdateAccessKey(AccessKeyModel updatedKey)
@@ -146,6 +135,12 @@ namespace HSMServer.Core.Cache
 
             _keys[updatedKey.Id] = updatedKey;
             _databaseCore.UpdateAccessKey(updatedKey.ToAccessKeyEntity());
+        }
+
+        public AccessKeyModel GetAccessKey(Guid id)
+        {
+            _keys.TryGetValue(id, out var key);
+            return key;
         }
 
         public void UpdateSensor(SensorUpdate updatedSensor)
@@ -243,9 +238,7 @@ namespace HSMServer.Core.Cache
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
 
-            BuildKeys(accessKeysEntities.ToList());
-
-            GenerateDefaultAccessKeys();
+            ApplyAccessKeys(accessKeysEntities.ToList());
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
@@ -290,25 +283,17 @@ namespace HSMServer.Core.Cache
             ResaveEntities(productEntities, sensorEntities);
         }
 
-        private void BuildKeys(List<AccessKeyEntity> entities) 
+        private void ApplyAccessKeys(List<AccessKeyEntity> entities) 
         {
             foreach(var keyEntity in entities)
             {
-                var key = new AccessKeyModel(keyEntity);
-                _keys.TryAdd(key.Id, key);
-
-                AddAccessKeyToProduct(key);
+                AddKeyToTree(new AccessKeyModel(keyEntity));
             }
-        }
 
-        private void GenerateDefaultAccessKeys()
-        {
-            foreach(var product in _tree.Values)
+            foreach (var product in _tree.Values)
             {
-                if (product.AccessKeys.Count > 0) 
-                    continue;
-
-                AddAccessKey(AccessKeyModel.BuildDefault(product));
+                if (product.AccessKeys.IsEmpty)
+                    AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
         }
 
@@ -454,13 +439,18 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void AddAccessKeyToProduct(AccessKeyModel key)
+        private bool AddKeyToTree(AccessKeyModel key)
         {
-            if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+            bool isSuccess = _keys.TryAdd(key.Id, key);
+
+            if (isSuccess && key.ProductId != null
+                && _tree.TryGetValue(key.ProductId, out var product))
             {
-                product.AddAccessKey(key);
+                isSuccess &= product.AddAccessKey(key);
                 ChangeProductEvent?.Invoke(product, TransactionType.Update);
             }
+
+            return isSuccess;
         }
     }
 }

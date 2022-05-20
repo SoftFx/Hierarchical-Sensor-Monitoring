@@ -66,7 +66,7 @@ namespace HSMServer.Core.Cache.Entities
             Id = key;
         }
 
-        internal void AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
+        internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {

@@ -34,9 +34,9 @@ namespace HSMServer.Core.Cache
 
         void AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
-        AccessKeyModel GetAccessKey(Guid id);
         void UpdateAccessKey(AccessKeyModel key);
-
+        AccessKeyModel GetAccessKey(Guid id);
+        
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);

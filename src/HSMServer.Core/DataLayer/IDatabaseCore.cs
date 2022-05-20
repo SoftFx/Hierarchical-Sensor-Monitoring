@@ -34,10 +34,10 @@ namespace HSMServer.Core.DataLayer
 
         #region AccessKey
 
-        void RemoveAccessKey(string id);
+        void RemoveAccessKey(Guid id);
         void AddAccessKey(AccessKeyEntity entity);
         void UpdateAccessKey(AccessKeyEntity entity);
-        AccessKeyEntity GetAccessKey(string id);
+        AccessKeyEntity GetAccessKey(Guid id);
         List<AccessKeyEntity> GetAccessKeys();
 
         #endregion

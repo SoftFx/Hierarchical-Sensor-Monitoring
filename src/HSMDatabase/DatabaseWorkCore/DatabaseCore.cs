@@ -426,10 +426,12 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region AccessKey
 
-        public void RemoveAccessKey(string id) 
+        public void RemoveAccessKey(Guid id) 
         {
-            _environmentDatabase.RemoveAccessKey(id);
-            _environmentDatabase.RemoveAccessKeyFromList(id);
+            var strId = id.ToString();
+
+            _environmentDatabase.RemoveAccessKey(strId);
+            _environmentDatabase.RemoveAccessKeyFromList(strId);
         }
 
         public void AddAccessKey(AccessKeyEntity entity)
@@ -440,8 +442,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(string id) => 
-            _environmentDatabase.GetAccessKey(id);
+        public AccessKeyEntity GetAccessKey(Guid id) => 
+            _environmentDatabase.GetAccessKey(id.ToString());
         
         public List<AccessKeyEntity> GetAccessKeys()
         {
