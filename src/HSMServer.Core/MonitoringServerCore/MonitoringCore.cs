@@ -73,21 +73,21 @@ namespace HSMServer.Core.MonitoringServerCore
             switch (extendedData.ValueType)
             {
                 case SensorType.IntegerBarSensor:
-                {
-                    var typedValue = extendedData.Value as IntBarSensorValue;
-                    typedValue.EndTime = DateTime.UtcNow;
-                    SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
-                    SaveSensorValue(obj, extendedData.ProductName);
-                    break;
-                }
+                    {
+                        var typedValue = extendedData.Value as IntBarSensorValue;
+                        typedValue.EndTime = DateTime.UtcNow;
+                        SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
+                        SaveSensorValue(obj, extendedData.ProductName);
+                        break;
+                    }
                 case SensorType.DoubleBarSensor:
-                {
-                    var typedValue = extendedData.Value as DoubleBarSensorValue;
-                    typedValue.EndTime = DateTime.UtcNow;
-                    SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
-                    SaveSensorValue(obj, extendedData.ProductName);
-                    break;
-                }
+                    {
+                        var typedValue = extendedData.Value as DoubleBarSensorValue;
+                        typedValue.EndTime = DateTime.UtcNow;
+                        SensorDataEntity obj = typedValue.Convert(extendedData.TimeCollected);
+                        SaveSensorValue(obj, extendedData.ProductName);
+                        break;
+                    }
             }
         }
 
@@ -121,7 +121,8 @@ namespace HSMServer.Core.MonitoringServerCore
                     return;
 
                 var productName = _treeValuesCache.GetProductNameById(value.Key);
-                if (!ProcessBarSensorValue(value, productName, timeCollected))
+
+                if (productName != null && !ProcessBarSensorValue(value, productName, timeCollected))
                     return;
 
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult);

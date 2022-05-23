@@ -10,11 +10,15 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using HSMServer.Helpers;
+using System.Text.RegularExpressions;
 
 namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
+        // regex for looking for strings that contain HTML markup
+        private static readonly Regex _tagRegex = new(@"<\s*([^ >]+)[^>]*>.*?<\s*/\s*\1\s*>");
+
         #region [ Users ]
         public static string CreateTable(User user, List<UserViewModel> users, Dictionary<string, string> products)
         {
@@ -392,7 +396,7 @@ namespace HSMServer.HtmlHelpers
             {
                 sb.Append($"<tr><td>{dates[i]}</td>" +
                     $"<td>{boolHistory[i].BoolValue}</td>" +
-                    $"<td>{boolHistory[i].Comment}</td></tr>");
+                    $"<td>{GetHistoryRawComment(boolHistory[i].Comment)}</td></tr>");
             }
 
             sb.Append("</tbody>");
@@ -412,7 +416,7 @@ namespace HSMServer.HtmlHelpers
             {
                 sb.Append($"<tr><td>{dates[i]}</td>" +
                     $"<td scope='row'>{intHistory[i].IntValue}</td>" +
-                    $"<td>{intHistory[i].Comment}</td></tr>");
+                    $"<td>{GetHistoryRawComment(intHistory[i].Comment)}</td></tr>");
             }
 
             sb.Append("</tbody>");
@@ -432,7 +436,7 @@ namespace HSMServer.HtmlHelpers
             {
                 sb.Append($"<tr><td>{dates[i]}</td>" +
                     $"<td scope='row'>{doubleHistory[i].DoubleValue}</td>" +
-                    $"<td>{doubleHistory[i].Comment}</td></tr>");
+                    $"<td>{GetHistoryRawComment(doubleHistory[i].Comment)}</td></tr>");
             }
 
             sb.Append("</tbody>");
@@ -452,7 +456,7 @@ namespace HSMServer.HtmlHelpers
             {
                 sb.Append($"<tr><td>{dates[i]}</td>" +
                     $"<td scope='row'>{stringHistory[i].StringValue}</td>" +
-                    $"<td>{stringHistory[i].Comment}</td></tr>");
+                    $"<td>{GetHistoryRawComment(stringHistory[i].Comment)}</td></tr>");
             }
 
             sb.Append("</tbody>");
@@ -506,6 +510,9 @@ namespace HSMServer.HtmlHelpers
             sb.Append("</tbody>");
             return sb.ToString();
         }
+
+        private static string GetHistoryRawComment(string comment) =>
+            _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
 
         #endregion
 
