@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
+using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Net;
@@ -20,6 +21,12 @@ namespace HSMServer
 
         public static void Main(string[] args)
         {
+            string appMode = "Debug";
+#if !DEBUG
+            appMode = "Release";
+#endif
+
+            LayoutRenderer.Register("buildConfiguration", logEvent => appMode);
             var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
 
             CertificatesConfig.InitializeConfig();
