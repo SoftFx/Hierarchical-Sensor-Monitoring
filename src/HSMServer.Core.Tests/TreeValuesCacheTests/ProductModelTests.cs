@@ -25,7 +25,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var product = new ProductModel(TestProductsManager.ProductName);
 
-            TestProductModel(product, TestProductsManager.ProductName);
+            ModelsTester.TestProductModel(TestProductsManager.ProductName, product);
         }
 
         [Fact]
@@ -38,7 +38,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var product = new ProductModel(key, name);
 
             Assert.Equal(key, product.Id);
-            TestProductModel(product, name);
+            ModelsTester.TestProductModel(name, product);
         }
 
 
@@ -62,20 +62,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var productEntity = product.ToProductEntity();
 
             ModelsTester.TestProductModel(productEntity, product);
-        }
-
-
-        private static void TestProductModel(ProductModel product, string name)
-        {
-            Assert.NotNull(product);
-            Assert.Equal(name, product.DisplayName);
-            Assert.Equal(ProductState.FullAccess, product.State);
-            Assert.NotEqual(DateTime.MinValue, product.CreationDate);
-            Assert.False(string.IsNullOrEmpty(product.Id));
-            Assert.True(string.IsNullOrEmpty(product.Description));
-            Assert.Null(product.ParentProduct);
-            Assert.Empty(product.SubProducts);
-            Assert.Empty(product.Sensors);
         }
     }
 }

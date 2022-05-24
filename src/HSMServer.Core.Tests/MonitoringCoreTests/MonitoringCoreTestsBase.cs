@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -16,24 +15,24 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private protected readonly SensorValuesFactory _sensorValuesFactory;
         private protected readonly SensorValuesTester _sensorValuesTester;
 
-        protected readonly TreeValuesCache _valuesCache;
+        protected readonly IUserManager _userManager;
         protected readonly IUpdatesQueue _updatesQueue;
 
         protected MonitoringCore _monitoringCore;
 
 
-        protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
+        protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
         {
             _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
-            _databaseCoreManager.AddTestProduct();
+            if (addTestProduct)
+                _databaseCoreManager.AddTestProduct();
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
             _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.DisplayName);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
-            var userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, userManager);
+            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
         }

@@ -44,6 +44,18 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static User BuildRandomUser() =>
             BuildUser(GenerateRandomProductRole(), RandomGenerator.GetRandomString());
 
+        internal static User BuildUserWithRole(ProductRoleEnum productRole, string productId = null)
+        {
+            var user = BuildUser(isAdmin: false);
+
+            user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+            {
+                new KeyValuePair<string, ProductRoleEnum>(productId, productRole),
+            };
+
+            return user;
+        }
+
         private static User BuildUser(string name = TestUserName, bool? isAdmin = null) =>
              new(name)
              {

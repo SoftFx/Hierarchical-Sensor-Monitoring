@@ -8,7 +8,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal class ModelsTester
+    internal sealed class ModelsTester
     {
         internal static void TestProductModel(ProductEntity expected, ProductModel actual)
         {
@@ -27,6 +27,47 @@ namespace HSMServer.Core.Tests.Infrastructure
             var expectedSensors = expected.SensorsIds;
             var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
             TestCollections(expectedSensors, actualSensors);
+        }
+
+        internal static void TestProductModel(ProductModel expected, ProductModel actual)
+        {
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.ParentProduct?.Id, actual.ParentProduct?.Id);
+            Assert.Equal(expected.DisplayName, actual.DisplayName);
+            Assert.Equal(expected.State, actual.State);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.CreationDate, actual.CreationDate);
+
+            var expectedSubProducts = expected.SubProducts.Select(p => p.Key).ToList();
+            var actualSubProducts = actual.SubProducts.Select(p => p.Key).ToList();
+            TestCollections(expectedSubProducts, actualSubProducts);
+
+            var expectedSensors = expected.Sensors.Select(p => p.Key.ToString()).ToList();
+            var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
+            TestCollections(expectedSensors, actualSensors);
+        }
+
+        internal static void TestProductModel(string name, ProductModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(name, actual.DisplayName);
+            Assert.Equal(ProductState.FullAccess, actual.State);
+            Assert.NotEqual(DateTime.MinValue, actual.CreationDate);
+            Assert.False(string.IsNullOrEmpty(actual.Id));
+            Assert.True(string.IsNullOrEmpty(actual.Description));
+            Assert.Null(actual.ParentProduct);
+            Assert.Empty(actual.SubProducts);
+            Assert.Empty(actual.Sensors);
+        }
+
+        internal static void TestProducts(List<ProductEntity> expected, List<ProductModel> actual)
+        {
+            var actualDict = actual.ToDictionary(p => p.Id);
+
+            Assert.Equal(expected.Count, actual.Count);
+
+            foreach (var expectedProduct in expected)
+                TestProductModel(expectedProduct, actualDict[expectedProduct.Id]);
         }
 
 

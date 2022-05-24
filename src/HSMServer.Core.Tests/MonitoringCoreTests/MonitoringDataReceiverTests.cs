@@ -1,5 +1,6 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
@@ -35,13 +36,15 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseCoreManager.DatabaseCore, configProviderLogger);
 
+            var valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager);
+
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseCoreManager.DatabaseCore,
                 _barStorage,
                 configurationProvider,
                 _updatesQueue,
-                _valuesCache,
+                valuesCache,
                 monitoringLogger);
         }
 

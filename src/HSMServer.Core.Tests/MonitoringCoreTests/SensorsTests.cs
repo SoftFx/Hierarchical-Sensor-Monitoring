@@ -2,6 +2,7 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringServerCore;
@@ -42,7 +43,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 barStorage,
                 configurationProvider.Object,
                 _updatesQueue,
-                _valuesCache,
+                new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager),
                 monitoringLogger);
         }
 
