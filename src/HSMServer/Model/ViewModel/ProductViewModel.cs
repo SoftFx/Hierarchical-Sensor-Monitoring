@@ -1,10 +1,12 @@
 ﻿using HSMServer.Core.Cache.Entities;
 using System;
+using System.Linq;
 
 namespace HSMServer.Model.ViewModel
 {
     public record ProductViewModel
     {
+        public string Id { get; }
         public string Key { get; }
         public string Name { get; }
         public DateTime CreationDate { get; }
@@ -12,7 +14,8 @@ namespace HSMServer.Model.ViewModel
 
         public ProductViewModel(string manager, ProductModel product)
         {
-            Key = product.Id;
+            Id = product.Id;
+            Key = product.AccessKeys.First().Value.Id.ToString();
             Name = product.DisplayName;
             CreationDate = product.CreationDate;
             ManagerName = manager;

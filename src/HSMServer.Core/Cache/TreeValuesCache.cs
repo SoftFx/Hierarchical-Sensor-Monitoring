@@ -73,6 +73,14 @@ namespace HSMServer.Core.Cache
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
                 _databaseCore.RemoveProductNew(product.Id);
 
+                if (!product.AccessKeys.IsEmpty)
+                {
+                    foreach (var id in product.AccessKeys.Keys)
+                    {
+                        RemoveAccessKey(id);
+                    }
+                }
+
                 _userManager.RemoveProductFromUsers(product.Id);
 
                 ChangeProductEvent?.Invoke(product, TransactionType.Delete);
@@ -374,6 +382,14 @@ namespace HSMServer.Core.Cache
         {
             _tree.TryAdd(product.Id, product);
             _databaseCore.AddProductNew(product.ToProductEntity());
+
+            if (product.AccessKeys.IsEmpty)
+                product.AddAccessKey(AccessKeyModel.BuildDefault(product));
+
+            foreach (var key in product.AccessKeys.Values)
+            {
+                AddAccessKey(key);
+            }
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
