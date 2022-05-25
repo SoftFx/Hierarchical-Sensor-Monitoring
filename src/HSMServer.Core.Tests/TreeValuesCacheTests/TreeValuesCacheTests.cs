@@ -176,7 +176,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             await Task.Delay(100);
 
-            var product = _valuesCache.GetTree().FirstOrDefault(p => p.DisplayName == "subProduct0_product0");
+            var product = GetProductByName("subProduct0_product0");
             var parentProduct = product.ParentProduct;
 
             var expectedDeletedProductIds = GetAllProductIdsInBranch(product);
@@ -327,6 +327,75 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 TestSensoUpdates(sensor, sensorUpdate);
         }
 
+        [Fact]
+        [Trait("Category", "Remove sensor(s)")]
+        public void RemoveSensorsTest()
+        {
+            var allSensors = _valuesCache.GetSensors();
+
+            int removedSensorsCount = 0;
+            void RemoveSensorEventHandler(SensorModel removedSensor, TransactionType type)
+            {
+                Assert.NotNull(removedSensor);
+                Assert.Equal(TransactionType.Delete, type);
+
+                removedSensorsCount++;
+            }
+
+            _valuesCache.ChangeSensorEvent += RemoveSensorEventHandler;
+
+            foreach (var sensor in allSensors)
+                _valuesCache.RemoveSensor(sensor.Id);
+
+            _valuesCache.ChangeSensorEvent -= RemoveSensorEventHandler;
+
+            Assert.Equal(allSensors.Count, removedSensorsCount);
+            Assert.Empty(_valuesCache.GetSensors());
+            Assert.Empty(_databaseCoreManager.DatabaseCore.GetAllSensors());
+            foreach (var sensor in allSensors)
+                Assert.Empty(_databaseCoreManager.DatabaseCore.GetAllSensorHistory(sensor.ProductName, sensor.Path));
+        }
+
+        [Fact]
+        [Trait("Category", "Remove sensor(s) data")]
+        public void RemoveSensorsDataTest()
+        {
+            int clearedSensorsCount = 0;
+            void UpdateSensorEventHandler(SensorModel clearedSensor, TransactionType type)
+            {
+                Assert.NotNull(clearedSensor);
+                Assert.Equal(TransactionType.Update, type);
+
+                clearedSensorsCount++;
+            }
+
+
+            var product = GetProductByName("product0");
+            var sensors = GetAllSensorIdsInBranch(product);
+
+            _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
+
+            _valuesCache.RemoveSensorsData(product.Id);
+
+            _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
+
+            Assert.Equal(4, clearedSensorsCount);
+            foreach (var sensorId in sensors)
+                TestClearedSensor(sensorId);
+        }
+
+        [Fact]
+        [Trait("Category", "Remove sensor(s) data")]
+        public void RemoveSensorDataTest()
+        {
+            var sensor = GetSensorByNameFromCache("sensor0");
+
+            _valuesCache.RemoveSensorData(sensor.Id);
+
+            TestClearedSensor(sensor.Id);
+            ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));
+        }
+
 
         internal static SensorUpdate BuildSensorUpdate(Guid? id = null) =>
             new()
@@ -346,6 +415,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
+
+        private ProductModel GetProductByName(string name) =>
+            _valuesCache.GetTree().FirstOrDefault(p => p.DisplayName == name);
 
         private SensorModel GetSensorByNameFromCache(string name) =>
             _valuesCache.GetSensors().FirstOrDefault(s => s.Path == name);
@@ -381,6 +453,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromDb);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
+        }
+
+        private void TestClearedSensor(Guid clearedSensorId)
+        {
+            var sensor = GetSensorByIdFromCache(clearedSensorId);
+
+            Assert.NotNull(sensor);
+            Assert.Equal(DateTime.MinValue, sensor.SensorTime);
+            Assert.Equal(DateTime.MinValue, sensor.LastUpdateTime);
+            Assert.Equal(SensorStatus.Unknown, sensor.Status);
+            Assert.Equal(default, sensor.OriginalFileSensorContentSize);
+            Assert.Equal(default, sensor.TypedData);
+
+            Assert.Empty(_databaseCoreManager.DatabaseCore.GetAllSensorHistory(sensor.ProductName, sensor.Path));
+            Assert.NotNull(GetSensorByIdFromDb(clearedSensorId));
         }
 
         private static void TestRemovedProduct(string productId, GetProductNameById getProductName,

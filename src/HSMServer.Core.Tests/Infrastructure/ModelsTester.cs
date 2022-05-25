@@ -8,7 +8,7 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal sealed class ModelsTester
+    internal static class ModelsTester
     {
         internal static void TestProductModel(ProductEntity expected, ProductModel actual)
         {
@@ -120,18 +120,22 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestSensorModelWithoutUpdatedMetadata(SensorModel expected, SensorModel actual)
         {
-            Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.ParentProduct.Id, actual.ParentProduct.Id);
-            Assert.Equal(expected.SensorName, actual.SensorName);
-            Assert.Equal(expected.ProductName, actual.ProductName);
-            Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(expected.SensorType, actual.SensorType);
-            Assert.Equal(expected.ValidationError, actual.ValidationError);
+            TestImmutableSensorData(expected, actual);
+
             Assert.Equal(expected.SensorTime, actual.SensorTime);
             Assert.Equal(expected.LastUpdateTime, actual.LastUpdateTime);
             Assert.Equal(expected.Status, actual.Status);
             Assert.Equal(expected.TypedData, actual.TypedData);
             Assert.Equal(expected.OriginalFileSensorContentSize, actual.OriginalFileSensorContentSize);
+        }
+
+        internal static void TestSensorDataWithoutClearedData(SensorModel expected, SensorModel actual)
+        {
+            TestImmutableSensorData(expected, actual);
+
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.ExpectedUpdateInterval, actual.ExpectedUpdateInterval);
+            Assert.Equal(expected.Unit, actual.Unit);
         }
 
         internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, DateTime timeCollected, SensorModel actual)
@@ -171,6 +175,17 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.True(string.IsNullOrEmpty(actual.ValidationError));
         }
 
+
+        private static void TestImmutableSensorData(SensorModel expected, SensorModel actual)
+        {
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.ParentProduct.Id, actual.ParentProduct.Id);
+            Assert.Equal(expected.SensorName, actual.SensorName);
+            Assert.Equal(expected.ProductName, actual.ProductName);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(expected.SensorType, actual.SensorType);
+            Assert.Equal(expected.ValidationError, actual.ValidationError);
+        }
 
         private static void TestCollections(List<string> expected, List<string> actual)
         {

@@ -113,6 +113,7 @@ namespace HSMServer.Core.Cache.Entities
 
         internal void ClearData()
         {
+            SensorTime = DateTime.MinValue;
             LastUpdateTime = DateTime.MinValue;
             Status = SensorStatus.Unknown;
             OriginalFileSensorContentSize = 0;
