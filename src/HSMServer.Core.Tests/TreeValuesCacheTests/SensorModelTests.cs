@@ -81,12 +81,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "SensorModel updating")]
         public void SensorModel_Update_Test()
         {
-            var updating = new SensorUpdate()
-            {
-                Description = RandomGenerator.GetRandomString(),
-                ExpectedUpdateInterval = TimeSpan.FromMinutes(10).ToString(),
-                Unit = RandomGenerator.GetRandomString(),
-            };
+            var updating = TreeValuesCacheTests.BuildSensorUpdate();
             var sensor = new SensorModel(EntitiesFactory.BuildSensorEntity(), null);
 
             sensor.Update(updating);

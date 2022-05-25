@@ -282,8 +282,6 @@ namespace HSMServer.Controllers
                 new SensorUpdate
                 {
                     Id = sensor.Id,
-                    Product = viewModel.ProductName,
-                    Path = viewModel.Path,
                     Description = viewModel.Description,
                     ExpectedUpdateInterval = viewModel.ExpectedUpdateInterval,
                     Unit = viewModel.Unit

@@ -74,14 +74,20 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModel(SensorEntity expected, SensorModel actual)
         {
             Assert.NotNull(actual);
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.ExpectedUpdateIntervalTicks, actual.ExpectedUpdateInterval.Ticks);
+            Assert.Equal(expected.Unit, actual.Unit);
+
+            TestSensorModelWithoutUpdatedMetadata(expected, actual);
+        }
+
+        internal static void TestSensorModelWithoutUpdatedMetadata(SensorEntity expected, SensorModel actual)
+        {
             Assert.Equal(expected.Id, actual.Id.ToString());
             Assert.Equal(expected.ProductId, actual.ParentProduct?.Id);
             Assert.Equal(expected.SensorName, actual.SensorName);
             Assert.Equal(expected.ProductName, actual.ProductName);
             Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ExpectedUpdateIntervalTicks, actual.ExpectedUpdateInterval.Ticks);
-            Assert.Equal(expected.Unit, actual.Unit);
             Assert.Equal(expected.SensorType, (int)actual.SensorType);
             Assert.True(string.IsNullOrEmpty(actual.ValidationError));
         }
@@ -103,6 +109,31 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Assert.Equal(expectedSensorData.Timestamp, actual.SensorTime.GetTimestamp());
         }
 
+        internal static void TestSensorModel(SensorModel expected, SensorModel actual)
+        {
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.ExpectedUpdateInterval, actual.ExpectedUpdateInterval);
+            Assert.Equal(expected.Unit, actual.Unit);
+
+            TestSensorModelWithoutUpdatedMetadata(expected, actual);
+        }
+
+        internal static void TestSensorModelWithoutUpdatedMetadata(SensorModel expected, SensorModel actual)
+        {
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.ParentProduct.Id, actual.ParentProduct.Id);
+            Assert.Equal(expected.SensorName, actual.SensorName);
+            Assert.Equal(expected.ProductName, actual.ProductName);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(expected.SensorType, actual.SensorType);
+            Assert.Equal(expected.ValidationError, actual.ValidationError);
+            Assert.Equal(expected.SensorTime, actual.SensorTime);
+            Assert.Equal(expected.LastUpdateTime, actual.LastUpdateTime);
+            Assert.Equal(expected.Status, actual.Status);
+            Assert.Equal(expected.TypedData, actual.TypedData);
+            Assert.Equal(expected.OriginalFileSensorContentSize, actual.OriginalFileSensorContentSize);
+        }
+
         internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, DateTime timeCollected, SensorModel actual)
         {
             Assert.NotNull(actual);
@@ -119,6 +150,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(TimeSpan.Parse(expected.ExpectedUpdateInterval), actual.ExpectedUpdateInterval);
+            Assert.Equal(expected.Unit, actual.Unit);
+        }
+
+        internal static void TestSensorModel(SensorUpdate expected, SensorEntity actual)
+        {
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(TimeSpan.Parse(expected.ExpectedUpdateInterval).Ticks, actual.ExpectedUpdateIntervalTicks);
             Assert.Equal(expected.Unit, actual.Unit);
         }
 
