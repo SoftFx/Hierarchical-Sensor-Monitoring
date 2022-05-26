@@ -25,7 +25,6 @@ namespace HSMServer.Core.Cache
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
-        public event Action<SensorModel> UploadSensorDataEvent;
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
@@ -179,7 +178,7 @@ namespace HSMServer.Core.Cache
 
             _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
-            UploadSensorDataEvent?.Invoke(sensor);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

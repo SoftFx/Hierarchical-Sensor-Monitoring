@@ -9,7 +9,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     public class SensorModelTests
     {
-        private readonly SensorValuesFactory _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.ProductName);
+        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.ProductName);
 
 
         [Fact]

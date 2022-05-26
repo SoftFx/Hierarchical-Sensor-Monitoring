@@ -47,7 +47,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestCollections(expectedSensors, actualSensors);
         }
 
-        internal static void TestProductModel(string name, ProductModel actual)
+        internal static void TestProductModel(string name, ProductModel actual,
+            ProductModel parentProduct = null, List<ProductModel> subProducts = null, List<SensorModel> sensors = null)
         {
             Assert.NotNull(actual);
             Assert.Equal(name, actual.DisplayName);
@@ -55,9 +56,17 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotEqual(DateTime.MinValue, actual.CreationDate);
             Assert.False(string.IsNullOrEmpty(actual.Id));
             Assert.True(string.IsNullOrEmpty(actual.Description));
-            Assert.Null(actual.ParentProduct);
-            Assert.Empty(actual.SubProducts);
-            Assert.Empty(actual.Sensors);
+            Assert.Equal(parentProduct, actual.ParentProduct);
+
+            if (subProducts == null)
+                Assert.Empty(actual.SubProducts);
+            else
+                TestCollections(subProducts.Select(s => s.Id).ToList(), actual.SubProducts.Keys.ToList());
+
+            if (sensors == null)
+                Assert.Empty(actual.Sensors);
+            else
+                TestCollections(sensors.Select(s => s.Id.ToString()).ToList(), actual.Sensors.Keys.Select(k => k.ToString()).ToList());
         }
 
         internal static void TestProducts(List<ProductEntity> expected, List<ProductModel> actual)
@@ -138,14 +147,19 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Unit, actual.Unit);
         }
 
-        internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, DateTime timeCollected, SensorModel actual)
+        internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, DateTime timeCollected,
+            SensorModel actual, ProductModel parentProduct = null)
         {
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));
-            Assert.True(string.IsNullOrEmpty(actual.ParentProduct?.Id));
             Assert.Equal(expected.Path.GetSensorName(), actual.SensorName);
             Assert.Equal(expectedProduct, actual.ProductName);
             Assert.Equal(expected.Path, actual.Path);
+
+            if (parentProduct == null)
+                Assert.Null(actual.ParentProduct);
+            else
+                Assert.Equal(parentProduct, actual.ParentProduct);
 
             TestSensorModelData(expected, timeCollected, actual);
         }
