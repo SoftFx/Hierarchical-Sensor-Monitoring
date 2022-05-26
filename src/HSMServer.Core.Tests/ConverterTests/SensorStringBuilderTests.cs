@@ -8,7 +8,6 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
 {
-    // TODO add tests for SensorModel string property
     public class SensorStringBuilderTests
     {
         [Theory]

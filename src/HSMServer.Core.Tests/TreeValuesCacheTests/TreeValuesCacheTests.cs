@@ -454,6 +454,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var subProduct = GetProductByName(subProductName);
             var subSubProduct = GetProductByName(subSubProductName);
             var sensor = GetSensorByNameFromCache(sensorName);
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestSensorValue(product.DisplayName, sensorValue.Path);
 
             Assert.Equal(2, addedProductsCount);
             Assert.Equal(3, updatedProductsCount);
@@ -470,7 +471,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             ModelsTester.TestSensorModel(sensorValue, product.DisplayName, timeCollected, sensor, parentProduct: subSubProduct);
             ModelsTester.TestSensorModel(GetSensorByIdFromDb(sensor.Id), sensor);
-            ModelsTester.TestSensorModel(_databaseCoreManager.DatabaseCore.GetLatestSensorValue(product.DisplayName, sensorValue.Path), sensor);
+            ModelsTester.TestSensorModel(sensorDataFromDb, sensor);
+            SensorValuesTester.TestSensorDataEntity(sensorValue, sensorDataFromDb, timeCollected);
         }
 
         [Theory]
@@ -510,13 +512,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = _valuesCache.GetProduct(CommonConstants.SelfMonitoringProductKey);
             var sensor = GetSensorByNameFromCache(sensorName);
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestSensorValue(product.DisplayName, sensorValue.Path);
 
             Assert.Equal(1, updatedSensorsCount);
             Assert.NotEmpty(product.Sensors);
 
             ModelsTester.TestSensorModel(sensorValue, product.DisplayName, timeCollected, sensor, parentProduct: product);
             ModelsTester.TestSensorModel(GetSensorByIdFromDb(sensor.Id), sensor);
-            ModelsTester.TestSensorModel(_databaseCoreManager.DatabaseCore.GetLatestSensorValue(product.DisplayName, sensorValue.Path), sensor);
+            ModelsTester.TestSensorModel(sensorDataFromDb, sensor);
+            SensorValuesTester.TestSensorDataEntity(sensorValue, sensorDataFromDb, timeCollected);
         }
 
 

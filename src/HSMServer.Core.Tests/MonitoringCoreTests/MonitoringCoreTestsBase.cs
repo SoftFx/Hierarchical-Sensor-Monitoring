@@ -13,7 +13,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     {
         private protected readonly DatabaseCoreManager _databaseCoreManager;
         private protected readonly SensorValuesFactory _sensorValuesFactory;
-        private protected readonly SensorValuesTester _sensorValuesTester;
 
         protected readonly IUserManager _userManager;
         protected readonly IUpdatesQueue _updatesQueue;
@@ -29,7 +28,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
-            _sensorValuesTester = new SensorValuesTester(TestProductsManager.TestProduct.DisplayName);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
