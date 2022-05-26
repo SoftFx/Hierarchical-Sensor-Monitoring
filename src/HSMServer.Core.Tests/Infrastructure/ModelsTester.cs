@@ -150,6 +150,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, DateTime timeCollected,
             SensorModel actual, ProductModel parentProduct = null)
         {
+            TestSensorModel(expected, expectedProduct, actual, parentProduct);
+            TestSensorModelData(expected, timeCollected, actual);
+        }
+
+        internal static void TestSensorModel(SensorValueBase expected, string expectedProduct, SensorModel actual, ProductModel parentProduct = null)
+        {
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));
             Assert.Equal(expected.Path.GetSensorName(), actual.SensorName);
@@ -160,8 +166,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Assert.Null(actual.ParentProduct);
             else
                 Assert.Equal(parentProduct, actual.ParentProduct);
-
-            TestSensorModelData(expected, timeCollected, actual);
         }
 
         internal static void TestSensorModel(SensorUpdate expected, SensorModel actual)
@@ -180,11 +184,17 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestSensorModelData(SensorValueBase expected, DateTime timeCollected, SensorModel actual)
         {
+            Assert.Equal(timeCollected, actual.LastUpdateTime);
+
+            TestSensorModelData(expected, actual);
+        }
+
+        internal static void TestSensorModelData(SensorValueBase expected, SensorModel actual)
+        {
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(SensorValuesTester.GetSensorValueType(expected), actual.SensorType);
             Assert.Equal(SensorValuesTester.GetSensorValueTypedDataString(expected), actual.TypedData);
             Assert.Equal(expected.Time, actual.SensorTime);
-            Assert.Equal(timeCollected, actual.LastUpdateTime);
             Assert.Equal(expected.Status, actual.Status);
             Assert.True(string.IsNullOrEmpty(actual.ValidationError));
         }
