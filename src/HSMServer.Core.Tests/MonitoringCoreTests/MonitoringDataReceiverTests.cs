@@ -1,3 +1,4 @@
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache;
@@ -8,7 +9,6 @@ using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,11 +24,10 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private readonly BarSensorsStorage _barStorage;
         private readonly ITreeValuesCache _valuesCache;
 
-        private delegate List<SensorModel> GetValuesFromCache();
+        private delegate List<SensorModel> GetSensorsFromCache();
         private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
         private delegate List<SensorHistoryData> GetAllSensorHistoryData(string productName, string path);
-        //private delegate SensorInfo GetSensorInfo(string productName, string path);
-        //private delegate List<SensorInfo> GetAllSensorInfo(string productName);
+        private delegate List<SensorEntity> GetAllSensorsFromDb();
 
 
         public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture, DatabaseRegisterFixture registerFixture)
@@ -69,8 +68,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             await FullSensorValueTestAsync(sensorValue,
                                            _valuesCache.GetSensors,
-                                           _databaseCoreManager.DatabaseCore.GetOneValueSensorValue);
-                                           //_databaseCoreManager.DatabaseCore.GetSensorInfo);
+                                           _databaseCoreManager.DatabaseCore.GetOneValueSensorValue,
+                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
         }
 
         [Theory]
@@ -111,8 +110,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory);
-                                                   //_databaseCoreManager.DatabaseCore.GetProductSensors);
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
         }
 
 
@@ -131,8 +130,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             await FullSeveralSensorValuesTestAsync(sensorValues,
                                                    _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory);
-                                                   //_databaseCoreManager.DatabaseCore.GetProductSensors);
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
         }
 
 
@@ -152,8 +151,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             await FullSeveralSensorValuesTestAsync(new List<SensorValueBase>() { unitedValue },
                                                    _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory);
-                                                   //_databaseCoreManager.DatabaseCore.GetProductSensors);
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
         }
 
         [Theory]
@@ -188,35 +187,35 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             await FullSeveralSensorValuesTestAsync(unitedValues,
                                                    _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory);
-                                                   //_databaseCoreManager.DatabaseCore.GetProductSensors);
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
         }
 
 
-        private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, GetValuesFromCache getCachedValues,
-            GetSensorHistoryData getSensorHistoryData/*, GetSensorInfo getSensorInfo*/)
+        private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, GetSensorsFromCache getSensorsFromCache,
+            GetSensorHistoryData getSensorHistoryData, GetAllSensorsFromDb getAllSensorsFromDb)
         {
             await Task.Delay(100);
 
-            TestSensorFromCache(sensorValue, getCachedValues);
+            TestSensorFromCache(sensorValue, getSensorsFromCache);
             TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
-            //TestSensorInfoFromDB(sensorValue, getSensorInfo);
+            TestSensorFromDB(sensorValue, getAllSensorsFromDb);
         }
 
         private async Task FullSeveralSensorValuesTestAsync(List<SensorValueBase> sensorValues,
-           GetValuesFromCache getCachedValues, GetAllSensorHistoryData getAllSensorHistoryData, /*GetAllSensorInfo getAllSensorInfo, */int? time = null)
+           GetSensorsFromCache getSensorsFromCache, GetAllSensorHistoryData getAllSensorHistoryData, GetAllSensorsFromDb getAllSensorsFromDb, int? time = null)
         {
             await Task.Delay(sensorValues.Count);
 
             var sensorsDict = sensorValues.GroupBy(s => s.Path)
                                           .ToDictionary(s => s.Key, s => s.ToList());
 
-            TestSeveralSensorFromCache(sensorsDict, getCachedValues);
+            TestSeveralSensorsFromCache(sensorsDict, getSensorsFromCache);
             TestSeveralSensorHistoryDataFromDB(sensorsDict, getAllSensorHistoryData);
-            //TestSeveralSensorInfoFromDB(sensorsDict, getAllSensorInfo);
+            TestSeveralSensorsFromDB(sensorsDict, getAllSensorsFromDb);
         }
 
-        private void TestSensorFromCache(SensorValueBase sensorValue, GetValuesFromCache getCachedSensors)
+        private void TestSensorFromCache(SensorValueBase sensorValue, GetSensorsFromCache getCachedSensors)
         {
             var sensorModel = getCachedSensors?.Invoke()?.FirstOrDefault(s => s.Path == sensorValue.Path);
 
@@ -230,17 +229,18 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue, sensorHistoryDataFromDB);
         }
 
-        //private void TestSensorInfoFromDB(SensorValueBase sensorValue, GetSensorInfo getSensorInfo)
-        //{
-        //    var sensorInfoFromDB = getSensorInfo?.Invoke(_testProductName, sensorValue.Path);
-
-        //    _sensorValuesTester.TestSensorInfoFromDB(sensorValue, sensorInfoFromDB);
-        //}
-
-        private void TestSeveralSensorFromCache(Dictionary<string, List<SensorValueBase>> sensorValues,
-            GetValuesFromCache getValuesFromCache)
+        private void TestSensorFromDB(SensorValueBase sensorValue, GetAllSensorsFromDb getAllSensors)
         {
-            var cache = getValuesFromCache?.Invoke()?.ToDictionary(s => s.Path);
+            var sensorFromDB = getAllSensors?.Invoke().FirstOrDefault(s => s.Path == sensorValue.Path);
+            var parentProduct = _valuesCache.GetProduct(sensorValue.Key);
+
+            SensorValuesTester.TestSensorEntity(sensorValue, parentProduct.DisplayName, sensorFromDB);
+        }
+
+        private void TestSeveralSensorsFromCache(Dictionary<string, List<SensorValueBase>> sensorValues,
+            GetSensorsFromCache getSensorsFromCache)
+        {
+            var cache = getSensorsFromCache?.Invoke()?.ToDictionary(s => s.Path);
 
             foreach (var sensors in sensorValues)
                 TestSensorFromCache(sensors.Value.LastOrDefault(), cache[sensors.Key]);
@@ -265,15 +265,18 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             }
         }
 
-        //private void TestSeveralSensorInfoFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
-        //    GetAllSensorInfo getAllSensorInfo)
-        //{
-        //    var infos = getAllSensorInfo(TestProductsManager.TestProduct.DisplayName).ToDictionary(s => s.Path);
+        private void TestSeveralSensorsFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
+            GetAllSensorsFromDb getAllSensorsFromDb)
+        {
+            var sensorEntities = getAllSensorsFromDb().ToDictionary(s => s.Path);
 
-        //    foreach (var sensors in sensorValues)
-        //        for (int i = 0; i < sensors.Value.Count; ++i)
-        //            _sensorValuesTester.TestSensorInfoFromDB(sensors.Value[i], infos[sensors.Key]);
-        //}
+            foreach (var sensors in sensorValues)
+            {
+                var parentProduct = _valuesCache.GetProduct(sensors.Value.First().Key);
+                for (int i = 0; i < sensors.Value.Count; ++i)
+                    SensorValuesTester.TestSensorEntity(sensors.Value[i], parentProduct.DisplayName, sensorEntities[sensors.Key]);
+            }
+        }
 
         private List<SensorValueBase> GetRandomSensorValues(int size)
         {

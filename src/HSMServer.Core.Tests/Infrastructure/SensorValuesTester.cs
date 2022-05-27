@@ -43,6 +43,21 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal((byte)GetSensorValueType(expected), actual.DataType);
         }
 
+        internal static void TestSensorEntity(SensorValueBase expected, string productName, SensorEntity actual)
+        {
+            Assert.NotNull(actual);
+            Assert.False(string.IsNullOrEmpty(actual.Id));
+            Assert.False(string.IsNullOrEmpty(actual.ProductId));
+            Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(productName, actual.ProductName);
+            Assert.Equal(expected.Path, actual.SensorName);
+            Assert.Equal((int)GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(default, actual.ExpectedUpdateIntervalTicks);
+            Assert.Null(actual.ValidationParameters);
+            Assert.Null(actual.Unit);
+        }
+
         internal static void TestBarSensorFromUnitedSensor(UnitedSensorValue expected, BarSensorValueBase actual)
         {
             Assert.Equal(expected.Comment, actual.Comment);
