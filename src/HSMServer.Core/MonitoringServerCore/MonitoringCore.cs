@@ -3,7 +3,6 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
@@ -100,15 +99,6 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             _databaseCore.PutSensorData(dataObject, productName);
         }
-
-        public void RemoveSensorsData(string productId) =>
-            _treeValuesCache.RemoveSensorsData(productId);
-
-        public void RemoveSensorData(Guid sensorId) =>
-            _treeValuesCache.RemoveSensorData(sensorId);
-
-        public void UpdateSensor(SensorUpdate updatedSensor) =>
-            _treeValuesCache.UpdateSensor(updatedSensor);
 
         public void AddSensorValue<T>(T value) where T : SensorValueBase
         {

@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
@@ -30,16 +31,19 @@ namespace HSMServer.Controllers
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
         private readonly ISensorsInterface _sensorsInterface;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly IHistoryProcessorFactory _historyProcessorFactory;
         private readonly TreeViewModel _treeViewModel;
 
 
         public HomeController(
             ISensorsInterface sensorsInterface,
+            ITreeValuesCache treeValuesCache,
             IHistoryProcessorFactory factory,
             TreeViewModel treeViewModel)
         {
             _sensorsInterface = sensorsInterface;
+            _treeValuesCache = treeValuesCache;
             _historyProcessorFactory = factory;
             _treeViewModel = treeViewModel;
         }
@@ -82,9 +86,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.Decode(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _sensorsInterface.RemoveSensorsData(node.Id);
+                _treeValuesCache.RemoveSensorsData(node.Id);
             else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
-                _sensorsInterface.RemoveSensorData(sensor.Id);
+                _treeValuesCache.RemoveSensorData(sensor.Id);
         }
 
         #region Update
@@ -278,7 +282,7 @@ namespace HSMServer.Controllers
             var viewModel = new SensorInfoViewModel(sensor);
             viewModel.Update(updateModel);
 
-            _sensorsInterface.UpdateSensor(
+            _treeValuesCache.UpdateSensor(
                 new SensorUpdate
                 {
                     Id = sensor.Id,
