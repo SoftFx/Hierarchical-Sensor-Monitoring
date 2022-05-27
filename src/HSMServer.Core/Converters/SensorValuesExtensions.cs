@@ -38,12 +38,12 @@ namespace HSMServer.Core.Converters
         public static BarSensorValueBase Convert(this UnitedSensorValue value) =>
             BuildBarSensorValue(value)?.FillBarSensorValueCommonSettings(value);
 
-
-        private static long GetTimestamp(DateTime dateTime)
+        internal static long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = dateTime - DateTime.UnixEpoch;
             return (long)timeSpan.TotalSeconds;
         }
+
 
         private static BarSensorValueBase BuildBarSensorValue(UnitedSensorValue unitedSensorValue) =>
             unitedSensorValue.Type switch

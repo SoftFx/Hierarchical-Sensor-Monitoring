@@ -142,7 +142,7 @@ namespace HSMServer.Core.Cache.Entities
                 Path = Path,
                 Time = SensorTime.ToUniversalTime(),
                 TimeCollected = LastUpdateTime.ToUniversalTime(),
-                Timestamp = GetTimestamp(SensorTime),
+                Timestamp = SensorValuesExtensions.GetTimestamp(SensorTime),
                 TypedData = TypedData,
                 DataType = (byte)SensorType,
                 OriginalFileSensorContentSize = OriginalFileSensorContentSize,
@@ -160,11 +160,5 @@ namespace HSMServer.Core.Cache.Entities
                 ResultType.Error => SensorStatus.Error,
                 _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
             };
-
-        private static long GetTimestamp(DateTime dateTime)
-        {
-            var timeSpan = dateTime - DateTime.UnixEpoch;
-            return (long)timeSpan.TotalSeconds;
-        }
     }
 }

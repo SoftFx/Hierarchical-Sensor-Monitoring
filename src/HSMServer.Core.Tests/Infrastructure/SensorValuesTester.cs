@@ -32,14 +32,12 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestSensorDataEntity(SensorValueBase expected, SensorDataEntity actual, DateTime timeCollected)
         {
-            var timeSpan = expected.Time - DateTime.UnixEpoch;
-
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal((byte)expected.Status, actual.Status);
             Assert.Equal(GetSensorValueTypedDataString(expected), actual.TypedData);
             Assert.Equal(expected.Time, actual.Time);
             Assert.Equal(timeCollected, actual.TimeCollected);
-            Assert.Equal((long)timeSpan.TotalSeconds, actual.Timestamp);
+            Assert.Equal(expected.Time.GetTimestamp(), actual.Timestamp);
             Assert.Equal((byte)GetSensorValueType(expected), actual.DataType);
         }
 

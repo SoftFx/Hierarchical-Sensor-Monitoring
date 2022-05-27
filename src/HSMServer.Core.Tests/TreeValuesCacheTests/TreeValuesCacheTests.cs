@@ -21,7 +21,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     public class TreeValuesCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
-        private readonly SensorValuesFactory _sensorValuesFactory = new(CommonConstants.SelfMonitoringProductKey);
         private readonly TreeValuesCache _valuesCache;
 
         private delegate string GetProductNameById(string id);

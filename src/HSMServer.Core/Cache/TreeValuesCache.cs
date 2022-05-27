@@ -11,7 +11,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Cache
 {
@@ -181,7 +180,6 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Initialize()
         {
             var productEntities = _databaseCore.GetAllProducts();
@@ -194,7 +192,6 @@ namespace HSMServer.Core.Cache
                 AddSelfMonitoringProduct();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
             foreach (var productEntity in productEntities)
@@ -228,11 +225,9 @@ namespace HSMServer.Core.Cache
                 }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
             var parentProduct = GetProductByName(productName);
@@ -263,7 +258,6 @@ namespace HSMServer.Core.Cache
         private ProductModel GetProductByName(string name) =>
             _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AddSelfMonitoringProduct()
         {
             var product = new ProductModel(CommonConstants.SelfMonitoringProductKey, CommonConstants.SelfMonitoringProductName);

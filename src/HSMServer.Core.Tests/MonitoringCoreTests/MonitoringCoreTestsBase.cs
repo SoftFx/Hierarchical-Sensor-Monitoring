@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -27,7 +28,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _databaseCoreManager.AddTestProduct();
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
-            _sensorValuesFactory = new SensorValuesFactory(TestProductsManager.TestProduct.Id);
+            _sensorValuesFactory = new SensorValuesFactory(addTestProduct ? TestProductsManager.TestProduct.Id : CommonConstants.SelfMonitoringProductKey);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);

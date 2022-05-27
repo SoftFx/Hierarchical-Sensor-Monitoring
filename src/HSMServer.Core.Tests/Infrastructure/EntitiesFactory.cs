@@ -17,8 +17,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                SubProductsIds = new List<string>(1 << 1),
-                SensorsIds = new List<string>(1 << 1),
+                SubProductsIds = new List<string>(2),
+                SensorsIds = new List<string>(2),
             };
 
         internal static ProductEntity AddSubProduct(this ProductEntity product, string subProductId)
