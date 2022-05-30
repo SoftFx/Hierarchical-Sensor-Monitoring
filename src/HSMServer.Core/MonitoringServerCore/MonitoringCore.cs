@@ -188,10 +188,7 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (productName == null)
                     return;
 
-                bool saveToDb = true;
-                if (!ProcessBarSensorValue(value, productName, timeCollected))
-                    saveToDb = false;
-
+                bool saveToDb = ProcessBarSensorValue(value, productName, timeCollected);
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult, saveToDb);
             }
             catch (Exception e)
