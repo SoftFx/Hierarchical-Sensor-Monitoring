@@ -26,7 +26,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
-            _logger.Info("Start initialization DatabaseCore");
+            _logger.Info($"{nameof(DatabaseCore)} is initializing");
 
             _databaseSettings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
@@ -34,7 +34,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             OpenAllExistingSensorDatabases();
 
-            _logger.Info("DatabaseCore has been initialized");
+            _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 
         private void OpenAllExistingSensorDatabases()

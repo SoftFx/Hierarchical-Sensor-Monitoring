@@ -187,15 +187,15 @@ namespace HSMServer.Core.Cache
 
         private void Initialize()
         {
-            _logger.Info("Start initialization TreeValuesCache");
+            _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            _logger.Info("Requesting all products from database");
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} is requesting");
             var productEntities = _databaseCore.GetAllProducts();
-            _logger.Info("Products have been requested");
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} requested");
 
-            _logger.Info("Requesting all sensors from database");
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
             var sensorEntities = _databaseCore.GetAllSensors();
-            _logger.Info("Sensors have been requested");
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
 
             BuildTree(productEntities, sensorEntities);
 
@@ -203,25 +203,28 @@ namespace HSMServer.Core.Cache
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
 
-            _logger.Info("TreeValuesCache has been initialized");
+            _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
-            _logger.Info("Building product models");
+            _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
                 _tree.TryAdd(product.Id, product);
             }
+            _logger.Info($"{nameof(productEntities)} applied");
 
-            _logger.Info("Building sensor models");
+            _logger.Info($"{nameof(sensorEntities)} are applying");
             foreach (var sensorEntity in sensorEntities)
             {
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 _sensors.TryAdd(sensor.Id, sensor);
             }
+            _logger.Info($"{nameof(sensorEntities)} applied");
 
+            _logger.Info("Tree is building");
             foreach (var productEntity in productEntities)
                 if (_tree.TryGetValue(productEntity.Id, out var product))
                 {
@@ -239,8 +242,7 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
-
-            _logger.Info("Product and sensor models have been built");
+            _logger.Info("Tree built");
         }
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
