@@ -9,7 +9,6 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
-using HSMServer.Core.Products;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
@@ -55,7 +54,6 @@ namespace HSMServer
             services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
 
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
-            services.AddSingleton<IProductManager>(_ => null);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();

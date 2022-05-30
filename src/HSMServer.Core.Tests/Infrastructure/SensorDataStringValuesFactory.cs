@@ -1,5 +1,5 @@
-﻿using System;
-using HSMServer.Core.Converters;
+﻿using HSMCommon.Constants;
+using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -25,5 +25,24 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static string GetBarSensorsShortString<T>(T min, T mean, T max, int count, T lastValue) where T : struct =>
             $"Min = {min}, Mean = {mean}, Max = {max}, Count = {count}, Last = {lastValue}.";
+    }
+
+
+    internal static class StringExtensions
+    {
+        internal static string AddComment(this string source, string comment) =>
+             $"{source}{(string.IsNullOrEmpty(comment) ? string.Empty : $" Comment = {comment}.")}";
+
+        internal static string GetSensorName(this string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
+    }
+
+
+    internal static class DateTimeExtension
+    {
+        internal static long GetTimestamp(this DateTime dateTime)
+        {
+            var timeSpan = dateTime - DateTime.UnixEpoch;
+            return (long)timeSpan.TotalSeconds;
+        }
     }
 }

@@ -162,16 +162,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             new()
             {
                 Time = dateTime.AddMinutes(-5),
-                Timestamp = GetTimestamp(dateTime),
+                Timestamp = dateTime.GetTimestamp(),
                 Path = nameof(SensorDataEntity),
                 TimeCollected = dateTime,
                 Status = RandomGenerator.GetRandomByte(max: 4),
             };
-
-        private static long GetTimestamp(DateTime dateTime)
-        {
-            var timeSpan = (dateTime - DateTime.UnixEpoch);
-            return (long)timeSpan.TotalSeconds;
-        }
     }
 }

@@ -65,24 +65,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public ProductEntity GetProductInfo(string productName)
-        {
-            string key = PrefixConstants.GetProductInfoKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value) ?
-                    JsonSerializer.Deserialize<ProductEntity>(Encoding.UTF8.GetString(value)) : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read info for product {productName}");
-            }
-
-            return null;
-        }
-
-        public ProductEntity GetProductInfoNew(string id)
+        public ProductEntity GetProduct(string id)
         {
             var bytesKey = Encoding.UTF8.GetBytes(id);
             try
@@ -98,54 +81,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public string GetProductInfoStr(string productName)
-        {
-            string key = PrefixConstants.GetProductInfoKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value) ? Encoding.UTF8.GetString(value) : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read info for product {productName}");
-            }
-
-            return null;
-        }
-
-        public string GetProductInfoStrNew(string id)
-        {
-            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value) ? Encoding.UTF8.GetString(value) : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read info for product {id}");
-            }
-
-            return null;
-        }
-
-        public void PutProductInfo(ProductEntity product)
-        {
-            string key = PrefixConstants.GetProductInfoKey(product.DisplayName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            string stringData = JsonSerializer.Serialize(product);
-            byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-            try
-            {
-                _database.Put(bytesKey, bytesValue);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to put product info for {product.DisplayName}");
-            }
-        }
-
-        public void PutProductInfoNew(ProductEntity product)
+        public void PutProduct(ProductEntity product)
         {
             var bytesKey = Encoding.UTF8.GetBytes(product.Id);
             var stringData = JsonSerializer.Serialize(product);
@@ -160,21 +96,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveProductInfo(string productName)
-        {
-            string key = PrefixConstants.GetProductInfoKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove info for product {productName}");
-            }
-        }
-
-        public void RemoveProductInfoNew(string id)
+        public void RemoveProduct(string id)
         {
             byte[] bytesKey = Encoding.UTF8.GetBytes(id);
             try
@@ -244,87 +166,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<string> GetSensorsList(string productName)
-        {
-            string listKey = PrefixConstants.GetSensorsListKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
-            List<string> result = new List<string>();
-            try
-            {
-                var products = _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                result.AddRange(products);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to get products list for {productName}");
-            }
-
-            return result;
-        }
-
-        // TODO: delete add/update/remove sensor to list (after resaving products this list doesn't exists and isn't used)
-        public void AddNewSensorToList(string productName, string path)
-        {
-            var key = PrefixConstants.GetSensorsListKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                var currentList = _database.TryRead(bytesKey, out var value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                if (!currentList.Contains(path))
-                    currentList.Add(path);
-
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add prodct to list");
-            }
-        }
-
-        public void RemoveSensorsList(string productName)
-        {
-            var key = PrefixConstants.GetSensorsListKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove sensors list for {productName}");
-            }
-        }
-
-        public void RemoveSensorFromList(string productName, string path)
-        {
-            var key = PrefixConstants.GetSensorsListKey(productName);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                var currentList = _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                currentList.Remove(path);
-
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add prodct to list");
-            }
-        }
-
         public SensorEntity GetSensorInfo(string productName, string path)
         {
             string key = PrefixConstants.GetSensorInfoKey(productName, path);
@@ -363,20 +204,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return result;
-        }
-
-        public void RemoveSensorValues(string productName, string path)
-        {
-            var key = PrefixConstants.GetSensorInfoKey(productName, path);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.DeleteAllStartingWith(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove sensor values for {productName}/{path}");
-            }
         }
 
         #endregion

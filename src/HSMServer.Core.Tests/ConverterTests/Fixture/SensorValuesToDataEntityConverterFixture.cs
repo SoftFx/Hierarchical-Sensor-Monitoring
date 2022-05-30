@@ -8,13 +8,10 @@ namespace HSMServer.Core.Tests.ConverterTests
 
         internal SensorValuesFactory SensorValuesFactory { get; }
 
-        internal SensorValuesTester SensorValuesTester { get; }
-
 
         public EntitiesConverterFixture()
         {
             SensorValuesFactory = new SensorValuesFactory(ProductName);
-            SensorValuesTester = new SensorValuesTester(ProductName);
         }
     }
 }
