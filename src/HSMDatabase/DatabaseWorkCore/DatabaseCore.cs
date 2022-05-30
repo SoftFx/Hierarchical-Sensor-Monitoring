@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
@@ -7,6 +8,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,17 +18,23 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
+        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.MainLoggerName);
+
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private readonly IDatabaseSettings _databaseSettings;
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
+            _logger.Info("Start initialization DatabaseCore");
+
             _databaseSettings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
             _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings ?? new DatabaseSettings());
 
             OpenAllExistingSensorDatabases();
+
+            _logger.Info("DatabaseCore has been initialized");
         }
 
         private void OpenAllExistingSensorDatabases()

@@ -7,6 +7,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -16,6 +17,8 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache
     {
+        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.MainLoggerName);
+
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
 
@@ -184,24 +187,35 @@ namespace HSMServer.Core.Cache
 
         private void Initialize()
         {
+            _logger.Info("Start initialization TreeValuesCache");
+
+            _logger.Info("Requesting all products from database");
             var productEntities = _databaseCore.GetAllProducts();
+            _logger.Info("Products have been requested");
+
+            _logger.Info("Requesting all sensors from database");
             var sensorEntities = _databaseCore.GetAllSensors();
+            _logger.Info("Sensors have been requested");
 
             BuildTree(productEntities, sensorEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
+
+            _logger.Info("TreeValuesCache has been initialized");
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
+            _logger.Info("Building product models");
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
                 _tree.TryAdd(product.Id, product);
             }
 
+            _logger.Info("Building sensor models");
             foreach (var sensorEntity in sensorEntities)
             {
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
@@ -225,6 +239,8 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
+
+            _logger.Info("Product and sensor models have been built");
         }
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
