@@ -20,5 +20,7 @@
         public const string ClientAppFolderName = "Client";
 
         public const char SensorPathSeparator = '/';
+
+        public const string InfrastructureLoggerName = "InfrastructureLogger";
     }
 }
