@@ -149,7 +149,8 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
+            ValidationResult validationResult, bool saveDataToDb = true)
         {
             var productName = GetProductNameById(sensorValue.Key);
             if (string.IsNullOrEmpty(productName))
@@ -177,7 +178,8 @@ namespace HSMServer.Core.Cache
                     _databaseCore.UpdateSensor(sensor.ToSensorEntity());
             }
 
-            _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+            if (saveDataToDb)
+                _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
             UploadSensorDataEvent?.Invoke(sensor);
         }

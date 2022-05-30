@@ -35,6 +35,6 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
-        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);
+        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult, bool saveDataToDb);
     }
 }
