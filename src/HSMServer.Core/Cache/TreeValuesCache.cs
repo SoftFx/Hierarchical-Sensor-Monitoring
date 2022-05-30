@@ -17,7 +17,7 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache
     {
-        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.MainLoggerName);
+        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;

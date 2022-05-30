@@ -27,7 +27,7 @@ namespace HSMServer
 #endif
 
             LayoutRenderer.Register("buildConfiguration", logEvent => appMode);
-            LayoutRenderer.Register("mainLogger", logEvent => CommonConstants.MainLoggerName);
+            LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
             var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
 
             CertificatesConfig.InitializeConfig();

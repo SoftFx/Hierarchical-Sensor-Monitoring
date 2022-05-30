@@ -21,6 +21,6 @@
 
         public const char SensorPathSeparator = '/';
 
-        public const string MainLoggerName = "MainLogger";
+        public const string InfrastructureLoggerName = "InfrastructureLogger";
     }
 }
