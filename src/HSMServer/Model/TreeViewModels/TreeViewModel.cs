@@ -22,7 +22,6 @@ namespace HSMServer.Model.TreeViewModels
             _treeValuesCache = valuesCache;
             _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
-            _treeValuesCache.UploadSensorDataEvent += UploadSensorDataHandler;
 
             BuildTree();
         }
@@ -110,12 +109,6 @@ namespace HSMServer.Model.TreeViewModels
                     Sensors.TryRemove(model.Id, out _);
                     break;
             }
-        }
-
-        private void UploadSensorDataHandler(SensorModel model)
-        {
-            if (Sensors.TryGetValue(model.Id, out var sensor))
-                sensor.Update(model);
         }
     }
 }

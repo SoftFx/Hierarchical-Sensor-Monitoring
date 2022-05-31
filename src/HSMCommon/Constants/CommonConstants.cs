@@ -22,5 +22,7 @@
         public const string DefaultAccessKey = "DefaultKey";
 
         public const char SensorPathSeparator = '/';
+
+        public const string InfrastructureLoggerName = "InfrastructureLogger";
     }
 }

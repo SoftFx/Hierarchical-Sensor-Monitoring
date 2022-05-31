@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System;
@@ -15,18 +14,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private readonly User _defaultUser = TestUsersManager.DefaultUser;
         private readonly User _testUser = TestUsersManager.TestUser;
 
-        private readonly UserManager _userManager;
-
         private delegate User GetUserByUserName(string username);
         private delegate User GetUser(Guid id);
         private delegate List<User> GetAllUsersFromDB();
 
 
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture)
-        {
-            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, CommonMoqs.CreateNullLogger<UserManager>());
-        }
+            : base(fixture, registerFixture) { }
 
 
         [Fact]

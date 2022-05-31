@@ -19,7 +19,6 @@ namespace HSMServer.Core.Cache
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<SensorModel, TransactionType> ChangeSensorEvent;
-        event Action<SensorModel> UploadSensorDataEvent;
 
 
         List<ProductModel> GetTree();
@@ -42,6 +41,6 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
-        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult);
+        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult, bool saveDataToDb);
     }
 }

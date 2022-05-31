@@ -7,16 +7,18 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache
     {
+        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
 
@@ -26,7 +28,6 @@ namespace HSMServer.Core.Cache
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
-        public event Action<SensorModel> UploadSensorDataEvent;
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
@@ -71,7 +72,7 @@ namespace HSMServer.Core.Cache
                     RemoveSensor(sensorId);
 
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
-                _databaseCore.RemoveProductNew(product.Id);
+                _databaseCore.RemoveProduct(product.Id);
 
                 if (!product.AccessKeys.IsEmpty)
                 {
@@ -115,6 +116,9 @@ namespace HSMServer.Core.Cache
 
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
+
+        //ToDo
+        public bool IsValidKey(string key) => false;
 
         public void AddAccessKey(AccessKeyModel key)
         {
@@ -196,7 +200,8 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
+            ValidationResult validationResult, bool saveDataToDb = true)
         {
             var productName = GetProductNameById(sensorValue.Key);
             if (string.IsNullOrEmpty(productName))
@@ -224,41 +229,54 @@ namespace HSMServer.Core.Cache
                     _databaseCore.UpdateSensor(sensor.ToSensorEntity());
             }
 
-            _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+            if (saveDataToDb)
+                _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
-            UploadSensorDataEvent?.Invoke(sensor);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
         private void Initialize()
         {
+            _logger.Info($"{nameof(TreeValuesCache)} is initializing");
+
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} is requesting");
             var productEntities = _databaseCore.GetAllProducts();
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} requested");
+
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
             var sensorEntities = _databaseCore.GetAllSensors();
+           
             var accessKeysEntities = _databaseCore.GetAccessKeys();
-
-            BuildTree(productEntities.Where(e => !e.IsConverted).ToList(),
-                      sensorEntities.Where(e => !e.IsConverted).ToList());
-
-            BuildTreeWithMigration(
-                productEntities.Where(e => e.IsConverted).ToList(),
-                sensorEntities.Where(e => e.IsConverted).ToList());
+            BuildTree(productEntities, sensorEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
 
             ApplyAccessKeys(accessKeysEntities.ToList());
+
+            _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
 
         private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
         {
-            var productsToResave = FillTreeByProductModels(productEntities);
+            _logger.Info($"{nameof(productEntities)} are applying");
+            foreach (var productEntity in productEntities)
+            {
+                var product = new ProductModel(productEntity);
+                _tree.TryAdd(product.Id, product);
+            }
+            _logger.Info($"{nameof(productEntities)} applied");
 
+            _logger.Info($"{nameof(sensorEntities)} are applying");
             foreach (var sensorEntity in sensorEntities)
             {
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 _sensors.TryAdd(sensor.Id, sensor);
             }
+            _logger.Info($"{nameof(sensorEntities)} applied");
 
+            _logger.Info("Tree is building");
             foreach (var productEntity in productEntities)
                 if (_tree.TryGetValue(productEntity.Id, out var product))
                 {
@@ -276,21 +294,11 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
-
-            ResaveProducts(productsToResave);
+            _logger.Info("Tree built");
         }
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
-
-        private void BuildTreeWithMigration(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
-        {
-            FillTreeByProductModels(productEntities);
-            FillTreeBySensorModels(sensorEntities);
-
-            ResaveEntities(productEntities, sensorEntities);
-        }
-
         private void ApplyAccessKeys(List<AccessKeyEntity> entities) 
         {
             foreach(var keyEntity in entities)
@@ -303,44 +311,7 @@ namespace HSMServer.Core.Cache
                 if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
-        }
-
-        private List<string> FillTreeByProductModels(List<ProductEntity> productEntities)        
-        {
-            var productsToResave = new List<string>();
-
-            foreach (var productEntity in productEntities)
-            {
-                var product = new ProductModel(productEntity);
-                _tree.TryAdd(product.Id, product);
-
-                if (!productEntity.IsConverted && productEntity.ParentProductId?.Length == 0)
-                    productsToResave.Add(productEntity.Id);
-            }
-
-            return productsToResave;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void FillTreeBySensorModels(List<SensorEntity> sensorEntities)
-        {
-            foreach (var sensorEntity in sensorEntities)
-            {
-                if (sensorEntity.Path == null)
-                    continue;
-
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(sensorEntity.ProductName, sensorEntity.Path);
-
-                var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
-                parentProduct.AddSensor(sensor);
-
-                _sensors.TryAdd(sensor.Id, sensor);
-
-                _databaseCore.UpdateProduct(parentProduct.ToProductEntity());
-            }
-        }
-
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        }        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
             var parentProduct = GetProductByName(productName);
             if (parentProduct == null)
@@ -370,7 +341,6 @@ namespace HSMServer.Core.Cache
         private ProductModel GetProductByName(string name) =>
             _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AddSelfMonitoringProduct()
         {
             var product = new ProductModel(CommonConstants.SelfMonitoringProductKey, CommonConstants.SelfMonitoringProductName);
@@ -381,7 +351,7 @@ namespace HSMServer.Core.Cache
         private void AddProduct(ProductModel product)
         {
             _tree.TryAdd(product.Id, product);
-            _databaseCore.AddProductNew(product.ToProductEntity());
+            _databaseCore.AddProduct(product.ToProductEntity());
 
             if (product.AccessKeys.IsEmpty)
                 product.AddAccessKey(AccessKeyModel.BuildDefault(product));
@@ -407,52 +377,6 @@ namespace HSMServer.Core.Cache
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveEntities(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
-        {
-            ResaveProducts(productEntities);
-            ResaveSensors(sensorEntities);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveProducts(List<ProductEntity> productEntities)
-        {
-            foreach (var productEntity in productEntities)
-            {
-                if (!productEntity.IsConverted || !_tree.TryGetValue(productEntity.Id, out var product))
-                    continue;
-
-                _databaseCore.UpdateProduct(product.ToProductEntity());
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveProducts(List<string> productIds)
-        {
-            foreach (var productId in productIds)
-            {
-                if (!_tree.TryGetValue(productId, out var product))
-                    continue;
-
-                _databaseCore.UpdateProduct(product.ToProductEntity());
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ResaveSensors(List<SensorEntity> sensorEntities)
-        {
-            foreach (var sensorEntity in sensorEntities)
-            {
-                if (sensorEntity.Path == null)
-                    _databaseCore.RemoveSensorWithMetadata(sensorEntity.ProductName, sensorEntity.Path);
-
-                if (!sensorEntity.IsConverted || !_sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
-                    continue;
-
-                _databaseCore.UpdateSensor(sensor.ToSensorEntity());
-            }
         }
 
         private bool AddKeyToTree(AccessKeyModel key)

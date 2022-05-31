@@ -1,11 +1,9 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model.Sensor;
 using System;
 using System.Text.Json;
 
@@ -13,22 +11,6 @@ namespace HSMServer.Core.Converters
 {
     public static class SensorValuesExtensions
     {
-        public static SensorData Convert(this SensorValueBase sensorValue, string productName,
-            DateTime timeCollected, TransactionType transactionType) =>
-            new()
-            {
-                Path = sensorValue.Path,
-                Description = sensorValue.Description,
-                Status = sensorValue.Status,
-                Key = sensorValue.Key,
-                Product = productName,
-                Time = timeCollected,
-                TransactionType = transactionType,
-                SensorType = SensorTypeFactory.GetSensorType(sensorValue),
-                StringValue = SensorDataPropertiesBuilder.GetStringValue(sensorValue, timeCollected),
-                ShortStringValue = SensorDataPropertiesBuilder.GetShortStringValue(sensorValue),
-            };
-
         public static SensorDataEntity Convert(this SensorValueBase sensorValue, DateTime timeCollected,
             SensorStatus validationStatus = SensorStatus.Unknown) =>
             new()
@@ -53,27 +35,14 @@ namespace HSMServer.Core.Converters
             return dataEntity;
         }
 
-        public static SensorInfo Convert(this SensorValueBase sensorValue, string productName) =>
-            new()
-            {
-                Path = sensorValue.Path,
-                Description = sensorValue.Description,
-                ProductName = productName,
-                SensorType = SensorTypeFactory.GetSensorType(sensorValue),
-                SensorName = ExtractSensor(sensorValue.Path),
-            };
-
         public static BarSensorValueBase Convert(this UnitedSensorValue value) =>
             BuildBarSensorValue(value)?.FillBarSensorValueCommonSettings(value);
 
-
-        private static long GetTimestamp(DateTime dateTime)
+        internal static long GetTimestamp(DateTime dateTime)
         {
             var timeSpan = dateTime - DateTime.UnixEpoch;
             return (long)timeSpan.TotalSeconds;
         }
-
-        private static string ExtractSensor(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
 
 
         private static BarSensorValueBase BuildBarSensorValue(UnitedSensorValue unitedSensorValue) =>
