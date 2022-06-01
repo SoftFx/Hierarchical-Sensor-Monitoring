@@ -91,6 +91,14 @@ namespace HSMServer.Controllers
                 _treeValuesCache.RemoveSensorData(sensor.Id);
         }
 
+        [HttpGet]
+        public IActionResult AccessKeys([FromQuery(Name = "Selected")] string selectedId)
+        {
+            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(selectedId), out var node);
+
+            return PartialView("~/Views/AccessKeys/_AccessKeysList.cshtml", node);
+        }
+
         #region Update
 
         [HttpPost]
