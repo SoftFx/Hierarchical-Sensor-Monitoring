@@ -245,15 +245,21 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
             var sensorEntities = _databaseCore.GetAllSensors();
-           
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
+
+            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
+            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
+
             BuildTree(productEntities, sensorEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
 
+            _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys(accessKeysEntities.ToList());
+            _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
@@ -299,9 +305,10 @@ namespace HSMServer.Core.Cache
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
-        private void ApplyAccessKeys(List<AccessKeyEntity> entities) 
+
+        private void ApplyAccessKeys(List<AccessKeyEntity> entities)
         {
-            foreach(var keyEntity in entities)
+            foreach (var keyEntity in entities)
             {
                 AddKeyToTree(new AccessKeyModel(keyEntity));
             }
@@ -311,7 +318,9 @@ namespace HSMServer.Core.Cache
                 if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
-        }        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        }
+
+        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
             var parentProduct = GetProductByName(productName);
             if (parentProduct == null)
