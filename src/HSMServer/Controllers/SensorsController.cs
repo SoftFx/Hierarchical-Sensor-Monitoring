@@ -280,10 +280,17 @@ namespace HSMServer.Controllers
                     var valuesList = values.ToList();
 
                     _dataCollector.ReportSensorsCount(valuesList.Count);
-                    //ToDo
-                    _updatesQueue.AddItems(valuesList.Select(v => v.Convert()).ToList());
 
-                    return Ok(values);
+                    var first = valuesList.First().Convert();
+                    //ToDo
+                    if (_cache.IsValidKey(first.Key, first.Path))
+                    {
+                        _updatesQueue.AddItems(valuesList.Select(v => v.Convert()).ToList());
+                        return Ok(values);
+                    }
+
+                    return StatusCode(406, values);
+
                 }
                 catch (Exception e)
                 {
@@ -307,11 +314,17 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.ReportSensorsCount(values.Count);
                 //ToDo
-                _updatesQueue.AddItems(values.Cast<SensorValueBase>().ToList());
+                _dataCollector.ReportSensorsCount(values.Count);
 
-                return Ok(values);
+                var first = values.First();
+                if (_cache.IsValidKey(first.Key, first.Path))
+                {
+                    _updatesQueue.AddItems(values.Cast<SensorValueBase>().ToList());
+                    return Ok(values);
+                }
+                
+                return StatusCode(406, values);
             }
             catch (Exception e)
             {
@@ -323,7 +336,7 @@ namespace HSMServer.Controllers
 
         private bool CanAddToQueue(SensorValueBase value)
         {
-            if (_cache.IsValidKey(value.Key))
+            if (_cache.IsValidKey(value.Key, value.Path))
             {
                 _updatesQueue.AddItem(value);
                 return true;
