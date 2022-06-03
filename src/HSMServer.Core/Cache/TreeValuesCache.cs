@@ -119,21 +119,65 @@ namespace HSMServer.Core.Cache
 
         public bool IsValidKey(string key, string path)
         {
-            //ToDo: new sensor ?
-            var sensor = GetSensorByPath(path);
-            if (sensor == null)
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
                 return false;
 
-            var product = GetSensorParent(key, sensor);
-            if (product == null)
-            {
-                product = GetFirstExistingProduct(path);
+            if (!GetFinishProduct(key, out var finishProduct))
+                return false;
 
-                //ToDo ?
-                //Check AccessKey ??
+            //if (!IsValidPath(path, finishProduct))
+            //return false;
+
+            return true;
+
+            //return productNames.Count == 0;
+        }
+
+        private bool IsValidPath(string path, ProductModel finishProduct)
+        {
+            var productNames = path.Split(CommonConstants.SensorPathSeparator)
+               [..^1].Reverse();
+
+            foreach (var productName in productNames)
+            {
+                var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
+                if (product == null)
+                    return false;
+
+                foreach (var node in _tree.Where(v => v.Value.DisplayName.Equals(productName)))
+                {
+                    var currentNode = node.Value;
+
+                    while (currentNode != finishProduct || currentNode != null)
+                        currentNode = currentNode.ParentProduct;
+
+                    if (currentNode != null)
+                        return true;
+                }
             }
 
             return false;
+        }
+
+        private bool GetFinishProduct(string key, out ProductModel finishProduct)
+        {
+            finishProduct = null;
+
+            _keys.TryGetValue(Guid.Parse(key), out var accessKey);
+            if (accessKey != null)
+            {
+                if (!accessKey.IsHasPermission())
+                    return false;
+
+                finishProduct = _tree[accessKey.ProductId];
+            }
+            else
+            {
+                if (!_tree.TryGetValue(key, out finishProduct))
+                    return false;
+            }
+
+            return true;
         }
 
         public void AddAccessKey(AccessKeyModel key)

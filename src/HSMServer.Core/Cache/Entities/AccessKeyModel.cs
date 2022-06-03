@@ -63,5 +63,8 @@ namespace HSMServer.Core.Cache.Entities
             };
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
+
+        //ToDo
+        internal bool IsHasPermission() => true;
     }
 }
