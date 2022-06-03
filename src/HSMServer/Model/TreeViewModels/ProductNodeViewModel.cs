@@ -38,10 +38,10 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)
-                AddSensor(new SensorNodeViewModel(sensor));
+                AddSensor(sensor);
 
-            foreach (var (id, key) in model.AccessKeys)
-                AccessKeys.TryAdd(id, new AccessKeyViewModel(key));
+            foreach (var (_, key) in model.AccessKeys)
+                AddAccessKey(key);
         }
 
 
@@ -58,11 +58,18 @@ namespace HSMServer.Model.TreeViewModels
             node.Parent = this;
         }
 
-        internal void AddSensor(SensorNodeViewModel sensor)
+        internal SensorNodeViewModel AddSensor(SensorModel model)
         {
+            var sensor = new SensorNodeViewModel(model);
+
             Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;
+
+            return sensor;
         }
+
+        internal void AddAccessKey(AccessKeyModel key) =>
+            AccessKeys.TryAdd(key.Id, new AccessKeyViewModel(key));
 
         internal void Recursion()
         {

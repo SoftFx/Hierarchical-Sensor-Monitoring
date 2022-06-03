@@ -22,6 +22,7 @@ namespace HSMServer.Model.TreeViewModels
             _treeValuesCache = valuesCache;
             _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
+            _treeValuesCache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
             BuildTree();
         }
@@ -80,6 +81,10 @@ namespace HSMServer.Model.TreeViewModels
 
                 case TransactionType.Delete:
                     Nodes.TryRemove(model.Id, out _);
+
+                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
+                        parentProduct.Nodes.TryRemove(model.Id, out var _);
+
                     break;
             }
         }
@@ -92,10 +97,9 @@ namespace HSMServer.Model.TreeViewModels
                     if (!Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
                         return;
 
-                    var newSensor = new SensorNodeViewModel(model);
-                    parent.AddSensor(newSensor);
-
+                    var newSensor = parent.AddSensor(model);
                     Sensors.TryAdd(newSensor.Id, newSensor);
+
                     break;
 
                 case TransactionType.Update:
@@ -107,6 +111,28 @@ namespace HSMServer.Model.TreeViewModels
 
                 case TransactionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
+
+                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
+                        parentProduct.Sensors.TryRemove(model.Id, out var _);
+
+                    break;
+            }
+        }
+
+        private void ChangeAccessKeyHandler(AccessKeyModel model, TransactionType transaction)
+        {
+            switch (transaction)
+            {
+                case TransactionType.Add:
+                    if (Nodes.TryGetValue(model.ProductId, out var parent))
+                        parent.AddAccessKey(model);
+
+                    break;
+
+                case TransactionType.Delete:
+                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                        parentProduct.AccessKeys.TryRemove(model.Id, out var _);
+
                     break;
             }
         }

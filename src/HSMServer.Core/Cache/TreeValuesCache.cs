@@ -28,6 +28,7 @@ namespace HSMServer.Core.Cache
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
@@ -74,13 +75,8 @@ namespace HSMServer.Core.Cache
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
                 _databaseCore.RemoveProduct(product.Id);
 
-                if (!product.AccessKeys.IsEmpty)
-                {
-                    foreach (var id in product.AccessKeys.Keys)
-                    {
-                        RemoveAccessKey(id);
-                    }
-                }
+                foreach (var (id, _) in product.AccessKeys)
+                    RemoveAccessKey(id);
 
                 _userManager.RemoveProductFromUsers(product.Id);
 
@@ -123,12 +119,16 @@ namespace HSMServer.Core.Cache
         public void AddAccessKey(AccessKeyModel key)
         {
             if (AddKeyToTree(key))
+            {
                 _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
+
+                ChangeAccessKeyEvent?.Invoke(key, TransactionType.Add);
+            }
         }
 
         public void RemoveAccessKey(Guid id)
         {
-            if (!_keys.TryGetValue(id, out var key))
+            if (!_keys.TryRemove(id, out var key))
                 return;
 
             if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
@@ -138,6 +138,8 @@ namespace HSMServer.Core.Cache
             }
 
             _databaseCore.RemoveAccessKey(id);
+
+            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
         }
 
         public void UpdateAccessKey(AccessKeyModel updatedKey)
@@ -147,6 +149,8 @@ namespace HSMServer.Core.Cache
 
             _keys[updatedKey.Id] = updatedKey;
             _databaseCore.UpdateAccessKey(updatedKey.ToAccessKeyEntity());
+
+            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
         }
 
         public AccessKeyModel GetAccessKey(Guid id)
@@ -365,10 +369,8 @@ namespace HSMServer.Core.Cache
             if (product.AccessKeys.IsEmpty)
                 product.AddAccessKey(AccessKeyModel.BuildDefault(product));
 
-            foreach (var key in product.AccessKeys.Values)
-            {
+            foreach (var (_, key) in product.AccessKeys)
                 AddAccessKey(key);
-            }
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
