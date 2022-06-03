@@ -91,13 +91,30 @@ namespace HSMServer.Controllers
                 _treeValuesCache.RemoveSensorData(sensor.Id);
         }
 
+
         [HttpGet]
-        public IActionResult AccessKeys([FromQuery(Name = "Selected")] string selectedId)
+        public IActionResult AccessKeys([FromQuery(Name = "Selected")] string selectedId) =>
+            GetPartialAccessKeysList(selectedId);
+
+        [HttpGet]
+        public IActionResult ShowNewAccessKeyModal() =>
+            PartialView("~/Views/AccessKeys/_NewAccessKey.cshtml");
+
+        [HttpPost]
+        public IActionResult AddAccessKey([FromBody] AccessKeyViewModel key)
         {
-            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(selectedId), out var node);
+            _treeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
+
+            return GetPartialAccessKeysList(key.EncodedProductId);
+        }
+
+        private IActionResult GetPartialAccessKeysList(string productId)
+        {
+            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(productId), out var node);
 
             return PartialView("~/Views/AccessKeys/_AccessKeysList.cshtml", node);
         }
+
 
         #region Update
 

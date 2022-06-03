@@ -17,7 +17,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public KeyRolesEnum KeyRole { get; }
 
-        public string DisplayName { get; }
+        public string DisplayName { get; init; }
 
         public DateTime CreationTime { get; }
 
@@ -36,15 +36,25 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
-        private AccessKeyModel(ProductModel product)
+        public AccessKeyModel(string authorId, string productId) : this()
+        {
+            AuthorId = authorId;
+            ProductId = productId;
+        }
+
+        private AccessKeyModel()
         {
             Id = Guid.NewGuid();
+            CreationTime = DateTime.UtcNow;
+        }
+
+        private AccessKeyModel(ProductModel product) : this()
+        {
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             IsLocked = false;
             KeyRole = KeyRolesEnum.Admin;
             DisplayName = CommonConstants.DefaultAccessKey;
-            CreationTime = DateTime.UtcNow;
             ExpirationTime = DateTime.MaxValue;
         }
 

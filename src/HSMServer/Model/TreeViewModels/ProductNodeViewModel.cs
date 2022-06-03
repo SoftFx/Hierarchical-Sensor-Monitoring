@@ -18,6 +18,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
 
+        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; }
+
         public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
 
         public int Count { get; private set; }
@@ -33,15 +35,21 @@ namespace HSMServer.Model.TreeViewModels
 
             Nodes = new ConcurrentDictionary<string, ProductNodeViewModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
+            AccessKeys = new ConcurrentDictionary<Guid, AccessKeyViewModel>();
 
             foreach (var (_, sensor) in model.Sensors)
                 AddSensor(new SensorNodeViewModel(sensor));
+
+            foreach (var (id, key) in model.AccessKeys)
+                AccessKeys.TryAdd(id, new AccessKeyViewModel(key));
         }
 
 
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
+
+            //TODO update sensors, subproducts and accessKeys
         }
 
         internal void AddSubNode(ProductNodeViewModel node)

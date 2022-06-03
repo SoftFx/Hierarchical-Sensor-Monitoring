@@ -118,18 +118,7 @@ function customMenu(node) {
             "separator_after": false,
             "label": "Access keys",
             "action": function (obj) {
-                $.ajax({
-                    type: 'get',
-                    url: 'AccessKeys?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false,
-                    success: function (viewData) {
-                        $("#accessKeysList_modalBody").html(viewData);
-                    }
-                }).done(function () {
-                    $('#accessKeysList_modal').modal('show')
-                });
+                showAccessKeysList(node.id, true);
             }
         }
     }

@@ -2,4 +2,16 @@
 
 @model ProductNodeViewModel
 
-<div>Access keys</div>
+<table class="table table-sm">
+    <tr>
+        <th>Id</th>
+        <th>Name</th>
+    </tr>
+    @foreach (var (_, key) in Model.AccessKeys)
+    {
+        <tr>
+            <td>@key.Id</td>
+            <td>@key.Name</td>
+        </tr>
+    }
+</table>

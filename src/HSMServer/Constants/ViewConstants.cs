@@ -25,8 +25,13 @@
         public const string SelectNodeAction = "SelectNode";
         public const string RefreshTreeAction = "RefreshTree";
 
-        public const string RemoveProductAction = "RemoveProduct";
         public const string RemoveNodeAction = "RemoveNode";
+
+        public const string GetAccessKeysAction = "AccessKeys";
+        public const string ShowNewAccessKeyModalAction = "ShowNewAccessKeyModal";
+        public const string SaveNewAccessKeyAction = "AddAccessKey";
+
+        public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";
