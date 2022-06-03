@@ -13,9 +13,11 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
-        public bool IsLocked { get; }
+        public string Comment { get; }
 
-        public KeyRolesEnum KeyRole { get; }
+        public KeyState State { get; }
+
+        public KeyPermissions Permissions { get; }
 
         public string DisplayName { get; init; }
 
@@ -29,8 +31,9 @@ namespace HSMServer.Core.Cache.Entities
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
             ProductId = entity.ProductId;
-            IsLocked = entity.IsLocked;
-            KeyRole = (KeyRolesEnum)entity.KeyRole;
+            Comment = entity.Comment;
+            State = (KeyState)entity.KeyState;
+            Permissions = (KeyPermissions)entity.KeyPermissions;
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
@@ -52,8 +55,9 @@ namespace HSMServer.Core.Cache.Entities
         {
             AuthorId = product.AuthorId;
             ProductId = product.Id;
-            IsLocked = false;
-            KeyRole = KeyRolesEnum.Admin;
+            Comment = CommonConstants.DefaultAccessKey;
+            State = KeyState.Active;
+            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanSendSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
@@ -65,13 +69,17 @@ namespace HSMServer.Core.Cache.Entities
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
                 ProductId = ProductId,
-                IsLocked = IsLocked,
-                KeyRole = (byte)KeyRole,
+                Comment = Comment,
+                KeyState = (byte)State,
+                KeyPermissions = (long)Permissions,
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks
             };
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
+
+        //ToDo
+        internal bool IsHasPermission() => true;
     }
 }
