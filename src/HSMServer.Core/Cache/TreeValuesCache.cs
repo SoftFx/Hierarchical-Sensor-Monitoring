@@ -119,7 +119,7 @@ namespace HSMServer.Core.Cache
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
-        public bool IsValidKey(string key, string path, out string message)
+        public bool TryCheckKeyPermissions(string key, string path, out string message)
         {
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
             {
@@ -127,7 +127,7 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            if (!GetFinishProduct(key, out var finishProduct, out message))
+            if (!TryGetProductByKey(key, out var finishProduct, out message))
                 return false;
 
             //if (!IsValidPath(path, finishProduct))
@@ -487,12 +487,13 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
-        private bool GetFinishProduct(string key, out ProductModel finishProduct,
+        private bool TryGetProductByKey(string key, out ProductModel finishProduct,
             out string message)
         {
-            if (!GetAccessKey(key, out finishProduct, out message)
-                && !string.IsNullOrEmpty(message))
-                return false;
+            message = string.Empty;
+
+            if (_keys.TryGetValue(Guid.Parse(key), out var accessKey))
+                return TryGetProductByKey(accessKey, out finishProduct, out message);
 
             if (!_tree.TryGetValue(key, out finishProduct))
             {
@@ -503,13 +504,13 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        private bool GetAccessKey(string key, out ProductModel finishProduct,
+        private bool TryGetProductByKey(AccessKeyModel accessKey, out ProductModel finishProduct,
             out string message)
         {
             finishProduct = null;
             message = string.Empty;
 
-            if (!_keys.TryGetValue(Guid.Parse(key), out var accessKey))
+            if (accessKey == null)
                 return false;
 
             if (accessKey.IsExpired(out message))

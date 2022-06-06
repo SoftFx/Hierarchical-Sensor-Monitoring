@@ -292,10 +292,7 @@ namespace HSMServer.Controllers
                         result.Add(convertedValue.Key, message);
                 }
 
-                if (result.Count == 0)
-                    return Ok(values);
-
-                return StatusCode(406, result);
+                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
             catch (Exception e)
             {
@@ -327,10 +324,7 @@ namespace HSMServer.Controllers
                         result.Add(convertedValue.Key, message);
                 }
 
-                if (result.Count == 0)
-                    return Ok(values);
-
-                return StatusCode(406, result);
+                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
             catch (Exception e)
             {
@@ -342,9 +336,7 @@ namespace HSMServer.Controllers
 
         private bool CanAddToQueue(SensorValueBase value, out string message)
         {
-            message = string.Empty;
-
-            if (_cache.IsValidKey(value.Key, value.Path, out message))
+            if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
             {
                 _updatesQueue.AddItem(value);
                 return true;
