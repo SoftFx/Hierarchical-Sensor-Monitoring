@@ -29,6 +29,7 @@
 
         public const string GetAccessKeysAction = "AccessKeys";
         public const string ShowNewAccessKeyModalAction = "NewAccessKey";
+        public const string RemoveAccessKeyAction = "RemoveAccessKey";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";

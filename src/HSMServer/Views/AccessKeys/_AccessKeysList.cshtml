@@ -6,6 +6,9 @@
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
+<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId"/>
+<input id='accessKey_productName' style='display: none' value="@Model.Name"/>
+
 <table class="table">
     <tr>
         <th>Id</th>
@@ -30,9 +33,9 @@
             <td>@key.Permissions</td>
             <td>@key.ExpirationDate</td>
             <td>
-                <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
+                @*<button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
                     <i class='fas fa-trash-alt'></i>
-                </button>
+                </button>*@
             </td>
         </tr>
     }
@@ -65,4 +68,21 @@
             setModalTitle("New access key");
         });
     }
+
+    //$('[id^="delete_"]').off("click").on("click",
+    //    function () {
+    //        let selectedKeyId = this.id.substring("delete_".length, this.id.length);
+    //        let productId = $('#accessKey_prodcutId').val();
+    //        console.log(selectedKeyId);
+    //        console.log(productId);
+    //        $.ajax({
+    //            type: 'GET',
+    //            url: removeAccessKey + "?SelectedKey=" + selectedKeyId + "&SelectedProduct=" + productId,
+    //            cache: false,
+    //            async: true,
+    //            success: function () {
+    //                document.location.reload();
+    //            }
+    //        });
+    //    });
 </script>

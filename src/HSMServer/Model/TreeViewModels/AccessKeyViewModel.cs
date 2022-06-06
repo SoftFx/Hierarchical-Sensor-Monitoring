@@ -24,7 +24,7 @@ namespace HSMServer.Model.TreeViewModels
     {
         public Guid Id { get; }
 
-        public DateTime ExpirationDate { get; }
+        public string ExpirationDate { get; }
 
         public string Permissions { get; }
 
@@ -50,8 +50,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             Id = accessKey.Id;
             DisplayName = accessKey.DisplayName;
-            Description = accessKey.Comment;
-            ExpirationDate = accessKey.ExpirationTime;
+            ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
             Permissions = BuildPermissions(accessKey.Permissions);
         }
 
@@ -93,6 +92,11 @@ namespace HSMServer.Model.TreeViewModels
                 AccessKeyExpiration.Year => expiration.AddYears(1),
             };
         }
+
+        private static string BuildExpiration(DateTime expirationTime) =>
+            expirationTime == DateTime.MaxValue
+                ? nameof(AccessKeyExpiration.Unlimit)
+                : expirationTime.ToString();
 
         private static string BuildPermissions(KeyPermissions permissions)
         {

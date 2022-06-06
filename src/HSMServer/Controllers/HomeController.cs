@@ -108,6 +108,14 @@ namespace HSMServer.Controllers
             return GetPartialAccessKeysList(key.EncodedProductId);
         }
 
+        [HttpPost]
+        public IActionResult RemoveAccessKey([FromQuery(Name = "SelectedKey")] string keyId, [FromQuery(Name = "SelectedProduct")] string productId)
+        {
+            _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
+
+            return GetPartialAccessKeysList(productId);
+        }
+
         private IActionResult GetPartialAccessKeysList(string productId)
         {
             _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(productId), out var node);

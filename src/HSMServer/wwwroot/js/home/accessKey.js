@@ -21,7 +21,9 @@ function setModalBody(viewData) {
 
 function showAccessKeysListModal() {
     showLargeModal();
-    setModalTitle("Access keys list for product");
+
+    let productName = $('#accessKey_productName').val();
+    setModalTitle(`Access keys list for product '${productName}'`);
 }
 
 
@@ -39,8 +41,10 @@ function showAccessKeysList(productId, showModalFirst) {
         showAccessKeysListModal();
 
         if (showModalFirst === true) {
-            document.getElementById("accessKey_prodcutId").setAttribute('value', productId);
-            $('#accessKeys_modal').modal('show')
+            $('#accessKeys_modal').modal({
+                backdrop: 'static',
+            });
+            $('#accessKeys_modal').modal('show');
         }
     });
 }
