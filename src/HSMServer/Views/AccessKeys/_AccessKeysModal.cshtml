@@ -1,0 +1,24 @@
+﻿@using HSMServer.Constants
+
+
+<script>
+    var getAccessKeysList = "@Html.Raw(Url.Action(ViewConstants.GetAccessKeysAction, ViewConstants.HomeController))";
+    var showNewAccessKeyModal = "@Html.Raw(Url.Action(ViewConstants.ShowNewAccessKeyModalAction, ViewConstants.HomeController))";
+</script>
+
+<script src="~/js/bundles/accessKey.min.js"></script>
+
+
+<div class="modal fade" tabindex="-1" role="dialog" id="accessKeys_modal">
+    <div class="modal-dialog mw-100 modal-dialog-centered" role="document" id="accessKeys_modalDialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accessKeys_modalTitle"></h5>
+                <button type="button" class="btn-close" onclick="$('#accessKeys_modal').modal('hide');" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="accessKeys_modalBody"></div>
+        </div>
+    </div>
+</div>
+
+<input id='accessKey_prodcutId' style='display: none' />

@@ -1,2 +1,83 @@
-﻿<label>Name:</label>
-<input id="accessKey_name" type="text" name="Name"/><br/>
+﻿@using HSMServer.Model.TreeViewModels
+
+@model AccessKeyViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form asp-controller="Home" asp-action="NewAccessKey" method="post" id="newAccessKey_form">
+    <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId"/>
+
+    <div class="row">
+        <div class="form-group col-8">
+            <label asp-for="DisplayName" class="col-form-label"></label>
+            <input type="text" asp-for="DisplayName" class="form-control" />
+        </div>
+        <div class="form-group col-4">
+            <label asp-for="Expiration" class="col-form-label"></label>
+            <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control custom-select"></select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label asp-for="Description" class="col-form-label"></label>
+        <textarea asp-for="Description" class="form-control"></textarea>
+    </div>
+
+    <div class="form-group row mt-2">
+        <label class="col-auto col-form-label">Permissions</label>
+        <button class="col-auto btn btn-light btn-sm" type="button" onclick="selectAllCheckBoxes()">Select all</button>
+    </div>
+
+    <div class="form-group">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" asp-for="CanSendData">
+            <label class="form-check-label" for="inlineCheckbox1">Send data</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" asp-for="CanAddSensors">
+            <label class="form-check-label" for="inlineCheckbox2">Add sensor(s)</label>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <div align="right">
+            <button class="btn btn-secondary" type="submit">Save</button>
+            <button class="btn btn-secondary" type="button" onclick="cancelButtonClick()">Cancel</button>
+        </div>
+    </div>
+</form>
+
+
+<script>
+    $(document).on("submit", "#newAccessKey_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#newAccessKey_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                setModalBody(viewData);
+            }
+        }).done(function () {
+            showAccessKeysListModal();
+        });
+    });
+
+    function cancelButtonClick() {
+        showAccessKeysList($('#accessKey_prodcutId').val(), false);
+    }
+
+    function selectAllCheckBoxes() {
+        $(':checkbox').each(function () {
+            this.checked = true;
+        });
+    }
+</script>

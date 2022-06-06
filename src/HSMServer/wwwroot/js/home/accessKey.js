@@ -1,18 +1,13 @@
-﻿let addKeyButtonId = "addAccessKeyButton";
-let saveKeyButtonId = "saveAccessKeyButton";
-let cancelButtonId = "cancelAccessKeyButton";
-
-
-function buttonsForAccessKeysListModal() {
-    showButton(addKeyButtonId);
-    hideButton(saveKeyButtonId);
-    hideButton(cancelButtonId);
+﻿function showLargeModal() {
+    var modal = document.getElementById("accessKeys_modalDialog");
+    modal.classList.remove("w-50");
+    modal.classList.add("w-75");
 }
 
-function buttonsForNewAccessKeyModal() {
-    hideButton(addKeyButtonId);
-    showButton(saveKeyButtonId);
-    showButton(cancelButtonId);
+function showMiddleModal() {
+    var modal = document.getElementById("accessKeys_modalDialog");
+    modal.classList.remove("w-75");
+    modal.classList.add("w-50");
 }
 
 function setModalTitle(title) {
@@ -24,19 +19,9 @@ function setModalBody(viewData) {
     $("#accessKeys_modalBody").html(viewData);
 }
 
-function showButton(buttonId) {
-    let element = document.getElementById(buttonId);
-    element.removeAttribute("hidden");
-}
-
-function hideButton(buttonId) {
-    let element = document.getElementById(buttonId);
-    element.setAttribute("hidden", "hidden");
-}
-
-function setTitleAndButtonsForAccessKeysListModal() {
+function showAccessKeysListModal() {
+    showLargeModal();
     setModalTitle("Access keys list for product");
-    buttonsForAccessKeysListModal();
 }
 
 
@@ -51,10 +36,9 @@ function showAccessKeysList(productId, showModalFirst) {
             setModalBody(viewData);
         }
     }).done(function () {
-        setTitleAndButtonsForAccessKeysListModal();
+        showAccessKeysListModal();
 
         if (showModalFirst === true) {
-            console.log(showModalFirst);
             document.getElementById("accessKey_prodcutId").setAttribute('value', productId);
             $('#accessKeys_modal').modal('show')
         }

@@ -13,17 +13,17 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
-        public string Comment { get; }
+        public string Comment { get; init; }
 
         public KeyState State { get; }
 
-        public KeyPermissions Permissions { get; }
+        public KeyPermissions Permissions { get; init;  }
 
         public string DisplayName { get; init; }
 
         public DateTime CreationTime { get; }
 
-        public DateTime ExpirationTime { get; }
+        public DateTime ExpirationTime { get; init; }
 
 
         public AccessKeyModel(AccessKeyEntity entity)

@@ -97,11 +97,11 @@ namespace HSMServer.Controllers
             GetPartialAccessKeysList(selectedId);
 
         [HttpGet]
-        public IActionResult ShowNewAccessKeyModal() =>
-            PartialView("~/Views/AccessKeys/_NewAccessKey.cshtml");
+        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId) =>
+            PartialView("~/Views/AccessKeys/_NewAccessKey.cshtml", new AccessKeyViewModel() { EncodedProductId = productId });
 
         [HttpPost]
-        public IActionResult AddAccessKey([FromBody] AccessKeyViewModel key)
+        public IActionResult NewAccessKey(AccessKeyViewModel key)
         {
             _treeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
 

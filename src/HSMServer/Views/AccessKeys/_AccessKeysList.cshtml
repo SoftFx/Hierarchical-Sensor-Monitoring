@@ -2,16 +2,67 @@
 
 @model ProductNodeViewModel
 
-<table class="table table-sm">
+
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
+
+<table class="table">
     <tr>
         <th>Id</th>
-        <th>Name</th>
+        <th></th>
+        <th>Display name</th>
+        <th>Permissions</th>
+        <th>Expiration</th>
+        <th></th>
     </tr>
     @foreach (var (_, key) in Model.AccessKeys)
     {
         <tr>
-            <td>@key.Id</td>
-            <td>@key.Name</td>
+            <td>
+                @key.Id
+            </td>
+            <td>
+                <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
+                    <i class="far fa-copy"></i>
+                </button>
+            </td>
+            <td>@key.DisplayName</td>
+            <td>@key.Permissions</td>
+            <td>@key.ExpirationDate</td>
+            <td>
+                <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
+                    <i class='fas fa-trash-alt'></i>
+                </button>
+            </td>
         </tr>
     }
 </table>
+
+<div align="right">
+    <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
+</div>
+
+
+<script>
+    var clipboardCopy = new ClipboardJS('[id^="copy_"]', {
+        container: document.getElementById('accessKeys_modal')
+    });
+
+    function addButtonClick() {
+        let productId = $('#accessKey_prodcutId').val();
+
+        $.ajax({
+            type: 'get',
+            url: showNewAccessKeyModal + '?Selected=' + productId,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                setModalBody(viewData);
+            }
+        }).done(function () {
+            showMiddleModal();
+            setModalTitle("New access key");
+        });
+    }
+</script>

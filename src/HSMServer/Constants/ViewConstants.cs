@@ -28,8 +28,7 @@
         public const string RemoveNodeAction = "RemoveNode";
 
         public const string GetAccessKeysAction = "AccessKeys";
-        public const string ShowNewAccessKeyModalAction = "ShowNewAccessKeyModal";
-        public const string SaveNewAccessKeyAction = "AddAccessKey";
+        public const string ShowNewAccessKeyModalAction = "NewAccessKey";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
