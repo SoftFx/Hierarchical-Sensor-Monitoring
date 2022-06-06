@@ -40,6 +40,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool CanAddSensors { get; set; }
 
+        public bool CanAddProducts { get; set; }
+
 
         // public constructor without parameters for action Home/NewAccessKey
         public AccessKeyViewModel() { }
@@ -65,12 +67,16 @@ namespace HSMServer.Model.TreeViewModels
 
         private KeyPermissions BuildPermissions()
         {
-            var perm = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddProducts;
+            var perm = KeyPermissions.CanSendSensorData |
+                       KeyPermissions.CanAddProducts |
+                       KeyPermissions.CanAddSensors;
 
             if (!CanSendData)
                 perm &= ~KeyPermissions.CanSendSensorData;
-            if (!CanAddSensors)
+            if (!CanAddProducts)
                 perm &= ~KeyPermissions.CanAddProducts;
+            if (!CanAddSensors)
+                perm &= ~KeyPermissions.CanAddSensors;
 
             return perm;
         }
@@ -96,6 +102,8 @@ namespace HSMServer.Model.TreeViewModels
                 result.Add("Send data");
             if (permissions.HasFlag(KeyPermissions.CanAddProducts))
                 result.Add("Add product(s)");
+            if (permissions.HasFlag(KeyPermissions.CanAddSensors))
+                result.Add("Add sensor(s)");
 
             return string.Join(", ", result);
         }
