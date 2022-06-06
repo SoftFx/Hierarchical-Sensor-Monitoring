@@ -15,7 +15,8 @@ namespace HSMServer.Core.Model.Authentication
     public enum KeyPermissions : long
     {
         CanSendSensorData = 1,
-        CanAddProducts = 2
+        CanAddProducts = 2,
+        CanAddSensors = 4
     }
 
     [SwaggerIgnore]
