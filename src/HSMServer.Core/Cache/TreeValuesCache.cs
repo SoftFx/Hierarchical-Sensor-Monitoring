@@ -29,6 +29,8 @@ namespace HSMServer.Core.Cache
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
 
+        private const string ErrorPathKey = "Path or key is empty.";
+        private const string ErrorKeyNotFound = "Key doesn't exist.";
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
         {
@@ -117,12 +119,15 @@ namespace HSMServer.Core.Cache
             return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
         }
 
-        public bool IsValidKey(string key, string path)
+        public bool IsValidKey(string key, string path, out string message)
         {
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
+            {
+                message = ErrorPathKey;
                 return false;
+            }
 
-            if (!GetFinishProduct(key, out var finishProduct))
+            if (!GetFinishProduct(key, out var finishProduct, out message))
                 return false;
 
             //if (!IsValidPath(path, finishProduct))
@@ -133,52 +138,6 @@ namespace HSMServer.Core.Cache
             //return productNames.Count == 0;
         }
 
-        private bool IsValidPath(string path, ProductModel finishProduct)
-        {
-            var productNames = path.Split(CommonConstants.SensorPathSeparator)
-               [..^1].Reverse();
-
-            foreach (var productName in productNames)
-            {
-                var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
-                if (product == null)
-                    return false;
-
-                foreach (var node in _tree.Where(v => v.Value.DisplayName.Equals(productName)))
-                {
-                    var currentNode = node.Value;
-
-                    while (currentNode != finishProduct || currentNode != null)
-                        currentNode = currentNode.ParentProduct;
-
-                    if (currentNode != null)
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        private bool GetFinishProduct(string key, out ProductModel finishProduct)
-        {
-            finishProduct = null;
-
-            _keys.TryGetValue(Guid.Parse(key), out var accessKey);
-            if (accessKey != null)
-            {
-                if (!accessKey.IsHasPermission())
-                    return false;
-
-                finishProduct = _tree[accessKey.ProductId];
-            }
-            else
-            {
-                if (!_tree.TryGetValue(key, out finishProduct))
-                    return false;
-            }
-
-            return true;
-        }
 
         public void AddAccessKey(AccessKeyModel key)
         {
@@ -305,7 +264,7 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
             var sensorEntities = _databaseCore.GetAllSensors();
-           
+
             var accessKeysEntities = _databaseCore.GetAccessKeys();
             BuildTree(productEntities, sensorEntities);
 
@@ -360,9 +319,9 @@ namespace HSMServer.Core.Cache
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
 
-        private void ApplyAccessKeys(List<AccessKeyEntity> entities) 
+        private void ApplyAccessKeys(List<AccessKeyEntity> entities)
         {
-            foreach(var keyEntity in entities)
+            foreach (var keyEntity in entities)
             {
                 AddKeyToTree(new AccessKeyModel(keyEntity));
             }
@@ -474,7 +433,7 @@ namespace HSMServer.Core.Cache
                 return null;
 
             var productNames = path.Split(CommonConstants.SensorPathSeparator)[..^1].Reverse();
-        
+
             foreach (var productName in productNames)
             {
                 var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
@@ -486,7 +445,7 @@ namespace HSMServer.Core.Cache
             return null;
         }
 
-        
+
         private bool AddKeyToTree(AccessKeyModel key)
         {
             bool isSuccess = _keys.TryAdd(key.Id, key);
@@ -499,6 +458,68 @@ namespace HSMServer.Core.Cache
             }
 
             return isSuccess;
+        }
+
+        private bool IsValidPath(string path, ProductModel finishProduct)
+        {
+            var productNames = path.Split(CommonConstants.SensorPathSeparator)
+               [..^1].Reverse();
+
+            foreach (var productName in productNames)
+            {
+                //ToDo
+                var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
+                if (product == null)
+                    return false;
+
+                foreach (var node in _tree.Where(v => v.Value.DisplayName.Equals(productName)))
+                {
+                    var currentNode = node.Value;
+
+                    while (currentNode != finishProduct || currentNode != null)
+                        currentNode = currentNode.ParentProduct;
+
+                    if (currentNode != null)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool GetFinishProduct(string key, out ProductModel finishProduct,
+            out string message)
+        {
+            if (!GetAccessKey(key, out finishProduct, out message)
+                && !string.IsNullOrEmpty(message))
+                return false;
+
+            if (!_tree.TryGetValue(key, out finishProduct))
+            {
+                message = ErrorKeyNotFound;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool GetAccessKey(string key, out ProductModel finishProduct,
+            out string message)
+        {
+            finishProduct = null;
+            message = string.Empty;
+
+            if (!_keys.TryGetValue(Guid.Parse(key), out var accessKey))
+                return false;
+
+            if (accessKey.IsExpired(out message))
+                return false;
+
+            if (!accessKey.IsHasPermission(KeyPermissions.CanSendSensorData, out message))
+                return false;
+
+            finishProduct = _tree[accessKey.ProductId];
+            return true;
         }
     }
 }

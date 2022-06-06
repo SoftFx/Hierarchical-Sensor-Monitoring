@@ -1,10 +1,28 @@
-﻿using HSMCommon.Constants;
+﻿using HSMCommon.Attributes;
+using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model.Authentication;
 using System;
 
 namespace HSMServer.Core.Cache.Entities
 {
+    [SwaggerIgnore]
+    [Flags]
+    public enum KeyPermissions : long
+    {
+        CanSendSensorData = 1,
+        CanAddProducts = 2,
+        CanAddSensors = 4
+    }
+
+    [SwaggerIgnore]
+    public enum KeyState : byte
+    {
+        Active = 0,
+        Expired = 1,
+        Blocked = 7
+    }
+
+
     public sealed class AccessKeyModel
     {
         public Guid Id { get; }
@@ -15,7 +33,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public string Comment { get; }
 
-        public KeyState State { get; }
+        public KeyState State { get; private set; }
 
         public KeyPermissions Permissions { get; }
 
@@ -69,7 +87,31 @@ namespace HSMServer.Core.Cache.Entities
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
 
-        //ToDo
-        internal bool IsHasPermission() => true;
+        internal bool IsHasPermission(KeyPermissions permisssion, out string message)
+        {
+            message = string.Empty;
+
+            if (!Permissions.HasFlag(permisssion))
+            {
+                message = $"AccessKey doesn't have {permisssion}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        internal bool IsExpired(out string message)
+        {
+            message = string.Empty;
+
+            if (ExpirationTime < DateTime.UtcNow)
+            {
+                message = "AccessKey expired.";
+                State = KeyState.Expired;
+                return false;
+            }
+
+            return true;
+        }
     }
 }
