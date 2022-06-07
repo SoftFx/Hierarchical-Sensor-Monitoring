@@ -47,11 +47,11 @@ namespace HSMServer.Model.AccessKeysViewModels
             var result = new List<string>(2);
 
             if (permissions.HasFlag(KeyPermissions.CanSendSensorData))
-                result.Add("Send data");
+                result.Add(nameof(KeyPermissions.CanSendSensorData));
             if (permissions.HasFlag(KeyPermissions.CanAddProducts))
-                result.Add("Add product(s)");
+                result.Add(nameof(KeyPermissions.CanAddProducts));
             if (permissions.HasFlag(KeyPermissions.CanAddSensors))
-                result.Add("Add sensor(s)");
+                result.Add(nameof(KeyPermissions.CanAddSensors));
 
             return string.Join(", ", result);
         }

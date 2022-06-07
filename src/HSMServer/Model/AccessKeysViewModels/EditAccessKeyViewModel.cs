@@ -51,16 +51,14 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         private KeyPermissions BuildPermissions()
         {
-            var perm = KeyPermissions.CanSendSensorData |
-                       KeyPermissions.CanAddProducts |
-                       KeyPermissions.CanAddSensors;
+            KeyPermissions perm = 0;
 
-            if (!CanSendData)
-                perm &= ~KeyPermissions.CanSendSensorData;
-            if (!CanAddProducts)
-                perm &= ~KeyPermissions.CanAddProducts;
-            if (!CanAddSensors)
-                perm &= ~KeyPermissions.CanAddSensors;
+            if (CanSendData)
+                perm |= KeyPermissions.CanSendSensorData;
+            if (CanAddProducts)
+                perm |= KeyPermissions.CanAddProducts;
+            if (CanAddSensors)
+                perm |= KeyPermissions.CanAddSensors;
 
             return perm;
         }
