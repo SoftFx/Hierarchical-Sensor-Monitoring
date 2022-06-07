@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Helpers;
+using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,11 +15,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public string EncodedId { get; }
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; }
+        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
-        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; }
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
-        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; }
+        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
 
@@ -32,24 +33,12 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
-
-            Nodes = new ConcurrentDictionary<string, ProductNodeViewModel>();
-            Sensors = new ConcurrentDictionary<Guid, SensorNodeViewModel>();
-            AccessKeys = new ConcurrentDictionary<Guid, AccessKeyViewModel>();
-
-            foreach (var (_, sensor) in model.Sensors)
-                AddSensor(sensor);
-
-            foreach (var (_, key) in model.AccessKeys)
-                AddAccessKey(key);
         }
 
 
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-
-            //TODO update sensors, subproducts and accessKeys
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -58,18 +47,14 @@ namespace HSMServer.Model.TreeViewModels
             node.Parent = this;
         }
 
-        internal SensorNodeViewModel AddSensor(SensorModel model)
+        internal void AddSensor(SensorNodeViewModel sensor)
         {
-            var sensor = new SensorNodeViewModel(model);
-
             Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;
-
-            return sensor;
         }
 
-        internal void AddAccessKey(AccessKeyModel key) =>
-            AccessKeys.TryAdd(key.Id, new AccessKeyViewModel(key));
+        internal void AddAccessKey(AccessKeyViewModel key) =>
+            AccessKeys.TryAdd(key.Id, key);
 
         internal void Recursion()
         {

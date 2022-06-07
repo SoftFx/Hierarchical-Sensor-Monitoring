@@ -2,9 +2,8 @@
 
 
 <script>
-    var getAccessKeysList = "@Html.Raw(Url.Action(ViewConstants.GetAccessKeysAction, ViewConstants.HomeController))";
-    var showNewAccessKeyModal = "@Html.Raw(Url.Action(ViewConstants.ShowNewAccessKeyModalAction, ViewConstants.HomeController))";
-    var removeAccessKey = "@Html.Raw(Url.Action(ViewConstants.RemoveAccessKeyAction, ViewConstants.HomeController))";
+    var getAccessKeysList = "@Html.Raw(Url.Action(ViewConstants.GetAccessKeysTableForProductAction, ViewConstants.AccessKeysController))";
+    var showNewAccessKeyModal = "@Html.Raw(Url.Action(ViewConstants.NewAccessKeyAction, ViewConstants.AccessKeysController))";
 </script>
 
 <script src="~/js/bundles/accessKey.min.js"></script>

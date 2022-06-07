@@ -1,12 +1,13 @@
-﻿@using HSMServer.Model.TreeViewModels
+﻿@using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Constants
 
-@model AccessKeyViewModel
+@model EditAccessKeyViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<form asp-controller="Home" asp-action="NewAccessKey" method="post" id="newAccessKey_form">
-    <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId"/>
+<form asp-controller="@ViewConstants.AccessKeysController" asp-action="@ViewConstants.NewAccessKeyAction" method="post" id="newAccessKey_form">
+    <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId" />
 
     <div class="row">
         <div class="form-group col-8">

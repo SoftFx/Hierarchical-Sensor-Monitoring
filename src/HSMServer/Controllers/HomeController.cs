@@ -92,38 +92,6 @@ namespace HSMServer.Controllers
         }
 
 
-        [HttpGet]
-        public IActionResult AccessKeys([FromQuery(Name = "Selected")] string selectedId) =>
-            GetPartialAccessKeysList(selectedId);
-
-        [HttpGet]
-        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId) =>
-            PartialView("~/Views/AccessKeys/_NewAccessKey.cshtml", new AccessKeyViewModel() { EncodedProductId = productId });
-
-        [HttpPost]
-        public IActionResult NewAccessKey(AccessKeyViewModel key)
-        {
-            _treeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
-
-            return GetPartialAccessKeysList(key.EncodedProductId);
-        }
-
-        [HttpPost]
-        public IActionResult RemoveAccessKey([FromQuery(Name = "SelectedKey")] string keyId, [FromQuery(Name = "SelectedProduct")] string productId)
-        {
-            _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
-
-            return GetPartialAccessKeysList(productId);
-        }
-
-        private IActionResult GetPartialAccessKeysList(string productId)
-        {
-            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(productId), out var node);
-
-            return PartialView("~/Views/AccessKeys/_AccessKeysList.cshtml", node);
-        }
-
-
         #region Update
 
         [HttpPost]

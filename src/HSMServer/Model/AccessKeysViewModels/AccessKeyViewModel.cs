@@ -1,0 +1,59 @@
+﻿using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model.Authentication;
+using System;
+using System.Collections.Generic;
+
+namespace HSMServer.Model.AccessKeysViewModels
+{
+    public class AccessKeyViewModel
+    {
+        public Guid Id { get; }
+
+        public string ProductName { get; }
+
+        public string AuthorName { get; }
+
+        public string DisplayName { get; }
+
+        public string Description { get; }
+
+        public string ExpirationDate { get; }
+
+        public string Permissions { get; }
+
+        public KeyState State { get; }
+
+
+        internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
+        {
+            Id = accessKey.Id;
+            ProductName = productName;
+            AuthorName = authorName;
+            DisplayName = accessKey.DisplayName;
+            Description = accessKey.Comment;
+            ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
+            Permissions = BuildPermissions(accessKey.Permissions);
+            State = accessKey.State;
+        }
+
+
+        private static string BuildExpiration(DateTime expirationTime) =>
+            expirationTime == DateTime.MaxValue
+                ? nameof(AccessKeyExpiration.Unlimit)
+                : expirationTime.ToString();
+
+        private static string BuildPermissions(KeyPermissions permissions)
+        {
+            var result = new List<string>(2);
+
+            if (permissions.HasFlag(KeyPermissions.CanSendSensorData))
+                result.Add("Send data");
+            if (permissions.HasFlag(KeyPermissions.CanAddProducts))
+                result.Add("Add product(s)");
+            if (permissions.HasFlag(KeyPermissions.CanAddSensors))
+                result.Add("Add sensor(s)");
+
+            return string.Join(", ", result);
+        }
+    }
+}

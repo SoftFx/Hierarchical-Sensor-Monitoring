@@ -1,0 +1,74 @@
+﻿@using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Constants
+
+@model List<AccessKeyViewModel>
+
+
+<script>
+    var removeAccessKey = "@Html.Raw(Url.Action(ViewConstants.RemoveAccessKeyAction, ViewConstants.AccessKeysController))";
+</script>
+
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
+
+<div class="container">
+    <div class="row justify-content-center">
+        <table class="table">
+            <tr>
+                <th>Id</th>
+                <th></th>
+                <th>Display name</th>
+                <th>Permissions</th>
+                <th>Expiration</th>
+                <th>Product</th>
+                <th>Author</th>
+                <th>State</th>
+                <th></th>
+            </tr>
+            @foreach (var key in Model)
+            {
+                <tr>
+                    <td nowrap>
+                        @key.Id
+                    </td>
+                    <td>
+                        <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </td>
+                    <td>@key.DisplayName</td>
+                    <td>@key.Permissions</td>
+                    <td>@key.ExpirationDate</td>
+                    <td>@key.ProductName</td>
+                    <td>@key.AuthorName</td>
+                    <td>@key.State</td>
+                    <td>
+                        <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
+                            <i class='fas fa-trash-alt'></i>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </table>
+    </div>
+</div>
+
+
+<script>
+    var clipboard = new ClipboardJS('[id^="copy_"]');
+
+    $('[id^="delete_"]').off("click").on("click",
+        function () {
+            let selectedKeyId = this.id.substring("delete_".length, this.id.length);
+
+            $.ajax({
+                type: 'POST',
+                url: removeAccessKey + "?SelectedKey=" + selectedKeyId,
+                cache: false,
+                async: true,
+                success: function () {
+                    document.location.reload();
+                }
+            });
+        });
+</script>

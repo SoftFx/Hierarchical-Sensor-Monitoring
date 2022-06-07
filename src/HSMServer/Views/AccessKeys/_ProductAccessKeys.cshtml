@@ -16,12 +16,12 @@
         <th>Display name</th>
         <th>Permissions</th>
         <th>Expiration</th>
-        <th></th>
+        <th>State</th>
     </tr>
     @foreach (var (_, key) in Model.AccessKeys)
     {
         <tr>
-            <td>
+            <td nowrap>
                 @key.Id
             </td>
             <td>
@@ -32,11 +32,7 @@
             <td>@key.DisplayName</td>
             <td>@key.Permissions</td>
             <td>@key.ExpirationDate</td>
-            <td>
-                @*<button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
-                    <i class='fas fa-trash-alt'></i>
-                </button>*@
-            </td>
+            <td>@key.State</td>
         </tr>
     }
 </table>
@@ -68,21 +64,4 @@
             setModalTitle("New access key");
         });
     }
-
-    //$('[id^="delete_"]').off("click").on("click",
-    //    function () {
-    //        let selectedKeyId = this.id.substring("delete_".length, this.id.length);
-    //        let productId = $('#accessKey_prodcutId').val();
-    //        console.log(selectedKeyId);
-    //        console.log(productId);
-    //        $.ajax({
-    //            type: 'GET',
-    //            url: removeAccessKey + "?SelectedKey=" + selectedKeyId + "&SelectedProduct=" + productId,
-    //            cache: false,
-    //            async: true,
-    //            success: function () {
-    //                document.location.reload();
-    //            }
-    //        });
-    //    });
 </script>

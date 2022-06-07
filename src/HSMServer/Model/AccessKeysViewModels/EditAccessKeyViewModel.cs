@@ -2,10 +2,9 @@
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.AccessKeysViewModels
 {
     public enum AccessKeyExpiration
     {
@@ -20,14 +19,8 @@ namespace HSMServer.Model.TreeViewModels
     }
 
 
-    public class AccessKeyViewModel
+    public class EditAccessKeyViewModel
     {
-        public Guid Id { get; }
-
-        public string ExpirationDate { get; }
-
-        public string Permissions { get; }
-
         public string EncodedProductId { get; set; }
 
         public string DisplayName { get; set; }
@@ -44,15 +37,7 @@ namespace HSMServer.Model.TreeViewModels
 
 
         // public constructor without parameters for action Home/NewAccessKey
-        public AccessKeyViewModel() { }
-
-        internal AccessKeyViewModel(AccessKeyModel accessKey)
-        {
-            Id = accessKey.Id;
-            DisplayName = accessKey.DisplayName;
-            ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
-            Permissions = BuildPermissions(accessKey.Permissions);
-        }
+        public EditAccessKeyViewModel() { }
 
 
         internal AccessKeyModel ToModel(Guid userId) =>
@@ -91,25 +76,6 @@ namespace HSMServer.Model.TreeViewModels
                 AccessKeyExpiration.Month => expiration.AddMonths(1),
                 AccessKeyExpiration.Year => expiration.AddYears(1),
             };
-        }
-
-        private static string BuildExpiration(DateTime expirationTime) =>
-            expirationTime == DateTime.MaxValue
-                ? nameof(AccessKeyExpiration.Unlimit)
-                : expirationTime.ToString();
-
-        private static string BuildPermissions(KeyPermissions permissions)
-        {
-            var result = new List<string>(2);
-
-            if (permissions.HasFlag(KeyPermissions.CanSendSensorData))
-                result.Add("Send data");
-            if (permissions.HasFlag(KeyPermissions.CanAddProducts))
-                result.Add("Add product(s)");
-            if (permissions.HasFlag(KeyPermissions.CanAddSensors))
-                result.Add("Add sensor(s)");
-
-            return string.Join(", ", result);
         }
     }
 }
