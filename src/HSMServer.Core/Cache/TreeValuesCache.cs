@@ -106,6 +106,23 @@ namespace HSMServer.Core.Cache
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
+        public bool TryGetProductByKey(string key, out ProductModel product,
+            out string message)
+        {
+            message = string.Empty;
+
+            if (_keys.TryGetValue(Guid.Parse(key), out var accessKey))
+                return TryGetProductByKey(accessKey, out product, out message);
+
+            if (!_tree.TryGetValue(key, out product))
+            {
+                message = ErrorKeyNotFound;
+                return false;
+            }
+
+            return true;
+        }
+
         public List<ProductModel> GetProductsWithoutParent(User user)
         {
             var products = _tree.Values.Where(p => p.ParentProduct == null).ToList();
@@ -485,23 +502,6 @@ namespace HSMServer.Core.Cache
             }
 
             return false;
-        }
-
-        private bool TryGetProductByKey(string key, out ProductModel finishProduct,
-            out string message)
-        {
-            message = string.Empty;
-
-            if (_keys.TryGetValue(Guid.Parse(key), out var accessKey))
-                return TryGetProductByKey(accessKey, out finishProduct, out message);
-
-            if (!_tree.TryGetValue(key, out finishProduct))
-            {
-                message = ErrorKeyNotFound;
-                return false;
-            }
-
-            return true;
         }
 
         private bool TryGetProductByKey(AccessKeyModel accessKey, out ProductModel finishProduct,
