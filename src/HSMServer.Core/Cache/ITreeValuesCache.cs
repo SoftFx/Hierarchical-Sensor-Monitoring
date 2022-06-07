@@ -30,8 +30,9 @@ namespace HSMServer.Core.Cache
         void RemoveProduct(string id);
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
+        bool TryGetProductByKey(string key, out ProductModel product, out string message);
         List<ProductModel> GetProductsWithoutParent(User user);
-        bool IsValidKey(string key, string path);
+        bool TryCheckKeyPermissions(string key, string path, out string message);
 
         void AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
