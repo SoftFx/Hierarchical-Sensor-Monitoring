@@ -119,9 +119,11 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        public List<ProductModel> GetProductsWithoutParent(User user)
+        public List<ProductModel> GetProducts(User user, bool withoutParent = true)
         {
-            var products = _tree.Values.Where(p => p.ParentProduct == null).ToList();
+            var products = _tree.Values.ToList();
+            if (withoutParent)
+                products = products.Where(p => p.ParentProduct == null).ToList();
 
             if (user == null || user.IsAdmin)
                 return products;

@@ -91,7 +91,6 @@ namespace HSMServer.Controllers
                 _treeValuesCache.RemoveSensorData(sensor.Id);
         }
 
-
         #region Update
 
         [HttpPost]

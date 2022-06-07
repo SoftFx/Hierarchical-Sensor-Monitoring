@@ -47,7 +47,7 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            var products = _treeValuesCache.GetProductsWithoutParent(user);
+            var products = _treeValuesCache.GetProducts(user);
 
             products = products?.OrderBy(x => x.DisplayName).ToList();
 

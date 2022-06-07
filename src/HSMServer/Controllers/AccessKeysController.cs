@@ -5,7 +5,7 @@ using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace HSMServer.Controllers
 {
@@ -22,7 +22,11 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index() => View(_treeViewModel.AccessKeys.Values.ToList());
+        public IActionResult Index() => View(GetAvailableAccessKeys(onlyProductsWithoutParent: true));
+
+        [HttpGet]
+        public IActionResult AvailableAccessKeys([FromQuery(Name = "WithoutParents")] bool productsWithoutParent) =>
+            GetPartialAllAccessKeys(productsWithoutParent);
 
         [HttpGet]
         public IActionResult AccessKeysForProduct([FromQuery(Name = "Selected")] string productId) =>
@@ -41,8 +45,31 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveAccessKey([FromQuery(Name = "SelectedKey")] string keyId) =>
+        public IActionResult RemoveAccessKey([FromQuery(Name = "SelectedKey")] string keyId,
+                                             [FromQuery(Name = "WithoutParents")] bool productsWithoutParent)
+        {
             _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
+
+            return GetPartialAllAccessKeys(productsWithoutParent);
+        }
+
+
+        private List<AccessKeyViewModel> GetAvailableAccessKeys(bool onlyProductsWithoutParent)
+        {
+            var keys = new List<AccessKeyViewModel>(1 << 5);
+
+            var availableProducts = _treeValuesCache.GetProducts(HttpContext.User as User, onlyProductsWithoutParent);
+            foreach (var product in availableProducts)
+            {
+                if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
+                    keys.AddRange(productViewModel.AccessKeys.Values);
+            }
+
+            return keys;
+        }
+
+        private PartialViewResult GetPartialAllAccessKeys(bool onlyProductsWithoutParent) =>
+            PartialView("_AllAccessKeys", GetAvailableAccessKeys(onlyProductsWithoutParent));
 
         private PartialViewResult GetPartialProductAccessKeys(string productId)
         {

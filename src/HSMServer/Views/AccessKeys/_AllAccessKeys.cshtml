@@ -1,0 +1,52 @@
+﻿@using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Constants
+
+@model List<AccessKeyViewModel>
+
+
+@foreach (var key in Model)
+{
+    <tr>
+        <td nowrap>
+            @key.Id
+        </td>
+        <td>
+            <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
+                <i class="far fa-copy"></i>
+            </button>
+        </td>
+        <td>@key.DisplayName</td>
+        <td>@key.Permissions</td>
+        <td>@key.ExpirationDate</td>
+        <td>@key.ProductName</td>
+        <td>@key.AuthorName</td>
+        <td>@key.State</td>
+        <td>
+            <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
+                <i class='fas fa-trash-alt'></i>
+            </button>
+        </td>
+    </tr>
+}
+
+
+<script>
+    var removeAccessKey = "@Html.Raw(Url.Action(ViewConstants.RemoveAccessKeyAction, ViewConstants.AccessKeysController))";
+
+
+    $('[id^="delete_"]').off("click").on("click",
+        function () {
+            let selectedKeyId = this.id.substring("delete_".length, this.id.length);
+            var withoutParents = document.getElementById('productsWithoutParents');
+
+            $.ajax({
+                type: 'POST',
+                url: removeAccessKey + "?SelectedKey=" + selectedKeyId + "&WithoutParents=" + withoutParents.checked,
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $('#accessKeysTable').html(viewData);
+                }
+            });
+        });
+</script>
