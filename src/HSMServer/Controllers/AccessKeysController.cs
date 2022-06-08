@@ -36,11 +36,14 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId) =>
-            PartialView("_NewAccessKey", new EditAccessKeyViewModel() { EncodedProductId = productId });
+            GetPartialNewAccessKey(new EditAccessKeyViewModel() { EncodedProductId = productId });
 
         [HttpPost]
         public IActionResult NewAccessKey(EditAccessKeyViewModel key)
         {
+            if (!ModelState.IsValid)
+                return GetPartialNewAccessKey(key);
+
             _treeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
 
             return GetPartialProductAccessKeys(key.EncodedProductId);
@@ -82,5 +85,8 @@ namespace HSMServer.Controllers
 
             return PartialView("_ProductAccessKeys", node);
         }
+
+        private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) =>
+            PartialView("_NewAccessKey", key);
     }
 }

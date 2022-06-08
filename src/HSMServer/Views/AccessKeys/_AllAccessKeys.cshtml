@@ -7,9 +7,7 @@
 @foreach (var key in Model)
 {
     <tr>
-        <td nowrap>
-            @key.Id
-        </td>
+        <td nowrap>@key.Id</td>
         <td>
             <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
                 <i class="far fa-copy"></i>

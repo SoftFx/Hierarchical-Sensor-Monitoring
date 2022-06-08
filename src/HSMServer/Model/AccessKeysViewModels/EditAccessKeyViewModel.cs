@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Attributes;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Helpers;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -23,17 +23,24 @@ namespace HSMServer.Model.AccessKeysViewModels
     {
         public string EncodedProductId { get; set; }
 
+        [Display(Name = "Display name")]
+        [Required(ErrorMessage = "{0} is required.")]
+        [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
         public string DisplayName { get; set; }
 
+        [StringLength(200, ErrorMessage = "{0} length should be less than {1}.")]
         public string Description { get; set; }
 
         public AccessKeyExpiration Expiration { get; set; }
 
-        public bool CanSendData { get; set; }
+        public bool CanSendSensorData { get; set; }
 
         public bool CanAddSensors { get; set; }
 
         public bool CanAddProducts { get; set; }
+
+        [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
+        public KeyPermissions Permissions => BuildPermissions();
 
 
         // public constructor without parameters for action Home/NewAccessKey
@@ -45,7 +52,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             {
                 DisplayName = DisplayName,
                 Comment = Description,
-                Permissions = BuildPermissions(),
+                Permissions = Permissions,
                 ExpirationTime = BuildExpirationTime(),
             };
 
@@ -53,7 +60,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             KeyPermissions perm = 0;
 
-            if (CanSendData)
+            if (CanSendSensorData)
                 perm |= KeyPermissions.CanSendSensorData;
             if (CanAddProducts)
                 perm |= KeyPermissions.CanAddProducts;
