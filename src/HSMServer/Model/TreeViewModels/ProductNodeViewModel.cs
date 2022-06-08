@@ -23,9 +23,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
 
-        public int Count { get; private set; }
+        public bool IsAvailableForUser { get; internal set; }
 
-        public bool IsAvailableForUser { get; set; }
+        public bool IsAddingAccessKeysAvailable { get; internal set; }
+
+        public int Count { get; private set; }
 
 
         public ProductNodeViewModel(ProductModel model)
@@ -72,6 +74,18 @@ namespace HSMServer.Model.TreeViewModels
 
             ModifyUpdateTime();
             ModifyStatus();
+        }
+
+        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
+        {
+            if (Nodes != null && !Nodes.IsEmpty)
+                foreach (var (_, node) in Nodes)
+                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
+
+            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
+
+            foreach (var (_, accessKey) in AccessKeys)
+                accessKey.IsRemovingAccessKeyAvailable = isAccessKeysOperationsAvailable;
         }
 
         private void ModifyUpdateTime()

@@ -3,12 +3,14 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Controllers
 {
+    [Authorize]
     public class AccessKeysController : Controller
     {
         private readonly ITreeValuesCache _treeValuesCache;
@@ -54,11 +56,17 @@ namespace HSMServer.Controllers
         }
 
 
+        private PartialViewResult GetPartialAllAccessKeys(bool onlyProductsWithoutParent) =>
+            PartialView("_AllAccessKeys", GetAvailableAccessKeys(onlyProductsWithoutParent));
+
         private List<AccessKeyViewModel> GetAvailableAccessKeys(bool onlyProductsWithoutParent)
         {
+            var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
-            var availableProducts = _treeValuesCache.GetProducts(HttpContext.User as User, onlyProductsWithoutParent);
+            _treeViewModel.UpdateAccessKeysCharacteristics(user);
+
+            var availableProducts = _treeValuesCache.GetProducts(user, onlyProductsWithoutParent);
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
@@ -67,9 +75,6 @@ namespace HSMServer.Controllers
 
             return keys;
         }
-
-        private PartialViewResult GetPartialAllAccessKeys(bool onlyProductsWithoutParent) =>
-            PartialView("_AllAccessKeys", GetAvailableAccessKeys(onlyProductsWithoutParent));
 
         private PartialViewResult GetPartialProductAccessKeys(string productId)
         {

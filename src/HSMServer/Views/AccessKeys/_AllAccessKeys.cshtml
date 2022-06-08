@@ -21,11 +21,14 @@
         <td>@key.ProductName</td>
         <td>@key.AuthorName</td>
         <td>@key.State</td>
-        <td>
-            <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
-                <i class='fas fa-trash-alt'></i>
-            </button>
-        </td>
+        @if (key.IsRemovingAccessKeyAvailable)
+        {
+            <td>
+                <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
+                    <i class='fas fa-trash-alt'></i>
+                </button>
+            </td>
+        }
     </tr>
 }
 

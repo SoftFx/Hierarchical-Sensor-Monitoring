@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
@@ -22,6 +21,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string Permissions { get; }
 
         public KeyState State { get; }
+
+        public bool IsRemovingAccessKeyAvailable { get; internal set; }
 
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)

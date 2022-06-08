@@ -45,6 +45,19 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)
                     node.Recursion();
+
+            UpdateAccessKeysCharacteristics(user);
+        }
+
+        internal void UpdateAccessKeysCharacteristics(User user)
+        {
+            foreach (var (_, node) in Nodes)
+                if (node.Parent == null)
+                    node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
+
+            foreach (var (productId, role) in user.ProductsRoles)
+                if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
+                    node.UpdateAccessKeysAvailableOperations(true);
         }
 
         private void BuildTree()

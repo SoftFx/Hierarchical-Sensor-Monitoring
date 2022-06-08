@@ -6,8 +6,8 @@
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
-<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId"/>
-<input id='accessKey_productName' style='display: none' value="@Model.Name"/>
+<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId" />
+<input id='accessKey_productName' style='display: none' value="@Model.Name" />
 
 <table class="table">
     <tr>
@@ -37,9 +37,12 @@
     }
 </table>
 
-<div align="right">
-    <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
-</div>
+@if (Model.IsAddingAccessKeysAvailable)
+{
+    <div align="right">
+        <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
+    </div>
+}
 
 
 <script>

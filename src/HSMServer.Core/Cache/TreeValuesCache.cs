@@ -131,7 +131,9 @@ namespace HSMServer.Core.Cache
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return null;
 
-            return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+            var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+
+            return withoutParent ? availableProducts : GetAllProductsWithTheirSubProducts(availableProducts);
         }
 
         public bool TryCheckKeyPermissions(string key, string path, out string message)
@@ -531,6 +533,29 @@ namespace HSMServer.Core.Cache
 
             finishProduct = _tree[accessKey.ProductId];
             return true;
+        }
+
+        private List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
+        {
+            var productsWithTheirSubProducts = new Dictionary<string, ProductModel>(products.Count);
+            foreach (var product in products)
+            {
+                productsWithTheirSubProducts.Add(product.Id, product);
+                GetAllProductSubProducts(product, productsWithTheirSubProducts);
+            }
+
+            return productsWithTheirSubProducts.Values.ToList();
+        }
+
+        private void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
+        {
+            foreach (var (subProductId, subProduct) in product.SubProducts)
+            {
+                if (!allSubProducts.ContainsKey(subProductId))
+                    allSubProducts.Add(subProductId, subProduct);
+
+                GetAllProductSubProducts(subProduct, allSubProducts);
+            }
         }
     }
 }
