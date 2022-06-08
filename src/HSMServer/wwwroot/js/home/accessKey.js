@@ -48,3 +48,14 @@ function showAccessKeysList(productId, showModalFirst) {
         }
     });
 }
+
+function popoversInit() {
+    $(document).ready(function () {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            if (popoverTriggerEl.getAttribute("data-bs-content") != "") {
+                return new bootstrap.Popover(popoverTriggerEl);
+            }
+        });
+    });
+}

@@ -29,7 +29,16 @@
                     <i class="far fa-copy"></i>
                 </button>
             </td>
-            <td>@key.DisplayName</td>
+            <td nowrap>
+                @key.DisplayName
+
+                @if (!string.IsNullOrEmpty(key.Description))
+                {
+                    <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
+                        <i class='fas fa-question-circle'></i>
+                    </a>
+                }
+            </td>
             <td>@key.Permissions</td>
             <td>@key.ExpirationDate</td>
             <td>@key.State</td>
@@ -67,4 +76,6 @@
             setModalTitle("New access key");
         });
     }
+
+    popoversInit();
 </script>

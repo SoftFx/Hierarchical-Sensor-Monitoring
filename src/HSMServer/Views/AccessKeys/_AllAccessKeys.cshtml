@@ -15,23 +15,34 @@
                 <i class="far fa-copy"></i>
             </button>
         </td>
-        <td>@key.DisplayName</td>
+        <td nowrap>
+            @key.DisplayName
+
+            @if (!string.IsNullOrEmpty(key.Description))
+            {
+                <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
+                    <i class='fas fa-question-circle'></i>
+                </a>
+            }
+        </td>
         <td>@key.Permissions</td>
         <td>@key.ExpirationDate</td>
         <td>@key.ProductName</td>
         <td>@key.AuthorName</td>
         <td>@key.State</td>
-        @if (key.IsRemovingAccessKeyAvailable)
-        {
-            <td>
+        <td nowrap>
+            @if (key.IsRemovingAccessKeyAvailable)
+            {
                 <button id='delete_@key.Id' title='delete' class='btn btn-secondary'>
                     <i class='fas fa-trash-alt'></i>
                 </button>
-            </td>
-        }
+            }
+        </td>
     </tr>
 }
 
+
+<script src="~/js/bundles/accessKey.min.js"></script>
 
 <script>
     var removeAccessKey = "@Html.Raw(Url.Action(ViewConstants.RemoveAccessKeyAction, ViewConstants.AccessKeysController))";
@@ -52,4 +63,6 @@
                 }
             });
         });
+
+    popoversInit();
 </script>
