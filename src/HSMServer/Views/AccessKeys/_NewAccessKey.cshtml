@@ -79,7 +79,9 @@
                 setModalBody(viewData);
             }
         }).done(function () {
-            showAccessKeysListModal();
+            if (document.getElementsByClassName("field-validation-error").length === 0) {
+                showAccessKeysListModal();
+            }
         });
     });
 
