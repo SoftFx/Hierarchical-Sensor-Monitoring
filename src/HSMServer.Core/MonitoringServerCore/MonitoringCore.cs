@@ -107,11 +107,11 @@ namespace HSMServer.Core.MonitoringServerCore
                 DateTime timeCollected = DateTime.UtcNow;
 
                 var validationResult = value.Validate();
+
                 if (!CheckValidationResult(value, validationResult))
                     return;
 
-                if (!_treeValuesCache.TryGetProductAndKey(value.Key, out var product,
-                    out var accessKey, out _))
+                if (!_treeValuesCache.TryGetProductByKey(value.Key, out var product, out _))
                     return;
 
                 bool saveToDb = ProcessBarSensorValue(value, product.DisplayName, timeCollected);

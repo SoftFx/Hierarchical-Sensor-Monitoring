@@ -99,32 +99,26 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public ProductModel GetProduct(string id)
-        {
-            _tree.TryGetValue(id, out var product);
-            return product;
-        }
+        public ProductModel GetProduct(string id) => _tree.GetValueOrDefault(id);
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public bool TryGetProductAndKey(string key, out ProductModel product,
-            out AccessKeyModel accessKey, out string message)
+        public bool TryGetProductByKey(string key, out ProductModel product, out string message)
         {
-            message = string.Empty;
-            accessKey = null;
+            key = GetAccessKeyModel(key)?.ProductId ?? key;
 
-            if (Guid.TryParse(key, out var id) && _keys.TryGetValue(id, out var unreviewedAccessKey))
-                return TryGetProductAndKey(unreviewedAccessKey, out product, out accessKey,
-                    out message);
+            var hasProduct = _tree.TryGetValue(key, out product);
 
-            if (!_tree.TryGetValue(key, out product))
-            {
-                message = ErrorKeyNotFound;
-                return false;
-            }
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
 
-            return true;
+            return hasProduct;
         }
+
+        private AccessKeyModel GetAccessKeyModel(string key)
+        {
+            return Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
+        }
+
 
         public List<ProductModel> GetProductsWithoutParent(User user)
         {
@@ -147,19 +141,20 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            if (!TryGetProductAndKey(key, out var finishProduct, out var accessKey, out message))
+            if (!TryGetProductByKey(key, out var product, out message))
                 return false;
-
-            if (finishProduct != null && accessKey == null)
+            else if (product.Id == key)
                 return true;
 
-            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
-                return true;
+            var keyModel = GetAccessKeyModel(key);
 
-            if (!IsValidPath(path, finishProduct, accessKey, out message))
+            if (!keyModel.HasPermissionForSendData(out message))
                 return false;
 
-            return true;
+            if (keyModel.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
+                return true;
+
+            return IsValidKeyForPath(path, product, keyModel, out message);
         }
 
 
@@ -484,50 +479,32 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private static bool IsValidPath(string path, ProductModel startProduct, AccessKeyModel accessKey,
+        private static bool IsValidKeyForPath(string path, ProductModel product, AccessKeyModel accessKey,
             out string message)
         {
             message = string.Empty;
 
-            var productNames = path.Split(CommonConstants.SensorPathSeparator);
-            var firstName = productNames.First();
+            var parts = path.Split(CommonConstants.SensorPathSeparator);
 
-            if (!startProduct.DisplayName.Equals(firstName))
+            for (int i = 0; i < parts.Length; i++)
             {
-                startProduct = startProduct.SubProducts
-                    .FirstOrDefault(sp => sp.Value.DisplayName.Equals(firstName)).Value;
+                var expectedName = parts[i];
 
-                //if (startProduct == null && accessKey != null)
-                //{
-                //    if (accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out message)
-                //        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
-                //        return true;
-                //}
-            }
-
-            var current = startProduct;
-            for (int i = 0; i < productNames.Length; i++)
-            {
-                var child = current.SubProducts.FirstOrDefault(sp =>
-                    sp.Value.DisplayName == productNames[i]).Value;
-
-                if (child == null)
+                if (i != parts.Length - 1)
                 {
-                    if ((i == productNames.Length - 1)
-                        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
-                        return true;
+                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
-                    //ToDo
-                    if ((i < productNames.Length - 1)
-                        && accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out message)
-                        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
-                        //we need error messages
-                        return true;
-
-                    return false;
+                    if (product == null && !accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out message))
+                        return false;
                 }
-                current = child;
+                else
+                {
+                    if (!product.Sensors.Any(s => s.Value.SensorName == expectedName) &&
+                        !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                        return false;
+                }
             }
+
             return true;
         }
 

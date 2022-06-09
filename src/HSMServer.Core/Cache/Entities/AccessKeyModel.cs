@@ -113,5 +113,10 @@ namespace HSMServer.Core.Cache.Entities
 
             return true;
         }
+
+        internal bool HasPermissionForSendData(out string message)
+        {
+            return !IsExpired(out message) && IsHasPermission(KeyPermissions.CanSendSensorData, out message);
+        }
     }
 }
