@@ -39,6 +39,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanAddProducts { get; set; }
 
+        public bool CloseModal { get; set; }
+
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
 

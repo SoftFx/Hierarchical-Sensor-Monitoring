@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Constants
+@using HSMServer.Controllers
 
 @model EditAccessKeyViewModel
 
@@ -10,8 +11,9 @@
 <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
 
 
-<form asp-controller="@ViewConstants.AccessKeysController" asp-action="@ViewConstants.NewAccessKeyAction" method="post" id="newAccessKey_form">
+<form asp-controller="@ViewConstants.AccessKeysController" asp-action="@nameof(AccessKeysController.NewAccessKey)" method="post" id="newAccessKey_form">
     <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId" />
+    <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal" />
 
     <div class="row">
         <div class="form-group col-8">
@@ -66,6 +68,7 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        let whetherCloseModal;
         $.ajax({
             url: $("#newAccessKey_form").attr("action"),
             type: 'POST',
@@ -76,22 +79,37 @@
             cache: false,
             async: true,
             success: function (viewData) {
+                whetherCloseModal = $('#whetherCloseModal').val();
+
                 setModalBody(viewData);
             }
         }).done(function () {
             if (document.getElementsByClassName("field-validation-error").length === 0) {
-                showAccessKeysListModal();
+                closeModalOrShowAccessKeysList(whetherCloseModal, function () {
+                    showAccessKeysListModal();
+                });
             }
         });
     });
 
     function cancelButtonClick() {
-        showAccessKeysList($('#accessKey_prodcutId').val(), false);
+        closeModalOrShowAccessKeysList($('#whetherCloseModal').val(), function () {
+            showAccessKeysList($('#accessKey_prodcutId').val(), false);
+        });
     }
 
     function selectAllCheckBoxes() {
         $(':checkbox').each(function () {
             this.checked = true;
         });
+    }
+
+    function closeModalOrShowAccessKeysList(whetherCloseModal, showAccessKeys) {
+        if (whetherCloseModal === "True") {
+            hideModal();
+        }
+        else {
+            showAccessKeys();
+        }
     }
 </script>

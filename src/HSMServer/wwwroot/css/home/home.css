@@ -50,12 +50,3 @@
 .info-link {
     cursor: pointer;
 }
-
-.field-validation-error {
-    color: #b94a48;
-    font-size: small;
-}
-
-input.input-validation-error {
-    border: 1px solid #b94a48;
-}

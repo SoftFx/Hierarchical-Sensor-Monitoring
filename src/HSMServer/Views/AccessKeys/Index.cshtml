@@ -1,11 +1,12 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Constants
+@using HSMServer.Controllers
 
 @model List<AccessKeyViewModel>
 
 
 <script>
-    var getAvailableAccessKeys = "@Html.Raw(Url.Action(ViewConstants.GetAvailableAccessKeysAction, ViewConstants.AccessKeysController))";
+    var getAvailableAccessKeys = "@Html.Raw(Url.Action(nameof(AccessKeysController.AvailableAccessKeys), ViewConstants.AccessKeysController))";
 </script>
 
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
@@ -24,7 +25,7 @@
                     Product (
                     <input class="form-check-input" type="checkbox" value="" checked onchange="onlyProductsWithoutParentsCahnged()" id="productsWithoutParents">
                     <label class="form-check-label" for="productsWithoutParents">
-                        only without parents)
+                        only without parent)
                     </label>
                 </th>
                 <th>Author</th>

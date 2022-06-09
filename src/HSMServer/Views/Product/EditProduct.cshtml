@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
+@using HSMServer.Controllers
 @using HSMServer.HtmlHelpers
 @model EditProductViewModel
 
@@ -33,7 +34,8 @@
     </div>
 </div>
 
-<input id="productKey" value="@Model.ProductKey" style="display: none" />
+<input id="productKey" value="@Model.ProductId" style="display: none" />
+<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none" />
 
 <div class="container row justify-content-center">
     <div style="margin: 10px">
@@ -46,14 +48,6 @@
                 <label for="email" class="form-label">Email address</label>
                 <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
             </div>
-            <!--<div class="mb-3">
-                <label for="dateTime" class="form-label">Access expiration date</label>
-                <input style="width: 300px" type="time" class="form-control" id="dateTime"
-                       min="@DateTime.UtcNow.ToString("")"/>-->
-                @*<input style="width: 300px" type="datetime-local" class="form-control" id="dateTime"
-                       min="@DateTime.UtcNow.ToString("yyyy-MM-ddThh:mm:ss")"
-                       max="@((DateTime.UtcNow + TimeSpan.FromMinutes(30)).ToString("yyyy-MM-ddThh:mm:ss"))"/>*@
-            <!--</div>-->
 
             <div class="mb-3">
                 <label for="productRole" class="form-label">Choose a role permission</label>
@@ -64,13 +58,44 @@
 
             <div class="mb-3">
                 <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
-                 <i class="fas fa-envelope"></i> Invite</button>
+                    <i class="fas fa-envelope"></i> Invite
+                </button>
             </div>
         </div>
     </div>
 
     @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
+
+
+    <div class="row justify-content-start">
+        <div class="row" style='margin: 20px 0px 10px;'>
+            <h5 class="col-auto">Product '@Model.ProductName' access keys</h5>
+            <button style='margin-left: 0px 5px' type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
+                <i class='fas fa-plus'></i>
+            </button>
+        </div>
+
+        <table class="table">
+            <tr>
+                <th>Id</th>
+                <th></th>
+                <th>Display name</th>
+                <th>Permissions</th>
+                <th>Expiration</th>
+                <th>Product</th>
+                <th>Author</th>
+                <th>State</th>
+                <th></th>
+            </tr>
+            <tbody id="accessKeysTable">
+                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
+            </tbody>
+        </table>
+    </div>
 </div>
+
+@await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
+
 
 <script>
     let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';
@@ -135,7 +160,6 @@
         productKey = $('#productKey').val();
 
         data = createUserRightData(userId, role, productKey);
-        //console.log(JSON.stringify(data));
 
         $.ajax({
             type: 'POST',
@@ -227,4 +251,18 @@
         });
     });
 
+</script>
+
+
+<script>
+    function addAccessKeyButtonClick() {
+        let productId = $('#encodedProductId').val();
+        let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
+
+        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}&CloseModal=true`, true);
+    }
+
+    $('#accessKeys_modal').on('hidden.bs.modal', function(e) {
+        document.location.reload();
+    });
 </script>

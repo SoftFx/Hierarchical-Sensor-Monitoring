@@ -88,6 +88,8 @@ namespace HSMServer.Model.TreeViewModels
                 accessKey.IsRemovingAccessKeyAvailable = isAccessKeysOperationsAvailable;
         }
 
+        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
         private void ModifyUpdateTime()
         {
             var sensorMaxTime = VisibleSensors.Count == 0 ? null : VisibleSensors?.Max(x => x.UpdateTime);

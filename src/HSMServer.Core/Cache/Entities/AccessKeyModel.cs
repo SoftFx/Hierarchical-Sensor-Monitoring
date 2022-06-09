@@ -73,9 +73,8 @@ namespace HSMServer.Core.Cache.Entities
         {
             AuthorId = product.AuthorId;
             ProductId = product.Id;
-            Comment = CommonConstants.DefaultAccessKey;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanSendSensorData;
+            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }

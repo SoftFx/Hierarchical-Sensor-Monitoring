@@ -35,8 +35,14 @@ namespace HSMServer.Controllers
             GetPartialProductAccessKeys(productId);
 
         [HttpGet]
-        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId) =>
-            GetPartialNewAccessKey(new EditAccessKeyViewModel() { EncodedProductId = productId });
+        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId,
+                                          [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
+            GetPartialNewAccessKey(
+                new EditAccessKeyViewModel()
+                {
+                    EncodedProductId = productId,
+                    CloseModal = closeModal,
+                });
 
         [HttpPost]
         public IActionResult NewAccessKey(EditAccessKeyViewModel key)
@@ -50,12 +56,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult RemoveAccessKey([FromQuery(Name = "SelectedKey")] string keyId,
-                                             [FromQuery(Name = "WithoutParents")] bool productsWithoutParent)
+        public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string keyId,
+                                                         [FromQuery(Name = "WithoutParents")] bool productsWithoutParent)
         {
             _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
 
             return GetPartialAllAccessKeys(productsWithoutParent);
+        }
+
+        [HttpPost]
+        public IActionResult RemoveAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string keyId)
+        {
+            _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
+
+            _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(keyId), out var key);
+            _treeViewModel.Nodes.TryGetValue(key.ProductId, out var productNode);
+
+            return PartialView("_AllAccessKeys", productNode.GetAccessKeys());
         }
 
 

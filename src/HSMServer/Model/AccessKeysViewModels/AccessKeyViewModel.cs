@@ -8,6 +8,8 @@ namespace HSMServer.Model.AccessKeysViewModels
     {
         public Guid Id { get; }
 
+        public string ProductId { get; }
+
         public string ProductName { get; }
 
         public string AuthorName { get; }
@@ -28,6 +30,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
         {
             Id = accessKey.Id;
+            ProductId = accessKey.ProductId;
             ProductName = productName;
             AuthorName = authorName;
             DisplayName = accessKey.DisplayName;

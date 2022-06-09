@@ -25,13 +25,7 @@
 
         public const string SelectNodeAction = "SelectNode";
         public const string RefreshTreeAction = "RefreshTree";
-
         public const string RemoveNodeAction = "RemoveNode";
-
-        public const string GetAccessKeysTableForProductAction = "AccessKeysForProduct";
-        public const string NewAccessKeyAction = "NewAccessKey";
-        public const string RemoveAccessKeyAction = "RemoveAccessKey";
-        public const string GetAvailableAccessKeysAction = "AvailableAccessKeys";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";

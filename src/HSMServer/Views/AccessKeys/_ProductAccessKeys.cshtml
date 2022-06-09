@@ -1,4 +1,6 @@
 ﻿@using HSMServer.Model.TreeViewModels
+@using HSMServer.Controllers
+@using HSMServer.Constants
 
 @model ProductNodeViewModel
 
@@ -57,23 +59,12 @@
         container: document.getElementById('accessKeys_modal')
     });
 
+    popoversInit();
+
     function addButtonClick() {
         let productId = $('#accessKey_prodcutId').val();
+        let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-        $.ajax({
-            type: 'get',
-            url: showNewAccessKeyModal + '?Selected=' + productId,
-            datatype: 'html',
-            contenttype: 'application/json',
-            cache: false,
-            success: function (viewData) {
-                setModalBody(viewData);
-            }
-        }).done(function () {
-            showMiddleModal();
-            setModalTitle("New access key");
-        });
+        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
     }
-
-    popoversInit();
 </script>
