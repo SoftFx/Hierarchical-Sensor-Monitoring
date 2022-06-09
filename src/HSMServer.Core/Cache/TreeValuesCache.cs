@@ -113,7 +113,7 @@ namespace HSMServer.Core.Cache
             message = string.Empty;
             accessKey = null;
 
-            if (_keys.TryGetValue(Guid.Parse(key), out var unreviewedAccessKey))
+            if (Guid.TryParse(key, out var id) && _keys.TryGetValue(id, out var unreviewedAccessKey))
                 return TryGetProductAndKey(unreviewedAccessKey, out product, out accessKey,
                     out message);
 
@@ -153,8 +153,7 @@ namespace HSMServer.Core.Cache
             if (finishProduct != null && accessKey == null)
                 return true;
 
-            if (accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out _)
-                && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out _))
+            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
                 return true;
 
             if (!IsValidPath(path, finishProduct, accessKey, out message))
@@ -507,19 +506,29 @@ namespace HSMServer.Core.Cache
             }
 
             var current = startProduct;
-            bool isValid = true;
-            foreach(var name in productNames.Skip(1))
+            for (int i = 0; i < productNames.Length; i++)
             {
-                if (current.SubProducts.FirstOrDefault(sp => 
-                    sp.Value.DisplayName == name).Value == null)
-                {
-                    isValid = false;
-                    break;
-                }
-            }
+                var child = current.SubProducts.FirstOrDefault(sp =>
+                    sp.Value.DisplayName == productNames[i]).Value;
 
-            //check perm for sensor or product
-            return false;
+                if (child == null)
+                {
+                    if ((i == productNames.Length - 1)
+                        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                        return true;
+
+                    //ToDo
+                    if ((i < productNames.Length - 1)
+                        && accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out message)
+                        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                        //we need error messages
+                        return true;
+
+                    return false;
+                }
+                current = child;
+            }
+            return true;
         }
 
         private bool TryGetProductAndKey(AccessKeyModel accessKey, out ProductModel finishProduct,
