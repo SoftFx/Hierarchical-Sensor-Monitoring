@@ -32,6 +32,7 @@ namespace HSMServer.Core.Cache
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
 
+
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
         {
             _databaseCore = databaseCore;
@@ -106,13 +107,15 @@ namespace HSMServer.Core.Cache
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public bool TryGetProductByKey(string key, out ProductModel product,
-            out string message)
+        public bool TryGetProductAndKey(string key, out ProductModel product,
+            out AccessKeyModel accessKey, out string message)
         {
             message = string.Empty;
+            accessKey = null;
 
-            if (_keys.TryGetValue(Guid.Parse(key), out var accessKey))
-                return TryGetProductByKey(accessKey, out product, out message);
+            if (_keys.TryGetValue(Guid.Parse(key), out var unreviewedAccessKey))
+                return TryGetProductAndKey(unreviewedAccessKey, out product, out accessKey,
+                    out message);
 
             if (!_tree.TryGetValue(key, out product))
             {
@@ -144,15 +147,20 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            if (!TryGetProductByKey(key, out var finishProduct, out message))
+            if (!TryGetProductAndKey(key, out var finishProduct, out var accessKey, out message))
                 return false;
 
-            //if (!IsValidPath(path, finishProduct))
-            //return false;
+            if (finishProduct != null && accessKey == null)
+                return true;
+
+            if (accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out _)
+                && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out _))
+                return true;
+
+            if (!IsValidPath(path, finishProduct, accessKey, out message))
+                return false;
 
             return true;
-
-            //return productNames.Count == 0;
         }
 
 
@@ -477,38 +485,49 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private bool IsValidPath(string path, ProductModel finishProduct)
+        private static bool IsValidPath(string path, ProductModel startProduct, AccessKeyModel accessKey,
+            out string message)
         {
-            var productNames = path.Split(CommonConstants.SensorPathSeparator)
-               [..^1].Reverse();
+            message = string.Empty;
 
-            foreach (var productName in productNames)
+            var productNames = path.Split(CommonConstants.SensorPathSeparator);
+            var firstName = productNames.First();
+
+            if (!startProduct.DisplayName.Equals(firstName))
             {
-                //ToDo
-                var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
-                if (product == null)
-                    return false;
+                startProduct = startProduct.SubProducts
+                    .FirstOrDefault(sp => sp.Value.DisplayName.Equals(firstName)).Value;
 
-                foreach (var node in _tree.Where(v => v.Value.DisplayName.Equals(productName)))
+                //if (startProduct == null && accessKey != null)
+                //{
+                //    if (accessKey.IsHasPermission(KeyPermissions.CanAddProducts, out message)
+                //        && accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                //        return true;
+                //}
+            }
+
+            var current = startProduct;
+            bool isValid = true;
+            foreach(var name in productNames.Skip(1))
+            {
+                if (current.SubProducts.FirstOrDefault(sp => 
+                    sp.Value.DisplayName == name).Value == null)
                 {
-                    var currentNode = node.Value;
-
-                    while (currentNode != finishProduct || currentNode != null)
-                        currentNode = currentNode.ParentProduct;
-
-                    if (currentNode != null)
-                        return true;
+                    isValid = false;
+                    break;
                 }
             }
 
+            //check perm for sensor or product
             return false;
         }
 
-        private bool TryGetProductByKey(AccessKeyModel accessKey, out ProductModel finishProduct,
-            out string message)
+        private bool TryGetProductAndKey(AccessKeyModel accessKey, out ProductModel finishProduct,
+             out AccessKeyModel accessKeyModel, out string message)
         {
             finishProduct = null;
             message = string.Empty;
+            accessKeyModel = null;
 
             if (accessKey == null)
                 return false;
@@ -520,6 +539,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             finishProduct = _tree[accessKey.ProductId];
+            accessKeyModel = accessKey;
             return true;
         }
     }
