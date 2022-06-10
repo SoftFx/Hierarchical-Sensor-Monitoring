@@ -108,10 +108,10 @@ namespace HSMServer.Core.Cache.Entities
             {
                 message = "AccessKey expired.";
                 State = KeyState.Expired;
-                return false;
+                return true;
             }
 
-            return true;
+            return false;
         }
 
         internal bool HasPermissionForSendData(out string message)

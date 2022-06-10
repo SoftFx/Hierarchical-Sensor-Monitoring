@@ -236,10 +236,10 @@ namespace HSMServer.Core.Cache
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
             ValidationResult validationResult, bool saveDataToDb = true)
         {
-            var productName = GetProductNameById(sensorValue.Key);
-            if (string.IsNullOrEmpty(productName))
+            if (!TryGetProductByKey(sensorValue.Key, out var product, out _))
                 return;
 
+            var productName = product.DisplayName;
             var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
@@ -389,6 +389,8 @@ namespace HSMServer.Core.Cache
             _tree.TryAdd(product.Id, product);
             _databaseCore.AddProduct(product.ToProductEntity());
 
+            ChangeProductEvent?.Invoke(product, TransactionType.Add);
+
             if (product.AccessKeys.IsEmpty)
                 product.AddAccessKey(AccessKeyModel.BuildDefault(product));
 
@@ -396,8 +398,6 @@ namespace HSMServer.Core.Cache
             {
                 AddAccessKey(key);
             }
-
-            ChangeProductEvent?.Invoke(product, TransactionType.Add);
         }
 
         private void AddSensor(SensorModel sensor)
