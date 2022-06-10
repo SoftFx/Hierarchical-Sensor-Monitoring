@@ -84,7 +84,7 @@ namespace HSMServer.Model.AccessKeysViewModels
              {
                  Id = Id,
                  DisplayName = DisplayName,
-                 Comment = Description,
+                 Comment = Description ?? string.Empty,
                  Permissions = Permissions,
              };
 

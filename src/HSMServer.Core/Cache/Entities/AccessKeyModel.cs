@@ -31,17 +31,17 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
+        public DateTime CreationTime { get; }
+
+        public DateTime ExpirationTime { get; init; }
+
         public string Comment { get; private set; }
 
         public KeyState State { get; private set; }
 
-        public KeyPermissions Permissions { get; private set;  }
+        public KeyPermissions Permissions { get; private set; }
 
         public string DisplayName { get; private set; }
-
-        public DateTime CreationTime { get; }
-
-        public DateTime ExpirationTime { get; init; }
 
 
         public AccessKeyModel(AccessKeyEntity entity)
@@ -82,9 +82,17 @@ namespace HSMServer.Core.Cache.Entities
 
         public AccessKeyModel Update(AccessKeyUpdate model)
         {
-            DisplayName = model.DisplayName;
-            Comment = model.Comment;
-            Permissions = model.Permissions;
+            if (model.DisplayName != null)
+                DisplayName = model.DisplayName;
+
+            if (model.Comment != null)
+                Comment = model.Comment;
+
+            if (model.Permissions.HasValue)
+                Permissions = model.Permissions.Value;
+
+            if (model.State.HasValue)
+                State = model.State.Value;
 
             return this;
         }

@@ -52,8 +52,14 @@ namespace HSMServer.Model.TreeViewModels
         internal void UpdateAccessKeysCharacteristics(User user)
         {
             foreach (var (_, node) in Nodes)
+            {
+                foreach (var (keyId, key) in node.AccessKeys)
+                    if (key.HasExpired())
+                        _treeValuesCache.UpdateAccessKey(new() { Id = keyId, State = KeyState.Expired, });
+
                 if (node.Parent == null)
                     node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
+            }
 
             foreach (var (productId, role) in user.ProductsRoles)
                 if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))

@@ -10,6 +10,8 @@ namespace HSMServer.Core.Cache.Entities
 
         public string Comment { get; init; }
 
-        public KeyPermissions Permissions { get; init; }
+        public KeyPermissions? Permissions { get; init; }
+
+        public KeyState? State { get; init; }
     }
 }

@@ -6,6 +6,9 @@ namespace HSMServer.Model.AccessKeysViewModels
 {
     public class AccessKeyViewModel
     {
+        private readonly DateTime _expirationTime;
+
+
         public Guid Id { get; }
 
         public string ProductId { get; }
@@ -29,6 +32,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
         {
+            _expirationTime = accessKey.ExpirationTime;
+
             Id = accessKey.Id;
             ProductId = accessKey.ProductId;
             ProductName = productName;
@@ -46,6 +51,8 @@ namespace HSMServer.Model.AccessKeysViewModels
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
         }
+
+        internal bool HasExpired() => DateTime.UtcNow >= _expirationTime && State < KeyState.Expired;
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
