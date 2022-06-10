@@ -31,13 +31,13 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
-        public string Comment { get; init; }
+        public string Comment { get; private set; }
 
         public KeyState State { get; private set; }
 
-        public KeyPermissions Permissions { get; init;  }
+        public KeyPermissions Permissions { get; private set;  }
 
-        public string DisplayName { get; init; }
+        public string DisplayName { get; private set; }
 
         public DateTime CreationTime { get; }
 
@@ -79,6 +79,15 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = DateTime.MaxValue;
         }
 
+
+        public AccessKeyModel Update(AccessKeyUpdate model)
+        {
+            DisplayName = model.DisplayName;
+            Comment = model.Comment;
+            Permissions = model.Permissions;
+
+            return this;
+        }
 
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()

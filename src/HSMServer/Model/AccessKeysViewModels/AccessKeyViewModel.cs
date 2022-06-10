@@ -14,17 +14,17 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string AuthorName { get; }
 
-        public string DisplayName { get; }
-
-        public string Description { get; }
-
         public string ExpirationDate { get; }
 
-        public string Permissions { get; }
+        public string DisplayName { get; private set; }
 
-        public KeyState State { get; }
+        public string Description { get; private set; }
 
-        public bool IsRemovingAccessKeyAvailable { get; internal set; }
+        public string Permissions { get; private set; }
+
+        public KeyState State { get; private set; }
+
+        public bool IsChangeAvailable { get; internal set; }
 
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
@@ -33,15 +33,21 @@ namespace HSMServer.Model.AccessKeysViewModels
             ProductId = accessKey.ProductId;
             ProductName = productName;
             AuthorName = authorName;
+            ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
+
+            Update(accessKey);
+        }
+
+
+        internal void Update(AccessKeyModel accessKey)
+        {
             DisplayName = accessKey.DisplayName;
             Description = accessKey.Comment;
-            ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
         }
 
-
-        private static string BuildExpiration(DateTime expirationTime) =>
+        internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
                 ? nameof(AccessKeyExpiration.Unlimit)
                 : expirationTime.ToString();

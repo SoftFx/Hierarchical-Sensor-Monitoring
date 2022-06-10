@@ -138,6 +138,13 @@ namespace HSMServer.Model.TreeViewModels
 
                     break;
 
+                case TransactionType.Update:
+                    if (!AccessKeys.TryGetValue(model.Id, out var accessKey))
+                        return;
+
+                    accessKey.Update(model);
+                    break;
+
                 case TransactionType.Delete:
                     AccessKeys.TryRemove(model.Id, out _);
 

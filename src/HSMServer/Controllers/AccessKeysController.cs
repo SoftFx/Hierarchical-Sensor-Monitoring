@@ -55,6 +55,31 @@ namespace HSMServer.Controllers
             return GetPartialProductAccessKeys(key.EncodedProductId);
         }
 
+        [HttpGet]
+        public IActionResult ModifyAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey)
+        {
+            var key = _treeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+
+            return GetPartialNewAccessKey(
+                new EditAccessKeyViewModel(key)
+                {
+                    EncodedProductId = SensorPathHelper.Encode(key.ProductId),
+                    CloseModal = true,
+                    IsModify = true,
+                });
+        }
+
+        [HttpPost]
+        public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
+        {
+            if (!ModelState.IsValid)
+                return GetPartialNewAccessKey(key);
+
+            _treeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
+
+            return GetPartialNewAccessKey(key);
+        }
+
         [HttpPost]
         public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string keyId,
                                                          [FromQuery(Name = "WithoutParents")] bool productsWithoutParent)
@@ -65,12 +90,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult RemoveAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string keyId)
+        public IActionResult RemoveAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
-            _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
+            var accessKeyId = Guid.Parse(selectedKey);
 
-            _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(keyId), out var key);
+            _treeViewModel.AccessKeys.TryGetValue(accessKeyId, out var key);
             _treeViewModel.Nodes.TryGetValue(key.ProductId, out var productNode);
+
+            _treeValuesCache.RemoveAccessKey(accessKeyId);
 
             return PartialView("_AllAccessKeys", productNode.GetAccessKeys());
         }

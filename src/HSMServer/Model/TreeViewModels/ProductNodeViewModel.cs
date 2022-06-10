@@ -85,7 +85,7 @@ namespace HSMServer.Model.TreeViewModels
             IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
 
             foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsRemovingAccessKeyAvailable = isAccessKeysOperationsAvailable;
+                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
         }
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();

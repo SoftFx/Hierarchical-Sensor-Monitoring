@@ -21,6 +21,15 @@ namespace HSMServer.Model.AccessKeysViewModels
 
     public class EditAccessKeyViewModel
     {
+        public Guid Id { get; set; }
+
+        public string ExpirationTime { get; }
+
+        public bool CloseModal { get; init; }
+
+        public bool IsModify { get; init; }
+
+
         public string EncodedProductId { get; set; }
 
         [Display(Name = "Display name")]
@@ -35,11 +44,9 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanSendSensorData { get; set; }
 
-        public bool CanAddSensors { get; set; }
-
         public bool CanAddProducts { get; set; }
 
-        public bool CloseModal { get; set; }
+        public bool CanAddSensors { get; set; }
 
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
@@ -48,15 +55,38 @@ namespace HSMServer.Model.AccessKeysViewModels
         // public constructor without parameters for action Home/NewAccessKey
         public EditAccessKeyViewModel() { }
 
+        public EditAccessKeyViewModel(AccessKeyModel key)
+        {
+            Id = key.Id;
 
-        internal AccessKeyModel ToModel(Guid userId) =>
-            new(userId.ToString(), SensorPathHelper.Decode(EncodedProductId))
+            DisplayName = key.DisplayName;
+            Description = key.Comment;
+            ExpirationTime = AccessKeyViewModel.BuildExpiration(key.ExpirationTime);
+
+            CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
+            CanAddProducts = key.Permissions.HasFlag(KeyPermissions.CanAddProducts);
+            CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
+        }
+
+
+        internal AccessKeyModel ToModel(Guid userId)
+        {
+            AccessKeyModel accessKey = new(userId.ToString(), SensorPathHelper.Decode(EncodedProductId))
             {
-                DisplayName = DisplayName,
-                Comment = Description,
-                Permissions = Permissions,
                 ExpirationTime = BuildExpirationTime(),
             };
+
+            return accessKey.Update(ToAccessKeyUpdate());
+        }
+
+        internal AccessKeyUpdate ToAccessKeyUpdate() =>
+             new()
+             {
+                 Id = Id,
+                 DisplayName = DisplayName,
+                 Comment = Description,
+                 Permissions = Permissions,
+             };
 
         private KeyPermissions BuildPermissions()
         {

@@ -182,13 +182,13 @@ namespace HSMServer.Core.Cache
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
         }
 
-        public void UpdateAccessKey(AccessKeyModel updatedKey)
+        public void UpdateAccessKey(AccessKeyUpdate updatedKey)
         {
             if (!_keys.TryGetValue(updatedKey.Id, out var key))
                 return;
 
-            _keys[updatedKey.Id] = updatedKey;
-            _databaseCore.UpdateAccessKey(updatedKey.ToAccessKeyEntity());
+            key.Update(updatedKey);
+            _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
 
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
         }

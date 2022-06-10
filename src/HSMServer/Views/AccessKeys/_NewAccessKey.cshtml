@@ -11,8 +11,11 @@
 <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
 
 
-<form asp-controller="@ViewConstants.AccessKeysController" asp-action="@nameof(AccessKeysController.NewAccessKey)" method="post" id="newAccessKey_form">
+<form asp-controller="@ViewConstants.AccessKeysController"
+      asp-action="@(Model.IsModify ? nameof(AccessKeysController.ModifyAccessKey) : nameof(AccessKeysController.NewAccessKey))"
+      method="post" id="newEditAccessKey_form">
     <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId" />
+    <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id" />
     <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal" />
 
     <div class="row">
@@ -21,9 +24,17 @@
             <input type="text" asp-for="DisplayName" class="form-control" />
             <span asp-validation-for="DisplayName"></span>
         </div>
+
         <div class="form-group col-4">
             <label asp-for="Expiration" class="col-form-label"></label>
-            <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control custom-select"></select>
+            @if (Model.IsModify)
+            {
+                <input id="accessKey_expiration" type="text" asp-for="ExpirationTime" class="form-control" value="@Model.ExpirationTime" disabled/>
+            }
+            else
+            {
+                <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control custom-select"></select>
+            }
         </div>
     </div>
 
@@ -64,13 +75,13 @@
 
 
 <script>
-    $(document).on("submit", "#newAccessKey_form", function (event) {
+    $(document).on("submit", "#newEditAccessKey_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
 
         let whetherCloseModal;
         $.ajax({
-            url: $("#newAccessKey_form").attr("action"),
+            url: $("#newEditAccessKey_form").attr("action"),
             type: 'POST',
             data: new FormData(this),
             datatype: 'html',
