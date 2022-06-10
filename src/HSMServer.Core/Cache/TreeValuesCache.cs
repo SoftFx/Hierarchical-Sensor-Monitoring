@@ -244,10 +244,10 @@ namespace HSMServer.Core.Cache
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
             ValidationResult validationResult, bool saveDataToDb = true)
         {
-            var productName = GetProductNameById(sensorValue.Key);
-            if (string.IsNullOrEmpty(productName))
+            if (!TryGetProductByKey(sensorValue.Key, out var product, out string _))
                 return;
 
+            var productName = product.DisplayName;
             var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
