@@ -31,17 +31,17 @@ namespace HSMServer.Core.Cache.Entities
 
         public string ProductId { get; }
 
-        public string Comment { get; }
+        public DateTime CreationTime { get; }
+
+        public DateTime ExpirationTime { get; init; }
+
+        public string Comment { get; private set; }
 
         public KeyState State { get; private set; }
 
-        public KeyPermissions Permissions { get; }
+        public KeyPermissions Permissions { get; private set; }
 
-        public string DisplayName { get; }
-
-        public DateTime CreationTime { get; }
-
-        public DateTime ExpirationTime { get; }
+        public string DisplayName { get; private set; }
 
 
         public AccessKeyModel(AccessKeyEntity entity)
@@ -57,19 +57,45 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
-        private AccessKeyModel(ProductModel product)
+        public AccessKeyModel(string authorId, string productId) : this()
+        {
+            AuthorId = authorId;
+            ProductId = productId;
+        }
+
+        private AccessKeyModel()
         {
             Id = Guid.NewGuid();
+            CreationTime = DateTime.UtcNow;
+        }
+
+        private AccessKeyModel(ProductModel product) : this()
+        {
             AuthorId = product.AuthorId;
             ProductId = product.Id;
-            Comment = CommonConstants.DefaultAccessKey;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanSendSensorData;
+            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
-            CreationTime = DateTime.UtcNow;
             ExpirationTime = DateTime.MaxValue;
         }
 
+
+        public AccessKeyModel Update(AccessKeyUpdate model)
+        {
+            if (model.DisplayName != null)
+                DisplayName = model.DisplayName;
+
+            if (model.Comment != null)
+                Comment = model.Comment;
+
+            if (model.Permissions.HasValue)
+                Permissions = model.Permissions.Value;
+
+            if (model.State.HasValue)
+                State = model.State.Value;
+
+            return this;
+        }
 
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()

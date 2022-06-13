@@ -19,6 +19,7 @@ namespace HSMServer.Core.Cache
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
         List<ProductModel> GetTree();
@@ -29,15 +30,15 @@ namespace HSMServer.Core.Cache
         void RemoveProduct(string id);
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
+        List<ProductModel> GetProducts(User user, bool withoutParent = true);
         bool TryGetProductByKey(string key, out ProductModel product, out string message);
-        List<ProductModel> GetProductsWithoutParent(User user);
         bool TryCheckKeyPermissions(string key, string path, out string message);
 
         void AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
-        void UpdateAccessKey(AccessKeyModel key);
+        void UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel GetAccessKey(Guid id);
-        
+
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);

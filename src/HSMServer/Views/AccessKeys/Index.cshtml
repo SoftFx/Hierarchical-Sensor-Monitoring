@@ -1,0 +1,65 @@
+﻿@using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Constants
+@using HSMServer.Controllers
+
+@model List<AccessKeyViewModel>
+
+
+<script>
+    var getAvailableAccessKeys = "@Html.Raw(Url.Action(nameof(AccessKeysController.AvailableAccessKeys), ViewConstants.AccessKeysController))";
+</script>
+
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
+
+<div class="container">
+    <div class="row justify-content-center">
+        <table class="table">
+            <tr>
+                <th>Id</th>
+                <th></th>
+                <th>Display name</th>
+                <th>Permissions</th>
+                <th>Expiration</th>
+                <th>
+                    Product (
+                    <input class="form-check-input" type="checkbox" value="" checked onchange="onlyProductsWithoutParentsCahnged()" id="productsWithoutParents">
+                    <label class="form-check-label" for="productsWithoutParents">
+                        only without parent)
+                    </label>
+                </th>
+                <th>Author</th>
+                <th>State</th>
+                <th></th>
+            </tr>
+            <tbody id="accessKeysTable">
+                @await Html.PartialAsync("_AllAccessKeys", Model)
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@await Html.PartialAsync("_AccessKeysModal")
+
+
+<script>
+    var clipboard = new ClipboardJS('[id^="copy_"]');
+
+    function onlyProductsWithoutParentsCahnged() {
+        var element = document.getElementById('productsWithoutParents');
+
+        $.ajax({
+            type: 'GET',
+            url: getAvailableAccessKeys + "?WithoutParents=" + element.checked,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $('#accessKeysTable').html(viewData);
+            }
+        });
+    }
+
+    $('#accessKeys_modal').on('hidden.bs.modal', function (e) {
+        onlyProductsWithoutParentsCahnged();
+    });
+</script>

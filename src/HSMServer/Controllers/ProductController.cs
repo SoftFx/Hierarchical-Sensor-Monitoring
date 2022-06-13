@@ -9,6 +9,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
@@ -30,15 +31,18 @@ namespace HSMServer.Controllers
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
         public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, ILogger<ProductController> logger)
+            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache,
+            TreeViewModel treeViewModel, ILogger<ProductController> logger)
         {
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
             _treeValuesCache = treeValuesCache;
+            _treeViewModel = treeViewModel;
             _logger = logger;
         }
 
@@ -47,7 +51,7 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            var products = _treeValuesCache.GetProductsWithoutParent(user);
+            var products = _treeValuesCache.GetProducts(user);
 
             products = products?.OrderBy(x => x.DisplayName).ToList();
 
@@ -86,7 +90,9 @@ namespace HSMServer.Controllers
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            var product = _treeValuesCache.GetProduct(productId);
+            _treeViewModel.UpdateAccessKeysCharacteristics(HttpContext.User as User);
+            _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
+
             var users = _userManager.GetViewers(productId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
@@ -94,10 +100,10 @@ namespace HSMServer.Controllers
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(product.Id)).Value));
+                        user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
                 }
 
-            return View(new EditProductViewModel(product, pairs));
+            return View(new EditProductViewModel(productNode, pairs));
         }
 
         [HttpPost]

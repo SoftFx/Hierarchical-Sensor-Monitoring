@@ -10,6 +10,7 @@
         public const string AccountController = "Account";
         public const string ProductController = "Product";
         public const string ConfigurationController = "Configuration";
+        public const string AccessKeysController = "AccessKeys";
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";
@@ -24,9 +25,9 @@
 
         public const string SelectNodeAction = "SelectNode";
         public const string RefreshTreeAction = "RefreshTree";
+        public const string RemoveNodeAction = "RemoveNode";
 
         public const string RemoveProductAction = "RemoveProduct";
-        public const string RemoveNodeAction = "RemoveNode";
         public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";

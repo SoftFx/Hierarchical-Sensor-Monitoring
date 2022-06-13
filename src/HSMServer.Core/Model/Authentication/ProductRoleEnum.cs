@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Attributes;
-using System;
 
 namespace HSMServer.Core.Model.Authentication
 {

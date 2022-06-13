@@ -8,49 +8,7 @@
             }
         },
         "contextmenu": {
-            "items": function ($node) {
-                var tree = $("#jstree").jstree(true);
-
-                return {
-                    "Delete": {
-                        "separator_before": false,
-                        "separator_after": false,
-                        "label": "Delete",
-                        "action": function (obj) {
-
-                            //modal
-                            $('#modalDeleteLabel').empty();
-                            $('#modalDeleteLabel').append('Remove node');
-                            $('#modalDeleteBody').empty();
-                            $('#modalDeleteBody').append('Do you really want to remove "' + $node.text + '" node?');
-
-                            var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                            modal.show();
-
-                            //modal confirm
-                            $('#confirmDeleteButton').off('click').on('click', function () {
-                                modal.hide();
-
-                                $.ajax({
-                                    type: 'POST',
-                                    url: removeNode + '?Selected=' + $node.id,
-                                    dataType: 'html',
-                                    contentType: 'application/json',
-                                    cache: false,
-                                    async: true
-                                }).done(function () {
-                                    tree.delete_node($node.id);
-                                    selectNodeAjax("");
-                                });                               
-                            });
-
-                            $('#closeDeleteButton').off('click').on('click', function () {
-                                modal.hide();
-                            });
-                        }
-                    }
-                }
-            }
+            "items": customMenu
         },
         "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
         "sort": function (a, b) {
@@ -111,4 +69,63 @@ function nameSorting(a, b) {
 
 function timeSorting(a, b) {
     return b.diff(a);
+}
+
+function customMenu(node) {
+    var tree = $("#jstree").jstree(true);
+
+    var items =
+    {
+        "Delete": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Delete",
+            "action": function (obj) {
+
+                //modal
+                $('#modalDeleteLabel').empty();
+                $('#modalDeleteLabel').append('Remove node');
+                $('#modalDeleteBody').empty();
+                $('#modalDeleteBody').append('Do you really want to remove "' + node.text + '" node?');
+
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+                modal.show();
+
+                //modal confirm
+                $('#confirmDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+
+                    $.ajax({
+                        type: 'POST',
+                        url: removeNode + '?Selected=' + node.id,
+                        dataType: 'html',
+                        contentType: 'application/json',
+                        cache: false,
+                        async: true
+                    }).done(function () {
+                        tree.delete_node(node.id);
+                        selectNodeAjax("");
+                    });
+                });
+
+                $('#closeDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+                });
+            }
+        },
+        "AccessKeys": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Access keys",
+            "action": function (obj) {
+                showAccessKeysList(node.id, true);
+            }
+        }
+    }
+
+    if (node.children.length === 0) {
+        delete items.AccessKeys;
+    }
+
+    return items;
 }
