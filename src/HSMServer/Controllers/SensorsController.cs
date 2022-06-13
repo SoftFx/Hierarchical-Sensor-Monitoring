@@ -317,12 +317,8 @@ namespace HSMServer.Controllers
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
-                {
-                    SensorValueBase convertedValue = value;
-
-                    if (!CanAddToQueue(convertedValue, out var message))
-                        result.Add(convertedValue.Key, message);
-                }
+                    if (!CanAddToQueue(value, out var message))
+                        result.Add(value.Key, message);
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }

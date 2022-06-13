@@ -17,6 +17,9 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache
     {
+        private const string ErrorPathKey = "Path or key is empty.";
+        private const string ErrorKeyNotFound = "Key doesn't exist.";
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -29,9 +32,6 @@ namespace HSMServer.Core.Cache
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
-
-        private const string ErrorPathKey = "Path or key is empty.";
-        private const string ErrorKeyNotFound = "Key doesn't exist.";
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
@@ -420,57 +420,12 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
         }
 
-        private SensorModel GetSensorByPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return null;
-
-            return _sensors.FirstOrDefault(v => v.Value.Path.Equals(path)).Value;
-        }
-
-        private static ProductModel GetSensorParent(string key, SensorModel sensor)
-        {
-            if (sensor == null)
-                return null;
-
-            var product = sensor.ParentProduct;
-
-            while (product != null)
-            {
-                if (product.Id.Equals(key))
-                    return product;
-
-                product = sensor.ParentProduct;
-            }
-
-            return null;
-        }
-
         private void UpdateProduct(ProductModel product)
         {
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
-
-        private ProductModel GetFirstExistingProduct(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return null;
-
-            var productNames = path.Split(CommonConstants.SensorPathSeparator)[..^1].Reverse();
-
-            foreach (var productName in productNames)
-            {
-                var product = _tree.FirstOrDefault(v => v.Value.DisplayName.Equals(productName)).Value;
-
-                if (product != null)
-                    return product;
-            }
-
-            return null;
-        }
-
 
         private bool AddKeyToTree(AccessKeyModel key)
         {
@@ -512,27 +467,6 @@ namespace HSMServer.Core.Cache
                         return false;
                 }
             }
-            return true;
-        }
-
-        private bool TryGetProductAndKey(AccessKeyModel accessKey, out ProductModel finishProduct,
-             out AccessKeyModel accessKeyModel, out string message)
-        {
-            finishProduct = null;
-            message = string.Empty;
-            accessKeyModel = null;
-
-            if (accessKey == null)
-                return false;
-
-            if (accessKey.IsExpired(out message))
-                return false;
-
-            if (!accessKey.IsHasPermission(KeyPermissions.CanSendSensorData, out message))
-                return false;
-
-            finishProduct = _tree[accessKey.ProductId];
-            accessKeyModel = accessKey;
             return true;
         }
 
