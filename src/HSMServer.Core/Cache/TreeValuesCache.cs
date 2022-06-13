@@ -363,7 +363,7 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
-            var parentProduct = GetProductByName(productName);
+            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
             if (parentProduct == null)
                 parentProduct = AddProduct(productName);
 
@@ -405,11 +405,11 @@ namespace HSMServer.Core.Cache
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
 
-            if (product.AccessKeys.IsEmpty)
-                product.AddAccessKey(AccessKeyModel.BuildDefault(product));
-
             foreach (var (_, key) in product.AccessKeys)
                 AddAccessKey(key);
+
+            if (product.AccessKeys.IsEmpty)
+                AddAccessKey(AccessKeyModel.BuildDefault(product));
         }
 
         private void AddSensor(SensorModel sensor)
