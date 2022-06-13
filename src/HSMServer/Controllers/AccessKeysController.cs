@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Filters;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
@@ -35,6 +36,7 @@ namespace HSMServer.Controllers
             GetPartialProductAccessKeys(productId);
 
         [HttpGet]
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId,
                                           [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
             GetPartialNewAccessKey(
@@ -117,7 +119,7 @@ namespace HSMServer.Controllers
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
-                    keys.AddRange(productViewModel.AccessKeys.Values);
+                    keys.AddRange(productViewModel.GetAccessKeys());
             }
 
             return keys;
