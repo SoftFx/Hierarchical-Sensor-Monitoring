@@ -17,6 +17,9 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache
     {
+        private const string ErrorPathKey = "Path or key is empty.";
+        private const string ErrorKeyNotFound = "Key doesn't exist.";
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -24,9 +27,11 @@ namespace HSMServer.Core.Cache
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
+        private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
@@ -36,6 +41,7 @@ namespace HSMServer.Core.Cache
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
+            _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
         }
@@ -44,6 +50,8 @@ namespace HSMServer.Core.Cache
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
         public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+
+        public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
         public ProductModel AddProduct(string productName)
         {
@@ -70,6 +78,9 @@ namespace HSMServer.Core.Cache
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
                 _databaseCore.RemoveProduct(product.Id);
 
+                foreach (var (id, _) in product.AccessKeys)
+                    RemoveAccessKey(id);
+
                 _userManager.RemoveProductFromUsers(product.Id);
 
                 ChangeProductEvent?.Invoke(product, TransactionType.Delete);
@@ -84,17 +95,28 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public ProductModel GetProduct(string id)
-        {
-            _tree.TryGetValue(id, out var product);
-            return product;
-        }
+        public ProductModel GetProduct(string id) => _tree.GetValueOrDefault(id);
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public List<ProductModel> GetProductsWithoutParent(User user)
+        public bool TryGetProductByKey(string key, out ProductModel product, out string message)
         {
-            var products = _tree.Values.Where(p => p.ParentProduct == null).ToList();
+            key = GetAccessKeyModel(key)?.ProductId ?? key;
+
+            var hasProduct = _tree.TryGetValue(key, out product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
+
+            return hasProduct;
+        }
+
+        private AccessKeyModel GetAccessKeyModel(string key) =>
+            Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
+
+        public List<ProductModel> GetProducts(User user, bool withoutParent = true)
+        {
+            var products = _tree.Values.ToList();
+            if (withoutParent)
+                products = products.Where(p => p.ParentProduct == null).ToList();
 
             if (user == null || user.IsAdmin)
                 return products;
@@ -102,7 +124,76 @@ namespace HSMServer.Core.Cache
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return null;
 
-            return products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+            var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+
+            return withoutParent ? availableProducts : GetAllProductsWithTheirSubProducts(availableProducts);
+        }
+
+        public bool TryCheckKeyPermissions(string key, string path, out string message)
+        {
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
+            {
+                message = ErrorPathKey;
+                return false;
+            }
+
+            if (!TryGetProductByKey(key, out var product, out message))
+                return false;
+            else if (product.Id == key)
+                return true;
+
+            var accessKey = GetAccessKeyModel(key);
+            if (!accessKey.HasPermissionForSendData(out message))
+                return false;
+
+            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
+                return true;
+
+            return IsValidKeyForPath(path, product, accessKey, out message);
+        }
+
+
+        public void AddAccessKey(AccessKeyModel key)
+        {
+            if (AddKeyToTree(key))
+            {
+                _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
+
+                ChangeAccessKeyEvent?.Invoke(key, TransactionType.Add);
+            }
+        }
+
+        public void RemoveAccessKey(Guid id)
+        {
+            if (!_keys.TryRemove(id, out var key))
+                return;
+
+            if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+            {
+                product.AccessKeys.TryRemove(id, out _);
+                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+            }
+
+            _databaseCore.RemoveAccessKey(id);
+
+            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
+        }
+
+        public void UpdateAccessKey(AccessKeyUpdate updatedKey)
+        {
+            if (!_keys.TryGetValue(updatedKey.Id, out var key))
+                return;
+
+            key.Update(updatedKey);
+            _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
+
+            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
+        }
+
+        public AccessKeyModel GetAccessKey(Guid id)
+        {
+            _keys.TryGetValue(id, out var key);
+            return key;
         }
 
         public void UpdateSensor(SensorUpdate updatedSensor)
@@ -153,10 +244,10 @@ namespace HSMServer.Core.Cache
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
             ValidationResult validationResult, bool saveDataToDb = true)
         {
-            var productName = GetProductNameById(sensorValue.Key);
-            if (string.IsNullOrEmpty(productName))
+            if (!TryGetProductByKey(sensorValue.Key, out var product, out _))
                 return;
 
+            var productName = product.DisplayName;
             var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
@@ -197,11 +288,19 @@ namespace HSMServer.Core.Cache
             var sensorEntities = _databaseCore.GetAllSensors();
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
 
+            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
+            var accessKeysEntities = _databaseCore.GetAccessKeys();
+            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
+
             BuildTree(productEntities, sensorEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
+
+            _logger.Info($"{nameof(accessKeysEntities)} are applying");
+            ApplyAccessKeys(accessKeysEntities.ToList());
+            _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
@@ -248,9 +347,23 @@ namespace HSMServer.Core.Cache
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
 
+        private void ApplyAccessKeys(List<AccessKeyEntity> entities)
+        {
+            foreach (var keyEntity in entities)
+            {
+                AddKeyToTree(new AccessKeyModel(keyEntity));
+            }
+
+            foreach (var product in _tree.Values)
+            {
+                if (product.AccessKeys.IsEmpty)
+                    AddAccessKey(AccessKeyModel.BuildDefault(product));
+            }
+        }
+
         private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
         {
-            var parentProduct = GetProductByName(productName);
+            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
             if (parentProduct == null)
                 parentProduct = AddProduct(productName);
 
@@ -291,6 +404,12 @@ namespace HSMServer.Core.Cache
             _databaseCore.AddProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Add);
+
+            foreach (var (_, key) in product.AccessKeys)
+                AddAccessKey(key);
+
+            if (product.AccessKeys.IsEmpty)
+                AddAccessKey(AccessKeyModel.BuildDefault(product));
         }
 
         private void AddSensor(SensorModel sensor)
@@ -306,6 +425,72 @@ namespace HSMServer.Core.Cache
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
+        }
+
+        private bool AddKeyToTree(AccessKeyModel key)
+        {
+            bool isSuccess = _keys.TryAdd(key.Id, key);
+
+            if (isSuccess && key.ProductId != null
+                && _tree.TryGetValue(key.ProductId, out var product))
+            {
+                isSuccess &= product.AddAccessKey(key);
+                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+            }
+
+            return isSuccess;
+        }
+
+        private static bool IsValidKeyForPath(string path, ProductModel product,
+            AccessKeyModel accessKey, out string message)
+        {
+            message = string.Empty;
+
+            var parts = path.Split(CommonConstants.SensorPathSeparator);
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var expectedName = parts[i];
+
+                if (i != parts.Length - 1)
+                {
+                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName
+                        .Equals(expectedName)).Value;
+
+                    if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
+                        return false;
+                }
+                else
+                {
+                    if (!product.Sensors.Any(s => s.Value.SensorName == expectedName) &&
+                        !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        private List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
+        {
+            var productsWithTheirSubProducts = new Dictionary<string, ProductModel>(products.Count);
+            foreach (var product in products)
+            {
+                productsWithTheirSubProducts.Add(product.Id, product);
+                GetAllProductSubProducts(product, productsWithTheirSubProducts);
+            }
+
+            return productsWithTheirSubProducts.Values.ToList();
+        }
+
+        private void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
+        {
+            foreach (var (subProductId, subProduct) in product.SubProducts)
+            {
+                if (!allSubProducts.ContainsKey(subProductId))
+                    allSubProducts.Add(subProductId, subProduct);
+
+                GetAllProductSubProducts(subProduct, allSubProducts);
+            }
         }
     }
 }

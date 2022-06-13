@@ -27,6 +27,16 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region AccessKey
+
+        void RemoveAccessKey(Guid id);
+        void AddAccessKey(AccessKeyEntity entity);
+        void UpdateAccessKey(AccessKeyEntity entity);
+        AccessKeyEntity GetAccessKey(Guid id);
+        List<AccessKeyEntity> GetAccessKeys();
+
+        #endregion
+
         #region Sensors
 
         void RemoveSensor(string productName, string path);

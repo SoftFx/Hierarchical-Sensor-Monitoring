@@ -110,11 +110,10 @@ namespace HSMServer.Core.MonitoringServerCore
                 if (!CheckValidationResult(value, validationResult))
                     return;
 
-                var productName = _treeValuesCache.GetProductNameById(value.Key);
-                if (productName == null)
+                if (!_treeValuesCache.TryGetProductByKey(value.Key, out var product, out _))
                     return;
 
-                bool saveToDb = ProcessBarSensorValue(value, productName, timeCollected);
+                bool saveToDb = ProcessBarSensorValue(value, product.DisplayName, timeCollected);
                 _treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult, saveToDb);
             }
             catch (Exception e)

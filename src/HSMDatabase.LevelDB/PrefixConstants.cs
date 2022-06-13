@@ -8,6 +8,7 @@ namespace HSMDatabase.LevelDB
         public const string SENSOR_KEY_PREFIX = "SensorKey";
         public const string SENSOR_VALUE_PREFIX = "SensorValue";
         public const string PRODUCTS_LIST_PREFIX = "ProductsNames";
+        public const string ACCESS_KEY_LIST_PREFIX = "AccessKeys";
         public const string PRODUCT_INFO_PREFIX = "ProductInfo";
         public const string FIRST_LOGIN_PREFIX = "FirstLogin";
         public const string USER_INFO_PREFIX = "UserInfo";
@@ -28,6 +29,8 @@ namespace HSMDatabase.LevelDB
         {
             return PRODUCTS_LIST_PREFIX;
         }
+
+        public static string GetAccessKeyListKey() => ACCESS_KEY_LIST_PREFIX;
 
         public static string GetProductInfoKey(string productName)
         {

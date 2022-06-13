@@ -1,0 +1,100 @@
+﻿@using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Controllers
+@using HSMServer.Constants
+
+@model List<AccessKeyViewModel>
+
+
+@foreach (var key in Model)
+{
+    <tr>
+        <td nowrap>@key.Id</td>
+        <td>
+            <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
+                <i class="far fa-copy"></i>
+            </button>
+        </td>
+        <td nowrap>
+            @key.DisplayName
+
+            @if (!string.IsNullOrEmpty(key.Description))
+            {
+                <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
+                    <i class='fas fa-question-circle'></i>
+                </a>
+            }
+        </td>
+        <td>@key.Permissions</td>
+        <td>@key.ExpirationDate</td>
+        <td>@key.ProductName</td>
+        <td>@key.AuthorName</td>
+        <td>@key.State</td>
+        <td nowrap>
+            @if (key.IsChangeAvailable)
+            {
+                <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'>
+                    <i class='fas fa-edit'></i>
+                </button>
+                <button id='deleteAccessKey_@key.Id' title='delete' class='btn btn-secondary'>
+                    <i class='fas fa-trash-alt'></i>
+                </button>
+            }
+        </td>
+    </tr>
+}
+
+
+<script src="~/js/bundles/accessKey.min.js"></script>
+
+<script>
+    popoversInit();
+
+    var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
+    $('[id^="changeAccessKey_"]').off("click").on("click",
+        function () {
+            let selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
+
+            $.ajax({
+                type: 'GET',
+                url: `${changeAccessKeyAction}?SelectedKey=${selectedKeyId}`,
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    setModalBody(viewData);
+                }
+            }).done(function () {
+                showModal();
+                showMiddleModal();
+                setModalTitle(`Edit access key '${selectedKeyId}'`);
+            });
+        });
+
+    $('[id^="deleteAccessKey_"]').off("click").on("click",
+        function () {
+            let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
+
+            $.ajax({
+                type: 'POST',
+                url: getRemoveAccessKeyURL(selectedKeyId),
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $('#accessKeysTable').html(viewData);
+                }
+            });
+        });
+
+    function getRemoveAccessKeyURL(selectedKeyId) {
+        let withoutParents = document.getElementById('productsWithoutParents');
+
+        let url;
+        if (withoutParents != undefined) {
+            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&WithoutParents=${withoutParents.checked}`;
+        }
+        else {
+            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+        }
+
+        return url;
+    }
+</script>

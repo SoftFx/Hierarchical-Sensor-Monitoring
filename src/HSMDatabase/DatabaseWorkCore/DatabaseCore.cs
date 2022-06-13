@@ -307,6 +307,44 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region AccessKey
+
+        public void RemoveAccessKey(Guid id) 
+        {
+            var strId = id.ToString();
+
+            _environmentDatabase.RemoveAccessKey(strId);
+            _environmentDatabase.RemoveAccessKeyFromList(strId);
+        }
+
+        public void AddAccessKey(AccessKeyEntity entity)
+        {
+            _environmentDatabase.AddAccessKeyToList(entity.Id);
+            _environmentDatabase.AddAccessKey(entity);
+        }
+
+        public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
+
+        public AccessKeyEntity GetAccessKey(Guid id) => 
+            _environmentDatabase.GetAccessKey(id.ToString());
+        
+        public List<AccessKeyEntity> GetAccessKeys()
+        {
+            var keys = new List<AccessKeyEntity>();
+            var keyIds = _environmentDatabase.GetAccessKeyList();
+
+            foreach(var keyId in keyIds)
+            {
+                var keyEntity = _environmentDatabase.GetAccessKey(keyId);
+                if (keyEntity != null)
+                    keys.Add(keyEntity);
+            }
+
+            return keys;
+        }
+
+        #endregion
+
         #region Environment database : User
 
         public void AddUser(User user)

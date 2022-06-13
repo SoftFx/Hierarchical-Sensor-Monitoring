@@ -17,6 +17,8 @@ namespace HSMServer.Core.Cache.Entities
     {
         public string Id { get; }
 
+        public string AuthorId { get; }
+
         public string DisplayName { get; }
 
         public string Description { get; }
@@ -24,6 +26,8 @@ namespace HSMServer.Core.Cache.Entities
         public ProductState State { get; }
 
         public DateTime CreationDate { get; }
+
+        public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
 
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
@@ -34,6 +38,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel()
         {
+            AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
             SubProducts = new ConcurrentDictionary<string, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, SensorModel>();
         }
@@ -41,6 +46,7 @@ namespace HSMServer.Core.Cache.Entities
         public ProductModel(ProductEntity entity) : this()
         {
             Id = entity.Id;
+            AuthorId = entity.AuthorId;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -60,6 +66,7 @@ namespace HSMServer.Core.Cache.Entities
             Id = key;
         }
 
+        internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {
@@ -79,7 +86,7 @@ namespace HSMServer.Core.Cache.Entities
             new()
             {
                 Id = Id,
-                //AuthorId ???
+                AuthorId = AuthorId,
                 ParentProductId = ParentProduct?.Id,
                 State = (int)State,
                 DisplayName = DisplayName,

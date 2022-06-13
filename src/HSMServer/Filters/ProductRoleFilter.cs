@@ -4,54 +4,42 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Filters
 {
     /// <summary>
-    /// The attribute denies access to EditProduct page for a user who is neither admin or the manager of the project
+    /// The attribute denies access to some actions for a user who is neither admin or has role from _roles
     /// </summary>
+    [AttributeUsage(AttributeTargets.Method)]
     public class ProductRoleFilter : Attribute, IActionFilter
     {
         private readonly List<ProductRoleEnum> _roles;
-        private readonly string _parseArgument = "Product=";
+        private readonly string _productIdArgument = "productId";
+        private readonly RedirectToActionResult _redirectToHomeIndex =
+            new(ViewConstants.IndexAction, ViewConstants.HomeController, null);
+
+
         public ProductRoleFilter(params ProductRoleEnum[] parameters)
         {
-            _roles = new List<ProductRoleEnum>();
-            _roles.AddRange(parameters);
+            _roles = new List<ProductRoleEnum>(parameters);
         }
+
+
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            var queryString = context.HttpContext.Request.QueryString.Value ?? string.Empty;
-            var key = GetProductKey(queryString);
             var user = context.HttpContext.User as User;
-
-            //Admins have all possible access
-            if (user?.IsAdmin ?? false)
+            if (user?.IsAdmin ?? false) //Admins have all possible access
                 return;
-            
-            foreach (var role in _roles)
-            {
-                if (user.ProductsRoles.FindIndex(r => r.Key == key && r.Value == role) != -1)
-                    return;
-            }
 
-            context.Result = new RedirectToActionResult(ViewConstants.IndexAction, ViewConstants.HomeController, null);
+            if (context.ActionArguments.TryGetValue(_productIdArgument, out var productIdArg) && productIdArg is string productId)
+                foreach (var role in _roles)
+                    if (user.ProductsRoles.Any(r => r.Key == productId && r.Value == role))
+                        return;
+
+            context.Result = _redirectToHomeIndex;
         }
 
-        public void OnActionExecuted(ActionExecutedContext context)
-        {
-            //Empty body
-        }
-
-        private string GetProductKey(string address)
-        {
-            int index = address.IndexOf(_parseArgument);
-            if (index != -1)
-            {
-                return address.Substring(index + _parseArgument.Length);
-            }
-
-            return address;
-        }
+        public void OnActionExecuted(ActionExecutedContext context) { }
     }
 }

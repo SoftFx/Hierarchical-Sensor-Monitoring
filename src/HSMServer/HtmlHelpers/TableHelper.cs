@@ -165,21 +165,21 @@ namespace HSMServer.HtmlHelpers
             {
                 result.Append($"<tr><th scope='row'>{index}</th>" +
                     $"<td>{product.Name}</td>" +
-                    $"<td id='key_{product.Key}' value='{product.Key}'>{product.Key}</td> " +
-                    $"<td><button id='copy_{product.Key}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
+                    $"<td id='key_{product.Id}' value='{product.Id}'>{product.Key}</td> " +
+                    $"<td><button id='copy_{product.Id}' data-clipboard-text='{product.Key}' title='copy key' type='button' class='btn btn-secondary'>" +
                     "<i class='far fa-copy'></i></button>" +
-                    $"<input style='display: none' type='text' id='inputName_{product.Key}' value='{product.Name}'/></td>" +
+                    $"<input style='display: none' type='text' id='inputName_{product.Id}' value='{product.Name}'/></td>" +
                     $"<td>{product.CreationDate}</td>" +
                     $"<td>{product.ManagerName}</td>");
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user) || 
-                    ProductRoleHelper.IsManager(product.Key, user.ProductsRoles))
-                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.Key}' " +
+                    ProductRoleHelper.IsManager(product.Id, user.ProductsRoles))
+                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.Id}' " +
                     "type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user))
-                    result.Append($"<button id='delete_{product.Key}' style='margin-left: 5px' " +
+                    result.Append($"<button id='delete_{product.Id}' style='margin-left: 5px' " +
                         "type='button' class='btn btn-secondary' title='delete'>" +
                         "<i class='fas fa-trash-alt'></i></button>");
 

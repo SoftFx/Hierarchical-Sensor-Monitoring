@@ -1,0 +1,70 @@
+﻿@using HSMServer.Model.TreeViewModels
+@using HSMServer.Controllers
+@using HSMServer.Constants
+
+@model ProductNodeViewModel
+
+
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
+
+<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId" />
+<input id='accessKey_productName' style='display: none' value="@Model.Name" />
+
+<table class="table">
+    <tr>
+        <th>Id</th>
+        <th></th>
+        <th>Display name</th>
+        <th>Permissions</th>
+        <th>Expiration</th>
+        <th>State</th>
+    </tr>
+    @foreach (var (_, key) in Model.AccessKeys)
+    {
+        <tr>
+            <td nowrap>@key.Id</td>
+            <td>
+                <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
+                    <i class="far fa-copy"></i>
+                </button>
+            </td>
+            <td nowrap>
+                @key.DisplayName
+
+                @if (!string.IsNullOrEmpty(key.Description))
+                {
+                    <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
+                        <i class='fas fa-question-circle'></i>
+                    </a>
+                }
+            </td>
+            <td>@key.Permissions</td>
+            <td>@key.ExpirationDate</td>
+            <td>@key.State</td>
+        </tr>
+    }
+</table>
+
+@if (Model.IsAddingAccessKeysAvailable)
+{
+    <div align="right">
+        <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
+    </div>
+}
+
+
+<script>
+    var clipboardCopy = new ClipboardJS('[id^="copy_"]', {
+        container: document.getElementById('accessKeys_modal')
+    });
+
+    popoversInit();
+
+    function addButtonClick() {
+        let productId = $('#accessKey_prodcutId').val();
+        let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
+
+        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
+    }
+</script>

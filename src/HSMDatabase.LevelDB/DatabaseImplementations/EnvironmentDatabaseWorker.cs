@@ -12,10 +12,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     {
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
+
+        private readonly byte[] _accessKeyListKey;
+        private readonly byte[] _productListKey;
+
         public EnvironmentDatabaseWorker(string name)
         {
             _database = new LevelDBDatabaseAdapter(name);
             _logger = LogManager.GetCurrentClassLogger();
+
+            var key = PrefixConstants.GetAccessKeyListKey();
+            _accessKeyListKey = Encoding.UTF8.GetBytes(key);
+
+            key = PrefixConstants.GetProductsListKey();
+            _productListKey = Encoding.UTF8.GetBytes(key);
         }
 
         #region Products
@@ -23,11 +33,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         //ToDo: use like ID
         public void AddProductToList(string productName)
         {
-            var key = PrefixConstants.GetProductsListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                var currentList = _database.TryRead(bytesKey, out var value)
+                var currentList = _database.TryRead(_productListKey, out var value)
                     ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))   
                     : new List<string>();
 
@@ -36,7 +44,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 string stringData = JsonSerializer.Serialize(currentList);
                 byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
+
+                _database.Put(_productListKey, bytesValue);
             }
             catch (Exception e)
             {
@@ -46,12 +55,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public List<string> GetProductsList()
         {
-            string listKey = PrefixConstants.GetProductsListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
             var result = new List<string>();
             try
             {
-                var products = _database.TryRead(bytesKey, out byte[] value) ?
+                var products = _database.TryRead(_productListKey, out byte[] value) ?
                     JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
                     : new List<string>();
 
@@ -112,11 +119,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         //ToDo: use like ID
         public void RemoveProductFromList(string productName)
         {
-            var key = PrefixConstants.GetProductsListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                var currentList = _database.TryRead(bytesKey, out byte[] value)
+                var currentList = _database.TryRead(_productListKey, out byte[] value)
                     ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
                     : new List<string>();
 
@@ -124,12 +129,114 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 string stringData = JsonSerializer.Serialize(currentList);
                 byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(_productListKey, bytesValue);
             }
             catch (Exception e)
             {
                 _logger.Error(e, "Failed to add prodct to list");
             }
+        }
+
+        #endregion
+
+        #region AccessKey
+
+        public void AddAccessKeyToList(string id) 
+        {
+            try
+            {
+                var currentList = GetAccessKeyList();
+                if (!currentList.Contains(id))
+                    currentList.Add(id);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(_accessKeyListKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add AccessKey {id} to list");
+            }
+        }
+
+        public List<string> GetAccessKeyList()
+        {
+            var result = new List<string>();
+            try
+            {
+                var keys = _database.TryRead(_accessKeyListKey, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new List<string>();
+
+                result.AddRange(keys);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get AccessKeys list");
+            }
+
+            return result;
+        }
+
+        public void RemoveAccessKeyFromList(string id)
+        {
+            try
+            {
+                var currentList = GetAccessKeyList();
+                currentList.Remove(id);
+
+                string stringData = JsonSerializer.Serialize(currentList);
+                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
+                _database.Put(_accessKeyListKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove AccessKey {id} from list");
+            }
+        }
+
+        public void AddAccessKey(AccessKeyEntity entity)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            var stringData = JsonSerializer.Serialize(entity);
+            var bytesValue = Encoding.UTF8.GetBytes(stringData);
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put AccessKey for {entity.Id}");
+            }
+        }
+
+        public void RemoveAccessKey(string id) 
+        {
+            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove AccessKey by {id}");
+            }
+        }
+
+        public AccessKeyEntity GetAccessKey(string id)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                return _database.TryRead(bytesKey, out byte[] value)
+                    ? JsonSerializer.Deserialize<AccessKeyEntity>(Encoding.UTF8.GetString(value)) : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read AccessKey by {id}");
+            }
+
+            return null;
         }
 
         #endregion

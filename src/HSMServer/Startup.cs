@@ -28,9 +28,6 @@ namespace HSMServer
 {
     internal sealed class Startup
     {
-        private IServiceCollection _services;
-
-
         public void ConfigureServices(IServiceCollection services)
         {
             services
@@ -79,8 +76,6 @@ namespace HSMServer
                 options.IncludeXmlComments(xmlPath, true);
                 options.DocumentFilter<SwaggerIgnoreFilter>();
             });
-
-            _services = services;
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

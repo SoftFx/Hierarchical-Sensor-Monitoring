@@ -17,6 +17,17 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region AccessKey
+
+        void AddAccessKeyToList(string id);
+        List<string> GetAccessKeyList();
+        void RemoveAccessKeyFromList(string id);
+        void AddAccessKey(AccessKeyEntity entity);
+        void RemoveAccessKey(string id);
+        AccessKeyEntity GetAccessKey(string id);
+
+        #endregion
+
         #region Sensors
 
         void RemoveSensor(string productName, string path);

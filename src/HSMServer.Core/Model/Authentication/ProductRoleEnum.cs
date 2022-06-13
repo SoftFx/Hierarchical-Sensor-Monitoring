@@ -8,12 +8,4 @@ namespace HSMServer.Core.Model.Authentication
         ProductManager = 0,
         ProductViewer = 1
     }
-
-    [SwaggerIgnore]
-    public enum KeyRolesEnum
-    {
-        Viewer,
-        Feeder,
-        Admin = 255
-    }
 }

@@ -1,6 +1,7 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Converters;
 using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Authorization;
@@ -11,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
+using System.Text;
 
 namespace HSMServer.Controllers
 {
@@ -28,14 +30,16 @@ namespace HSMServer.Controllers
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
         private readonly IDataCollectorFacade _dataCollector;
+        private readonly ITreeValuesCache _cache;
 
 
         public SensorsController(IUpdatesQueue updatesQueue, IDataCollectorFacade dataCollector,
-            ILogger<SensorsController> logger)
+            ILogger<SensorsController> logger, ITreeValuesCache cache)
         {
             _updatesQueue = updatesQueue;
             _dataCollector = dataCollector;
             _logger = logger;
+            _cache = cache;
         }
 
 
@@ -43,13 +47,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<BoolSensorValue> Post([FromBody] BoolSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -67,13 +75,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<IntSensorValue> Post([FromBody] IntSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -91,13 +103,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<DoubleSensorValue> Post([FromBody] DoubleSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -115,13 +131,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<StringSensorValue> Post([FromBody] StringSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -139,13 +159,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<DoubleBarSensorValue> Post([FromBody] DoubleBarSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, sensorValue);
             }
             catch (Exception e)
             {
@@ -163,13 +187,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<IntBarSensorValue> Post([FromBody] IntBarSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -187,13 +215,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue.ConvertToFileSensorBytes());
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue.ConvertToFileSensorBytes(), out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -212,13 +244,17 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<FileSensorBytesValue> Post([FromBody] FileSensorBytesValue sensorValue)
         {
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                _updatesQueue.AddItem(sensorValue);
-                return Ok(sensorValue);
+
+                if (CanAddToQueue(sensorValue, out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -235,27 +271,34 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<List<CommonSensorValue>> Post([FromBody] IEnumerable<CommonSensorValue> values)
         {
-            if (values != null)
+            if (values == null || !values.Any())
+                return BadRequest(values);
+
+            try
             {
-                try
-                {
-                    var valuesList = values.ToList();
+                var valuesList = values.ToList();
 
-                    _dataCollector.ReportSensorsCount(valuesList.Count);
-                    _updatesQueue.AddItems(valuesList.Select(v => v.Convert()).ToList());
+                _dataCollector.ReportSensorsCount(valuesList.Count);
 
-                    return Ok(values);
-                }
-                catch (Exception e)
+                var result = new Dictionary<string, string>(values.Count());
+                foreach (var value in valuesList)
                 {
-                    _logger.LogError(e, "Failed to put data");
-                    return BadRequest(values);
+                    var convertedValue = value.Convert();
+
+                    if (!CanAddToQueue(convertedValue, out var message))
+                        result.Add(convertedValue.Key, message);
                 }
+
+                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
-
-            return BadRequest(values);
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data");
+                return BadRequest(values);
+            }
         }
 
 
@@ -271,15 +314,31 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
-                _updatesQueue.AddItems(values.Cast<SensorValueBase>().ToList());
 
-                return Ok(values);
+                var result = new Dictionary<string, string>(values.Count);
+                foreach (var value in values)
+                    if (!CanAddToQueue(value, out var message))
+                        result.Add(value.Key, message);
+
+                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Failed to put data");
                 return BadRequest(values);
             }
+        }
+
+
+        private bool CanAddToQueue(SensorValueBase value, out string message)
+        {
+            if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
+            {
+                _updatesQueue.AddItem(value);
+                return true;
+            }
+
+            return false;
         }
     }
 }
