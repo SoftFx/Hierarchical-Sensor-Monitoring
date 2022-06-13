@@ -25,18 +25,17 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index() => View(GetAvailableAccessKeys(onlyProductsWithoutParent: true));
+        public IActionResult Index() => View(GetAvailableAccessKeys(isAllProducts: false));
 
         [HttpGet]
-        public IActionResult AvailableAccessKeys([FromQuery(Name = "WithoutParents")] bool productsWithoutParent) =>
-            GetPartialAllAccessKeys(productsWithoutParent);
+        public IActionResult AvailableAccessKeys([FromQuery(Name = "AllProducts")] bool isAllProducts) =>
+            GetPartialAllAccessKeys(isAllProducts);
 
         [HttpGet]
         public IActionResult AccessKeysForProduct([FromQuery(Name = "Selected")] string productId) =>
             GetPartialProductAccessKeys(productId);
 
         [HttpGet]
-        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId,
                                           [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
             GetPartialNewAccessKey(
@@ -84,11 +83,11 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string keyId,
-                                                         [FromQuery(Name = "WithoutParents")] bool productsWithoutParent)
+                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
 
-            return GetPartialAllAccessKeys(productsWithoutParent);
+            return GetPartialAllAccessKeys(isAllProducts);
         }
 
         [HttpPost]
@@ -105,17 +104,17 @@ namespace HSMServer.Controllers
         }
 
 
-        private PartialViewResult GetPartialAllAccessKeys(bool onlyProductsWithoutParent) =>
-            PartialView("_AllAccessKeys", GetAvailableAccessKeys(onlyProductsWithoutParent));
+        private PartialViewResult GetPartialAllAccessKeys(bool isAllProducts) =>
+            PartialView("_AllAccessKeys", GetAvailableAccessKeys(isAllProducts));
 
-        private List<AccessKeyViewModel> GetAvailableAccessKeys(bool onlyProductsWithoutParent)
+        private List<AccessKeyViewModel> GetAvailableAccessKeys(bool isAllProducts)
         {
             var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
             _treeViewModel.UpdateAccessKeysCharacteristics(user);
 
-            var availableProducts = _treeValuesCache.GetProducts(user, onlyProductsWithoutParent);
+            var availableProducts = _treeValuesCache.GetProducts(user, isAllProducts);
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))

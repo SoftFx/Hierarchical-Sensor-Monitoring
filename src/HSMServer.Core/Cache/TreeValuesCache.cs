@@ -112,10 +112,10 @@ namespace HSMServer.Core.Cache
         private AccessKeyModel GetAccessKeyModel(string key) =>
             Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
 
-        public List<ProductModel> GetProducts(User user, bool withoutParent = true)
+        public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
         {
             var products = _tree.Values.ToList();
-            if (withoutParent)
+            if (!isAllProducts)
                 products = products.Where(p => p.ParentProduct == null).ToList();
 
             if (user == null || user.IsAdmin)
@@ -126,7 +126,7 @@ namespace HSMServer.Core.Cache
 
             var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
 
-            return withoutParent ? availableProducts : GetAllProductsWithTheirSubProducts(availableProducts);
+            return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
 
         public bool TryCheckKeyPermissions(string key, string path, out string message)
@@ -141,6 +141,13 @@ namespace HSMServer.Core.Cache
                 return false;
             else if (product.Id == key)
                 return true;
+
+            // TODO: remove after refactoring sensors data storing
+            if (product.ParentProduct is not null)
+            {
+                message = "Temporarily unavailable feature. Please select a product without a parent";
+                return false;
+            }
 
             var accessKey = GetAccessKeyModel(key);
             if (!accessKey.HasPermissionForSendData(out message))

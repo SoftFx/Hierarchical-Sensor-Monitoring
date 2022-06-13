@@ -13,7 +13,7 @@
 
 <table class="table">
     <tr>
-        <th>Id</th>
+        <th>Key</th>
         <th></th>
         <th>Display name</th>
         <th>Permissions</th>
@@ -46,12 +46,13 @@
     }
 </table>
 
-@if (Model.IsAddingAccessKeysAvailable)
-{
-    <div align="right">
+<div align="right">
+    @if (Model.IsAddingAccessKeysAvailable)
+    {
         <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
-    </div>
-}
+    }
+    <button class="btn btn-secondary" onclick="hideModal()">Close</button>
+</div>
 
 
 <script>

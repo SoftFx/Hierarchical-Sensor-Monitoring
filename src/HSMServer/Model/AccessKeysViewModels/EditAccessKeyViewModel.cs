@@ -8,8 +8,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 {
     public enum AccessKeyExpiration
     {
-        [Display(Name = "Unlimit")]
-        Unlimit,
+        [Display(Name = "Unlimited")]
+        Unlimited,
         [Display(Name = "1 Day")]
         Day,
         [Display(Name = "1 Month")]
@@ -108,7 +108,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
             return Expiration switch
             {
-                AccessKeyExpiration.Unlimit => DateTime.MaxValue,
+                AccessKeyExpiration.Unlimited => DateTime.MaxValue,
                 AccessKeyExpiration.Day => expiration.AddDays(1),
                 AccessKeyExpiration.Month => expiration.AddMonths(1),
                 AccessKeyExpiration.Year => expiration.AddYears(1),

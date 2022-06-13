@@ -56,7 +56,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
-                ? nameof(AccessKeyExpiration.Unlimit)
+                ? nameof(AccessKeyExpiration.Unlimited)
                 : expirationTime.ToString();
 
         private static string BuildPermissions(KeyPermissions permissions)

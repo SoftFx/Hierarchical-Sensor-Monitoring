@@ -85,11 +85,11 @@
         });
 
     function getRemoveAccessKeyURL(selectedKeyId) {
-        let withoutParents = document.getElementById('productsWithoutParents');
+        let isAllProducts = document.getElementById('allProducts');
 
         let url;
-        if (withoutParents != undefined) {
-            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&WithoutParents=${withoutParents.checked}`;
+        if (isAllProducts != undefined) {
+            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
         }
         else {
             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;

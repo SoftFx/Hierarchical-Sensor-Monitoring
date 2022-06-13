@@ -16,16 +16,17 @@
     <div class="row justify-content-center">
         <table class="table">
             <tr>
-                <th>Id</th>
+                <th>Key</th>
                 <th></th>
                 <th>Display name</th>
                 <th>Permissions</th>
                 <th>Expiration</th>
                 <th>
-                    Product (
-                    <input class="form-check-input" type="checkbox" value="" checked onchange="onlyProductsWithoutParentsCahnged()" id="productsWithoutParents">
-                    <label class="form-check-label" for="productsWithoutParents">
-                        only without parent)
+                    Product<br />
+                    (
+                    <input class="form-check-input" type="checkbox" value="" onchange="allProductsChanged()" id="allProducts">
+                    <label class="form-check-label" for="allProducts">
+                        node)
                     </label>
                 </th>
                 <th>Author</th>
@@ -45,12 +46,12 @@
 <script>
     var clipboard = new ClipboardJS('[id^="copy_"]');
 
-    function onlyProductsWithoutParentsCahnged() {
-        var element = document.getElementById('productsWithoutParents');
+    function allProductsChanged() {
+        var element = document.getElementById('allProducts');
 
         $.ajax({
             type: 'GET',
-            url: getAvailableAccessKeys + "?WithoutParents=" + element.checked,
+            url: getAvailableAccessKeys + "?AllProducts=" + element.checked,
             cache: false,
             async: true,
             success: function (viewData) {
@@ -60,6 +61,6 @@
     }
 
     $('#accessKeys_modal').on('hidden.bs.modal', function (e) {
-        onlyProductsWithoutParentsCahnged();
+        allProductsChanged();
     });
 </script>
