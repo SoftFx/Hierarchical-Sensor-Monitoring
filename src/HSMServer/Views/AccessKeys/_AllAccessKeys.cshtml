@@ -8,6 +8,12 @@
 @foreach (var key in Model)
 {
     <tr>
+        @if (key.HasProductColumn)
+        {
+            <td>
+                @Html.ActionLink($"{key.ProductName}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ProductId }, null)
+            </td>
+        }
         <td nowrap>@key.Id</td>
         <td>
             <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
@@ -26,7 +32,6 @@
         </td>
         <td>@key.Permissions</td>
         <td>@key.ExpirationDate</td>
-        <td>@key.ProductName</td>
         <td>@key.AuthorName</td>
         <td>@key.State</td>
         <td nowrap>

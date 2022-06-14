@@ -29,6 +29,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool IsChangeAvailable { get; internal set; }
 
+        public bool HasProductColumn { get; internal set; } = true;
+
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
         {
@@ -51,6 +53,8 @@ namespace HSMServer.Model.AccessKeysViewModels
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
         }
+
+        internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
 
         internal bool HasExpired() => DateTime.UtcNow >= _expirationTime && State < KeyState.Expired;
 

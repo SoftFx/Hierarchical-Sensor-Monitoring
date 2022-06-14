@@ -76,6 +76,14 @@ function customMenu(node) {
 
     var items =
     {
+        "AccessKeys": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Access keys",
+            "action": function (obj) {
+                showAccessKeysList(node.id, true);
+            }
+        },
         "Delete": {
             "separator_before": false,
             "separator_after": false,
@@ -111,14 +119,6 @@ function customMenu(node) {
                 $('#closeDeleteButton').off('click').on('click', function () {
                     modal.hide();
                 });
-            }
-        },
-        "AccessKeys": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Access keys",
-            "action": function (obj) {
-                showAccessKeysList(node.id, true);
             }
         }
     }

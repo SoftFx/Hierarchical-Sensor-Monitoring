@@ -115,6 +115,8 @@ namespace HSMServer.Controllers
             _treeViewModel.UpdateAccessKeysCharacteristics(user);
 
             var availableProducts = _treeValuesCache.GetProducts(user, isAllProducts);
+            availableProducts.Sort((key1, key2) => key1.DisplayName.CompareTo(key2.DisplayName));
+
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
