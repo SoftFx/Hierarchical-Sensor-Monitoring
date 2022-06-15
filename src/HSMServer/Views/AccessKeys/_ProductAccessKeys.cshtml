@@ -29,16 +29,7 @@
                     <i class="far fa-copy"></i>
                 </button>
             </td>
-            <td nowrap>
-                @key.DisplayName
-
-                @if (!string.IsNullOrEmpty(key.Description))
-                {
-                    <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
-                        <i class='fas fa-question-circle'></i>
-                    </a>
-                }
-            </td>
+            <td nowrap>@key.DisplayName</td>
             <td>@key.Permissions</td>
             <td>@key.ExpirationDate</td>
             <td>@key.State</td>
@@ -59,8 +50,6 @@
     var clipboardCopy = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
-
-    popoversInit();
 
     function addButtonClick() {
         let productId = $('#accessKey_prodcutId').val();
