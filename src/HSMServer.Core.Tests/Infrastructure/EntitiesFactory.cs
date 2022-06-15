@@ -36,6 +36,21 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
+        internal static AccessKeyEntity BuildAccessKeyEntity(string name = null) =>
+            new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                AuthorId = Guid.NewGuid().ToString(),
+                ProductId = Guid.NewGuid().ToString(),
+                Comment = RandomGenerator.GetRandomString(),
+                KeyState = (byte)KeyState.Active,
+                KeyPermissions = (long)KeyPermissions.CanSendSensorData,
+                DisplayName = name ?? RandomGenerator.GetRandomString(),
+                CreationTime = DateTime.UtcNow.Ticks,
+                ExpirationTime = DateTime.MaxValue.Ticks
+            };
+        
+
         internal static SensorEntity BuildSensorEntity(string name = null, string parent = "") =>
             new()
             {

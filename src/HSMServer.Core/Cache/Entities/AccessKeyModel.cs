@@ -37,9 +37,9 @@ namespace HSMServer.Core.Cache.Entities
 
         public string Comment { get; private set; }
 
-        public KeyState State { get; private set; }
+        public KeyState KeyState { get; private set; }
 
-        public KeyPermissions Permissions { get; private set; }
+        public KeyPermissions KeyPermissions { get; private set; }
 
         public string DisplayName { get; private set; }
 
@@ -50,8 +50,8 @@ namespace HSMServer.Core.Cache.Entities
             AuthorId = entity.AuthorId;
             ProductId = entity.ProductId;
             Comment = entity.Comment;
-            State = (KeyState)entity.KeyState;
-            Permissions = (KeyPermissions)entity.KeyPermissions;
+            KeyState = (KeyState)entity.KeyState;
+            KeyPermissions = (KeyPermissions)entity.KeyPermissions;
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
@@ -73,8 +73,8 @@ namespace HSMServer.Core.Cache.Entities
         {
             AuthorId = product.AuthorId;
             ProductId = product.Id;
-            State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
+            KeyState = KeyState.Active;
+            KeyPermissions = KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
@@ -89,10 +89,10 @@ namespace HSMServer.Core.Cache.Entities
                 Comment = model.Comment;
 
             if (model.Permissions.HasValue)
-                Permissions = model.Permissions.Value;
+                KeyPermissions = model.Permissions.Value;
 
             if (model.State.HasValue)
-                State = model.State.Value;
+                KeyState = model.State.Value;
 
             return this;
         }
@@ -104,8 +104,8 @@ namespace HSMServer.Core.Cache.Entities
                 AuthorId = AuthorId,
                 ProductId = ProductId,
                 Comment = Comment,
-                KeyState = (byte)State,
-                KeyPermissions = (long)Permissions,
+                KeyState = (byte)KeyState,
+                KeyPermissions = (long)KeyPermissions,
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks
@@ -117,7 +117,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             message = string.Empty;
 
-            if (!Permissions.HasFlag(permisssion))
+            if (!KeyPermissions.HasFlag(permisssion))
             {
                 message = $"AccessKey doesn't have {permisssion}.";
                 return false;
@@ -133,7 +133,7 @@ namespace HSMServer.Core.Cache.Entities
             if (ExpirationTime < DateTime.UtcNow)
             {
                 message = "AccessKey expired.";
-                State = KeyState.Expired;
+                KeyState = KeyState.Expired;
                 return true;
             }
 

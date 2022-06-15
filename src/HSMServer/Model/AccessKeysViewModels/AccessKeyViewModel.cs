@@ -48,8 +48,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             DisplayName = accessKey.DisplayName;
             Description = accessKey.Comment;
-            Permissions = BuildPermissions(accessKey.Permissions);
-            State = accessKey.State;
+            Permissions = BuildPermissions(accessKey.KeyPermissions);
+            State = accessKey.KeyState;
         }
 
         internal bool HasExpired() => DateTime.UtcNow >= _expirationTime && State < KeyState.Expired;
