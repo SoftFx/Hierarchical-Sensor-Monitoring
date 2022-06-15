@@ -35,8 +35,6 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime ExpirationTime { get; init; }
 
-        public string Comment { get; private set; }
-
         public KeyState State { get; private set; }
 
         public KeyPermissions Permissions { get; private set; }
@@ -49,7 +47,6 @@ namespace HSMServer.Core.Cache.Entities
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
             ProductId = entity.ProductId;
-            Comment = entity.Comment;
             State = (KeyState)entity.KeyState;
             Permissions = (KeyPermissions)entity.KeyPermissions;
             DisplayName = entity.DisplayName;
@@ -85,9 +82,6 @@ namespace HSMServer.Core.Cache.Entities
             if (model.DisplayName != null)
                 DisplayName = model.DisplayName;
 
-            if (model.Comment != null)
-                Comment = model.Comment;
-
             if (model.Permissions.HasValue)
                 Permissions = model.Permissions.Value;
 
@@ -103,7 +97,6 @@ namespace HSMServer.Core.Cache.Entities
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
                 ProductId = ProductId,
-                Comment = Comment,
                 KeyState = (byte)State,
                 KeyPermissions = (long)Permissions,
                 DisplayName = DisplayName,

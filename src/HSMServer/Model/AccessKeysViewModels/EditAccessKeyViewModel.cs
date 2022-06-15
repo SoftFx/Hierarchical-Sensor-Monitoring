@@ -37,9 +37,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
         public string DisplayName { get; set; }
 
-        [StringLength(200, ErrorMessage = "{0} length should be less than {1}.")]
-        public string Description { get; set; }
-
         public AccessKeyExpiration Expiration { get; set; }
 
         public bool CanSendSensorData { get; set; }
@@ -60,7 +57,6 @@ namespace HSMServer.Model.AccessKeysViewModels
             Id = key.Id;
 
             DisplayName = key.DisplayName;
-            Description = key.Comment;
             ExpirationTime = AccessKeyViewModel.BuildExpiration(key.ExpirationTime);
 
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
@@ -84,7 +80,6 @@ namespace HSMServer.Model.AccessKeysViewModels
              {
                  Id = Id,
                  DisplayName = DisplayName,
-                 Comment = Description ?? string.Empty,
                  Permissions = Permissions,
              };
 

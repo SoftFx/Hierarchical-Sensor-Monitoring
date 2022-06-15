@@ -20,8 +20,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string DisplayName { get; private set; }
 
-        public string Description { get; private set; }
-
         public string Permissions { get; private set; }
 
         public KeyState State { get; private set; }
@@ -49,7 +47,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         internal void Update(AccessKeyModel accessKey)
         {
             DisplayName = accessKey.DisplayName;
-            Description = accessKey.Comment;
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
         }
@@ -81,14 +78,11 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         private static string BuildPermissions(KeyPermissions permissions)
         {
-            var result = new List<string>(2);
+            var result = new List<string>(3);
 
-            if (permissions.HasFlag(KeyPermissions.CanSendSensorData))
-                result.Add(nameof(KeyPermissions.CanSendSensorData));
-            if (permissions.HasFlag(KeyPermissions.CanAddProducts))
-                result.Add(nameof(KeyPermissions.CanAddProducts));
-            if (permissions.HasFlag(KeyPermissions.CanAddSensors))
-                result.Add(nameof(KeyPermissions.CanAddSensors));
+            foreach (var permission in Enum.GetValues(typeof(KeyPermissions)))
+                if (permissions.HasFlag((KeyPermissions)permission))
+                    result.Add(permission.ToString());
 
             return string.Join(", ", result);
         }

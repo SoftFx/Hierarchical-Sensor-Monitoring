@@ -21,16 +21,7 @@
                 }
             </td>
         }
-        <td nowrap>
-            @key.DisplayName
-
-            @if (!string.IsNullOrEmpty(key.Description))
-            {
-                <a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' data-bs-content='@key.Description'>
-                    <i class='fas fa-question-circle'></i>
-                </a>
-            }
-        </td>
+        <td nowrap>@key.DisplayName</td>
         <td nowrap>
             <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
         </td>
@@ -58,8 +49,6 @@
 <script src="~/js/bundles/accessKey.min.js"></script>
 
 <script>
-    popoversInit();
-
     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
