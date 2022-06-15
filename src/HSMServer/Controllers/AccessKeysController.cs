@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Filters;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
@@ -8,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Controllers
 {
@@ -121,9 +121,7 @@ namespace HSMServer.Controllers
                     keys.AddRange(productViewModel.GetAccessKeys());
             }
 
-            keys.Sort((key1, key2) => key1.NodePath.CompareTo(key2.NodePath));
-
-            return keys;
+            return keys.OrderBy(key => key?.NodePath).ToList();
         }
 
         private PartialViewResult GetPartialProductAccessKeys(string productId)
