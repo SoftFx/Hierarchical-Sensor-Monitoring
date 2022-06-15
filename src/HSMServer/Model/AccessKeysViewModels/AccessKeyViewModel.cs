@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Cache.Entities;
+using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
 
@@ -11,9 +12,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public Guid Id { get; }
 
-        public string ProductId { get; }
-
-        public string ProductName { get; }
+        public ProductNodeViewModel ParentProduct { get; }
 
         public string AuthorName { get; }
 
@@ -27,18 +26,19 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public KeyState State { get; private set; }
 
+        public string NodePath { get; private set; }
+
         public bool IsChangeAvailable { get; internal set; }
 
         public bool HasProductColumn { get; internal set; } = true;
 
 
-        internal AccessKeyViewModel(AccessKeyModel accessKey, string productName, string authorName)
+        internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, string authorName)
         {
             _expirationTime = accessKey.ExpirationTime;
 
             Id = accessKey.Id;
-            ProductId = accessKey.ProductId;
-            ProductName = productName;
+            ParentProduct = parent;
             AuthorName = authorName;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
@@ -52,6 +52,22 @@ namespace HSMServer.Model.AccessKeysViewModels
             Description = accessKey.Comment;
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
+        }
+
+        internal void UpdateNodePath()
+        {
+            var nodePathParts = new List<string>();
+            NodeViewModel parent = ParentProduct;
+
+            while (parent != null)
+            {
+                nodePathParts.Add(parent.Name);
+                parent = parent.Parent;
+            }
+
+            nodePathParts.Reverse();
+
+            NodePath = string.Join('/', nodePathParts);
         }
 
         internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();

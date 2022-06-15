@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace HSMDatabase.AccessManager.DatabaseEntities
+﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public sealed record AccessKeyEntity
     {

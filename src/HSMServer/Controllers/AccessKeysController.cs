@@ -96,7 +96,7 @@ namespace HSMServer.Controllers
             var accessKeyId = Guid.Parse(selectedKey);
 
             _treeViewModel.AccessKeys.TryGetValue(accessKeyId, out var key);
-            _treeViewModel.Nodes.TryGetValue(key.ProductId, out var productNode);
+            _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
 
             _treeValuesCache.RemoveAccessKey(accessKeyId);
 
