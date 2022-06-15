@@ -1,5 +1,15 @@
 [
   {
+    "outputFileName": "wwwroot/js/bundles/deletionConfirmation.min.js",
+    "inputFiles": [
+      "wwwroot/js/home/deletionConfirmation.js"
+    ],
+    "minify": {
+      "enabled": true,
+      "renameLocals": false
+    }
+  },
+  {
     "outputFileName": "wwwroot/js/bundles/accessKey.min.js",
     "inputFiles": [
       "wwwroot/js/home/accessKey.js"

@@ -44,13 +44,15 @@
                 <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'>
                     <i class='fas fa-edit'></i>
                 </button>
-                <button id='deleteAccessKey_@key.Id' title='delete' class='btn btn-secondary'>
+                <button id='deleteAccessKey_@key.Id' title='remove' class='btn btn-secondary'>
                     <i class='fas fa-trash-alt'></i>
                 </button>
             }
         </td>
     </tr>
 }
+
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 
 
 <script src="~/js/bundles/accessKey.min.js"></script>
@@ -82,15 +84,21 @@
         function () {
             let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
 
-            $.ajax({
-                type: 'POST',
-                url: getRemoveAccessKeyURL(selectedKeyId),
-                cache: false,
-                async: true,
-                success: function (viewData) {
-                    $('#accessKeysTable').html(viewData);
+            showDeletionConfirmationModal(
+                "Removing access key",
+                `Do you really want to remove selected access key '${selectedKeyId}'?`,
+                function () {
+                    $.ajax({
+                        type: 'POST',
+                        url: getRemoveAccessKeyURL(selectedKeyId),
+                        cache: false,
+                        async: true,
+                        success: function (viewData) {
+                            $('#accessKeysTable').html(viewData);
+                        }
+                    })
                 }
-            });
+            );
         });
 
     function getRemoveAccessKeyURL(selectedKeyId) {
