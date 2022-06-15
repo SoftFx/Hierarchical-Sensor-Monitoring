@@ -86,7 +86,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Id, actual.Id.ToString());
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.ProductId, actual.ProductId);
-            Assert.Equal(expected.Comment, actual.Comment);
             Assert.Equal(expected.KeyState, (byte)actual.KeyState);
             Assert.Equal(expected.KeyPermissions, (long)actual.KeyPermissions);
             Assert.Equal(expected.DisplayName, actual.DisplayName);

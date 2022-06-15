@@ -42,7 +42,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Id = Guid.NewGuid().ToString(),
                 AuthorId = Guid.NewGuid().ToString(),
                 ProductId = Guid.NewGuid().ToString(),
-                Comment = RandomGenerator.GetRandomString(),
                 KeyState = (byte)KeyState.Active,
                 KeyPermissions = (long)KeyPermissions.CanSendSensorData,
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
