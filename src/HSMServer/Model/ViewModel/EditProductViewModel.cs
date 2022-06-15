@@ -21,9 +21,10 @@ namespace HSMServer.Model.ViewModel
             ProductId = product.Id;
             EncodedProductId = product.EncodedId;
             UsersRights = usersRights.Select(x =>
-                new KeyValuePair<UserViewModel, ProductRoleEnum>(
-                    new UserViewModel(x.Key), x.Value)).ToList();
-            AccessKeys = product.GetAccessKeys();
+                new KeyValuePair<UserViewModel, ProductRoleEnum>(new UserViewModel(x.Key), x.Value)).ToList();
+
+            AccessKeys = product.GetAccessKeys().Select(k => k.Copy()).ToList();
+            AccessKeys.ForEach(k => k.HasProductColumn = false);
         }
     }
 }

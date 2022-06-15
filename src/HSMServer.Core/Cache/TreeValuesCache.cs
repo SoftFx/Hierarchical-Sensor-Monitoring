@@ -123,7 +123,7 @@ namespace HSMServer.Core.Cache
                 return products;
 
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
-                return null;
+                return new List<ProductModel>();
 
             var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
 

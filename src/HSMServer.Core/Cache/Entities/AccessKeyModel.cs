@@ -35,8 +35,6 @@ namespace HSMServer.Core.Cache.Entities
 
         public DateTime ExpirationTime { get; init; }
 
-        public string Comment { get; private set; }
-
         public KeyState KeyState { get; private set; }
 
         public KeyPermissions KeyPermissions { get; private set; }
@@ -49,7 +47,6 @@ namespace HSMServer.Core.Cache.Entities
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
             ProductId = entity.ProductId;
-            Comment = entity.Comment;
             KeyState = (KeyState)entity.KeyState;
             KeyPermissions = (KeyPermissions)entity.KeyPermissions;
             DisplayName = entity.DisplayName;
@@ -85,9 +82,6 @@ namespace HSMServer.Core.Cache.Entities
             if (model.DisplayName != null)
                 DisplayName = model.DisplayName;
 
-            if (model.Comment != null)
-                Comment = model.Comment;
-
             if (model.Permissions.HasValue)
                 KeyPermissions = model.Permissions.Value;
 
@@ -103,7 +97,6 @@ namespace HSMServer.Core.Cache.Entities
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
                 ProductId = ProductId,
-                Comment = Comment,
                 KeyState = (byte)KeyState,
                 KeyPermissions = (long)KeyPermissions,
                 DisplayName = DisplayName,
@@ -116,7 +109,6 @@ namespace HSMServer.Core.Cache.Entities
         internal bool IsHasPermission(KeyPermissions permisssion, out string message)
         {
             message = string.Empty;
-
             if (!KeyPermissions.HasFlag(permisssion))
             {
                 message = $"AccessKey doesn't have {permisssion}.";

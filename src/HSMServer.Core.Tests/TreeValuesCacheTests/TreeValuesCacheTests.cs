@@ -232,7 +232,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var actualProducts = _valuesCache.GetProducts(TestUsersManager.NotAdmin);
 
-            Assert.Null(actualProducts);
+            Assert.Empty(actualProducts);
         }
 
         [Theory]

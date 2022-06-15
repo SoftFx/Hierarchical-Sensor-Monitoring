@@ -76,6 +76,9 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var product in products)
                 foreach (var (_, subProduct) in product.SubProducts)
                     Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
+
+            foreach (var (_, key) in AccessKeys)
+                key.UpdateNodePath();
         }
 
         private void ChangeProductHandler(ProductModel model, TransactionType transaction)
@@ -186,7 +189,7 @@ namespace HSMServer.Model.TreeViewModels
 
         private void AddNewAccessKeyViewModel(AccessKeyModel key, ProductNodeViewModel parent)
         {
-            var viewModel = new AccessKeyViewModel(key, parent.Name, GetAccessKeyAuthorName(key));
+            var viewModel = new AccessKeyViewModel(key, parent, GetAccessKeyAuthorName(key));
 
             parent.AddAccessKey(viewModel);
             AccessKeys.TryAdd(key.Id, viewModel);
