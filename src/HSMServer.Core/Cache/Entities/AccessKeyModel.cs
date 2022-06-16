@@ -47,8 +47,8 @@ namespace HSMServer.Core.Cache.Entities
             Id = Guid.Parse(entity.Id);
             AuthorId = entity.AuthorId;
             ProductId = entity.ProductId;
-            State = (KeyState)entity.KeyState;
-            Permissions = (KeyPermissions)entity.KeyPermissions;
+            State = (KeyState)entity.State;
+            Permissions = (KeyPermissions)entity.Permissions;
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
@@ -97,8 +97,8 @@ namespace HSMServer.Core.Cache.Entities
                 Id = Id.ToString(),
                 AuthorId = AuthorId,
                 ProductId = ProductId,
-                KeyState = (byte)State,
-                KeyPermissions = (long)Permissions,
+                State = (byte)State,
+                Permissions = (long)Permissions,
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks
