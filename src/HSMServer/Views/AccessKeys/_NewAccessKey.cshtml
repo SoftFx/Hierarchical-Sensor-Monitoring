@@ -44,7 +44,7 @@
     </div>
     <span asp-validation-for="Permissions"></span>
 
-    <div class="form-group">
+    <div class="form-group" id="permissions">
         <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" asp-for="CanSendSensorData">
             <label class="form-check-label" asp-for="CanSendSensorData"></label>
@@ -104,7 +104,7 @@
     }
 
     function selectAllCheckBoxes() {
-        $(':checkbox').each(function () {
+        $('#permissions :checkbox').each(function () {
             this.checked = true;
         });
     }
