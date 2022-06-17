@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Filters;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
@@ -16,6 +17,8 @@ namespace HSMServer.Controllers
     {
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
+
+        internal ITreeValuesCache TreeValuesCache => _treeValuesCache;
 
 
         public AccessKeysController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
@@ -36,16 +39,18 @@ namespace HSMServer.Controllers
             GetPartialProductAccessKeys(productId);
 
         [HttpGet]
-        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string productId,
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
+        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
                                           [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
             GetPartialNewAccessKey(
                 new EditAccessKeyViewModel()
                 {
-                    EncodedProductId = productId,
+                    EncodedProductId = encodedProductId,
                     CloseModal = closeModal,
                 });
 
         [HttpPost]
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
@@ -57,6 +62,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult ModifyAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
             var key = _treeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
@@ -71,6 +77,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
@@ -82,15 +89,17 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string keyId,
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
+        public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
                                                          [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
-            _treeValuesCache.RemoveAccessKey(Guid.Parse(keyId));
+            _treeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
 
             return GetPartialAllAccessKeys(isAllProducts);
         }
 
         [HttpPost]
+        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
             var accessKeyId = Guid.Parse(selectedKey);
