@@ -41,7 +41,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanSendSensorData { get; set; }
 
-        public bool CanAddProducts { get; set; }
+        public bool CanAddNodes { get; set; }
 
         public bool CanAddSensors { get; set; }
 
@@ -60,7 +60,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             ExpirationTime = AccessKeyViewModel.BuildExpiration(key.ExpirationTime);
 
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
-            CanAddProducts = key.Permissions.HasFlag(KeyPermissions.CanAddProducts);
+            CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
         }
 
@@ -89,8 +89,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
             if (CanSendSensorData)
                 perm |= KeyPermissions.CanSendSensorData;
-            if (CanAddProducts)
-                perm |= KeyPermissions.CanAddProducts;
+            if (CanAddNodes)
+                perm |= KeyPermissions.CanAddNodes;
             if (CanAddSensors)
                 perm |= KeyPermissions.CanAddSensors;
 
