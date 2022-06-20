@@ -42,8 +42,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Id = Guid.NewGuid().ToString(),
                 AuthorId = Guid.NewGuid().ToString(),
                 ProductId = Guid.NewGuid().ToString(),
-                KeyState = (byte)KeyState.Active,
-                KeyPermissions = (long)KeyPermissions.CanSendSensorData,
+                State = (byte)KeyState.Active,
+                Permissions = (long)KeyPermissions.CanSendSensorData,
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 CreationTime = DateTime.UtcNow.Ticks,
                 ExpirationTime = DateTime.MaxValue.Ticks

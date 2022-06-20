@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
@@ -41,14 +42,15 @@ namespace HSMServer.Model.AccessKeysViewModels
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
             Update(accessKey);
+            UpdateNodePath();
         }
 
 
         internal void Update(AccessKeyModel accessKey)
         {
             DisplayName = accessKey.DisplayName;
-            Permissions = BuildPermissions(accessKey.KeyPermissions);
-            State = accessKey.KeyState;
+            Permissions = BuildPermissions(accessKey.Permissions);
+            State = accessKey.State;
         }
 
         internal void UpdateNodePath()
@@ -64,7 +66,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
             nodePathParts.Reverse();
 
-            NodePath = string.Join('/', nodePathParts);
+            NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
 
         internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();

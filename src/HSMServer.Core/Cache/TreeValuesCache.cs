@@ -19,8 +19,7 @@ namespace HSMServer.Core.Cache
     {
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
-        private const string ErrorInvalidPath = "Path has an invalid format."; 
-
+        private const string ErrorInvalidPath = "Path has an invalid format.";
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -154,7 +153,7 @@ namespace HSMServer.Core.Cache
             if (!accessKey.HasPermissionForSendData(out message))
                 return false;
 
-            if (accessKey.KeyPermissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
+            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
                 return true;
 
             return IsValidKeyForPath(path, product, accessKey, out message);
