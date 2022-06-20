@@ -43,8 +43,6 @@ namespace HSMServer
 
             services.AddMvc();
             services.AddFluentValidation();
-            services.AddControllers();
-            services.AddControllersWithViews();
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 

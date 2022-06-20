@@ -74,10 +74,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\Protos\HSMservice.proto" GrpcServices="Server" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Reference Include="BouncyCastle.Crypto">
       <HintPath>..\ThirdPartyLib\BouncyCastle.Crypto.dll</HintPath>
     </Reference>
