@@ -10,7 +10,7 @@ namespace HSMServer.Core.Cache.Entities
     public enum KeyPermissions : long
     {
         CanSendSensorData = 1,
-        CanAddProducts = 2,
+        CanAddNodes = 2,
         CanAddSensors = 4
     }
 
@@ -71,7 +71,7 @@ namespace HSMServer.Core.Cache.Entities
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
+            Permissions = KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
@@ -137,7 +137,7 @@ namespace HSMServer.Core.Cache.Entities
             => !IsExpired(out message) && IsHasPermission(KeyPermissions.CanSendSensorData, out message);
 
         internal bool HasPermissionCreateProductBranch(out string message)
-            => IsHasPermission(KeyPermissions.CanAddProducts, out message)
+            => IsHasPermission(KeyPermissions.CanAddNodes, out message)
             && IsHasPermission(KeyPermissions.CanAddSensors, out message);
     }
 }
