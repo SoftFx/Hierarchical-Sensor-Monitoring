@@ -1,4 +1,5 @@
 ﻿using HSMServer.Constants;
+using HSMServer.Controllers;
 using HSMServer.Core.Model.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -51,6 +52,16 @@ namespace HSMServer.Filters.ProductRoleFilters
 
             if (context.ActionArguments.TryGetValue(ArgumentName, out var arg))
                 productId = GetProductId(arg, context);
+
+            if (!string.IsNullOrEmpty(productId) && context.Controller is AccessKeysController keysController)
+            {
+                var product = keysController.TreeValuesCache.GetProduct(productId);
+                while (product?.ParentProduct != null)
+                {
+                    productId = product.ParentProduct.Id;
+                    product = product.ParentProduct;
+                }
+            }
 
             return !string.IsNullOrEmpty(productId);
         }
