@@ -137,6 +137,13 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
+            var parts = path.Split(CommonConstants.SensorPathSeparator);
+            if (parts.Contains(string.Empty))
+            {
+                message = ErrorInvalidPath;
+                return false;
+            }
+
             if (!TryGetProductByKey(key, out var product, out message))
                 return false;
             else if (product.Id == key)
@@ -153,10 +160,10 @@ namespace HSMServer.Core.Cache
             if (!accessKey.HasPermissionForSendData(out message))
                 return false;
 
-            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddProducts | KeyPermissions.CanAddSensors))
+            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
                 return true;
 
-            return IsValidKeyForPath(path, product, accessKey, out message);
+            return IsValidKeyForPath(parts, product, accessKey, out message);
         }
 
 
@@ -448,21 +455,14 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private static bool IsValidKeyForPath(string path, ProductModel product,
+        private static bool IsValidKeyForPath(string[] parts, ProductModel product,
             AccessKeyModel accessKey, out string message)
         {
             message = string.Empty;
 
-            var parts = path.Split(CommonConstants.SensorPathSeparator);
-
             for (int i = 0; i < parts.Length; i++)
             {
                 var expectedName = parts[i];
-                if (string.IsNullOrEmpty(expectedName))
-                {
-                    message = ErrorInvalidPath;
-                    return false;
-                }
 
                 if (i != parts.Length - 1)
                 {

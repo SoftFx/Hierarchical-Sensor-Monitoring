@@ -8,7 +8,7 @@ using HSMServer.Core.Encryption;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
-using HSMServer.Filters;
+using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -84,7 +84,7 @@ namespace HSMServer.Controllers
 
         #region Edit Product
 
-        [ProductRoleFilter(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByProductId(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
         {
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
