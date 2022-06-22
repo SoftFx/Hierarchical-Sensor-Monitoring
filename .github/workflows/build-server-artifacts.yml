@@ -13,19 +13,19 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0.x
+        dotnet-version: 6.0.x
 
     - name: Install dependencies
-      run: dotnet restore src/HSMServer/HSMServer.sln --force
+      run: dotnet restore src/server/HSMServer/HSMServer.sln --force
 
     - name: Build Solution
-      run: dotnet build src/HSMServer/HSMServer.sln -c Release --no-restore
+      run: dotnet build src/server/HSMServer/HSMServer.sln -c Release --no-restore
 
-    # - name: Test
-    #   run: dotnet test --verbosity normal src/HSMServer/HSMServer.sln
+    - name: Test
+      run: dotnet test --verbosity normal src/server/HSMServer/HSMServer.sln
 
     - name: Build HSMServer
-      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/HSMServerOutput --no-restore
+      run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/HSMServerOutput --no-restore
 
     - name: Upload artifact
       uses: actions/upload-artifact@v2
