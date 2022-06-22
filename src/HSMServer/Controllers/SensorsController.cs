@@ -289,7 +289,7 @@ namespace HSMServer.Controllers
                     var convertedValue = value.Convert();
 
                     if (!CanAddToQueue(convertedValue, out var message))
-                        result.Add(convertedValue.Key, message);
+                        result[convertedValue.Key] = message;
                 }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -318,7 +318,7 @@ namespace HSMServer.Controllers
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
                     if (!CanAddToQueue(value, out var message))
-                        result.Add(value.Key, message);
+                        result[value.Key] = message;
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
