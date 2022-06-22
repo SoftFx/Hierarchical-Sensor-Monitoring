@@ -8,8 +8,6 @@ on:
         default: 'warning'
       tags:
         description: 'Test scenario tags'
-env:
-
 jobs:
   printInputs:
     runs-on: windows-latest
