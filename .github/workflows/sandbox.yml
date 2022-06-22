@@ -27,4 +27,4 @@ jobs:
       run: echo "RELEASE_VERSION=$((Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion)" >> $GITHUB_ENV
 
     - name: Test
-      reu: echo ${{ env.RELEASE_VERSION }}
+      run: echo ${{ env.RELEASE_VERSION }}
