@@ -8,6 +8,7 @@ on:
         default: 'warning'
       tags:
         description: 'Test scenario tags'
+env:
 
 jobs:
   printInputs:
@@ -19,11 +20,11 @@ jobs:
       with:
         dotnet-version: 6.0.x
 
-    - name: Install dependencies
-      run: dotnet restore src/HSMServer/HSMServer.sln --force
-
     - name: Build HSMServer
-      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release --no-restore
+      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release
 
     - name: Get server version
-      run: (Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion
+      run: echo "RELEASE_VERSION=$((Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion)" >> $GITHUB_ENV
+
+    - name: Test
+      reu: echo ${{ env.RELEASE_VERSION }}
