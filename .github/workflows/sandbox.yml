@@ -11,15 +11,19 @@ on:
 
 jobs:
   printInputs:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
-      - name: Test output
-        run: |
-          echo "Log level: ${{ github.event.inputs.logLevel }}"
-          echo "Tags: ${{ github.event.inputs.tags }}"
-      - name: Output Run ID
-        run: echo ${{ github.run_id }}
-      - name: Output Run Number
-        run: echo ${{ github.run_number }}
-      - name: Output Run Attempt
-        run: echo ${{ github.run_attempt }}
+    - uses: actions/checkout@v2
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 6.0.x
+
+    - name: Install dependencies
+      run: dotnet restore src/HSMServer/HSMServer.sln --force
+
+    - name: Build HSMServer
+      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release --no-restore
+
+    - name: Get server version
+      run: (Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion
