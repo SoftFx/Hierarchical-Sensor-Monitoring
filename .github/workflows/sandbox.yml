@@ -14,8 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Test output
-        echo "Log level: ${{ github.event.inputs.logLevel }}"
-        echo "Tags: ${{ github.event.inputs.tags }}"
+        run: |
+          echo "Log level: ${{ github.event.inputs.logLevel }}"
+          echo "Tags: ${{ github.event.inputs.tags }}"
       - name: Output Run ID
         run: echo ${{ github.run_id }}
       - name: Output Run Number
