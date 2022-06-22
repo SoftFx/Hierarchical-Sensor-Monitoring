@@ -9,8 +9,8 @@
     <Company>Soft-FX</Company>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<Copyright>Copyright © 2022</Copyright>
-	<IsPackable>true</IsPackable>
-	<Description>Data objects for HSMDataCollector</Description>
-  </PropertyGroup>
+	  <Copyright>Copyright © 2022</Copyright>
+	  <IsPackable>true</IsPackable>
+	  <Description>Data objects for HSMDataCollector</Description>
+    </PropertyGroup>
 </Project>
