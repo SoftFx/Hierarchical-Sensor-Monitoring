@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Sensors">
+      <UniqueIdentifier>{e6a37ca8-de01-4a94-8e3a-269d172716f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{de500f31-cdc4-4abd-8e95-02e71018028f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMBarSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMCppWrapper.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\SensorStatus.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DataCollector.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMBarSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMLastValueSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMLastValueSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMParamsFuncSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMParamsFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="DataCollectorImpl.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMNoParamsFuncSensorImpl.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMBaseParamsFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMBaseNoParamsFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMNoParamsFuncSensor.h">
+      <Filter>Sensors</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DataCollector.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMBarSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMLastValueSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMParamsFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMNoParamsFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMBaseParamsFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMBaseNoParamsFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
