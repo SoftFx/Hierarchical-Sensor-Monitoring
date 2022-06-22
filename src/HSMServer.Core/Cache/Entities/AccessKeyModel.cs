@@ -109,7 +109,6 @@ namespace HSMServer.Core.Cache.Entities
         internal bool IsHasPermission(KeyPermissions permisssion, out string message)
         {
             message = string.Empty;
-
             if (!Permissions.HasFlag(permisssion))
             {
                 message = $"AccessKey doesn't have {permisssion}.";

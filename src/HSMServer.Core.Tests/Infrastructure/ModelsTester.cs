@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache.Entities;
 using System;
@@ -45,6 +46,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             var expectedSensors = expected.Sensors.Select(p => p.Key.ToString()).ToList();
             var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
             TestCollections(expectedSensors, actualSensors);
+
+            var expectedKeys = expected.AccessKeys.Select(k => k.Key.ToString()).ToList();
+            var actualKeys = actual.AccessKeys.Select(k => k.Key.ToString()).ToList();
+            TestCollections(expectedKeys, actualKeys);
         }
 
         internal static void TestProductModel(string name, ProductModel actual,
@@ -77,6 +82,51 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             foreach (var expectedProduct in expected)
                 TestProductModel(expectedProduct, actualDict[expectedProduct.Id]);
+        }
+
+
+        internal static void TestAccessKeyModel(AccessKeyEntity expected, AccessKeyModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Id, actual.Id.ToString());
+            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.State, (byte)actual.State);
+            Assert.Equal(expected.Permissions, (long)actual.Permissions);
+            Assert.Equal(expected.DisplayName, actual.DisplayName);
+            Assert.Equal(expected.CreationTime, actual.CreationTime.Ticks);
+            Assert.Equal(expected.ExpirationTime, actual.ExpirationTime.Ticks);
+        }
+
+        internal static void TestAccessKeyModel(AccessKeyModel expected, AccessKeyModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.State, actual.State);
+            Assert.Equal(expected.Permissions, actual.Permissions);
+            Assert.Equal(expected.DisplayName, actual.DisplayName);
+            Assert.Equal(expected.CreationTime, actual.CreationTime);
+            Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
+        }
+
+        internal static void TestAccessKeyModel(ProductModel expected, AccessKeyModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.Id, actual.ProductId);
+            Assert.Equal(KeyPermissions.CanAddNodes
+                | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData, actual.Permissions);
+            Assert.Equal(CommonConstants.DefaultAccessKey, actual.DisplayName);
+            Assert.Equal(DateTime.MaxValue, actual.ExpirationTime);
+        }
+
+        internal static void TestAccessKeyModel(string authorId, string productId, AccessKeyModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(authorId, actual.AuthorId);
+            Assert.Equal(productId, actual.ProductId);
         }
 
 

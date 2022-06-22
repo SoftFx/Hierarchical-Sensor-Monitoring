@@ -20,7 +20,6 @@ namespace HSMServer.Core.Cache
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
-
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -168,14 +167,18 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void AddAccessKey(AccessKeyModel key)
+        public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
             if (AddKeyToTree(key))
             {
                 _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
 
                 ChangeAccessKeyEvent?.Invoke(key, TransactionType.Add);
+
+                return key;
             }
+
+            return null;
         }
 
         public void RemoveAccessKey(Guid id)
@@ -194,15 +197,17 @@ namespace HSMServer.Core.Cache
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
         }
 
-        public void UpdateAccessKey(AccessKeyUpdate updatedKey)
+        public AccessKeyModel UpdateAccessKey(AccessKeyUpdate updatedKey)
         {
             if (!_keys.TryGetValue(updatedKey.Id, out var key))
-                return;
+                return null;
 
             key.Update(updatedKey);
             _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
 
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
+
+            return key;
         }
 
         public AccessKeyModel GetAccessKey(Guid id)

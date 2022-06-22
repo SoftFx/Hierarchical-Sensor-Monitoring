@@ -34,9 +34,9 @@ namespace HSMServer.Core.Cache
         bool TryGetProductByKey(string key, out ProductModel product, out string message);
         bool TryCheckKeyPermissions(string key, string path, out string message);
 
-        void AddAccessKey(AccessKeyModel key);
+        AccessKeyModel AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
-        void UpdateAccessKey(AccessKeyUpdate key);
+        AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel GetAccessKey(Guid id);
 
         void UpdateSensor(SensorUpdate updatedSensor);
