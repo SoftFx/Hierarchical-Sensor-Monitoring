@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core
+﻿namespace HSMServer.Core.Model
 {
     public record BooleanValue : BaseValue<bool> { }
 
