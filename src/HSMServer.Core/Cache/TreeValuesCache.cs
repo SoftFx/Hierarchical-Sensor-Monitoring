@@ -167,14 +167,18 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void AddAccessKey(AccessKeyModel key)
+        public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
             if (AddKeyToTree(key))
             {
                 _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
 
                 ChangeAccessKeyEvent?.Invoke(key, TransactionType.Add);
+
+                return key;
             }
+
+            return null;
         }
 
         public void RemoveAccessKey(Guid id)
@@ -193,15 +197,17 @@ namespace HSMServer.Core.Cache
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
         }
 
-        public void UpdateAccessKey(AccessKeyUpdate updatedKey)
+        public AccessKeyModel UpdateAccessKey(AccessKeyUpdate updatedKey)
         {
             if (!_keys.TryGetValue(updatedKey.Id, out var key))
-                return;
+                return null;
 
             key.Update(updatedKey);
             _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
 
             ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
+
+            return key;
         }
 
         public AccessKeyModel GetAccessKey(Guid id)

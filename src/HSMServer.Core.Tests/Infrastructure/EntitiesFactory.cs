@@ -36,12 +36,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
-        internal static AccessKeyEntity BuildAccessKeyEntity(string name = null) =>
+        internal static AccessKeyEntity BuildAccessKeyEntity(string name = null, string productId = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
                 AuthorId = Guid.NewGuid().ToString(),
-                ProductId = Guid.NewGuid().ToString(),
+                ProductId = productId ?? Guid.NewGuid().ToString(),
                 State = (byte)KeyState.Active,
                 Permissions = (long)KeyPermissions.CanSendSensorData,
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
