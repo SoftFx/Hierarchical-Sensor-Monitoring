@@ -1,11 +1,11 @@
-﻿using HSMCommon.Model;
+﻿using HSMCommon.Constants;
+using HSMCommon.Model;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HSMCommon.Constants;
 
 namespace HSMServer.Core.Configuration
 {
@@ -19,7 +19,7 @@ namespace HSMServer.Core.Configuration
         private string _clientAppFolderPath;
         private readonly List<string> _configurationObjectNamesList = new List<string>
         {
-            ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey, 
+            ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey,
             ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, ConfigurationConstants.SMTPPort,
             ConfigurationConstants.SMTPLogin, ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
             ConfigurationConstants.ServerCertificatePassword
@@ -37,7 +37,6 @@ namespace HSMServer.Core.Configuration
         #region Public interface implementation
 
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.ClientAppFolderName);
-        public ClientVersionModel ClientVersion => _clientVersion ??= ReadClientVersion();
 
         public List<string> GetAllParameterNames()
         {
@@ -74,11 +73,6 @@ namespace HSMServer.Core.Configuration
             return result;
         }
 
-        public string GetCurrentVersion()
-        {
-            return ReadCurrentVersion();
-        }
-
         public ConfigurationObject ReadConfigurationObject(string name)
         {
             var objectFromDB = _databaseCore.GetConfigurationObject(name);
@@ -90,37 +84,5 @@ namespace HSMServer.Core.Configuration
         }
 
         #endregion
-
-        private string ReadCurrentVersion()
-        {
-            try
-            {
-                string versionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                    ConfigurationConstants.VersionFileName);
-                string content = File.ReadAllText(versionFilePath);
-                return content;
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to read current version");
-            }
-
-            return string.Empty;
-        }
-
-        private ClientVersionModel ReadClientVersion()
-        {
-            try
-            {
-                string versionFilePath = Path.Combine(ClientAppFolderPath, CommonConstants.ClientVersionFileName);
-                string text = File.ReadAllText(versionFilePath);
-                return ClientVersionModel.Parse(text);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to read client app version!");
-            }
-            return new ClientVersionModel() {ExtraVersion = 0, MainVersion = 0, SubVersion = 0, Postfix = "Failed to read!"};            
-        }
     }
 }

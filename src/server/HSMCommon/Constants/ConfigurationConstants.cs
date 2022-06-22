@@ -4,10 +4,8 @@ namespace HSMCommon.Constants
 {
     public class ConfigurationConstants
     {
-        public const int GrpcPort = 22900;
         public const int SensorsPort = 44330;
         public const int SitePort = 44333;
-        public const string VersionFileName = "version.txt";
 
         #region Default config
 

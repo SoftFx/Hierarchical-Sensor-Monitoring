@@ -1,6 +1,5 @@
-﻿using HSMCommon.Constants;
-using System;
-using System.IO;
+﻿using System;
+using System.Reflection;
 
 namespace HSMServer.Controllers.LayoutStaticController
 {
@@ -13,12 +12,10 @@ namespace HSMServer.Controllers.LayoutStaticController
         {
             try
             {
-                string versionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                    ConfigurationConstants.VersionFileName);
-                string content = File.ReadAllText(versionFilePath);
+                var version = Assembly.GetExecutingAssembly().GetName().Version;
 
-                if (!string.IsNullOrEmpty(content))
-                    return $"Current version: {content}";
+                if (version is not null)
+                    return $"Current version: {version.Major}.{version.Minor}.{version.Build}";
             }
             catch (Exception) { }
 

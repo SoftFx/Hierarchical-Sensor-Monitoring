@@ -8,7 +8,6 @@ namespace HSMServer.Core.Configuration
     public interface IConfigurationProvider
     {
         string ClientAppFolderPath { get; }
-        ClientVersionModel ClientVersion { get; }
 
         List<string> GetAllParameterNames();
         void AddConfigurationObject(string name, string value);
@@ -26,7 +25,5 @@ namespace HSMServer.Core.Configuration
         /// </summary>
         /// <returns>List of <see cref="ConfigurationObject"/>.</returns>
         List<ConfigurationObject> GetAllConfigurationObjects();
-
-        string GetCurrentVersion();
     }
 }
