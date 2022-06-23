@@ -1,5 +1,9 @@
 name: Sandbox build
 on:
+  push:
+    branches:
+      - test_github_actions
+
   workflow_dispatch:
     inputs:
       isRelease:
