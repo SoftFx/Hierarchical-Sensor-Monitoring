@@ -26,7 +26,17 @@ jobs:
       run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o ${{ env.OutputFolder }}
 
     - id: save-version
+      name: Try to get server version
       run: echo "::set-output name=version::$((Get-Item ${{ env.OutputFolder }}/HSMServer.exe).VersionInfo.ProductVersion)"
 
-    - name: Test
+    - name: Print server version
       run: echo "Project version is ${{ steps.save-version.outputs.version }}"
+
+  push_tag:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions-ecosystem/action-push-tag@v1
+        with:
+          tag: test-server-${{ needs.build.outputs.VERSION }}
+          message: "Test message"
