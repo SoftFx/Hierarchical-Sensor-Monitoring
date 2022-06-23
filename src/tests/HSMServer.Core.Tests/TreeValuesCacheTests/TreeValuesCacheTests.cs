@@ -698,14 +698,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         ProductId = product.Id,
                         ProductName = product.DisplayName,
                         Path = $"sensor{j}",
-                        SensorName = $"sensor{j}",
-                        SensorType = (int)SensorType.BooleanSensor,
+                        DisplayName = $"sensor{j}",
+                        Type = (int)SensorType.BooleanSensor,
                     };
                     var sensorData = new SensorDataEntity()
                     {
                         Path = sensor.Path,
                         TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensor.SensorType,
+                        DataType = (byte)sensor.Type,
                         TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData" }),
                         Status = (byte)SensorStatus.Warning,
                     };
@@ -723,14 +723,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         ProductId = subSubProduct.Id,
                         ProductName = product.DisplayName,
                         Path = $"{subProduct.DisplayName}/{subSubProduct.DisplayName}/sensor",
-                        SensorName = "sensor",
-                        SensorType = (int)SensorType.IntSensor,
+                        DisplayName = "sensor",
+                        Type = (int)SensorType.IntSensor,
                     };
                     var sensorForSubSubProductData = new SensorDataEntity()
                     {
                         Path = sensorForSubSubProduct.Path,
                         TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensorForSubSubProduct.SensorType,
+                        DataType = (byte)sensorForSubSubProduct.Type,
                         TypedData = JsonSerializer.Serialize(new IntSensorData() { IntValue = 12345, Comment = "sensorData1" }),
                         Status = (byte)SensorStatus.Ok,
                     };

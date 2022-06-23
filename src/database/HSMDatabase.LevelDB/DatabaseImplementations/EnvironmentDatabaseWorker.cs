@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
-using HSMDatabase.AccessManager;
+﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
@@ -36,7 +37,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             try
             {
                 var currentList = _database.TryRead(_productListKey, out var value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))   
+                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
                     : new List<string>();
 
                 if (!currentList.Contains(productName))
@@ -141,7 +142,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region AccessKey
 
-        public void AddAccessKeyToList(string id) 
+        public void AddAccessKeyToList(string id)
         {
             try
             {
@@ -210,7 +211,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveAccessKey(string id) 
+        public void RemoveAccessKey(string id)
         {
             byte[] bytesKey = Encoding.UTF8.GetBytes(id);
             try
@@ -279,7 +280,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                return _database.TryRead(bytesKey, out byte[] value) 
+                return _database.TryRead(bytesKey, out byte[] value)
                     ? JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value))
                     : null;
             }
@@ -291,7 +292,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public List<SensorEntity> GetSensorsInfo()
+        public List<SensorEntity> GetSensorEntities()
         {
             var key = PrefixConstants.GetSensorsInfoReadKey();
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
@@ -300,7 +301,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 var values = _database.GetAllStartingWith(bytesKey);
 
-                foreach(var value in values)
+                foreach (var value in values)
                 {
                     result.Add(JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value)));
                 }
@@ -308,6 +309,52 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, "Failed to get sensors list");
+            }
+
+            return result;
+        }
+
+        public List<string> GetSensorsStrOld()
+        {
+            var key = PrefixConstants.GetSensorsInfoReadKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+
+            try
+            {
+                return _database.GetAllStartingWith(bytesKey).Select(v => Encoding.UTF8.GetString(v)).ToList();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read all sensor entities with prefix {key}");
+            }
+
+            return new();
+        }
+
+        public List<string> GetSensorsStrNew()
+        {
+            var result = new List<string>();
+            byte[] sensorsIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorsKey());
+
+            try
+            {
+                var currentSensorIds = _database.TryRead(sensorsIdsKey, out byte[] sensorIds)
+                  ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(sensorIds))
+                  : new List<string>();
+
+                foreach (var sensorId in currentSensorIds)
+                {
+                    var sensor = _database.TryRead(Encoding.UTF8.GetBytes(sensorId), out byte[] value)
+                        ? Encoding.UTF8.GetString(value)
+                        : null;
+
+                    if (sensor != null)
+                        result.Add(sensor);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read all sensor entities strings");
             }
 
             return result;
@@ -465,7 +512,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
             try
             {
-                return _database.TryRead(bytesKey, out byte[] value) 
+                return _database.TryRead(bytesKey, out byte[] value)
                     ? JsonSerializer.Deserialize<RegisterTicketEntity>(Encoding.UTF8.GetString(value))
                     : null;
             }

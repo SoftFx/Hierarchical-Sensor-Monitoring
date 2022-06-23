@@ -19,7 +19,7 @@ namespace HSMServer.Core.Model
 
         public string ProductId { get; }
 
-        public DateTime CreationTime { get; }
+        public DateTime CreationDate{ get; }
 
         public string DisplayName { get; private set; }
 

@@ -1,79 +1,41 @@
-﻿namespace HSMServer.Core.DataLayer
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
+using System.Text.Json;
+
+namespace HSMServer.Core.DataLayer
 {
     public static class EntityConverter
     {
-        //public static SensorEntity ConvertSensorEntity(string oldEntity)
-        //{
-        //    var jsonDocument = JsonDocument.Parse(oldEntity);
-        //    var rootElement = jsonDocument.RootElement;
+        private const string SensorNamePropertyName = "SensorName";
+        private const string SensorTypePropertyName = "SensorType";
 
-        //    if (rootElement.TryGetProperty("Id", out _))
-        //    {
-        //        return JsonSerializer.Deserialize<SensorEntity>(oldEntity);
-        //    }
 
-        //    var id = Guid.NewGuid().ToString();
-        //    var productId = string.Empty;
-        //    var path = string.Empty;
-        //    var productName = string.Empty;
-        //    var sensorName = string.Empty;
-        //    var desc = string.Empty;
-        //    var sensorType = 0;
-        //    long ticksInterval = 0;
-        //    var unit = string.Empty;
-        //    var validationParameters = new List<ValidationParameterEntity>();
-        //    const bool isConverted = true;
+        // TODO: return SensorEntity with expectedupdateinterval is IsConverted = true
+        public static SensorEntity ConvertSensorEntity(string oldEntity)
+        {
+            var jsonDocument = JsonDocument.Parse(oldEntity);
+            var rootElement = jsonDocument.RootElement;
 
-        //    path = rootElement.TryGetProperty("Path", out var jsonPath) ? jsonPath.GetString() : path;
-        //    productName = rootElement.TryGetProperty("ProductName", out var jsonProductName) 
-        //        ? jsonProductName.GetString() : productName;
-        //    sensorName = rootElement.TryGetProperty("SensorName", out var jsonSensorName) 
-        //        ? jsonSensorName.GetString() : sensorName;
-        //    desc = rootElement.TryGetProperty("Description", out var jsonDesc) ? jsonDesc.GetString() : desc;
-        //    sensorType = rootElement.TryGetProperty("SensorType", out var jsonSensorType) ?
-        //        jsonSensorType.GetInt32() : sensorType;
-        //    ticksInterval = rootElement.TryGetProperty("ExpectedUpdateIntervalTicks", out var jsonTicks) ?
-        //        jsonTicks.GetInt64() : ticksInterval;
-        //    unit = rootElement.TryGetProperty("Unit", out var jsonUnit) ? jsonUnit.GetString() : unit;
+            if (rootElement.TryGetProperty(nameof(SensorEntity.DisplayName), out _))
+                return JsonSerializer.Deserialize<SensorEntity>(oldEntity);
 
-        //    rootElement.TryGetProperty("ValidationParameters", out var jsonParameters);
-        //    if (jsonParameters.GetArrayLength() > 0)
-        //    {
-        //        foreach (var parameter in jsonParameters.EnumerateArray())
-        //        {
-        //            validationParameters.Add(ConvertValidationParameter(parameter));
-        //        }
-        //    }
+            string GetStringProperty(JsonElement element) => element.GetString();
+            byte GetByteProperty(JsonElement element) => element.GetByte();
 
-        //    var newEntity = new SensorEntity()
-        //    {
-        //        Id = id,
-        //        ProductId = productId,
-        //        Path = path,
-        //        ProductName = productName,
-        //        SensorName = sensorName,
-        //        Description = desc,
-        //        SensorType = sensorType,
-        //        ExpectedUpdateIntervalTicks = ticksInterval,
-        //        Unit = unit,
-        //        ValidationParameters = validationParameters,
-        //        IsConverted = isConverted
-        //    };
+            return new()
+            {
+                Id = rootElement.GetProperty(nameof(SensorEntity.Id), GetStringProperty, Guid.NewGuid().ToString()),
+                ProductId = rootElement.GetProperty(nameof(SensorEntity.ProductId), GetStringProperty),
+                DisplayName = rootElement.GetProperty(SensorNamePropertyName, GetStringProperty),
+                Description = rootElement.GetProperty(nameof(SensorEntity.Description), GetStringProperty),
+                Unit = rootElement.GetProperty(nameof(SensorEntity.Unit), GetStringProperty),
+                Type = rootElement.GetProperty(SensorTypePropertyName, GetByteProperty),
+                IsConverted = true,
+            };
+        }
 
-        //    return newEntity;
-        //}
-
-        //public static ValidationParameterEntity ConvertValidationParameter(JsonElement parameter)
-        //{
-        //    var entity = new ValidationParameterEntity
-        //    {
-        //        ParameterType = parameter.TryGetProperty("ParameterType", out var jsonParameterType)
-        //                    ? jsonParameterType.GetInt32() : 0,
-        //        ValidationValue = parameter.TryGetProperty("ValidationValue", out var jsonValidationValue)
-        //                    ? jsonValidationValue.GetString() : string.Empty
-        //    };
-
-        //    return entity;
-        //}
+        private static T GetProperty<T>(this JsonElement rootElement, string propertyName,
+                                        Func<JsonElement, T> getPropertyAction, T defaultValue = default) =>
+            rootElement.TryGetProperty(propertyName, out var property) ? getPropertyAction(property) : defaultValue;
     }
 }

@@ -49,10 +49,9 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(productName, actual.ProductName);
-            Assert.Equal(expected.Path, actual.SensorName);
-            Assert.Equal((int)GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(expected.Path, actual.DisplayName);
+            Assert.Equal((int)GetSensorValueType(expected), actual.Type);
             Assert.Equal(default, actual.ExpectedUpdateIntervalTicks);
-            Assert.Null(actual.ValidationParameters);
             Assert.Null(actual.Unit);
         }
 

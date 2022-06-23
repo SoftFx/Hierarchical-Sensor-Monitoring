@@ -45,9 +45,9 @@ namespace HSMServer.Core.Cache.Entities
         internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = Guid.Parse(entity.Id);
-            SensorName = string.IsNullOrEmpty(entity.SensorName) ? GetSensorName(entity.Path) : entity.SensorName; // TODO: is sensorName right in database????
+            SensorName = string.IsNullOrEmpty(entity.DisplayName) ? GetSensorName(entity.Path) : entity.DisplayName; // TODO: is sensorName right in database????
             Description = entity.Description;
-            SensorType = (SensorType)entity.SensorType;
+            SensorType = (SensorType)entity.Type;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
             Unit = entity.Unit;
             ProductName = entity.ProductName;
@@ -125,9 +125,9 @@ namespace HSMServer.Core.Cache.Entities
             {
                 Id = Id.ToString(),
                 ProductId = ParentProduct?.Id,
-                SensorName = SensorName,
+                DisplayName = SensorName,
                 Description = Description,
-                SensorType = (int)SensorType,
+                Type = (byte)SensorType,
                 ExpectedUpdateIntervalTicks = ExpectedUpdateInterval.Ticks,
                 Unit = Unit,
                 ProductName = ProductName,

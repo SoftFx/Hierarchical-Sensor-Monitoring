@@ -251,21 +251,30 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorEntity> GetAllSensors()
         {
-            var oldEntities = _environmentDatabase.GetSensorsInfo();
-            if (oldEntities == null || oldEntities.Count == 0)
-                return new List<SensorEntity>();
+            var dictionary = new Dictionary<string, SensorEntity>();
 
+            var oldEntities = _environmentDatabase.GetSensorsStrOld();
+            var newEntities = _environmentDatabase.GetSensorsStrNew();
             foreach (var oldEntity in oldEntities)
             {
-                if (!string.IsNullOrEmpty(oldEntity.Id))
-                    continue;
-
-                oldEntity.Id = Guid.NewGuid().ToString();
-                oldEntity.ProductId = string.Empty;
-                oldEntity.IsConverted = true;
+                var entity = EntityConverter.ConvertSensorEntity(oldEntity);
+                dictionary.Add(entity.Id, entity);
             }
 
-            return oldEntities;
+            var allEntities = new List<SensorEntity>();
+            foreach (var convertedEntity in newEntities)
+            {
+                var entity = EntityConverter.ConvertSensorEntity(convertedEntity);
+
+                if (dictionary.ContainsKey(entity.Id))
+                    dictionary.Remove(entity.Id);
+
+                allEntities.Add(entity);
+            }
+
+            allEntities.AddRange(dictionary.Values);
+
+            return allEntities;
         }
 
         #endregion

@@ -6,6 +6,7 @@ namespace HSMDatabase.LevelDB
     {
         public const string JOB_SENSOR_PREFIX = "JobSensorValue";
         public const string SENSOR_KEY_PREFIX = "SensorKey";
+        public const string SENSORIDS_PREFIX = "SensorIds";
         public const string SENSOR_VALUE_PREFIX = "SensorValue";
         public const string PRODUCTS_LIST_PREFIX = "ProductsNames";
         public const string ACCESS_KEY_LIST_PREFIX = "AccessKeys";
@@ -58,6 +59,8 @@ namespace HSMDatabase.LevelDB
         }
 
         public static string GetSensorsInfoReadKey() => SENSOR_KEY_PREFIX;
+
+        public static string GetSensorsKey() => SENSORIDS_PREFIX;
 
         public static string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {
