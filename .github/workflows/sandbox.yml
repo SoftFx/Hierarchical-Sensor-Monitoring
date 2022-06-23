@@ -38,7 +38,7 @@ jobs:
 
 
   create-artifact:
-    runs-on: ubuntu-lates
+    runs-on: ubuntu-latest
     needs: build
     outputs:
       ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
