@@ -84,7 +84,7 @@ jobs:
         with:
           type: 'zip'
           path: ${{ env.OUTPUT_FOLDER }}
-          filename: $ArtifactsZip
+          filename: ${{ env.ArtifactsZip }}
 
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -92,6 +92,6 @@ jobs:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: $ArtifactsZip
+          artifacts: ${{ env.ArtifactsZip }}
           prerelease: false
           allowUpdates: true
