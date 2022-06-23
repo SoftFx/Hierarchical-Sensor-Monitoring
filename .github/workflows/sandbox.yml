@@ -39,7 +39,7 @@ jobs:
       - uses: rickstaa/action-create-tag@v1
         name: Create tag
         with:
-          tag: "server-v${{ needs.build.outputs.VERSION }}"
+          tag: server-v${{ needs.build.outputs.VERSION }}
           message: "Test message"
           force_push_tag: true
 
@@ -52,8 +52,8 @@ jobs:
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
-          name: "HSMServer v${{ needs.build.outputs.VERSION }}"
-          tag: "server-v${{ needs.build.outputs.VERSION }}"
+          name: HSMServer v${{ needs.build.outputs.VERSION }}
+          tag: server-v${{ needs.build.outputs.VERSION }}
           token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: false
           allowUpdates: true
