@@ -36,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - uses: actions/checkout@v3
       - uses: actions-ecosystem/action-push-tag@v1
         with:
           tag: test-server-${{ needs.build.outputs.VERSION }}
