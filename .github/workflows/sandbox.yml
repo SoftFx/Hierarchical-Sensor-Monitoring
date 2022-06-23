@@ -2,12 +2,11 @@ name: Sandbox build
 on:
   workflow_dispatch:
     inputs:
-      logLevel:
-        description: 'Log level'
+      isRelease:
+        description: 'Release'
+        type: boolean
         required: true
-        default: 'warning'
-      tags:
-        description: 'Test scenario tags'
+        default: false
 jobs:
   build:
     runs-on: windows-latest
@@ -40,5 +39,6 @@ jobs:
       - uses: rickstaa/action-create-tag@v1
         name: Create tag
         with:
-          tag: "test-server-${{ needs.build.outputs.VERSION }}"
+          tag: "server-v${{ needs.build.outputs.VERSION }}"
           message: "Test message"
+          force_push_tag: true
