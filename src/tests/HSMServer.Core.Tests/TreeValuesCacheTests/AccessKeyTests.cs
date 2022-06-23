@@ -95,7 +95,49 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             keyIds.ForEach(id => Assert.Null(_valuesCache.GetAccessKey(id)));
         }
 
-        //update
+        [Theory]
+        [InlineData(1)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(1000)]
+        [Trait("Category", "Update access key(s)")]
+        public void UpdateAccessKeysTest(int count)
+        {
+             static AccessKeyUpdate BuildKeyUpdate(Guid id) =>
+                new()
+                {
+                    Id = id,
+                    DisplayName = RandomGenerator.GetRandomString(),
+                    Comment = RandomGenerator.GetRandomString(),
+                    Permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddSensors,
+                    State = KeyState.Blocked
+                };
+
+            var product = _valuesCache.AddProduct(RandomGenerator.GetRandomString());
+
+            var updates = new List<AccessKeyUpdate>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var id = _valuesCache.AddAccessKey(new AccessKeyModel
+                    (EntitiesFactory.BuildAccessKeyEntity(productId: product.Id))).Id;
+
+                updates.Add(BuildKeyUpdate(id));
+            }
+
+            updates.ForEach(upd => _valuesCache.UpdateAccessKey(upd));
+
+            CheckTransactionsCount((add: ProductAddTransactionCount,
+                update: count + DefaultKeyCount, delete: 0), _productTransactionCount);
+
+            CheckTransactionsCount((add: count + DefaultKeyCount, update: count, delete: 0),
+                _keyTransactionCount);
+
+            ModelsTester.TestProductModel(product, _valuesCache.GetProduct(product.Id));
+
+            foreach (var update in updates)
+                ModelsTester.TestAccessKeyModel(update, _valuesCache.GetAccessKey(update.Id));
+        }
 
         //getAll
 
@@ -147,7 +189,5 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(expected.update, actual.update);
             Assert.Equal(expected.delete, actual.delete);
         }
-
-
     }
 }

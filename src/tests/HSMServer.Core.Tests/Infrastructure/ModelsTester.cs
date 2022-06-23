@@ -47,9 +47,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
             TestCollections(expectedSensors, actualSensors);
 
-            var expectedKeys = expected.AccessKeys.Select(k => k.Key.ToString()).ToList();
-            var actualKeys = actual.AccessKeys.Select(k => k.Key.ToString()).ToList();
-            TestCollections(expectedKeys, actualKeys);
+            var expectedKeys = expected.AccessKeys.Values.ToList();
+            var actualKeys = actual.AccessKeys.Values.ToList();
+            for (int i = 0; i < expectedKeys.Count; i++)
+            {
+                TestAccessKeyModel(expectedKeys[i], actualKeys[i]);
+            }
         }
 
         internal static void TestProductModel(string name, ProductModel actual,
@@ -109,6 +112,15 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.CreationTime, actual.CreationTime);
             Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
+        }
+
+        internal static void TestAccessKeyModel(AccessKeyUpdate expected, AccessKeyModel actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.State, actual.State);
+            Assert.Equal(expected.Permissions, actual.Permissions);
+            Assert.Equal(expected.DisplayName, actual.DisplayName);
         }
 
         internal static void TestAccessKeyModel(ProductModel expected, AccessKeyModel actual)
