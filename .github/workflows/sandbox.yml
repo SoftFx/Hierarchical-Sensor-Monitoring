@@ -88,5 +88,6 @@ jobs:
           name: ${{ needs.create-artifact.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: ${{ env.OUTPUT_FOLDER }}
           prerelease: false
           allowUpdates: true
