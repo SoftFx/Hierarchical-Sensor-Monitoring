@@ -114,15 +114,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
         }
 
-        internal static void TestAccessKeyModel(AccessKeyUpdate expected, AccessKeyModel actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.State, actual.State);
-            Assert.Equal(expected.Permissions, actual.Permissions);
-            Assert.Equal(expected.DisplayName, actual.DisplayName);
-        }
-
         internal static void TestAccessKeyModel(ProductModel expected, AccessKeyModel actual)
         {
             Assert.NotNull(actual);
