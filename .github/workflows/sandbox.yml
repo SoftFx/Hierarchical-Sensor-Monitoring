@@ -9,8 +9,10 @@ on:
       tags:
         description: 'Test scenario tags'
 jobs:
-  printInputs:
+  build:
     runs-on: windows-latest
+    outputs:
+      VERSION: ${{ steps.save-version.outputs.version }}
     steps:
     - uses: actions/checkout@v2
     - name: Setup .NET Core
@@ -21,8 +23,10 @@ jobs:
     - name: Build HSMServer
       run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release
 
-    - name: Get server version
-      run: echo "RELEASE_VERSION=$((Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion)" >> $GITHUB_ENV
+    - id: save-version
+
+    - name: Save project verion
+      run: echo "::set-output name=version::$((Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion)"
 
     - name: Test
-      run: echo ${{ env.RELEASE_VERSION }}
+      run: echo "Project version is ${{ steps.save-version.outputs.version }}"
