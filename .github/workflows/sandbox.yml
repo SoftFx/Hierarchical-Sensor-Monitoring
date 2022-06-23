@@ -40,7 +40,7 @@ jobs:
   create-artifact:
     runs-on: ubuntu-lates
     needs: build
-    output:
+    outputs:
       ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
     steps:
       - uses: actions/checkout@v3
