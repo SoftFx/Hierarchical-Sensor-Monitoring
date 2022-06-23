@@ -42,3 +42,17 @@ jobs:
           tag: "server-v${{ needs.build.outputs.VERSION }}"
           message: "Test message"
           force_push_tag: true
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build, create-tag]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Create release
+        uses: actions/create-release@v1
+        with:
+          draft: false
+          prerelease: false
+          release_name: HSMServer v{{ needs.build.outputs.VERSION }}"
+          tag_name: ${{ github.ref }}
