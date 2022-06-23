@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, create-tag]
     env:
-      ArtifactsZip: ${{ env.OUTPUT_FOLDER }}.zip
+      ArtifactsZip: Artifacts.zip
     steps:
       - uses: actions/checkout@v3
 
