@@ -68,8 +68,6 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     needs: [build, create-tag]
-    env:
-      ArtifactsZip: Artifacts.zip
     steps:
       - uses: actions/checkout@v3
 
@@ -84,7 +82,7 @@ jobs:
         with:
           type: 'zip'
           path: ${{ env.OUTPUT_FOLDER }}
-          filename: ${{ env.ArtifactsZip }}
+          filename:  ${{ needs.build.outputs.ARTIFACT_NAME }}.zip
 
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -92,6 +90,6 @@ jobs:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ${{ env.ArtifactsZip }}
+          artifacts:  ${{ needs.build.outputs.ARTIFACT_NAME }}.zip
           prerelease: false
           allowUpdates: true
