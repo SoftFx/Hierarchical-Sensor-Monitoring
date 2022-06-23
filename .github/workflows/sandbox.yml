@@ -21,7 +21,7 @@ jobs:
         dotnet-version: 6.0.x
 
     - name: Build HSMServer
-      run: dotnet build src/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release
+      run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o ${{ github.workspace }}/Release
 
     - id: save-version
       run: echo "::set-output name=version::$((Get-Item ${{ github.workspace }}/Release/HSMServer.exe).VersionInfo.ProductVersion)"
