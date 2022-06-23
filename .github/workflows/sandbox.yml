@@ -16,17 +16,17 @@ jobs:
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v2
       with:
         dotnet-version: 6.0.x
 
     - name: Build HSMServer
-      run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o $OutputFolder
+      run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o ${{ env.OutputFolder }}
 
     - id: save-version
-      run: echo "::set-output name=version::$((Get-Item $OutputFolder/HSMServer.exe).VersionInfo.ProductVersion)"
+      run: echo "::set-output name=version::$((Get-Item ${{ env.OutputFolder }}/HSMServer.exe).VersionInfo.ProductVersion)"
 
     - name: Test
       run: echo "Project version is ${{ steps.save-version.outputs.version }}"
