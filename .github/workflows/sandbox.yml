@@ -26,7 +26,7 @@ jobs:
       run: dotnet build src/server/HSMServer/HSMServer.csproj -c Release -o $OutputFolder
 
     - id: save-version
-      run: echo "::set-output name=version::$((Get-Item ${{ OutputFolder }}/HSMServer.exe).VersionInfo.ProductVersion)"
+      run: echo "::set-output name=version::$((Get-Item ${{ env.OutputFolder }}/HSMServer.exe).VersionInfo.ProductVersion)"
 
     - name: Test
       run: echo "Project version is ${{ steps.save-version.outputs.version }}"
