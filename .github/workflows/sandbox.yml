@@ -6,8 +6,8 @@ on:
 
   workflow_dispatch:
     inputs:
-      isRelease:
-        description: 'Release'
+      isPreRelease:
+        description: 'PreRelease'
         type: boolean
         required: true
         default: false
@@ -77,12 +77,18 @@ jobs:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           path: ${{ env.OUTPUT_FOLDER }}
 
+      - name: Create archive name
+        run: echo "ArtifactZip=HSMServer-{{ needs.build.outputs.VERSION }}.zip" >> $GITHUB_ENV
+
+      - name: Check name
+        run: echo $ArtifactZip
+
       - name: Archive artifacts
         uses: thedoctor0/zip-release@main
         with:
           type: 'zip'
           path: ${{ env.OUTPUT_FOLDER }}
-          filename:  ${{ needs.build.outputs.ARTIFACT_NAME }}.zip
+          filename: $ArtifactZip
 
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -90,6 +96,6 @@ jobs:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts:  ${{ needs.build.outputs.ARTIFACT_NAME }}.zip
+          artifacts: $ArtifactZip
           prerelease: false
           allowUpdates: true
