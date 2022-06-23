@@ -75,7 +75,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
-          path: ${{ env.OUTPUT_FOLDER }}.zip
+          path: ${{ env.OUTPUT_FOLDER }}
 
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -83,6 +83,6 @@ jobs:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ${{ env.OUTPUT_FOLDER }}.zip
+          artifacts: ${{ env.OUTPUT_FOLDER }}/*
           prerelease: false
           allowUpdates: true
