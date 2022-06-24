@@ -59,11 +59,11 @@ jobs:
         run: echo "::set-output name=tag::server-v${{ needs.build.outputs.VERSION }}"
 
       - name: Build release tag message
-        if: ${{ github.event.inputs.isPreRelease == false}}
+        if: ${{ !github.event.inputs.isPreRelease }}
         run: echo "TagMessage=Release version HSMServer-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
 
       - name: Build prerelease tag message
-        if: ${{ github.event.inputs.isPreRelease == true}}
+        if: ${{ github.event.inputs.isPreRelease }}
         run: echo "TagMessage=PreRelease version HSMServer-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
 
       - name: Push tag
