@@ -105,6 +105,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, create-tag]
     environment: DockerHub
+    env:
+      DockerimageName: hsmonitoring/hierarchical_sensor_monitoring
     steps:
       - uses: actions/checkout@v3
 
@@ -119,3 +121,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.DockerimageName }}
+
+      - name: Print tags
+        run: echo ${{ steps.meta.outputs.tags }}
