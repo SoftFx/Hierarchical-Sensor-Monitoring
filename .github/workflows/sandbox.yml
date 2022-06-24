@@ -58,11 +58,19 @@ jobs:
         name: Create tag
         run: echo "::set-output name=tag::server-v${{ needs.build.outputs.VERSION }}"
 
+      - name: Build release tag message
+        if: ${{ github.event.inputs.isPreRelease == false}}
+        run: echo "TagMessage=Release version HSMServer-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
+
+      - name: Build prerelease tag message
+        if: ${{ github.event.inputs.isPreRelease == true}}
+        run: echo "TagMessage=PreRelease version HSMServer-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
+
       - name: Push tag
         uses: rickstaa/action-create-tag@v1
         with:
           tag: ${{ steps.save-tag.outputs.tag }}
-          message: "Test message"
+          message: ${{ env.TagMessage }}
           force_push_tag: true
 
 
@@ -98,12 +106,13 @@ jobs:
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: ${{ env.ArtifactZip }}
-          prerelease: false
+          prerelease: ${{ github.event.inputs.isPreRelease }}
           allowUpdates: true
 
 
   publish-dockerimage:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    #if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: false
     runs-on: ubuntu-latest
     needs: [build]
     environment: DockerHub
