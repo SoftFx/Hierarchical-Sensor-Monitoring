@@ -52,6 +52,7 @@ namespace HSMServer.Core.DataLayer
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
 
         List<SensorEntity> GetAllSensors();
+        void RemoveAllOldSensors();
         #endregion
 
         #region User

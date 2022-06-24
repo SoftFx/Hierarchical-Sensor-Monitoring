@@ -29,6 +29,7 @@ namespace HSMServer.Core.Cache
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
+        private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensorsNew;
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
@@ -43,6 +44,7 @@ namespace HSMServer.Core.Cache
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, SensorModel>();
+            _sensorsNew = new ConcurrentDictionary<Guid, BaseSensorModel>();
             _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
@@ -338,14 +340,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(productEntities)} applied");
 
             _logger.Info($"{nameof(sensorEntities)} are applying");
-            foreach (var sensorEntity in sensorEntities)
-            {
-                var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
-                _sensors.TryAdd(sensor.Id, sensor);
-
-                var newSensor = GetSensorModel(sensorEntity);
-                var newEntity = newSensor.ToEntity();
-            }
+            ApplySensors(sensorEntities);
             _logger.Info($"{nameof(sensorEntities)} applied");
 
             _logger.Info("Tree is building");
@@ -369,21 +364,25 @@ namespace HSMServer.Core.Cache
             _logger.Info("Tree is built");
         }
 
-        private static BaseSensorModel GetSensorModel(SensorEntity entity) =>
-            (SensorType)entity.Type switch
-            {
-                SensorType.Boolean => new BooleanSensorModel(entity),
-                SensorType.Integer => new IntegerSensorModel(entity),
-                SensorType.Double => new DoubleSensorModel(entity),
-                SensorType.String => new StringSensorModel(entity),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
-                SensorType.File => new FileSensorModel(entity),
-                _ => null,
-            };
+        private void ApplySensors(List<SensorEntity> entities)
+        {
+            var entitiesToResave = new List<SensorEntity>();
 
-        private SensorDataEntity GetSensorData(SensorEntity sensor) =>
-            _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);
+            foreach (var entity in entities)
+            {
+                var sensor = GetSensorModel(entity);
+
+                if (sensor != null)
+                {
+                    _sensorsNew.TryAdd(sensor.Id, sensor);
+
+                    if (entity.IsConverted)
+                        entitiesToResave.Add(sensor.ToEntity());
+                }
+            }
+
+            ResaveSensors(entitiesToResave);
+        }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)
         {
@@ -528,5 +527,35 @@ namespace HSMServer.Core.Cache
                 GetAllProductSubProducts(subProduct, allSubProducts);
             }
         }
+
+        private void ResaveSensors(List<SensorEntity> entitiesToResave)
+        {
+            if (entitiesToResave.Count == 0)
+                return;
+
+            _logger.Info($"{nameof(entitiesToResave)} are resaving ({entitiesToResave.Count} sensors)");
+
+            foreach (var sensor in entitiesToResave)
+                _databaseCore.AddSensor(sensor);
+
+            _logger.Info($"All old sensors are removing");
+            _databaseCore.RemoveAllOldSensors();
+            _logger.Info($"All old sensors removed");
+
+            _logger.Info($"{nameof(entitiesToResave)} resaved ({entitiesToResave.Count} sensors)");
+        }
+
+        private static BaseSensorModel GetSensorModel(SensorEntity entity) =>
+            (SensorType)entity.Type switch
+            {
+                SensorType.Boolean => new BooleanSensorModel(entity),
+                SensorType.Integer => new IntegerSensorModel(entity),
+                SensorType.Double => new DoubleSensorModel(entity),
+                SensorType.String => new StringSensorModel(entity),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
+                SensorType.File => new FileSensorModel(entity),
+                _ => null,
+            };
     }
 }

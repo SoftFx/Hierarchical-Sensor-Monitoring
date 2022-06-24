@@ -38,6 +38,7 @@ namespace HSMDatabase.AccessManager
         List<string> GetAllSensorsIds();
         List<string> GetSensorsStrOld();
         List<string> GetSensorsStrNew();
+        void RemoveAllOldSensors();
 
         #endregion
 

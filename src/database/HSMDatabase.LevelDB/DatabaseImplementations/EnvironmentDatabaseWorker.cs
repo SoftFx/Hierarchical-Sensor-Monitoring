@@ -358,6 +358,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
+        public void RemoveAllOldSensors()
+        {
+            var key = PrefixConstants.GetSensorsInfoReadKey();
+            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
+
+            try
+            {
+                _database.DeleteAllStartingWith(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to removing all sensor entities with prefix {key}");
+            }
+        }
+
         private void UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
         {
             try

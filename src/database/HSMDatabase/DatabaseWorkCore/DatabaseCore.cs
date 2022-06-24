@@ -279,6 +279,9 @@ namespace HSMDatabase.DatabaseWorkCore
             return allEntities;
         }
 
+        public void RemoveAllOldSensors() =>
+            _environmentDatabase.RemoveAllOldSensors();
+
         #endregion
 
         #region Environment database : Product
