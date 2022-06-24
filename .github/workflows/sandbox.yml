@@ -15,16 +15,7 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
 jobs:
-  check-event:
-    runs-on: ubuntu-latest
-    steps:
-    - run: echo "${{ github.event_name }}"
-
-    - if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: echo "Is manually run"
-
   build:
-    if: false
     runs-on: windows-latest
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
@@ -55,6 +46,7 @@ jobs:
 
 
   create-tag:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: build
     outputs:
@@ -111,6 +103,7 @@ jobs:
 
 
   publish-dockerimage:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [build]
     environment: DockerHub
