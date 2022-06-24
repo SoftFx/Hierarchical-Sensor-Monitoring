@@ -16,6 +16,8 @@ env:
 
 jobs:
   check-event:
+    runs-on: ubuntu-latest
+    steps:
     - run: echo "${{ github.event_name }}"
 
     - if: ${{ github.event_name }} == workflow_dispatch
