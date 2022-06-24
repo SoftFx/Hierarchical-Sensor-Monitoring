@@ -5,6 +5,7 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
 using NLog;
@@ -20,6 +21,7 @@ namespace HSMServer.Core.Cache
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -340,6 +342,9 @@ namespace HSMServer.Core.Cache
             {
                 var sensor = new SensorModel(sensorEntity, GetSensorData(sensorEntity));
                 _sensors.TryAdd(sensor.Id, sensor);
+
+                var newSensor = GetSensorModel(sensorEntity);
+                var newEntity = newSensor.ToEntity();
             }
             _logger.Info($"{nameof(sensorEntities)} applied");
 
@@ -361,8 +366,21 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
-            _logger.Info("Tree built");
+            _logger.Info("Tree is built");
         }
+
+        private static BaseSensorModel GetSensorModel(SensorEntity entity) =>
+            (SensorType)entity.Type switch
+            {
+                SensorType.Boolean => new BooleanSensorModel(entity),
+                SensorType.Integer => new IntegerSensorModel(entity),
+                SensorType.Double => new DoubleSensorModel(entity),
+                SensorType.String => new StringSensorModel(entity),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
+                SensorType.File => new FileSensorModel(entity),
+                _ => null,
+            };
 
         private SensorDataEntity GetSensorData(SensorEntity sensor) =>
             _databaseCore.GetLatestSensorValue(sensor.ProductName, sensor.Path);

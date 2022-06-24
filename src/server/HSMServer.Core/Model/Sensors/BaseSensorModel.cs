@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
@@ -15,11 +16,11 @@ namespace HSMServer.Core.Model
     {
         public Guid Id { get; }
 
-        public string AuthorId { get; }
+        public Guid? AuthorId { get; }
 
         public string ProductId { get; }
 
-        public DateTime CreationDate{ get; }
+        public DateTime CreationDate { get; }
 
         public string DisplayName { get; private set; }
 
@@ -40,6 +41,22 @@ namespace HSMServer.Core.Model
 
         // TODO: maybe store in Storage
         public DateTime LastUpdateTime { get; private set; }
+
+
+        internal BaseSensorModel(SensorEntity entity)
+        {
+            Id = Guid.Parse(entity.Id);
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            ProductId = entity.ProductId;
+            CreationDate = new DateTime(entity.CreationDate);
+            DisplayName = entity.DisplayName;
+            Description = entity.Description;
+            State = (SensorState)entity.State;
+            Unit = entity.Unit;
+        }
+
+
+        internal abstract SensorEntity ToEntity();
     }
 
 
@@ -48,5 +65,36 @@ namespace HSMServer.Core.Model
         private readonly List<Policy<T>> _policies = new();
 
         public abstract ValuesStorage<T> Storage { get; }
+
+
+        internal BaseSensorModel(SensorEntity entity) : base(entity) { }
+
+
+        internal override SensorEntity ToEntity() =>
+            new()
+            {
+                Id = Id.ToString(),
+                AuthorId = AuthorId.ToString(),
+                ProductId = ProductId,
+                DisplayName = DisplayName,
+                Description = Description,
+                Unit = Unit,
+                CreationDate = CreationDate.Ticks,
+                Type = (byte)GetSensorType(),
+                State = (byte)State,
+            };
+
+        // Можно вместо switch хранить Type в базовой моделе.
+        private SensorType GetSensorType() =>
+            this switch
+            {
+                BooleanSensorModel => SensorType.Boolean,
+                IntegerSensorModel => SensorType.Integer,
+                DoubleSensorModel => SensorType.Double,
+                StringSensorModel => SensorType.String,
+                FileSensorModel => SensorType.File,
+                IntegerBarSensorModel => SensorType.IntegerBar,
+                DoubleBarSensorModel => SensorType.DoubleBar,
+            };
     }
 }

@@ -2,6 +2,7 @@
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Converters
 {

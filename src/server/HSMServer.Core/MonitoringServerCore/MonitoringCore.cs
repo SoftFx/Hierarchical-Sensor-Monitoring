@@ -19,6 +19,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.MonitoringServerCore
 {

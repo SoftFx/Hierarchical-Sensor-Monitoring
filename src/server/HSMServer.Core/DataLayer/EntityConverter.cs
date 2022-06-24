@@ -29,7 +29,7 @@ namespace HSMServer.Core.DataLayer
                 DisplayName = rootElement.GetProperty(SensorNamePropertyName, GetStringProperty),
                 Description = rootElement.GetProperty(nameof(SensorEntity.Description), GetStringProperty),
                 Unit = rootElement.GetProperty(nameof(SensorEntity.Unit), GetStringProperty),
-                Type = rootElement.GetProperty(SensorTypePropertyName, GetByteProperty),
+                Type = GetSensorType(rootElement.GetProperty(SensorTypePropertyName, GetByteProperty)),
                 IsConverted = true,
             };
         }
@@ -37,5 +37,11 @@ namespace HSMServer.Core.DataLayer
         private static T GetProperty<T>(this JsonElement rootElement, string propertyName,
                                         Func<JsonElement, T> getPropertyAction, T defaultValue = default) =>
             rootElement.TryGetProperty(propertyName, out var property) ? getPropertyAction(property) : defaultValue;
+
+        private static byte GetSensorType(byte currentType) =>
+            (HSMSensorDataObjects.SensorType)currentType == HSMSensorDataObjects.SensorType.FileSensorBytes ||
+            (HSMSensorDataObjects.SensorType)currentType == HSMSensorDataObjects.SensorType.FileSensor
+                ? (byte)Model.SensorType.File
+                : currentType;
     }
 }

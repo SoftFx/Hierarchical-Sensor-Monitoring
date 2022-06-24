@@ -10,16 +10,16 @@ namespace HSMServer.Core.Model
     //    Unknown = byte.MaxValue,
     //}
 
-    //public enum SensorType : byte
-    //{
-    //    Boolean,
-    //    Integer,
-    //    Double,
-    //    String,
-    //    IntegerBar,
-    //    DoubleBar,
-    //    File,
-    //}
+    public enum SensorType : byte
+    {
+        Boolean,
+        Integer,
+        Double,
+        String,
+        IntegerBar,
+        DoubleBar,
+        File,
+    }
 
 
     public abstract record BaseValue
