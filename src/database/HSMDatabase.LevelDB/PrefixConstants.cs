@@ -16,6 +16,8 @@ namespace HSMDatabase.LevelDB
         public const string CONFIGURATION_OBJECT_PREFIX = "ConfigurationObject";
         public const string REGISTRATION_TICKET_PREFIX = "RegistrationTicket";
         public const string MONITORING_DATABASE_LIST_PREFIX = "MonitoringDatabases";
+
+
         public static string GetUniqueUserKey(string userName)
         {
             return $"{USER_INFO_PREFIX}_{userName}";
@@ -33,11 +35,6 @@ namespace HSMDatabase.LevelDB
 
         public static string GetAccessKeyListKey() => ACCESS_KEY_LIST_PREFIX;
 
-        public static string GetProductInfoKey(string productName)
-        {
-            return $"{PRODUCT_INFO_PREFIX}_{productName}";
-        }
-
         public static string GetUniqueConfigurationObjectKey(string objectName)
         {
             return $"{CONFIGURATION_OBJECT_PREFIX}_{objectName}";
@@ -53,14 +50,9 @@ namespace HSMDatabase.LevelDB
             return $"{SENSOR_VALUE_PREFIX}_{productName}_{path}";
         }
 
-        public static string GetSensorInfoKey(string productName, string path)
-        {
-            return $"{SENSOR_KEY_PREFIX}_{productName}_{path}";
-        }
-
         public static string GetSensorsInfoReadKey() => SENSOR_KEY_PREFIX;
 
-        public static string GetSensorsKey() => SENSORIDS_PREFIX;
+        public static string GetSensorIdsKey() => SENSORIDS_PREFIX;
 
         public static string GetSensorWriteValueKey(string productName, string path, DateTime putTime)
         {

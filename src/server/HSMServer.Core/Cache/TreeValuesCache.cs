@@ -233,7 +233,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ParentProduct.Sensors.TryRemove(sensorId, out _);
-            _databaseCore.RemoveSensorWithMetadata(sensor.ProductName, sensor.Path);
+            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }

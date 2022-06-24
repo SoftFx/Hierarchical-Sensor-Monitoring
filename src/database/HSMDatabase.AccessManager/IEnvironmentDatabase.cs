@@ -30,10 +30,12 @@ namespace HSMDatabase.AccessManager
 
         #region Sensors
 
-        void RemoveSensor(string productName, string path);
+        void AddSensorIdToList(string sensorId);
         void AddSensor(SensorEntity info);
-        SensorEntity GetSensorInfo(string productName, string path);
-        List<SensorEntity> GetSensorEntities();
+        void RemoveSensorIdFromList(string sensorId);
+        void RemoveSensor(string sensorId);
+        SensorEntity GetSensorEntity(string sensorId);
+        List<string> GetAllSensorsIds();
         List<string> GetSensorsStrOld();
         List<string> GetSensorsStrNew();
 
