@@ -1,8 +1,7 @@
 name: HSMServer build
 on:
   push:
-    branches:
-      - test_github_actions
+    branches: [master, develop]
 
   workflow_dispatch:
     inputs:
@@ -37,7 +36,7 @@ jobs:
       run: dotnet build ${{ env.SolutionPath }} -c Release --no-restore
 
     - name: Test Solution
-      run: dotnet test ${{ env.SolutionPath }} -v normal
+      run: dotnet test ${{ env.SolutionPath }}
 
     - name: Build HSMServer
       run: dotnet build ${{ env.ServerPath }} -c Release -o ${{ env.OUTPUT_FOLDER }}
