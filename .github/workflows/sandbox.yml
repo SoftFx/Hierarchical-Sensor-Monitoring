@@ -15,7 +15,14 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
 jobs:
+  check-event:
+    - run: echo "${{ github.event_name }}"
+
+    - if: ${{ github.event_name }} == workflow_dispatch
+      run: "Is manually run"
+
   build:
+    if: false
     runs-on: windows-latest
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
