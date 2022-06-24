@@ -104,6 +104,7 @@ jobs:
   publish-dockerimage:
     runs-on: ubuntu-latest
     needs: [build, create-tag]
+    environment: DockerHub
     steps:
       - uses: actions/checkout@v3
 
