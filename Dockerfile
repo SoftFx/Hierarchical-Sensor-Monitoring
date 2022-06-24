@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 COPY . ./
-RUN dotnet restore src/HSMServer/HSMServer.sln
-RUN dotnet publish src/HSMServer/HSMServer.sln -c Release --no-restore -o Release
+RUN dotnet restore src/server/HSMServer/HSMServer.sln
+RUN dotnet publish src/server/HSMServer/HSMServer.sln -c Release --no-restore -o Release
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0
 RUN apt-get update && apt-get install -y \
