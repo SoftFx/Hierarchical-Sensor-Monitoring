@@ -20,7 +20,7 @@ jobs:
     steps:
     - run: echo "${{ github.event_name }}"
 
-    - if: ${{ github.event_name }} == "workflow_dispatch"
+    - if: ${{ github.event_name == 'workflow_dispatch' }}
       run: echo "Is manually run"
 
   build:
