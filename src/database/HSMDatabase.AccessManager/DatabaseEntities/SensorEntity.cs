@@ -6,6 +6,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public class SensorEntity
     {
+        [Obsolete]
+        [NonSerialized]
+        public long ExpectedUpdateIntervalTicks;
+
+
         public string Id { get; init; }
 
         public string ProductId { get; init; }
@@ -24,12 +29,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public byte State { get; init; }
 
+        public List<string> Policies { get; init; }
+
         [Obsolete]
         public string Path { get; set; }
         [Obsolete]
         public string ProductName { get; set; }
-        [Obsolete]
-        public long ExpectedUpdateIntervalTicks { get; set; }
 
         [JsonIgnore]
         public bool IsConverted { get; set; }

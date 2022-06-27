@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -14,6 +15,9 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel
     {
+        protected readonly List<Policy> _basePolicies = new();
+
+
         public Guid Id { get; }
 
         public Guid? AuthorId { get; }
@@ -34,9 +38,6 @@ namespace HSMServer.Core.Model
         //public SensorStatus Status { get; private set; }
         //public string DataError { get; private set; }
 
-        // TODO: move to policies logic
-        //public TimeSpan ExpectedUpdateInterval { get; private set; }
-
         public string Unit { get; private set; }
 
         // TODO: maybe store in Storage
@@ -56,19 +57,28 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal void AddBasePolicy(Policy policy) =>
+            _basePolicies.Add(policy);
+
+        internal abstract void AddCustomPolicy(Policy policy);
+
         internal abstract SensorEntity ToEntity();
     }
 
 
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly List<Policy<T>> _policies = new();
+        private readonly List<Policy<T>> _customPolicies = new();
+
 
         public abstract ValuesStorage<T> Storage { get; }
 
 
         internal BaseSensorModel(SensorEntity entity) : base(entity) { }
 
+
+        internal override void AddCustomPolicy(Policy policy) =>
+            _customPolicies.Add((Policy<T>)policy);
 
         internal override SensorEntity ToEntity() =>
             new()
@@ -82,6 +92,7 @@ namespace HSMServer.Core.Model
                 CreationDate = CreationDate.Ticks,
                 Type = (byte)GetSensorType(),
                 State = (byte)State,
+                Policies = GetPolicyIds(),
             };
 
         // Можно вместо switch хранить Type в базовой моделе.
@@ -96,5 +107,15 @@ namespace HSMServer.Core.Model
                 IntegerBarSensorModel => SensorType.IntegerBar,
                 DoubleBarSensorModel => SensorType.DoubleBar,
             };
+
+        private List<string> GetPolicyIds()
+        {
+            var policyIds = new List<string>(_basePolicies.Count + _customPolicies.Count);
+
+            policyIds.AddRange(_basePolicies.Select(p => p.Id.ToString()));
+            policyIds.AddRange(_customPolicies.Select(p => p.Id.ToString()));
+
+            return policyIds;
+        }
     }
 }

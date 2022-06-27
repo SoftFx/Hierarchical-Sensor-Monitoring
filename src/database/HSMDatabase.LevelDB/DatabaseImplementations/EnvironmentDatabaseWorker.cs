@@ -16,7 +16,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         private readonly byte[] _accessKeyListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetAccessKeyListKey());
         private readonly byte[] _productListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetProductsListKey());
-        private readonly byte[] _sensorsIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorIdsKey());
+        private readonly byte[] _sensorIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorIdsKey());
+        private readonly byte[] _policyIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetPolicyIdsKey());
 
 
         public EnvironmentDatabaseWorker(string name)
@@ -301,21 +302,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public List<string> GetAllSensorsIds()
-        {
-            try
-            {
-                return _database.TryRead(_sensorsIdsKey, out byte[] value) ?
-                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to get sensors ids list");
-            }
-
-            return new();
-        }
+        public List<string> GetAllSensorsIds() =>
+            GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
         public List<string> GetSensorsStrOld()
         {
@@ -381,7 +369,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 updateListAction?.Invoke(sensorIds);
 
-                _database.Put(_sensorsIdsKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(sensorIds)));
+                _database.Put(_sensorIdsKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(sensorIds)));
             }
             catch (Exception e)
             {
@@ -390,6 +378,45 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
         #endregion
+
+        #region
+
+        public void AddPolicyIdToList(string policyId)
+        {
+            try
+            {
+                var policyIds = GetAllPoliciesIds();
+
+                if (!policyIds.Contains(policyId))
+                    policyIds.Add(policyId);
+
+                _database.Put(_policyIdsKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(policyIds)));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add policy id {policyId} to list");
+            }
+        }
+
+        public void AddPolicy(PolicyEntity entity)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            var bytesValue = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(entity.Policy));
+
+            try
+            {
+                _database.Put(bytesKey, bytesValue);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add policy info for {entity.Id}");
+            }
+        }
+
+        public List<string> GetAllPoliciesIds() =>
+            GetListOfKeys(_policyIdsKey, "Failed to get all policy ids");
+
+        #endregion 
 
         #region User
 
@@ -652,5 +679,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
         public void Dispose() => _database.Dispose();
+
+        private List<string> GetListOfKeys(byte[] key, string error)
+        {
+            try
+            {
+                return _database.TryRead(key, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new List<string>();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, error);
+            }
+
+            return new();
+        }
     }
 }

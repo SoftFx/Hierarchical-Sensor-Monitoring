@@ -367,6 +367,7 @@ namespace HSMServer.Core.Cache
         private void ApplySensors(List<SensorEntity> entities)
         {
             var entitiesToResave = new List<SensorEntity>();
+            var policiesToAdd = new Dictionary<string, Policy>();
 
             foreach (var entity in entities)
             {
@@ -377,11 +378,21 @@ namespace HSMServer.Core.Cache
                     _sensorsNew.TryAdd(sensor.Id, sensor);
 
                     if (entity.IsConverted)
+                    {
+                        if (entity.ExpectedUpdateIntervalTicks != 0)
+                        {
+                            var policy = new ExpectedUpdateIntervalPolicy(entity.ExpectedUpdateIntervalTicks);
+
+                            sensor.AddBasePolicy(policy);
+                            policiesToAdd.Add(entity.Id, policy);
+                        }
+
                         entitiesToResave.Add(sensor.ToEntity());
+                    }
                 }
             }
 
-            ResaveSensors(entitiesToResave);
+            ResaveSensors(entitiesToResave, policiesToAdd);
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)
@@ -528,7 +539,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void ResaveSensors(List<SensorEntity> entitiesToResave)
+        private void ResaveSensors(List<SensorEntity> entitiesToResave, Dictionary<string, Policy> policiesToAdd)
         {
             if (entitiesToResave.Count == 0)
                 return;
@@ -536,7 +547,12 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(entitiesToResave)} are resaving ({entitiesToResave.Count} sensors)");
 
             foreach (var sensor in entitiesToResave)
+            {
                 _databaseCore.AddSensor(sensor);
+
+                if (policiesToAdd.TryGetValue(sensor.Id, out Policy policy))
+                    _databaseCore.AddPolicy(policy.ToEntity());
+            }
 
             _logger.Info($"All old sensors are removing");
             _databaseCore.RemoveAllOldSensors();

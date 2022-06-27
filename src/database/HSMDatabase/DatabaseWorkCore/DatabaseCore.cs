@@ -284,6 +284,16 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region
+
+        public void AddPolicy(PolicyEntity entity)
+        {
+            _environmentDatabase.AddPolicyIdToList(entity.Id);
+            _environmentDatabase.AddPolicy(entity);
+        }
+
+        #endregion
+
         #region Environment database : Product
 
         public void AddProduct(ProductEntity entity)

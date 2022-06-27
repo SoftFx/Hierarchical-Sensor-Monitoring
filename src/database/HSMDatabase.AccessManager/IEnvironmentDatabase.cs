@@ -42,6 +42,13 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region
+
+        void AddPolicyIdToList(string policyId);
+        void AddPolicy(PolicyEntity policy);
+
+        #endregion
+
         #region Users
 
         void AddUser(UserEntity user);

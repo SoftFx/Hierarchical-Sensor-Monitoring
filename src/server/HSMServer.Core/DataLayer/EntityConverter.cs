@@ -11,16 +11,17 @@ namespace HSMServer.Core.DataLayer
 
 
         // TODO: return SensorEntity with expectedupdateinterval is IsConverted = true
-        public static SensorEntity ConvertSensorEntity(string oldEntity)
+        public static SensorEntity ConvertSensorEntity(string entity)
         {
-            var jsonDocument = JsonDocument.Parse(oldEntity);
+            var jsonDocument = JsonDocument.Parse(entity);
             var rootElement = jsonDocument.RootElement;
 
             if (rootElement.TryGetProperty(nameof(SensorEntity.DisplayName), out _))
-                return JsonSerializer.Deserialize<SensorEntity>(oldEntity);
+                return JsonSerializer.Deserialize<SensorEntity>(entity);
 
             string GetStringProperty(JsonElement element) => element.GetString();
             byte GetByteProperty(JsonElement element) => element.GetByte();
+            long GetLongProperty(JsonElement element) => element.GetInt64();
 
             return new()
             {
@@ -30,6 +31,7 @@ namespace HSMServer.Core.DataLayer
                 Description = rootElement.GetProperty(nameof(SensorEntity.Description), GetStringProperty),
                 Unit = rootElement.GetProperty(nameof(SensorEntity.Unit), GetStringProperty),
                 Type = GetSensorType(rootElement.GetProperty(SensorTypePropertyName, GetByteProperty)),
+                ExpectedUpdateIntervalTicks = rootElement.GetProperty(nameof(SensorEntity.ExpectedUpdateIntervalTicks), GetLongProperty),
                 IsConverted = true,
             };
         }

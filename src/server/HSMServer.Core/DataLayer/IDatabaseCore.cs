@@ -53,6 +53,13 @@ namespace HSMServer.Core.DataLayer
 
         List<SensorEntity> GetAllSensors();
         void RemoveAllOldSensors();
+
+        #endregion
+
+        #region
+
+        void AddPolicy(PolicyEntity policy);
+
         #endregion
 
         #region User
