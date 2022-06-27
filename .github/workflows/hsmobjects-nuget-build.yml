@@ -1,0 +1,29 @@
+name: HSMObjects nuget build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_NuGet:
+    runs-on: ubuntu-latest
+    environment: Nuget
+    env:
+      ApiPath: src/api/HSMSensorDataObjects/HSMSensorDataObjects.csproj
+      OutputFolder: ${{ github.workspace }}/BuildOutput
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Intall nuget
+        uses: nuget/setup-nuget@v1
+        with:
+          nuget-api-key: ${{ secrets.NUGETKEY }}
+
+      - name: Pack Api
+        run: dotnet pack ${{ env.ApiPath }} -c Release -o ${{ env.OutputFolder }}
+
+      - name: Push nuget
+        run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json

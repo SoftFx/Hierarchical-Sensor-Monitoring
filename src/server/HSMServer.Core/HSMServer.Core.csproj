@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.31" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
+    <PackageReference Include="NLog" Version="4.7.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\database\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+  </ItemGroup>
+
+</Project>
