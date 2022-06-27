@@ -156,6 +156,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private void EventHandler<T>(T model, TransactionType type)
         {
+            static void CheckTransaction(TransactionType type,
+            ref (int add, int update, int delete) transactionCount)
+            {
+                switch (type)
+                {
+                    case TransactionType.Add:
+                        transactionCount.add++;
+                        break;
+
+                    case TransactionType.Update:
+                        transactionCount.update++;
+                        break;
+
+                    case TransactionType.Delete:
+                        transactionCount.delete++;
+                        break;
+                }
+            }
+
             Assert.NotNull(model);
 
             if (model is ProductModel)
@@ -163,25 +182,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             else if (model is AccessKeyModel)
                 CheckTransaction(type, ref _keyTransactionCount);
-        }
-
-        private static void CheckTransaction(TransactionType type, 
-            ref (int add, int update, int delete) transactionCount)
-        {
-            switch (type)
-            {
-                case TransactionType.Add:
-                    transactionCount.add++;
-                    break;
-
-                case TransactionType.Update:
-                    transactionCount.update++;
-                    break;
-
-                case TransactionType.Delete:
-                    transactionCount.delete++;
-                    break;
-            }
         }
 
         private static void AssertTransactionsCount((int add, int update, int delete) expected,
