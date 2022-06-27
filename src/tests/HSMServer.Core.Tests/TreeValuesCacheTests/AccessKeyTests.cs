@@ -13,6 +13,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     public class AccessKeyTests : MonitoringCoreTestsBase<AccessKeyFixture>, IDisposable
     {
+        private const int DefaultKeyCount = 1;
+        private const int ProductAddTransactionCount = 1;
+
         private readonly ITreeValuesCache _valuesCache;
 
         private (int add, int update, int delete) _productTransactionCount;
@@ -21,9 +24,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private delegate ProductModel GetProduct(string id);
         private delegate AccessKeyModel GetAccessKey(Guid id);
-
-        private const int DefaultKeyCount = 1;
-        private const int ProductAddTransactionCount = 1; 
 
 
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
@@ -34,8 +34,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _productTransactionCount = (0, 0, 0);
             _keyTransactionCount = (0, 0, 0);
 
-            _valuesCache.ChangeProductEvent += ProductEventHandler;
-            _valuesCache.ChangeAccessKeyEvent += KeyEventHandler;
+            _valuesCache.ChangeProductEvent += EventHandler;
+            _valuesCache.ChangeAccessKeyEvent += EventHandler;
 
             _product = _valuesCache.AddProduct(RandomGenerator.GetRandomString());
         }
@@ -52,10 +52,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             List<AccessKeyModel> keys = AddRandomKeys(count);
             
-            TestTransactionsCount((add: ProductAddTransactionCount, 
+            AssertTransactionsCount((add: ProductAddTransactionCount, 
                 update: count + DefaultKeyCount, delete: 0), _productTransactionCount);
 
-            TestTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0), 
+            AssertTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0), 
                 _keyTransactionCount);
 
             TestProductAndKeys(keys, _valuesCache.GetProduct, _valuesCache.GetAccessKey);
@@ -76,10 +76,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 _valuesCache.RemoveAccessKey(id);
 
             // 2 * count = count (added keys) + count (removed keys)
-            TestTransactionsCount((add: ProductAddTransactionCount,
+            AssertTransactionsCount((add: ProductAddTransactionCount,
                 update: (2 * count) + DefaultKeyCount, delete: 0), _productTransactionCount);
 
-            TestTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: count),
+            AssertTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: count),
                 _keyTransactionCount);
 
             ModelsTester.TestProductModel(_product, _valuesCache.GetProduct(_product.Id));
@@ -109,16 +109,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var updatedKeys = new List<AccessKeyModel>(count);
             for (int i = 0; i < count; i++)
             {
-                var id = _valuesCache.AddAccessKey(new AccessKeyModel
-                    (EntitiesFactory.BuildAccessKeyEntity(productId: _product.Id))).Id;
+                var id = _valuesCache.AddAccessKey(BuildAccessKeyModel()).Id;
 
                 updatedKeys.Add(_valuesCache.UpdateAccessKey(BuildKeyUpdate(id)));
             }
 
-            TestTransactionsCount((add: ProductAddTransactionCount,
+            AssertTransactionsCount((add: ProductAddTransactionCount,
                 update: count + DefaultKeyCount, delete: 0), _productTransactionCount);
 
-            TestTransactionsCount((add: count + DefaultKeyCount, update: count, delete: 0),
+            AssertTransactionsCount((add: count + DefaultKeyCount, update: count, delete: 0),
                 _keyTransactionCount);
 
             TestProductAndKeys(updatedKeys, _valuesCache.GetProduct, _valuesCache.GetAccessKey);
@@ -138,10 +137,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             keys.AddRange(_product.AccessKeys.Values);
             keys.AddRange(AddRandomKeys(count));
 
-            TestTransactionsCount((add: ProductAddTransactionCount,
+            AssertTransactionsCount((add: ProductAddTransactionCount,
                 update: count + DefaultKeyCount, delete: 0), _productTransactionCount);
 
-            TestTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0),
+            AssertTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0),
                 _keyTransactionCount);
 
             TestProductAndKeys(keys, _valuesCache.GetProduct, _valuesCache.GetAccessKey);
@@ -150,25 +149,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         public void Dispose()
         {
-            _valuesCache.ChangeAccessKeyEvent -= KeyEventHandler;
-            _valuesCache.ChangeProductEvent -= ProductEventHandler;
-
+            _valuesCache.ChangeAccessKeyEvent -= EventHandler;
+            _valuesCache.ChangeProductEvent -= EventHandler;
             _product = null;
         }
 
-
-        private void ProductEventHandler(ProductModel model, TransactionType type)
+        private void EventHandler<T>(T model, TransactionType type)
         {
             Assert.NotNull(model);
 
-            CheckTransaction(type, ref _productTransactionCount);
-        }
+            if (model is ProductModel)
+                CheckTransaction(type, ref _productTransactionCount);
 
-        private void KeyEventHandler(AccessKeyModel model, TransactionType type)
-        {
-            Assert.NotNull(model);
-
-            CheckTransaction(type, ref _keyTransactionCount);
+            else if (model is AccessKeyModel)
+                CheckTransaction(type, ref _keyTransactionCount);
         }
 
         private static void CheckTransaction(TransactionType type, 
@@ -190,14 +184,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
         }
 
-        private static void TestTransactionsCount((int add, int update, int delete) expected,
-            (int add, int update, int delete) actual)
-        {
-            Assert.Equal(expected.add, actual.add);
-            Assert.Equal(expected.update, actual.update);
-            Assert.Equal(expected.delete, actual.delete);
-        }
-
+        private static void AssertTransactionsCount((int add, int update, int delete) expected,
+            (int add, int update, int delete) actual) => Assert.True(expected == actual);
+        
         private void TestProductAndKeys(List<AccessKeyModel> keys, GetProduct getProduct,
             GetAccessKey getKey)
         {
@@ -212,10 +201,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var keys = new List<AccessKeyModel>(count + 1);
 
             for (int i = 0; i < count; i++)
-                keys.Add(_valuesCache.AddAccessKey(
-                    new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: _product.Id))));
+                keys.Add(_valuesCache.AddAccessKey(BuildAccessKeyModel()));
 
             return keys;
         }
+
+        private AccessKeyModel BuildAccessKeyModel() => new (EntitiesFactory
+            .BuildAccessKeyEntity(productId: _product.Id));
     }
 }
