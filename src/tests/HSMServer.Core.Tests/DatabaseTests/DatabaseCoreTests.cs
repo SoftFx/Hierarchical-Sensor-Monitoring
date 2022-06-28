@@ -6,6 +6,7 @@ using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -86,6 +87,98 @@ namespace HSMServer.Core.Tests
                 _databaseCore.RemoveProduct(product.Id);
                 Assert.Null(_databaseCore.GetProduct(product.Id));
             }
+        }
+
+        #endregion
+
+        #region [ AccessKey Tests ]
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Add access key(s)")]
+        public void AddKeysTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var key = AddKey();
+
+                FullKeyTest(key, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Remove access key(s)")]
+        public void RemoveAccessKeysTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var key = AddKey();
+                var id = Guid.Parse(key.Id);
+
+                Assert.NotNull(_databaseCore.GetAccessKey(id));
+
+                _databaseCore.RemoveAccessKey(id);
+                Assert.Null(_databaseCore.GetAccessKey(id));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "Update access key(s)")]
+        public void UpdateKeysTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var key = AddKey();
+
+                var updated = DatabaseCoreFactory.CreateAccessKey(key.Id);
+                _databaseCore.UpdateAccessKey(updated);
+
+                FullKeyTest(updated, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "GetAll access key(s)")]
+        public void GetAllKeysTest(int count)
+        {
+            var expectedList = new List<AccessKeyEntity>(count);
+            for (int i = 0; i < count; i++)
+                expectedList.Add(AddKey());
+
+            var actualList = _databaseCore.GetAccessKeys();
+
+            Assert.NotNull(actualList);
+            Assert.Equal(expectedList.Count, actualList.Count);
+            
+            for (int i = 0; i < actualList.Count; i++)
+                FullKeyTest(expectedList[i], actualList[i]);
         }
 
         #endregion
@@ -394,6 +487,19 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedProduct.SensorsIds, actualProduct.SensorsIds);
         }
 
+        private static void FullKeyTest(AccessKeyEntity expected, AccessKeyEntity actual)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Id, actual.Id);
+            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.State, actual.State);
+            Assert.Equal(expected.Permissions, actual.Permissions);
+            Assert.Equal(expected.DisplayName, actual.DisplayName);
+            Assert.Equal(expected.CreationTime, actual.CreationTime);
+            Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
+        }
+
         private static void FullUserTest(User expectedUser, User actualUser)
         {
             Assert.NotNull(actualUser);
@@ -454,6 +560,14 @@ namespace HSMServer.Core.Tests
                 return pageSize;
 
             return -1;
+        }
+
+        private AccessKeyEntity AddKey()
+        {
+            var key = DatabaseCoreFactory.CreateAccessKey();
+            _databaseCore.AddAccessKey(key);
+
+            return key;
         }
 
         #endregion
