@@ -17,6 +17,8 @@ namespace HSMServer.Core.Tests
     {
         private readonly IDatabaseCore _databaseCore;
 
+        private delegate void AddAccessKey(AccessKeyEntity entity);
+
         public DatabaseCoreTests(DatabaseCoreFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
@@ -106,7 +108,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var key = AddKey();
+                var key = AddKey(_databaseCore.AddAccessKey);
 
                 FullKeyTest(key, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
             }
@@ -125,7 +127,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var key = AddKey();
+                var key = AddKey(_databaseCore.AddAccessKey);
                 var id = Guid.Parse(key.Id);
 
                 Assert.NotNull(_databaseCore.GetAccessKey(id));
@@ -148,7 +150,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var key = AddKey();
+                var key = AddKey(_databaseCore.AddAccessKey);
 
                 var updated = DatabaseCoreFactory.CreateAccessKey(key.Id);
                 _databaseCore.UpdateAccessKey(updated);
@@ -170,7 +172,7 @@ namespace HSMServer.Core.Tests
         {
             var expectedList = new List<AccessKeyEntity>(count);
             for (int i = 0; i < count; i++)
-                expectedList.Add(AddKey());
+                expectedList.Add(AddKey(_databaseCore.AddAccessKey));
 
             var actualList = _databaseCore.GetAccessKeys();
 
@@ -562,10 +564,10 @@ namespace HSMServer.Core.Tests
             return -1;
         }
 
-        private AccessKeyEntity AddKey()
+        private AccessKeyEntity AddKey(AddAccessKey addKey)
         {
             var key = DatabaseCoreFactory.CreateAccessKey();
-            _databaseCore.AddAccessKey(key);
+            addKey?.Invoke(key);
 
             return key;
         }
