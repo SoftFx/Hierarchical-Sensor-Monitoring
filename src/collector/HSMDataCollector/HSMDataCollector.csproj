@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<id>HSMDataCollector.HSMDataCollector</id>
+    <PackageId>HSMDataCollector.HSMDataCollector</PackageId>
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
