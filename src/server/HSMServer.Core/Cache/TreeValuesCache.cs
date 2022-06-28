@@ -386,9 +386,10 @@ namespace HSMServer.Core.Cache
                     var sensor = GetSensorModel(entity);
                     _sensorsNew.TryAdd(sensor.Id, sensor);
 
-                    foreach (var policyId in entity.Policies)
-                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                            sensor.AddPolicy(policy);
+                    if (entity.Policies != null) // TODO: remove this check after sensor entities migration
+                        foreach (var policyId in entity.Policies)
+                            if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
+                                sensor.AddPolicy(policy);
 
                     if (entity.IsConverted)
                     {
