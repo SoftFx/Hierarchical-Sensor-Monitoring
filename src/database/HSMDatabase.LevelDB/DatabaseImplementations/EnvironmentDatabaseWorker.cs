@@ -416,6 +416,24 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllPoliciesIds() =>
             GetListOfKeys(_policyIdsKey, "Failed to get all policy ids");
 
+        public string GetPolicy(string policyId)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(policyId);
+
+            try
+            {
+                return _database.TryRead(bytesKey, out byte[] value)
+                    ? Encoding.UTF8.GetString(value)
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for sensor {policyId}");
+            }
+
+            return null;
+        }
+
         #endregion 
 
         #region User

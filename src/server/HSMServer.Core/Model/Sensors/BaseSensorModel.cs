@@ -57,12 +57,12 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal void AddBasePolicy(Policy policy) =>
-            _basePolicies.Add(policy);
-
-        internal abstract void AddCustomPolicy(Policy policy);
+        internal abstract void AddPolicy(Policy policy);
 
         internal abstract SensorEntity ToEntity();
+
+        protected void AddBasePolicy(Policy policy) =>
+            _basePolicies.Add(policy);
     }
 
 
@@ -77,8 +77,13 @@ namespace HSMServer.Core.Model
         internal BaseSensorModel(SensorEntity entity) : base(entity) { }
 
 
-        internal override void AddCustomPolicy(Policy policy) =>
-            _customPolicies.Add((Policy<T>)policy);
+        internal override void AddPolicy(Policy policy)
+        {
+            if (policy is Policy<T> customPolicy)
+                _customPolicies.Add(customPolicy);
+            else
+                AddBasePolicy(policy);
+        }
 
         internal override SensorEntity ToEntity() =>
             new()

@@ -46,6 +46,8 @@ namespace HSMDatabase.AccessManager
 
         void AddPolicyIdToList(string policyId);
         void AddPolicy(PolicyEntity policy);
+        List<string> GetAllPoliciesIds();
+        string GetPolicy(string policyId);
 
         #endregion
 

@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model
         public string Type { get; init; }
 
 
-        internal Policy()
+        protected Policy()
         {
             Id = Guid.NewGuid();
             Type = GetType().Name;
@@ -28,6 +28,6 @@ namespace HSMServer.Core.Model
 
     public abstract class Policy<T> : Policy where T : BaseValue
     {
-        internal Policy() : base() { }
+        protected Policy() : base() { }
     }
 }

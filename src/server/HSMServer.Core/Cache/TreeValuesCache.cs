@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -13,6 +14,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
@@ -312,11 +314,15 @@ namespace HSMServer.Core.Cache
             var sensorEntities = _databaseCore.GetAllSensors();
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
 
+            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
+            var policyEntities = _databaseCore.GetAllPolicies();
+            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
+
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            BuildTree(productEntities, sensorEntities);
+            BuildTree(productEntities, sensorEntities, policyEntities);
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
@@ -329,7 +335,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
 
-        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities)
+        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<string> policyEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
@@ -339,8 +345,12 @@ namespace HSMServer.Core.Cache
             }
             _logger.Info($"{nameof(productEntities)} applied");
 
+            _logger.Info($"{nameof(policyEntities)} are deserializing");
+            var policies = GetPolicyModels(policyEntities);
+            _logger.Info($"{nameof(policyEntities)} deserialized");
+
             _logger.Info($"{nameof(sensorEntities)} are applying");
-            ApplySensors(sensorEntities);
+            ApplySensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
 
             _logger.Info("Tree is building");
@@ -364,18 +374,21 @@ namespace HSMServer.Core.Cache
             _logger.Info("Tree is built");
         }
 
-        private void ApplySensors(List<SensorEntity> entities)
+        private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
         {
             var entitiesToResave = new List<SensorEntity>();
             var policiesToAdd = new Dictionary<string, Policy>();
 
             foreach (var entity in entities)
             {
-                var sensor = GetSensorModel(entity);
-
-                if (sensor != null)
+                try
                 {
+                    var sensor = GetSensorModel(entity);
                     _sensorsNew.TryAdd(sensor.Id, sensor);
+
+                    foreach (var policyId in entity.Policies)
+                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
+                            sensor.AddPolicy(policy);
 
                     if (entity.IsConverted)
                     {
@@ -383,12 +396,16 @@ namespace HSMServer.Core.Cache
                         {
                             var policy = new ExpectedUpdateIntervalPolicy(entity.ExpectedUpdateIntervalTicks);
 
-                            sensor.AddBasePolicy(policy);
+                            sensor.AddPolicy(policy);
                             policiesToAdd.Add(entity.Id, policy);
                         }
 
                         entitiesToResave.Add(sensor.ToEntity());
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Applying sensor {entity.Id} error: {ex.Message}");
                 }
             }
 
@@ -548,10 +565,10 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in entitiesToResave)
             {
-                _databaseCore.AddSensor(sensor);
-
                 if (policiesToAdd.TryGetValue(sensor.Id, out Policy policy))
                     _databaseCore.AddPolicy(policy.ToEntity());
+
+                _databaseCore.AddSensor(sensor);
             }
 
             _logger.Info($"All old sensors are removing");
@@ -571,7 +588,23 @@ namespace HSMServer.Core.Cache
                 SensorType.IntegerBar => new IntegerBarSensorModel(entity),
                 SensorType.DoubleBar => new DoubleBarSensorModel(entity),
                 SensorType.File => new FileSensorModel(entity),
-                _ => null,
+                _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
+
+        private static Dictionary<Guid, Policy> GetPolicyModels(List<string> policyEntities)
+        {
+            Dictionary<Guid, Policy> policies = new(policyEntities.Count);
+
+            foreach (var entity in policyEntities)
+            {
+                var serializeOptions = new JsonSerializerOptions();
+                serializeOptions.Converters.Add(new PolicyDeserializationConverter());
+
+                var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
+                policies.Add(policy.Id, policy);
+            }
+
+            return policies;
+        }
     }
 }

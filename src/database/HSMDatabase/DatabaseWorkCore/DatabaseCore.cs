@@ -292,6 +292,21 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddPolicy(entity);
         }
 
+        public List<string> GetAllPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+
+            var policies = new List<string>(policiesIds.Count);
+            foreach (var policyId in policiesIds)
+            {
+                var policy = _environmentDatabase.GetPolicy(policyId);
+                if (!string.IsNullOrEmpty(policy))
+                    policies.Add(policy);
+            }
+
+            return policies;
+        }
+
         #endregion
 
         #region Environment database : Product
