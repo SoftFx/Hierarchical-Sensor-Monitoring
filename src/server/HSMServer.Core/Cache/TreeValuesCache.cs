@@ -335,7 +335,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
 
-        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<string> policyEntities)
+        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<byte[]> policyEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
@@ -592,15 +592,15 @@ namespace HSMServer.Core.Cache
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
 
-        private static Dictionary<Guid, Policy> GetPolicyModels(List<string> policyEntities)
+        private static Dictionary<Guid, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
             Dictionary<Guid, Policy> policies = new(policyEntities.Count);
 
+            var serializeOptions = new JsonSerializerOptions();
+            serializeOptions.Converters.Add(new PolicyDeserializationConverter());
+
             foreach (var entity in policyEntities)
             {
-                var serializeOptions = new JsonSerializerOptions();
-                serializeOptions.Converters.Add(new PolicyDeserializationConverter());
-
                 var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
                 policies.Add(policy.Id, policy);
             }

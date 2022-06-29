@@ -7,9 +7,13 @@ namespace HSMServer.Core.Converters
 {
     internal sealed class PolicyDeserializationConverter : JsonConverter<Policy>
     {
+        private const string UnexpectedPolicyTypeError = "Unexpected policy type";
+        private const string UnexpectedJsonError = "Unexpected string for policy deserialization";
+
+
         public override Policy Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            Utf8JsonReader readerClone = reader;
+            Utf8JsonReader readerClone = reader; // readerClone is a full copy of reader, because Utf8JsonReader is ref struct
 
             while (readerClone.Read() || readerClone.TokenType != JsonTokenType.EndObject)
             {
@@ -26,11 +30,11 @@ namespace HSMServer.Core.Converters
                 return policyType switch
                 {
                     nameof(ExpectedUpdateIntervalPolicy) => JsonSerializer.Deserialize<ExpectedUpdateIntervalPolicy>(ref reader),
-                    _ => throw new JsonException("Unexpected policy type"),
+                    _ => throw new JsonException(UnexpectedPolicyTypeError),
                 };
             }
 
-            throw new JsonException("Unexpected string for policy deserialization");
+            throw new JsonException(UnexpectedJsonError);
         }
 
         public override void Write(Utf8JsonWriter writer, Policy value, JsonSerializerOptions options)

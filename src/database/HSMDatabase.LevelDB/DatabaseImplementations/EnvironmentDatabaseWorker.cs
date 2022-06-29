@@ -40,10 +40,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (!currentList.Contains(productId))
                     currentList.Add(productId);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-
-                _database.Put(_productListKey, bytesValue);
+                _database.Put(_productListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
@@ -89,11 +86,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void PutProduct(ProductEntity product)
         {
             var bytesKey = Encoding.UTF8.GetBytes(product.Id);
-            var stringData = JsonSerializer.Serialize(product);
-            var bytesValue = Encoding.UTF8.GetBytes(stringData);
+
             try
             {
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(product));
             }
             catch (Exception e)
             {
@@ -124,9 +120,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 currentList.Remove(productId);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(_productListKey, bytesValue);
+                _database.Put(_productListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
@@ -146,9 +140,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (!currentList.Contains(id))
                     currentList.Add(id);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(_accessKeyListKey, bytesValue);
+                _database.Put(_accessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
@@ -182,9 +174,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 var currentList = GetAccessKeyList();
                 currentList.Remove(id);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(_accessKeyListKey, bytesValue);
+                _database.Put(_accessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
@@ -195,11 +185,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void AddAccessKey(AccessKeyEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
-            var stringData = JsonSerializer.Serialize(entity);
-            var bytesValue = Encoding.UTF8.GetBytes(stringData);
+
             try
             {
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(entity));
             }
             catch (Exception e)
             {
@@ -254,7 +243,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void AddSensor(SensorEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
-            var bytesValue = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(entity));
+            var bytesValue = JsonSerializer.SerializeToUtf8Bytes(entity);
 
             try
             {
@@ -305,14 +294,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
-        public List<string> GetSensorsStrOld()
+        public List<byte[]> GetSensorsStrOld()
         {
             var key = PrefixConstants.GetSensorsInfoReadKey();
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
 
             try
             {
-                return _database.GetAllStartingWith(bytesKey).Select(v => Encoding.UTF8.GetString(v)).ToList();
+                return _database.GetAllStartingWith(bytesKey).ToList();
             }
             catch (Exception e)
             {
@@ -320,30 +309,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return new();
-        }
-
-        public List<string> GetSensorsStrNew()
-        {
-            var result = new List<string>(1 << 5);
-
-            try
-            {
-                foreach (var sensorId in GetAllSensorsIds())
-                {
-                    var sensor = _database.TryRead(Encoding.UTF8.GetBytes(sensorId), out byte[] value)
-                        ? Encoding.UTF8.GetString(value)
-                        : null;
-
-                    if (sensor != null)
-                        result.Add(sensor);
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read all sensor entities strings");
-            }
-
-            return result;
         }
 
         public void RemoveAllOldSensors()
@@ -369,7 +334,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 updateListAction?.Invoke(sensorIds);
 
-                _database.Put(_sensorIdsKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(sensorIds)));
+                _database.Put(_sensorIdsKey, JsonSerializer.SerializeToUtf8Bytes(sensorIds));
             }
             catch (Exception e)
             {
@@ -390,7 +355,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (!policyIds.Contains(policyId))
                     policyIds.Add(policyId);
 
-                _database.Put(_policyIdsKey, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(policyIds)));
+                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
             }
             catch (Exception e)
             {
@@ -401,7 +366,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void AddPolicy(PolicyEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
-            var bytesValue = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(entity.Policy));
+            var bytesValue = JsonSerializer.SerializeToUtf8Bytes(entity.Policy);
 
             try
             {
@@ -416,15 +381,13 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllPoliciesIds() =>
             GetListOfKeys(_policyIdsKey, "Failed to get all policy ids");
 
-        public string GetPolicy(string policyId)
+        public byte[] GetPolicy(string policyId)
         {
             var bytesKey = Encoding.UTF8.GetBytes(policyId);
 
             try
             {
-                return _database.TryRead(bytesKey, out byte[] value)
-                    ? Encoding.UTF8.GetString(value)
-                    : null;
+                return _database.TryRead(bytesKey, out byte[] value) ? value : null;
             }
             catch (Exception e)
             {
@@ -442,11 +405,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             var userKey = PrefixConstants.GetUniqueUserKey(user.UserName);
             var keyBytes = Encoding.UTF8.GetBytes(userKey);
-            var stringValue = JsonSerializer.Serialize(user);
-            var valueBytes = Encoding.UTF8.GetBytes(stringValue);
+
             try
             {
-                _database.Put(keyBytes, valueBytes);
+                _database.Put(keyBytes, JsonSerializer.SerializeToUtf8Bytes(user));
             }
             catch (Exception e)
             {
@@ -550,11 +512,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            string stringValue = JsonSerializer.Serialize(obj);
-            byte[] bytesValue = Encoding.UTF8.GetBytes(stringValue);
+
             try
             {
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(obj));
             }
             catch (Exception e)
             {
@@ -616,11 +577,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
             byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            string stringValue = JsonSerializer.Serialize(ticket);
-            byte[] bytesValue = Encoding.UTF8.GetBytes(stringValue);
+
             try
             {
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(ticket));
             }
             catch (Exception e)
             {
@@ -664,9 +624,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 if (!currentList.Contains(folderName))
                     currentList.Add(folderName);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
@@ -686,9 +644,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 currentList.Remove(folderName);
 
-                string stringData = JsonSerializer.Serialize(currentList);
-                byte[] bytesValue = Encoding.UTF8.GetBytes(stringData);
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {

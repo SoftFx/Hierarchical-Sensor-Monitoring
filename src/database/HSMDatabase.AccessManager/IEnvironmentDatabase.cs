@@ -36,8 +36,7 @@ namespace HSMDatabase.AccessManager
         void RemoveSensor(string sensorId);
         SensorEntity GetSensorEntity(string sensorId);
         List<string> GetAllSensorsIds();
-        List<string> GetSensorsStrOld();
-        List<string> GetSensorsStrNew();
+        List<byte[]> GetSensorsStrOld();
         void RemoveAllOldSensors();
 
         #endregion
@@ -47,7 +46,7 @@ namespace HSMDatabase.AccessManager
         void AddPolicyIdToList(string policyId);
         void AddPolicy(PolicyEntity policy);
         List<string> GetAllPoliciesIds();
-        string GetPolicy(string policyId);
+        byte[] GetPolicy(string policyId);
 
         #endregion
 

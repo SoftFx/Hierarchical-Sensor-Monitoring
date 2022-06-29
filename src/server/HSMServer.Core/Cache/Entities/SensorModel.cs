@@ -45,13 +45,11 @@ namespace HSMServer.Core.Cache.Entities
         internal SensorModel(SensorEntity entity, SensorDataEntity dataEntity)
         {
             Id = Guid.Parse(entity.Id);
-            SensorName = string.IsNullOrEmpty(entity.DisplayName) ? GetSensorName(entity.Path) : entity.DisplayName; // TODO: is sensorName right in database????
+            SensorName = entity.DisplayName;
             Description = entity.Description;
             SensorType = (SensorType)entity.Type;
             ExpectedUpdateInterval = new TimeSpan(entity.ExpectedUpdateIntervalTicks);
             Unit = entity.Unit;
-            ProductName = entity.ProductName;
-            Path = entity.Path;
 
             if (dataEntity != null)
             {
@@ -130,9 +128,6 @@ namespace HSMServer.Core.Cache.Entities
                 Type = (byte)SensorType,
                 ExpectedUpdateIntervalTicks = ExpectedUpdateInterval.Ticks,
                 Unit = Unit,
-                ProductName = ProductName,
-                Path = Path,
-                //ValidationParameters ???
             };
 
         internal SensorDataEntity ToSensorDataEntity() =>

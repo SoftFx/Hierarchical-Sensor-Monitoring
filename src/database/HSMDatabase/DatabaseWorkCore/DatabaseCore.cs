@@ -256,7 +256,6 @@ namespace HSMDatabase.DatabaseWorkCore
             var dictionary = new Dictionary<string, SensorEntity>();
 
             var oldEntities = _environmentDatabase.GetSensorsStrOld();
-            var newEntities = _environmentDatabase.GetSensorsStrNew();
             foreach (var oldEntity in oldEntities)
             {
                 var entity = EntityConverter.ConvertSensorEntity(oldEntity);
@@ -264,14 +263,13 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             var allEntities = new List<SensorEntity>();
-            foreach (var convertedEntity in newEntities)
+            var newEntities = GetNewSensors();
+            foreach (var newEntity in newEntities)
             {
-                var entity = EntityConverter.ConvertSensorEntity(convertedEntity);
+                if (dictionary.ContainsKey(newEntity.Id))
+                    dictionary.Remove(newEntity.Id);
 
-                if (dictionary.ContainsKey(entity.Id))
-                    dictionary.Remove(entity.Id);
-
-                allEntities.Add(entity);
+                allEntities.Add(newEntity);
             }
 
             allEntities.AddRange(dictionary.Values);
@@ -281,6 +279,21 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemoveAllOldSensors() =>
             _environmentDatabase.RemoveAllOldSensors();
+
+        private List<SensorEntity> GetNewSensors()
+        {
+            var sensorsIds = _environmentDatabase.GetAllSensorsIds();
+
+            var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
+            foreach (var sensorId in sensorsIds)
+            {
+                var sensor = _environmentDatabase.GetSensorEntity(sensorId);
+                if (sensor != null)
+                    sensorEntities.Add(sensor);
+            }
+
+            return sensorEntities;
+        }
 
         #endregion
 
@@ -292,15 +305,15 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddPolicy(entity);
         }
 
-        public List<string> GetAllPolicies()
+        public List<byte[]> GetAllPolicies()
         {
             var policiesIds = _environmentDatabase.GetAllPoliciesIds();
 
-            var policies = new List<string>(policiesIds.Count);
+            var policies = new List<byte[]>(policiesIds.Count);
             foreach (var policyId in policiesIds)
             {
                 var policy = _environmentDatabase.GetPolicy(policyId);
-                if (!string.IsNullOrEmpty(policy))
+                if (policy != null && policy.Length != 0)
                     policies.Add(policy);
             }
 
@@ -348,7 +361,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region AccessKey
 
-        public void RemoveAccessKey(Guid id) 
+        public void RemoveAccessKey(Guid id)
         {
             var strId = id.ToString();
 
@@ -364,15 +377,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(Guid id) => 
+        public AccessKeyEntity GetAccessKey(Guid id) =>
             _environmentDatabase.GetAccessKey(id.ToString());
-        
+
         public List<AccessKeyEntity> GetAccessKeys()
         {
             var keys = new List<AccessKeyEntity>();
             var keyIds = _environmentDatabase.GetAccessKeyList();
 
-            foreach(var keyId in keyIds)
+            foreach (var keyId in keyIds)
             {
                 var keyEntity = _environmentDatabase.GetAccessKey(keyId);
                 if (keyEntity != null)

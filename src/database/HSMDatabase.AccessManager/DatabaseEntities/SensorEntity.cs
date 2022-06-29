@@ -6,7 +6,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public class SensorEntity
     {
-        [Obsolete]
+        [Obsolete("Remove this property after sensor entities migration")]
         [NonSerialized]
         public long ExpectedUpdateIntervalTicks;
 

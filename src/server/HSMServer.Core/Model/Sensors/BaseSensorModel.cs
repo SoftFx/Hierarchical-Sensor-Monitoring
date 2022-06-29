@@ -15,7 +15,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel
     {
-        protected readonly List<Policy> _basePolicies = new();
+        protected readonly List<Policy> _systemPolicies = new();
 
 
         public Guid Id { get; }
@@ -26,11 +26,11 @@ namespace HSMServer.Core.Model
 
         public DateTime CreationDate { get; }
 
+        public abstract SensorType Type { get; }
+
         public string DisplayName { get; private set; }
 
         public string Description { get; private set; }
-
-        //public SensorType Type { get; private set; }
 
         public SensorState State { get; private set; }
 
@@ -42,6 +42,8 @@ namespace HSMServer.Core.Model
 
         // TODO: maybe store in Storage
         public DateTime LastUpdateTime { get; private set; }
+
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
 
 
         internal BaseSensorModel(SensorEntity entity)
@@ -57,18 +59,21 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract void AddPolicy(Policy policy);
+        internal virtual void AddPolicy(Policy policy)
+        {
+            _systemPolicies.Add(policy);
+
+            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
+                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
+        }
 
         internal abstract SensorEntity ToEntity();
-
-        protected void AddBasePolicy(Policy policy) =>
-            _basePolicies.Add(policy);
     }
 
 
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly List<Policy<T>> _customPolicies = new();
+        private readonly List<Policy<T>> _userPolicies = new();
 
 
         public abstract ValuesStorage<T> Storage { get; }
@@ -80,9 +85,9 @@ namespace HSMServer.Core.Model
         internal override void AddPolicy(Policy policy)
         {
             if (policy is Policy<T> customPolicy)
-                _customPolicies.Add(customPolicy);
+                _userPolicies.Add(customPolicy);
             else
-                AddBasePolicy(policy);
+                base.AddPolicy(policy);
         }
 
         internal override SensorEntity ToEntity() =>
@@ -95,30 +100,17 @@ namespace HSMServer.Core.Model
                 Description = Description,
                 Unit = Unit,
                 CreationDate = CreationDate.Ticks,
-                Type = (byte)GetSensorType(),
+                Type = (byte)Type,
                 State = (byte)State,
                 Policies = GetPolicyIds(),
             };
 
-        // Можно вместо switch хранить Type в базовой моделе.
-        private SensorType GetSensorType() =>
-            this switch
-            {
-                BooleanSensorModel => SensorType.Boolean,
-                IntegerSensorModel => SensorType.Integer,
-                DoubleSensorModel => SensorType.Double,
-                StringSensorModel => SensorType.String,
-                FileSensorModel => SensorType.File,
-                IntegerBarSensorModel => SensorType.IntegerBar,
-                DoubleBarSensorModel => SensorType.DoubleBar,
-            };
-
         private List<string> GetPolicyIds()
         {
-            var policyIds = new List<string>(_basePolicies.Count + _customPolicies.Count);
+            var policyIds = new List<string>(_systemPolicies.Count + _userPolicies.Count);
 
-            policyIds.AddRange(_basePolicies.Select(p => p.Id.ToString()));
-            policyIds.AddRange(_customPolicies.Select(p => p.Id.ToString()));
+            policyIds.AddRange(_systemPolicies.Select(p => p.Id.ToString()));
+            policyIds.AddRange(_userPolicies.Select(p => p.Id.ToString()));
 
             return policyIds;
         }
