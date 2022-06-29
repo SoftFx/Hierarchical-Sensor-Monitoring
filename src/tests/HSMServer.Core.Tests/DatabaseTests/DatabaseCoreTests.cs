@@ -513,8 +513,8 @@ namespace HSMServer.Core.Tests
 
             if (expectedUser.ProductsRoles.Count > 0)
             {
-                expectedUser.ProductsRoles.OrderBy(pr => pr.Key);
-                actualUser.ProductsRoles.OrderBy(pr => pr.Key);
+                expectedUser.ProductsRoles = expectedUser.ProductsRoles.OrderBy(pr => pr.Key).ToList();
+                actualUser.ProductsRoles = actualUser.ProductsRoles.OrderBy(pr => pr.Key).ToList();
 
                 for (int i = 0; i < expectedUser.ProductsRoles.Count; i++)
                 {
@@ -564,7 +564,7 @@ namespace HSMServer.Core.Tests
             return -1;
         }
 
-        private AccessKeyEntity AddKey(AddAccessKey addKey)
+        private static AccessKeyEntity AddKey(AddAccessKey addKey)
         {
             var key = DatabaseCoreFactory.CreateAccessKey();
             addKey?.Invoke(key);

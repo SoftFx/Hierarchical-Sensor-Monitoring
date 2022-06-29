@@ -198,7 +198,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private List<AccessKeyModel> AddRandomKeys(int count)
         {
-            var keys = new List<AccessKeyModel>(count + 1);
+            var keys = new List<AccessKeyModel>(count);
 
             for (int i = 0; i < count; i++)
                 keys.Add(_valuesCache.AddAccessKey(BuildAccessKeyModel()));
