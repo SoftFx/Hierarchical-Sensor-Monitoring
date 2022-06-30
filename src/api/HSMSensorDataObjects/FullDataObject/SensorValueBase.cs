@@ -3,6 +3,7 @@ using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
+    [Obsolete("Use ValueBase<T>")]
     [DataContract]
     public abstract class SensorValueBase
     {

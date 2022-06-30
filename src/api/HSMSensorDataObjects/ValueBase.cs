@@ -16,16 +16,16 @@ namespace HSMSensorDataObjects
         public string Comment { get; private set; }
         [DataMember]
         public SensorStatus Status { get; private set; }
+        [DataMember]
         public abstract SensorType Type { get; }
     }
 
     [DataContract]
     public abstract class ValueBase<T> : ValueBase
     {
-        private SensorType _type;
-
         [DataMember]
-        public T Value { get; private set; }
+        public T Value { get; set; }
+        [DataMember]
         public abstract override SensorType Type { get; }
     }
 
@@ -33,9 +33,9 @@ namespace HSMSensorDataObjects
     public abstract class BarValueBase<T> : ValueBase
     {
         [DataMember]
-        public DateTime OpenTime { get; private set; }
+        public DateTime OpenTime { get; set; }
         [DataMember]
-        public DateTime CloseTime { get; private set; }
+        public DateTime CloseTime { get; set; }
         [DataMember]
         public int Count { get; private set; }
         [DataMember]
@@ -46,6 +46,7 @@ namespace HSMSensorDataObjects
         public T Mean { get; private set; }
         [DataMember]
         public T LastValue { get; private set; }
+        [DataMember]
         public abstract override SensorType Type { get; }
     }
 }

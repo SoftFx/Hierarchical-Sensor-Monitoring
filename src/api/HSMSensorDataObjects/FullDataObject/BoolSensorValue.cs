@@ -3,9 +3,14 @@
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class BoolSensorValue : SensorValueBase
+    public class BoolSensorValue : ValueBase<bool>
     {
+        public bool BoolValue 
+        { 
+            get => Value;
+            set { Value = value; BoolValue = value; }
+        }
         [DataMember]
-        public bool BoolValue { get; set; }
+        public override SensorType Type { get => SensorType.BooleanSensor; }
     }
 }

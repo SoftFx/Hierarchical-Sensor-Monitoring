@@ -3,10 +3,14 @@
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class StringSensorValue : SensorValueBase
+    public class StringSensorValue : ValueBase<string>
     {
+        public string StringValue 
+        {
+            get => Value; 
+            set { Value = value; StringValue = value; }
+        }
         [DataMember]
-        public string StringValue { get; set; }
-    
+        public override SensorType Type { get => SensorType.StringSensor; }
     }
 }

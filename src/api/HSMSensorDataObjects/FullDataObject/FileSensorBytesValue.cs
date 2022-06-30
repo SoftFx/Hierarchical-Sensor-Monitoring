@@ -3,13 +3,18 @@
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class FileSensorBytesValue : SensorValueBase
+    public class FileSensorBytesValue : ValueBase<byte[]>
     {
+        public byte[] FileContent 
+        { 
+            get => Value;
+            set { Value = value; FileContent = value; }
+        }
         [DataMember]
         public string Extension { get; set; }
         [DataMember]
-        public byte[] FileContent { get; set; }
-        [DataMember]
         public string FileName { get; set; }
+        [DataMember]
+        public override SensorType Type { get => SensorType.FileSensorBytes; }
     }
 }

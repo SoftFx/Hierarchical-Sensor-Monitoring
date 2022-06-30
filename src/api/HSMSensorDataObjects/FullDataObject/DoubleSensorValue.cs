@@ -3,9 +3,14 @@
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class DoubleSensorValue : SensorValueBase
+    public class DoubleSensorValue : ValueBase<double>
     {
+        public double DoubleValue 
+        {
+            get => Value;
+            set { Value = value; DoubleValue = value; } 
+        }
         [DataMember]
-        public double DoubleValue { get; set; }
+        public override SensorType Type { get => SensorType.DoubleSensor; }
     }
 }
