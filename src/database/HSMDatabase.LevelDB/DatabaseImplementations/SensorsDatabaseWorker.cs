@@ -1,11 +1,11 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
-using NLog;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
@@ -86,6 +86,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             values.Sort((v1, v2) => v2.TimeCollected.CompareTo(v1.TimeCollected));
             return values.First(v => v.Path == path);
+        }
+
+        public List<byte[]> GetValues(string productName, string path)
+        {
+            var key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+
+            var values = GetValues(key);
+            if (values == null || values.Count == 0)
+                return new();
+
+            return values;
         }
 
         public List<SensorDataEntity> GetAllSensorValues(string productName, string path)
@@ -178,6 +189,24 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                         _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to SensorDataEntity");
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read all sensors values for {Encoding.UTF8.GetString(key)}");
+            }
+
+            return result;
+        }
+
+        private List<byte[]> GetValues(byte[] key)
+        {
+            var result = new List<byte[]>();
+
+            try
+            {
+                var values = _database.GetAllStartingWith(key);
+                foreach (var value in values)
+                    result.Add(value);
             }
             catch (Exception e)
             {

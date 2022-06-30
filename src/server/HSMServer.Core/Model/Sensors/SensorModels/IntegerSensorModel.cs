@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.DataLayer;
 
 namespace HSMServer.Core.Model
 {
@@ -6,9 +7,13 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type { get; } = SensorType.Integer;
 
-        public override IntegerValuesStorage Storage { get; } = new();
+        public override IntegerValuesStorage Storage { get; }
 
 
-        internal IntegerSensorModel(SensorEntity entity) : base(entity) { }
+        internal IntegerSensorModel(SensorEntity entity, IDatabaseCore db)
+            : base(entity)
+        {
+            Storage = new IntegerValuesStorage(db);
+        }
     }
 }

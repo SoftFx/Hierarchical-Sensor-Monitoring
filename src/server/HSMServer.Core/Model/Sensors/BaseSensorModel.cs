@@ -1,4 +1,6 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +47,10 @@ namespace HSMServer.Core.Model
 
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
 
+        public string ProductName { get; private set; }
+
+        public string Path { get; private set; }
+
 
         internal BaseSensorModel(SensorEntity entity)
         {
@@ -59,6 +65,22 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal void BuildProductNameAndPath(ProductModel parentProduct)
+        {
+            var pathParts = new List<string>() { DisplayName };
+
+            while (parentProduct.ParentProduct != null)
+            {
+                pathParts.Add(parentProduct.DisplayName);
+                parentProduct = parentProduct.ParentProduct;
+            }
+
+            pathParts.Reverse();
+
+            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
+            ProductName = parentProduct.DisplayName;
+        }
+
         internal virtual void AddPolicy(Policy policy)
         {
             _systemPolicies.Add(policy);
@@ -68,10 +90,12 @@ namespace HSMServer.Core.Model
         }
 
         internal abstract SensorEntity ToEntity();
+
+        internal abstract void InitializeStorage();
     }
 
 
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
+    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
     {
         private readonly List<Policy<T>> _userPolicies = new();
 
@@ -104,6 +128,11 @@ namespace HSMServer.Core.Model
                 State = (byte)State,
                 Policies = GetPolicyIds(),
             };
+
+        internal override void InitializeStorage()
+        {
+            Storage.InitializeValues(ProductName, Path);
+        }
 
         private List<string> GetPolicyIds()
         {

@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.DataLayer;
 
 namespace HSMServer.Core.Model
 {
@@ -6,9 +7,13 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type { get; } = SensorType.Boolean;
 
-        public override BooleanValuesStorage Storage { get; } = new();
+        public override BooleanValuesStorage Storage { get; }
 
 
-        internal BooleanSensorModel(SensorEntity entity) : base(entity) { }
+        internal BooleanSensorModel(SensorEntity entity, IDatabaseCore db)
+            : base(entity)
+        {
+            Storage = new BooleanValuesStorage(db);
+        }
     }
 }

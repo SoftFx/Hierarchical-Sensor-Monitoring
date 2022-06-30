@@ -187,6 +187,22 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
+        public T GetLatestValue<T>(string productName, string path) where T : BaseValue, new()
+        {
+            var databases = _sensorsDatabases.GetAllDatabases();
+            databases.Reverse();
+
+            foreach (var database in databases)
+            {
+                var values = database.GetValues(productName, path);
+
+                if (values.Count != 0)
+                    return (T)values.Select(v => EntityConverter.ConvertSensorData<T>(v)).OrderBy(v => v.ReceivingTime).LastOrDefault();
+            }
+
+            return null;
+        }
+
         #endregion
 
         #region Environment database : Sensor

@@ -17,5 +17,7 @@ namespace HSMDatabase.AccessManager
         List<SensorDataEntity> GetAllSensorValues(string productName, string path);
         List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
+
+        List<byte[]> GetValues(string productName, string path);
     }
 }

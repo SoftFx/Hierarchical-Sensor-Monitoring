@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
 using System;
 using System.Text.Json;
 
@@ -9,19 +10,18 @@ namespace HSMServer.Core.DataLayer
         private const string SensorNamePropertyName = "SensorName";
         private const string SensorTypePropertyName = "SensorType";
 
+        private const string SensorDataTypedDataPropertyName = "TypedData";
+        private const string SensorDataDataTypePropertyName = "DataType";
+
 
         // TODO: return SensorEntity with expectedupdateinterval is IsConverted = true
-        public static SensorEntity ConvertSensorEntity(string entity)
+        public static SensorEntity ConvertSensorEntity(byte[] entity)
         {
             var jsonDocument = JsonDocument.Parse(entity);
             var rootElement = jsonDocument.RootElement;
 
             if (rootElement.TryGetProperty(nameof(SensorEntity.DisplayName), out _))
                 return JsonSerializer.Deserialize<SensorEntity>(entity);
-
-            string GetStringProperty(JsonElement element) => element.GetString();
-            byte GetByteProperty(JsonElement element) => element.GetByte();
-            long GetLongProperty(JsonElement element) => element.GetInt64();
 
             return new()
             {
@@ -36,14 +36,29 @@ namespace HSMServer.Core.DataLayer
             };
         }
 
-        private static T GetProperty<T>(this JsonElement rootElement, string propertyName,
+        public static BaseValue ConvertSensorData<T>(byte[] entity) where T : BaseValue, new()
+        {
+            var rootElement = JsonDocument.Parse(entity).RootElement;
+
+            return rootElement.TryGetProperty(SensorDataTypedDataPropertyName, out _)
+                ? new T().BuildValue(rootElement)
+                : JsonSerializer.Deserialize<T>(rootElement);
+        }
+
+        internal static T GetProperty<T>(this JsonElement rootElement, string propertyName,
                                         Func<JsonElement, T> getPropertyAction, T defaultValue = default) =>
             rootElement.TryGetProperty(propertyName, out var property) ? getPropertyAction(property) : defaultValue;
 
+        private static string GetStringProperty(JsonElement element) => element.GetString();
+
+        private static byte GetByteProperty(JsonElement element) => element.GetByte();
+
+        private static long GetLongProperty(JsonElement element) => element.GetInt64();
+
         private static byte GetSensorType(byte currentType) =>
-            (HSMSensorDataObjects.SensorType)currentType == HSMSensorDataObjects.SensorType.FileSensorBytes ||
-            (HSMSensorDataObjects.SensorType)currentType == HSMSensorDataObjects.SensorType.FileSensor
-                ? (byte)Model.SensorType.File
+            currentType == (byte)HSMSensorDataObjects.SensorType.FileSensorBytes ||
+            currentType == (byte)HSMSensorDataObjects.SensorType.FileSensor
+                ? (byte)SensorType.File
                 : currentType;
     }
 }

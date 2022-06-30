@@ -306,27 +306,14 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} is requesting");
-            var productEntities = _databaseCore.GetAllProducts();
-            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} requested");
+            var productEntities = RequestProducts();
+            ApplyProducts(productEntities);
 
-            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
-            var sensorEntities = _databaseCore.GetAllSensors();
-            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
-
-            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
-            var policyEntities = _databaseCore.GetAllPolicies();
-            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
+            ApplySensors(productEntities, RequestSensors(), RequestPolicies());
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
-
-            BuildTree(productEntities, sensorEntities, policyEntities);
-
-            var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
-            if (productEntities.Count == 0 || monitoringProduct == null)
-                AddSelfMonitoringProduct();
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys(accessKeysEntities.ToList());
@@ -335,7 +322,34 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
 
-        private void BuildTree(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<byte[]> policyEntities)
+        private List<ProductEntity> RequestProducts()
+        {
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} is requesting");
+            var productEntities = _databaseCore.GetAllProducts();
+            _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} requested");
+
+            return productEntities;
+        }
+
+        private List<SensorEntity> RequestSensors()
+        {
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
+            var sensorEntities = _databaseCore.GetAllSensors();
+            _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
+
+            return sensorEntities;
+        }
+
+        private List<byte[]> RequestPolicies()
+        {
+            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
+            var policyEntities = _databaseCore.GetAllPolicies();
+            _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
+
+            return policyEntities;
+        }
+
+        private void ApplyProducts(List<ProductEntity> productEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
@@ -345,15 +359,7 @@ namespace HSMServer.Core.Cache
             }
             _logger.Info($"{nameof(productEntities)} applied");
 
-            _logger.Info($"{nameof(policyEntities)} are deserializing");
-            var policies = GetPolicyModels(policyEntities);
-            _logger.Info($"{nameof(policyEntities)} deserialized");
-
-            _logger.Info($"{nameof(sensorEntities)} are applying");
-            ApplySensors(sensorEntities, policies);
-            _logger.Info($"{nameof(sensorEntities)} applied");
-
-            _logger.Info("Tree is building");
+            _logger.Info("Links between products are building");
             foreach (var productEntity in productEntities)
                 if (_tree.TryGetValue(productEntity.Id, out var product))
                 {
@@ -363,7 +369,28 @@ namespace HSMServer.Core.Cache
                             if (_tree.TryGetValue(subProductId, out var subProduct))
                                 product.AddSubProduct(subProduct);
                         }
+                }
+            _logger.Info("Links between products are built");
 
+            var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
+            if (productEntities.Count == 0 || monitoringProduct == null)
+                AddSelfMonitoringProduct();
+        }
+
+        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<byte[]> policyEntities)
+        {
+            _logger.Info($"{nameof(policyEntities)} are deserializing");
+            var policies = GetPolicyModels(policyEntities);
+            _logger.Info($"{nameof(policyEntities)} deserialized");
+
+            _logger.Info($"{nameof(sensorEntities)} are applying");
+            ApplySensors(sensorEntities, policies);
+            _logger.Info($"{nameof(sensorEntities)} applied");
+
+            _logger.Info("Links between products and their sensors are building");
+            foreach (var productEntity in productEntities)
+                if (_tree.TryGetValue(productEntity.Id, out var product))
+                {
                     if (productEntity.SensorsIds != null)
                         foreach (var sensorId in productEntity.SensorsIds)
                         {
@@ -371,7 +398,7 @@ namespace HSMServer.Core.Cache
                                 product.AddSensor(sensor);
                         }
                 }
-            _logger.Info("Tree is built");
+            _logger.Info("Links between products and their sensors are built");
         }
 
         private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
@@ -579,18 +606,27 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(entitiesToResave)} resaved ({entitiesToResave.Count} sensors)");
         }
 
-        private static BaseSensorModel GetSensorModel(SensorEntity entity) =>
-            (SensorType)entity.Type switch
+        private BaseSensorModel GetSensorModel(SensorEntity entity)
+        {
+            BaseSensorModel sensor = (SensorType)entity.Type switch
             {
-                SensorType.Boolean => new BooleanSensorModel(entity),
-                SensorType.Integer => new IntegerSensorModel(entity),
-                SensorType.Double => new DoubleSensorModel(entity),
-                SensorType.String => new StringSensorModel(entity),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
-                SensorType.File => new FileSensorModel(entity),
+                SensorType.Boolean => new BooleanSensorModel(entity, _databaseCore),
+                SensorType.Integer => new IntegerSensorModel(entity, _databaseCore),
+                SensorType.Double => new DoubleSensorModel(entity, _databaseCore),
+                SensorType.String => new StringSensorModel(entity, _databaseCore),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity, _databaseCore),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity, _databaseCore),
+                SensorType.File => new FileSensorModel(entity, _databaseCore),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
+
+            if (_tree.TryGetValue(sensor.ProductId, out var product))
+                sensor.BuildProductNameAndPath(product);
+
+            sensor.InitializeStorage(); // TODO: lazy initializing
+
+            return sensor;
+        }
 
         private static Dictionary<Guid, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
