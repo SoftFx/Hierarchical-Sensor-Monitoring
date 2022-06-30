@@ -1,7 +1,9 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.TypedDataObject
 {
+    [Obsolete("Use BoolSensorValue")]
     [DataContract]
     public class BoolSensorData
     {

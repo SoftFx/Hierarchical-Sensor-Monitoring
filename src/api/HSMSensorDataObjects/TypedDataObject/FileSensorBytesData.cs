@@ -1,7 +1,9 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.TypedDataObject
 {
+    [Obsolete("Use FileSensorBytesValue")]
     [DataContract]
     public class FileSensorBytesData
     {

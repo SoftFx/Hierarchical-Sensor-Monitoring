@@ -8,7 +8,7 @@ namespace HSMSensorDataObjects.FullDataObject
     public class UnitedSensorValue : SensorValueBase
     {
         [DataMember]
-        public SensorType Type { get; set; }
+        public override SensorType Type { get; }
         [DataMember]
         public string Data { get; set; }
 

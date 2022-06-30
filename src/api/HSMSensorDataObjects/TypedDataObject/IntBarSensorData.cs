@@ -5,6 +5,7 @@ using HSMSensorDataObjects.BarData;
 
 namespace HSMSensorDataObjects.TypedDataObject
 {
+    [Obsolete("Use IntBatSensorValue")]
     [DataContract]
     public class IntBarSensorData
     {
