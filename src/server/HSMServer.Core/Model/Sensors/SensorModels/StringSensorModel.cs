@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal StringSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new StringValuesStorage(db);
+            Storage = new StringValuesStorage() { Database = db };
         }
     }
 }

@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal BooleanSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new BooleanValuesStorage(db);
+            Storage = new BooleanValuesStorage() { Database = db };
         }
     }
 }

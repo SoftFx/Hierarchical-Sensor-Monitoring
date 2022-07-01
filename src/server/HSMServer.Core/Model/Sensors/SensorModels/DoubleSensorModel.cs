@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal DoubleSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new DoubleValuesStorage(db);
+            Storage = new DoubleValuesStorage() { Database = db };
         }
     }
 }

@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal IntegerBarSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new IntegerBarValuesStorage(db);
+            Storage = new IntegerBarValuesStorage() { Database = db };
         }
     }
 }

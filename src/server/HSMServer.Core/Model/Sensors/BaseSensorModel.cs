@@ -95,7 +95,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
+    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
         private readonly List<Policy<T>> _userPolicies = new();
 

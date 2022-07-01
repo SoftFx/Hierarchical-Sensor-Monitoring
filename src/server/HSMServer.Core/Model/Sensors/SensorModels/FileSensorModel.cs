@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal FileSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new FileValuesStorage(db);
+            Storage = new FileValuesStorage() { Database = db };
         }
     }
 }

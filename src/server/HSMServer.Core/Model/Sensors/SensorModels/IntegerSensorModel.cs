@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
         internal IntegerSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
-            Storage = new IntegerValuesStorage(db);
+            Storage = new IntegerValuesStorage() { Database = db };
         }
     }
 }

@@ -187,7 +187,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
-        public T GetLatestValue<T>(string productName, string path) where T : BaseValue, new()
+        public T GetLatestValue<T>(string productName, string path) where T : BaseValue
         {
             var databases = _sensorsDatabases.GetAllDatabases();
             databases.Reverse();
