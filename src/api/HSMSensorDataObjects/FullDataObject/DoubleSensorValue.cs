@@ -1,10 +1,12 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
     public class DoubleSensorValue : ValueBase<double>
     {
+        [Obsolete]
         public double DoubleValue 
         {
             get => Value;

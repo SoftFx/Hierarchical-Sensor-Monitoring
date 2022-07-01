@@ -1,10 +1,12 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
     public class FileSensorBytesValue : ValueBase<byte[]>
     {
+        [Obsolete]
         public byte[] FileContent 
         { 
             get => Value;
