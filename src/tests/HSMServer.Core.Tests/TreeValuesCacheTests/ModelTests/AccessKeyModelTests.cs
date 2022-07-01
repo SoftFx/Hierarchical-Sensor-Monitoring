@@ -3,7 +3,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using System;
 using Xunit;
 
-namespace HSMServer.Core.Tests.TreeValuesCacheTests
+namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 {
     public class AccessKeyModelTests
     {
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void AccessKeyModelToAccessKeyEntityTest()
         {
             var entity = EntitiesFactory.BuildAccessKeyEntity();
-            
+
             var key = new AccessKeyModel(entity);
 
             var accessKeyEntity = key.ToAccessKeyEntity();
