@@ -21,8 +21,10 @@ namespace HSMSensorDataObjects.FullDataObject
 
         [DataMember]
         public DateTime OpenTime { get; set; }
+
         [DataMember]
         public DateTime CloseTime { get; set; }
+
         [DataMember]
         public int Count { get; set; }
     }
@@ -32,10 +34,13 @@ namespace HSMSensorDataObjects.FullDataObject
     {
         [DataMember]
         public T Min { get; set; }
+
         [DataMember]
         public T Max { get; set; }
+
         [DataMember]
         public T Mean { get; set; }
+
         [DataMember]
         public T LastValue { get; set; }
     }

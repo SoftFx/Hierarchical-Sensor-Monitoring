@@ -9,8 +9,10 @@ namespace HSMSensorDataObjects.FullDataObject
     public class IntBarSensorValue : BarValueSensorBase<int>
     {
         [DataMember]
-        public override SensorType Type { get => SensorType.IntegerBarSensor; }
+        public override SensorType Type => SensorType.IntegerBarSensor;
+
         [DataMember]
+        [Obsolete]
         public List<PercentileValueInt> Percentiles { get; set; }
 
 

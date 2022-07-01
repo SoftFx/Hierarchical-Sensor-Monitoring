@@ -5,8 +5,11 @@ namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
     [Obsolete("FileSensorValue is obsolete. New FileSensorValues are replaced by FileSensorBytesValues in API, saved FileSensorValues in db are converted to FileSensorBytesValues in Core")]
-    public class FileSensorValue : SensorValueBase
+    public class FileSensorValue : ValueBase<string>
     {
+        [DataMember]
+        public override SensorType Type => SensorType.FileSensor;
+
         [DataMember]
         public string Extension { get; set; }
         [DataMember]

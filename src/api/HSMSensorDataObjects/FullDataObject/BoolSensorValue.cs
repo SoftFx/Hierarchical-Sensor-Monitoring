@@ -12,6 +12,7 @@ namespace HSMSensorDataObjects.FullDataObject
             get => Value;
             set { Value = value; BoolValue = value; }
         }
+
         [DataMember]
         public override SensorType Type { get => SensorType.BooleanSensor; }
     }
