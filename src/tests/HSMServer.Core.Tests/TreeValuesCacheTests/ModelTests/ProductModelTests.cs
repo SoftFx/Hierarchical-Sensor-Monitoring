@@ -4,7 +4,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using System;
 using Xunit;
 
-namespace HSMServer.Core.Tests.TreeValuesCacheTests
+namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 {
     public class ProductModelTests
     {

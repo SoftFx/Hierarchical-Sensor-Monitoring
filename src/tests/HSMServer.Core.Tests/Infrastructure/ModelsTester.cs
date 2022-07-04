@@ -47,9 +47,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
             TestCollections(expectedSensors, actualSensors);
 
-            var expectedKeys = expected.AccessKeys.Select(k => k.Key.ToString()).ToList();
-            var actualKeys = actual.AccessKeys.Select(k => k.Key.ToString()).ToList();
-            TestCollections(expectedKeys, actualKeys);
+            var expectedKeys = expected.AccessKeys.Values.ToList();
+            var actualKeys = actual.AccessKeys.Values.ToList();
+            for (int i = 0; i < expectedKeys.Count; i++)
+            {
+                TestAccessKeyModel(expectedKeys[i], actualKeys[i]);
+            }
         }
 
         internal static void TestProductModel(string name, ProductModel actual,
