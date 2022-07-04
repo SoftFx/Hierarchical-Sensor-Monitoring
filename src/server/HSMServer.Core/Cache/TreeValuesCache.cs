@@ -612,17 +612,7 @@ namespace HSMServer.Core.Cache
 
         private BaseSensorModel GetSensorModel(SensorEntity entity)
         {
-            BaseSensorModel sensor = (SensorType)entity.Type switch
-            {
-                SensorType.Boolean => new BooleanSensorModel(entity, _databaseCore),
-                SensorType.Integer => new IntegerSensorModel(entity, _databaseCore),
-                SensorType.Double => new DoubleSensorModel(entity, _databaseCore),
-                SensorType.String => new StringSensorModel(entity, _databaseCore),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity, _databaseCore),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity, _databaseCore),
-                SensorType.File => new FileSensorModel(entity, _databaseCore),
-                _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
-            };
+            var sensor = BaseSensorModel.GetModel(entity, _databaseCore);
 
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);

@@ -275,28 +275,19 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorEntity> GetAllSensors()
         {
-            var dictionary = new Dictionary<string, SensorEntity>();
-
             var oldEntities = _environmentDatabase.GetSensorsStrOld();
-            foreach (var oldEntity in oldEntities)
-            {
-                var entity = EntityConverter.ConvertSensorEntity(oldEntity);
-                dictionary.Add(entity.Id, entity);
-            }
-
-            var allEntities = new List<SensorEntity>();
+            var entities = oldEntities.Select(e => e.ConvertToEntity()).ToDictionary(e => e.Id);
             var newEntities = GetNewSensors();
+
             foreach (var newEntity in newEntities)
             {
-                if (dictionary.ContainsKey(newEntity.Id))
-                    dictionary.Remove(newEntity.Id);
-
-                allEntities.Add(newEntity);
+                if (entities.ContainsKey(newEntity.Id))
+                    entities[newEntity.Id] = newEntity;
+                else
+                    entities.Add(newEntity.Id, newEntity);
             }
 
-            allEntities.AddRange(dictionary.Values);
-
-            return allEntities;
+            return entities.Values.ToList();
         }
 
         public void RemoveAllOldSensors() =>
@@ -319,7 +310,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
-        #region
+        #region Policies
 
         public void AddPolicy(PolicyEntity entity)
         {

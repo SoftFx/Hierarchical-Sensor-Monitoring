@@ -18,7 +18,7 @@ namespace HSMServer.Core.DataLayer
         private const string SensorDataTypedDataPropertyName = "TypedData";
 
 
-        public static SensorEntity ConvertSensorEntity(byte[] entity)
+        public static SensorEntity ConvertToEntity(this byte[] entity)
         {
             var jsonDocument = JsonDocument.Parse(entity);
             var rootElement = jsonDocument.RootElement;
@@ -39,7 +39,7 @@ namespace HSMServer.Core.DataLayer
             };
         }
 
-        public static BaseValue ConvertSensorData<T>(byte[] entity) where T : BaseValue
+        public static BaseValue ConvertToSensorValue<T>(this byte[] entity) where T : BaseValue
         {
             if (entity == null)
                 return null;

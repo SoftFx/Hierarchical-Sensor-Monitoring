@@ -58,7 +58,7 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
-        #region
+        #region Policies
 
         void AddPolicy(PolicyEntity policy);
         List<byte[]> GetAllPolicies();

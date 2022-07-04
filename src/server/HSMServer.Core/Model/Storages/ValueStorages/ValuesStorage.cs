@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model
 
         internal void AddValue(byte[] valueBytes)
         {
-            var value = EntityConverter.ConvertSensorData<T>(valueBytes);
+            var value = valueBytes.ConvertToSensorValue<T>();
 
             if (value != null)
                 Values.Add((T)value);

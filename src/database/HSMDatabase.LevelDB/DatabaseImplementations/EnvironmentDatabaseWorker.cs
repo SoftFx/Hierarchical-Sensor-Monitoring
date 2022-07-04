@@ -344,7 +344,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        #region
+        #region Policies
 
         public void AddPolicyIdToList(string policyId)
         {

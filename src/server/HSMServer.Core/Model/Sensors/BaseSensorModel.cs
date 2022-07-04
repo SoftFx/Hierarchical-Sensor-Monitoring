@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.DataLayer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -88,6 +89,19 @@ namespace HSMServer.Core.Model
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
+
+        internal static BaseSensorModel GetModel(SensorEntity entity, IDatabaseCore db) =>
+            (SensorType)entity.Type switch
+            {
+                SensorType.Boolean => new BooleanSensorModel(entity, db),
+                SensorType.Integer => new IntegerSensorModel(entity, db),
+                SensorType.Double => new DoubleSensorModel(entity, db),
+                SensorType.String => new StringSensorModel(entity, db),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity, db),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity, db),
+                SensorType.File => new FileSensorModel(entity, db),
+                _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
+            };
 
         internal abstract SensorEntity ToEntity();
 
