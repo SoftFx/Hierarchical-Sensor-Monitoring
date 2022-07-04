@@ -1,11 +1,23 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class BoolSensorValue : SensorValueBase
+    public class BoolSensorValue : ValueBase<bool>
     {
         [DataMember]
-        public bool BoolValue { get; set; }
+        public override SensorType Type => SensorType.BooleanSensor;
+
+        [Obsolete]
+        public bool BoolValue 
+        { 
+            get => Value;
+            set 
+            { 
+                Value = value; 
+                BoolValue = value; 
+            }
+        }
     }
 }

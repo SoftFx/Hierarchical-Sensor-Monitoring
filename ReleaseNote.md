@@ -1,3 +1,4 @@
 - .NET has been updated to version 6
 - Github workflows have been uploaded
 - Libraries and nugets versioning has been fixed
+- HSMSensorDataObjects structure has been changed and old models have been marked as obsolete

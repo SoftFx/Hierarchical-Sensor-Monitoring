@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace HSMSensorDataObjects.BarData
 {
+    [Obsolete("Use IntBarSensorValue")]
     public class IntBarData
     {
         public int LastValue { get; set; }
