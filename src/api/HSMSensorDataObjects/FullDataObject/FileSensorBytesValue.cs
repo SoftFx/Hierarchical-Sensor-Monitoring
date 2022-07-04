@@ -13,7 +13,11 @@ namespace HSMSensorDataObjects.FullDataObject
         public byte[] FileContent 
         { 
             get => Value;
-            set { Value = value; FileContent = value; }
+            set 
+            { 
+                Value = value; 
+                FileContent = value; 
+            }
         }
 
         [DataMember]

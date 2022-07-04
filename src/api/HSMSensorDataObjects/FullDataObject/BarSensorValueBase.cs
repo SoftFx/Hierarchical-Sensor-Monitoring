@@ -10,13 +10,22 @@ namespace HSMSensorDataObjects.FullDataObject
         public DateTime StartTime 
         { 
             get => OpenTime;
-            set { OpenTime = value; StartTime = value; } 
+            set 
+            { 
+                OpenTime = value; 
+                StartTime = value; 
+            } 
         }
+
         [Obsolete]
         public DateTime EndTime 
         { 
             get => CloseTime;
-            set { CloseTime = value; EndTime = value; }
+            set 
+            { 
+                CloseTime = value; 
+                EndTime = value; 
+            }
         }
 
         [DataMember]
