@@ -91,7 +91,7 @@ namespace HSMServer.Core.Model
 
         internal abstract SensorEntity ToEntity();
 
-        internal abstract void InitializeStorage();
+        internal abstract void AddValue(byte[] valueBytes);
     }
 
 
@@ -129,10 +129,8 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
-        internal override void InitializeStorage()
-        {
-            Storage.InitializeValues(ProductName, Path);
-        }
+        internal override void AddValue(byte[] valueBytes) =>
+            Storage.AddValue(valueBytes);
 
         private List<string> GetPolicyIds()
         {

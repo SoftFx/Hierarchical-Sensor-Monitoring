@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -187,20 +188,25 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
-        public T GetLatestValue<T>(string productName, string path) where T : BaseValue
+        public Dictionary<byte[], (Guid sensorId, byte[] latestValue)> GetLatestValues(List<BaseSensorModel> sensors)
         {
+            var result = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+
+            foreach (var sensor in sensors)
+            {
+                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
+                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+
+                result.Add(key, value);
+            }
+
             var databases = _sensorsDatabases.GetAllDatabases();
             databases.Reverse();
 
             foreach (var database in databases)
-            {
-                var values = database.GetValues(productName, path);
+                database.FillLatestValues(result);
 
-                if (values.Count != 0)
-                    return (T)values.Select(v => EntityConverter.ConvertSensorData<T>(v)).OrderBy(v => v.ReceivingTime).LastOrDefault();
-            }
-
-            return null;
+            return result;
         }
 
         #endregion

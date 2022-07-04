@@ -399,6 +399,10 @@ namespace HSMServer.Core.Cache
                         }
                 }
             _logger.Info("Links between products and their sensors are built");
+
+            _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
+            FillSensorsData();
+            _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
         }
 
         private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
@@ -623,9 +627,16 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
 
-            sensor.InitializeStorage(); // TODO: lazy initializing
-
             return sensor;
+        }
+
+        private void FillSensorsData()
+        {
+            var sensorValues = _databaseCore.GetLatestValues(_sensorsNew.Values.ToList());
+
+            foreach (var (_, value) in sensorValues)
+                if (_sensorsNew.TryGetValue(value.sensorId, out var sensor))
+                    sensor.AddValue(value.latestValue);
         }
 
         private static Dictionary<Guid, Policy> GetPolicyModels(List<byte[]> policyEntities)

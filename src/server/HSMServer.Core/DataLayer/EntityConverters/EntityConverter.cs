@@ -41,6 +41,9 @@ namespace HSMServer.Core.DataLayer
 
         public static BaseValue ConvertSensorData<T>(byte[] entity) where T : BaseValue
         {
+            if (entity == null)
+                return null;
+
             var rootElement = JsonDocument.Parse(entity).RootElement;
 
             return rootElement.TryGetProperty(SensorDataTypedDataPropertyName, out _)

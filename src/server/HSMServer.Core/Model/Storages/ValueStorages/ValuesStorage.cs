@@ -10,12 +10,12 @@ namespace HSMServer.Core.Model
         public IDatabaseCore Database { get; init; }
 
 
-        internal void InitializeValues(string productName, string path)
+        internal void AddValue(byte[] valueBytes)
         {
-            var value = Database.GetLatestValue<T>(productName, path);
+            var value = EntityConverter.ConvertSensorData<T>(valueBytes);
 
             if (value != null)
-                Values.Add(value);
+                Values.Add((T)value);
         }
     }
 }

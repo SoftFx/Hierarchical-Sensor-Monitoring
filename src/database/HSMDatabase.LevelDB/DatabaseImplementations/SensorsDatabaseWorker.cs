@@ -88,15 +88,16 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return values.First(v => v.Path == path);
         }
 
-        public List<byte[]> GetValues(string productName, string path)
+        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
         {
-            var key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
-
-            var values = GetValues(key);
-            if (values == null || values.Count == 0)
-                return new();
-
-            return values;
+            try
+            {
+                _database.FillLatestValues(keyValuePairs);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to fill sensors latest values");
+            }
         }
 
         public List<SensorDataEntity> GetAllSensorValues(string productName, string path)
@@ -189,24 +190,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                         _logger.Error(e, $"Failed to deserialize {Encoding.UTF8.GetString(value)} to SensorDataEntity");
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read all sensors values for {Encoding.UTF8.GetString(key)}");
-            }
-
-            return result;
-        }
-
-        private List<byte[]> GetValues(byte[] key)
-        {
-            var result = new List<byte[]>();
-
-            try
-            {
-                var values = _database.GetAllStartingWith(key);
-                foreach (var value in values)
-                    result.Add(value);
             }
             catch (Exception e)
             {
