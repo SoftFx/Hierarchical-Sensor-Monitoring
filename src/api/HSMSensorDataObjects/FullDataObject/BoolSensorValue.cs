@@ -7,7 +7,7 @@ namespace HSMSensorDataObjects.FullDataObject
     public class BoolSensorValue : ValueBase<bool>
     {
         [DataMember]
-        public override SensorType Type { get => SensorType.BooleanSensor; }
+        public override SensorType Type => SensorType.BooleanSensor;
 
         [Obsolete]
         public bool BoolValue 
