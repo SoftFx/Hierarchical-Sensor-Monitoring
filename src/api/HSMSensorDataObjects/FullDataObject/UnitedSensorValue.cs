@@ -5,12 +5,21 @@ namespace HSMSensorDataObjects.FullDataObject
 {
     [Obsolete]
     [DataContract]
-    public class UnitedSensorValue : SensorValueBase
+    public class UnitedSensorValue : StringSensorValue
     {
         [DataMember]
-        public override SensorType Type { get; }
+        public new SensorType Type { get; set; }
+
         [DataMember]
-        public string Data { get; set; }
+        public string Data 
+        { 
+            get => Value;
+            set
+            {
+                Value = value;
+                Data = value;
+            }
+        }
 
         public bool IsBarSensor()
         {
