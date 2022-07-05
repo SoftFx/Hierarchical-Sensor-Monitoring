@@ -1,8 +1,6 @@
 ﻿using HSMCommon.Constants;
-using HSMSensorDataObjects;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Converters;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 
@@ -76,7 +74,7 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public SensorNodeViewModel(SensorModel model)
+        public SensorNodeViewModel(BaseSensorModel model)
         {
             Id = model.Id;
             EncodedId = SensorPathHelper.EncodeGuid(Id);
@@ -105,25 +103,27 @@ namespace HSMServer.Model.TreeViewModels
             return "no info";
         }
 
-        internal void Update(SensorModel model)
+        internal void Update(BaseSensorModel model)
         {
-            ExpectedUpdateInterval = model.ExpectedUpdateInterval;
+            if (model.ExpectedUpdateIntervalPolicy != null)
+                ExpectedUpdateInterval = new TimeSpan(model.ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval);
 
-            Name = model.SensorName;
-            SensorType = model.SensorType;
-            Status = model.Status;
+            Name = model.DisplayName;
+            SensorType = model.Type;
             Description = model.Description;
             UpdateTime = model.LastUpdateTime;
-            ValidationError = model.ValidationError;
+            // TODO
+            //Status = model.Status;
+            //ValidationError = model.ValidationError;
             Product = model.ProductName;
             Path = model.Path;
             Unit = model.Unit;
 
-            HasData = !string.IsNullOrEmpty(model.TypedData);
-            ShortStringValue = SensorStringPropertyBuilder.GetShortStringValue(model.SensorType, model.TypedData, model.OriginalFileSensorContentSize);
+            HasData = model.HasData();
+            ShortStringValue = model.GetLatestValueString();
 
-            IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
-            FileNameString = GetFileNameString(model.SensorType, ShortStringValue);
+            IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
+            FileNameString = GetFileNameString(model.Type, ShortStringValue);
         }
 
         private static string UnitsToString(double value, string unit)
@@ -132,11 +132,11 @@ namespace HSMServer.Model.TreeViewModels
             return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
-        private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.StringSensor;
+        private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.String;
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {
-            if (sensorType != SensorType.FileSensorBytes || string.IsNullOrEmpty(value))
+            if (sensorType != SensorType.File || string.IsNullOrEmpty(value))
                 return string.Empty;
 
             var ind = value.IndexOf(FileNamePattern);

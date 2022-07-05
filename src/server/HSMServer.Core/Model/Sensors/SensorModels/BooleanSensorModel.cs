@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override BooleanValuesStorage Storage { get; }
 
 
+        internal BooleanSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal BooleanSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {

@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BarBaseValue<T> : BarBaseValue
+    public abstract record BarBaseValue<T> : BarBaseValue where T : struct
     {
         public T Min { get; init; }
 
@@ -21,5 +21,9 @@ namespace HSMServer.Core.Model
         public T Mean { get; init; }
 
         public T LastValue { get; init; }
+
+
+        public override string ToString() =>
+            $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
     }
 }

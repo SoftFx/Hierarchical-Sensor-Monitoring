@@ -25,11 +25,11 @@ namespace HSMServer.Core.Model
 
         public Guid? AuthorId { get; }
 
-        public string ProductId { get; }
-
         public DateTime CreationDate { get; }
 
         public abstract SensorType Type { get; }
+
+        public string ProductId { get; private set; }
 
         public string DisplayName { get; private set; }
 
@@ -43,15 +43,22 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        // TODO: maybe store in Storage
-        public DateTime LastUpdateTime { get; private set; }
-
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
 
         public string ProductName { get; private set; }
 
         public string Path { get; private set; }
 
+        // TODO: maybe store in Storage
+        public DateTime LastUpdateTime { get; protected set; }
+
+
+        internal BaseSensorModel(string productId, string sensorName)
+        {
+            Id = Guid.NewGuid();
+            ProductId = productId;
+            DisplayName = sensorName;
+        }
 
         internal BaseSensorModel(SensorEntity entity)
         {
@@ -65,6 +72,8 @@ namespace HSMServer.Core.Model
             Unit = entity.Unit;
         }
 
+
+        internal void SetProduct(string productId) => ProductId = productId;
 
         internal void BuildProductNameAndPath(ProductModel parentProduct)
         {
@@ -80,6 +89,13 @@ namespace HSMServer.Core.Model
 
             Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
             ProductName = parentProduct.DisplayName;
+        }
+
+        internal void Update(SensorUpdate sensor)
+        {
+            Description = sensor.Description;
+            //ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval); // TODO update expected update interval policy!!!
+            Unit = sensor.Unit;
         }
 
         internal virtual void AddPolicy(Policy policy)
@@ -103,9 +119,30 @@ namespace HSMServer.Core.Model
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
 
+        internal static BaseSensorModel GetModel(BaseValue value, string productId, string name) =>
+            value switch
+            {
+                BooleanValue => new BooleanSensorModel(productId, name),
+                IntegerValue => new IntegerSensorModel(productId, name),
+                DoubleValue => new DoubleSensorModel(productId, name),
+                StringValue => new StringSensorModel(productId, name),
+                IntegerBarValue => new IntegerBarSensorModel(productId, name),
+                DoubleBarValue => new DoubleBarSensorModel(productId, name),
+                FileValue => new FileSensorModel(productId, name),
+                _ => throw new ArgumentException($"Unexpected sensor value type {value.GetType()}"),
+            };
+
         internal abstract SensorEntity ToEntity();
 
+        internal abstract void AddValue(BaseValue value);
+
         internal abstract void AddValue(byte[] valueBytes);
+
+        internal abstract void ClearValues();
+
+        public abstract string GetLatestValueString();
+
+        public abstract bool HasData();
     }
 
 
@@ -116,6 +153,8 @@ namespace HSMServer.Core.Model
 
         public abstract ValuesStorage<T> Storage { get; }
 
+
+        internal BaseSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
 
         internal BaseSensorModel(SensorEntity entity) : base(entity) { }
 
@@ -143,8 +182,22 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
+        internal override void AddValue(BaseValue value) =>
+            Storage.AddValue((T)value);
+
         internal override void AddValue(byte[] valueBytes) =>
             Storage.AddValue(valueBytes);
+
+        internal override void ClearValues()
+        {
+            Storage.ClearValues();
+            LastUpdateTime = DateTime.MinValue;
+        }
+
+        public override bool HasData() => Storage.Values.Count > 0;
+
+        public override string GetLatestValueString() =>
+            Storage.Values.LastOrDefault()?.ToString();
 
         private List<string> GetPolicyIds()
         {

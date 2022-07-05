@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override DoubleValuesStorage Storage { get; }
 
 
+        internal DoubleSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal DoubleSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {

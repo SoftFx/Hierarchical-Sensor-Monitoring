@@ -10,6 +10,12 @@ namespace HSMServer.Core.Model
         public IDatabaseCore Database { get; init; }
 
 
+        internal void AddValue(T value)
+        {
+            if (value != null)
+                Values.Add(value);
+        }
+
         internal void AddValue(byte[] valueBytes)
         {
             var value = valueBytes.ConvertToSensorValue<T>();
@@ -17,5 +23,7 @@ namespace HSMServer.Core.Model
             if (value != null)
                 Values.Add((T)value);
         }
+
+        internal void ClearValues() => Values.Clear();
     }
 }

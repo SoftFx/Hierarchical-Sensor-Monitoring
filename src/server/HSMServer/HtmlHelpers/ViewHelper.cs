@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Html;

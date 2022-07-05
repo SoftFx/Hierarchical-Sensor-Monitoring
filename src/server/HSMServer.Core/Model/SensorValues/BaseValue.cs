@@ -34,11 +34,17 @@ namespace HSMServer.Core.Model
         //public SensorType Type { get; init; }
 
         public SensorStatus Status { get; init; }
+
+
+        public override string ToString() => null;
     }
 
 
     public abstract record BaseValue<T> : BaseValue
     {
         public T Value { get; init; }
+
+
+        public override string ToString() => Value.ToString();
     }
 }

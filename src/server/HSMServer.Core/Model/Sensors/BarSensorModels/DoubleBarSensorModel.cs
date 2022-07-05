@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override DoubleBarValuesStorage Storage { get; }
 
 
+        internal DoubleBarSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal DoubleBarSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {

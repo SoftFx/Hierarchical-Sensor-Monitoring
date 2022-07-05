@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override IntegerValuesStorage Storage { get; }
 
 
+        internal IntegerSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal IntegerSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {

@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override FileValuesStorage Storage { get; }
 
 
+        internal FileSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal FileSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {

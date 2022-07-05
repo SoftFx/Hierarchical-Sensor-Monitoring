@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -31,7 +32,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
-        public ConcurrentDictionary<Guid, SensorModel> Sensors { get; }
+        public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
 
         public ProductModel ParentProduct { get; private set; }
 
@@ -40,7 +41,7 @@ namespace HSMServer.Core.Cache.Entities
         {
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
             SubProducts = new ConcurrentDictionary<string, ProductModel>();
-            Sensors = new ConcurrentDictionary<Guid, SensorModel>();
+            Sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
         }
 
         public ProductModel(ProductEntity entity) : this()
@@ -75,9 +76,9 @@ namespace HSMServer.Core.Cache.Entities
             SubProducts.TryAdd(product.Id, product);
         }
 
-        internal void AddSensor(SensorModel sensor)
+        internal void AddSensor(BaseSensorModel sensor)
         {
-            sensor.AddParent(this);
+            sensor.SetProduct(Id);
 
             Sensors.TryAdd(sensor.Id, sensor);
         }

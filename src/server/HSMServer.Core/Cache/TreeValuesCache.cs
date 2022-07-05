@@ -30,12 +30,11 @@ namespace HSMServer.Core.Cache
         private readonly IUserManager _userManager;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
-        private readonly ConcurrentDictionary<Guid, SensorModel> _sensors;
-        private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensorsNew;
+        private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
-        public event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
@@ -45,8 +44,7 @@ namespace HSMServer.Core.Cache
             _userManager = userManager;
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
-            _sensors = new ConcurrentDictionary<Guid, SensorModel>();
-            _sensorsNew = new ConcurrentDictionary<Guid, BaseSensorModel>();
+            _sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
             _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
@@ -55,7 +53,7 @@ namespace HSMServer.Core.Cache
 
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
-        public List<SensorModel> GetSensors() => _sensors.Values.ToList();
+        public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
@@ -228,7 +226,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-            _databaseCore.UpdateSensor(sensor.ToSensorEntity());
+            _databaseCore.UpdateSensor(sensor.ToEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -238,7 +236,9 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            sensor.ParentProduct.Sensors.TryRemove(sensorId, out _);
+            if (_tree.TryGetValue(sensor.ProductId, out var parent))
+                parent.Sensors.TryRemove(sensorId, out _);
+
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
@@ -261,12 +261,40 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(sensorId, out var sensor))
                 return;
 
-            sensor.ClearData();
+            sensor.ClearValues();
             _databaseCore.RemoveSensor(sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+        public void AddNewSensorValue(BaseValue sensorValue, string key, string path)
+        {
+            if (!TryGetProductByKey(key, out var product, out _))
+                return;
+
+            var productName = product.DisplayName;
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, path);
+
+            var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
+            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
+            if (sensor == null)
+            {
+                sensor = BaseSensorModel.GetModel(sensorValue, parentProduct.Id, sensorName);
+                parentProduct.AddSensor(sensor);
+
+                AddSensor(sensor);
+                UpdateProduct(parentProduct);
+            }
+            else
+                sensor.AddValue(sensorValue); // TODO there is saving value to db
+
+            //if (saveDataToDb)
+            //    _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+        }
+
+        // TODO use another method AddNewSensorValue
         public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
             ValidationResult validationResult, bool saveDataToDb = true)
         {
@@ -277,27 +305,27 @@ namespace HSMServer.Core.Cache
             var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
             var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
-            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.SensorName == newSensorValueName).Value;
-            if (sensor == null)
-            {
-                sensor = new SensorModel(sensorValue, productName, timeCollected, validationResult);
-                parentProduct.AddSensor(sensor);
+            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == newSensorValueName).Value;
+            //if (sensor == null)
+            //{
+            //    sensor = new SensorModel(sensorValue, productName, timeCollected, validationResult);
+            //    parentProduct.AddSensor(sensor);
 
-                AddSensor(sensor);
-                UpdateProduct(parentProduct);
-            }
-            else
-            {
-                bool isMetadataUpdated = sensor.IsSensorMetadataUpdated(sensorValue);
+            //    AddSensor(sensor);
+            //    UpdateProduct(parentProduct);
+            //}
+            //else
+            //{
+            //    bool isMetadataUpdated = sensor.IsSensorMetadataUpdated(sensorValue);
 
-                sensor.UpdateData(sensorValue, timeCollected, validationResult);
+            //    sensor.UpdateData(sensorValue, timeCollected, validationResult);
 
-                if (isMetadataUpdated)
-                    _databaseCore.UpdateSensor(sensor.ToSensorEntity());
-            }
+            //    if (isMetadataUpdated)
+            //        _databaseCore.UpdateSensor(sensor.ToSensorEntity());
+            //}
 
-            if (saveDataToDb)
-                _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+            //if (saveDataToDb)
+            //    _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -415,7 +443,7 @@ namespace HSMServer.Core.Cache
                 try
                 {
                     var sensor = GetSensorModel(entity);
-                    _sensorsNew.TryAdd(sensor.Id, sensor);
+                    _sensors.TryAdd(sensor.Id, sensor);
 
                     if (entity.Policies != null) // TODO: remove this check after sensor entities migration
                         foreach (var policyId in entity.Policies)
@@ -509,10 +537,10 @@ namespace HSMServer.Core.Cache
                 AddAccessKey(AccessKeyModel.BuildDefault(product));
         }
 
-        private void AddSensor(SensorModel sensor)
+        private void AddSensor(BaseSensorModel sensor)
         {
             _sensors.TryAdd(sensor.Id, sensor);
-            _databaseCore.AddSensor(sensor.ToSensorEntity());
+            _databaseCore.AddSensor(sensor.ToEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
         }
@@ -557,7 +585,7 @@ namespace HSMServer.Core.Cache
                 }
                 else
                 {
-                    if (!product.Sensors.Any(s => s.Value.SensorName == expectedName) &&
+                    if (!product.Sensors.Any(s => s.Value.DisplayName == expectedName) &&
                         !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
@@ -622,10 +650,10 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var sensorValues = _databaseCore.GetLatestValues(_sensorsNew.Values.ToList());
+            var sensorValues = _databaseCore.GetLatestValues(_sensors.Values.ToList());
 
             foreach (var (_, value) in sensorValues)
-                if (_sensorsNew.TryGetValue(value.sensorId, out var sensor))
+                if (_sensors.TryGetValue(value.sensorId, out var sensor))
                     sensor.AddValue(value.latestValue);
         }
 

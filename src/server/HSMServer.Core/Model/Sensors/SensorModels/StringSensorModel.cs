@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         public override StringValuesStorage Storage { get; }
 
 
+        internal StringSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
+
         internal StringSensorModel(SensorEntity entity, IDatabaseCore db)
             : base(entity)
         {
