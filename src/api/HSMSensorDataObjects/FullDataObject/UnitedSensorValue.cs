@@ -14,11 +14,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public string Data 
         { 
             get => Value;
-            set
-            {
-                Value = value;
-                Data = value;
-            }
+            set => Value = value;
         }
 
         public bool IsBarSensor()

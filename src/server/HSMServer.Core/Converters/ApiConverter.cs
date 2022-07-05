@@ -5,7 +5,7 @@ namespace HSMServer.Core.Converters
 {
     public static class ApiConverter
     {
-        public static BooleanValue ConvertToValue(this BoolSensorValue value) =>
+        public static BooleanValue Convert(this BoolSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -16,7 +16,7 @@ namespace HSMServer.Core.Converters
                 Value = value.Value
             };
 
-        public static IntegerValue ConvertToValue(this IntSensorValue value) =>
+        public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Converters
                 Value = value.Value
             };
 
-        public static DoubleValue ConvertToValue(this DoubleSensorValue value) =>
+        public static DoubleValue Convert(this DoubleSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -38,7 +38,7 @@ namespace HSMServer.Core.Converters
                 Value = value.Value
             };
 
-        public static StringValue ConvertToValue(this StringSensorValue value) =>
+        public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Converters
                 Value = value.Value
             };
 
-        public static FileValue ConvertToValue(this FileSensorBytesValue value) =>
+        public static FileValue Convert(this FileSensorBytesValue value) =>
             new()
             {
                 Key = value.Key,
@@ -63,7 +63,7 @@ namespace HSMServer.Core.Converters
                 OriginalSize = value.Value.LongLength
             };
 
-        public static IntegerBarValue ConvertToValue(this IntBarSensorValue value) =>
+        public static IntegerBarValue Convert(this IntBarSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -80,7 +80,7 @@ namespace HSMServer.Core.Converters
                 LastValue = value.LastValue
             };
 
-        public static DoubleBarValue ConvertToValue(this DoubleBarSensorValue value) =>
+        public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
             {
                 Key = value.Key,
@@ -97,7 +97,7 @@ namespace HSMServer.Core.Converters
                 LastValue = value.LastValue
             };
 
-        public static StringValue ConvertToValue(this UnitedSensorValue value) =>
+        public static StringValue Decode(this UnitedSensorValue value) =>
             new()
             {
                 Key = value.Key,

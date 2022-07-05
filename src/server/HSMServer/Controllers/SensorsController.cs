@@ -55,7 +55,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -83,7 +83,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -111,7 +111,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -139,7 +139,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -167,7 +167,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, sensorValue);
@@ -195,7 +195,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -223,7 +223,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToFileSensorBytes().ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.ConvertToFileSensorBytes().Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -252,7 +252,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToValue(), out var message))
+                if (CanAddToQueue(sensorValue.Convert(), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -319,7 +319,7 @@ namespace HSMServer.Controllers
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
-                    if (!CanAddToQueue(value.ConvertToValue(), out var message))
+                    if (!CanAddToQueue(value.Decode(), out var message))
                         result[value.Key] = message;
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -336,7 +336,8 @@ namespace HSMServer.Controllers
         {
             if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
             {
-                _updatesQueue.AddItem(value);
+                //ToDo
+                //_updatesQueue.AddItem(value);
                 return true;
             }
 
