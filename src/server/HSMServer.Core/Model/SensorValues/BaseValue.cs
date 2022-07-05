@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMSensorDataObjects;
 
 namespace HSMServer.Core.Model
 {
@@ -34,10 +35,10 @@ namespace HSMServer.Core.Model
 
         public DateTime Time { get; init; }
 
+        public SensorStatus Status { get; init; }
+
         // TODO: if this property is necessary
         //public SensorType Type { get; init; }
-
-        //public SensorStatus Status { get; init; }
     }
 
 
