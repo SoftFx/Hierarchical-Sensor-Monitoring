@@ -139,8 +139,8 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             if (value is BarSensorValueBase barSensorValue)
                 return ProcessBarSensorValue(barSensorValue, product, timeCollected);
-            else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
-                return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
+            //else if (value is UnitedSensorValue unitedSensorValue && unitedSensorValue.IsBarSensor())
+            //    return ProcessBarSensorValue(unitedSensorValue.Convert(), product, timeCollected);
 
             return true;
         }

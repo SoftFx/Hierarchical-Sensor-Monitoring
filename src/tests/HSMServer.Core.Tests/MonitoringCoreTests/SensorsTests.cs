@@ -56,21 +56,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }
         }
 
-        [Theory]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetAllSensorsHistoryData_WithBarValues_Test(SensorType type)
-        {
-            const int sensorValuesCount = 10;
+        //[Theory]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetAllSensorsHistoryData_WithBarValues_Test(SensorType type)
+        //{
+        //    const int sensorValuesCount = 10;
 
-            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
-            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+        //    var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+        //    barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
 
-            var history = _monitoringCore.GetAllSensorHistory(_testProductName, barSensorValues[0].Path);
+        //    var history = _monitoringCore.GetAllSensorHistory(_testProductName, barSensorValues[0].Path);
 
-            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
-        }
+        //    TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
+        //}
 
         [Theory]
         [InlineData(1)]
@@ -93,25 +93,25 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }
         }
 
-        [Theory]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetSensorsHistoryDataFromTo_WithBarValues_Test(SensorType type)
-        {
-            const int sensorValuesCount = 10;
+        //[Theory]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetSensorsHistoryDataFromTo_WithBarValues_Test(SensorType type)
+        //{
+        //    const int sensorValuesCount = 10;
 
-            DateTime from = DateTime.UtcNow;
+        //    DateTime from = DateTime.UtcNow;
 
-            var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
-            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+        //    var barSensorValues = AddAndGetBarSensorValues(sensorValuesCount, type);
+        //    barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
 
-            DateTime to = DateTime.UtcNow;
+        //    DateTime to = DateTime.UtcNow;
 
-            var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, from, to);
+        //    var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, from, to);
 
-            TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
-        }
+        //    TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
+        //}
 
         [Theory]
         [InlineData(1)]
@@ -132,23 +132,23 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }
         }
 
-        [Theory]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetSensorsHistoryDataSpecificCount_WithBarValues_Test(SensorType type)
-        {
-            const int expectedCount = 101;
-            const int specificCount = 5;
+        //[Theory]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetSensorsHistoryDataSpecificCount_WithBarValues_Test(SensorType type)
+        //{
+        //    const int expectedCount = 101;
+        //    const int specificCount = 5;
 
-            var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
-            barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
-            barSensorValues = barSensorValues.TakeLast(specificCount).ToList();
+        //    var barSensorValues = AddAndGetBarSensorValues(expectedCount, type);
+        //    barSensorValues.Add(AddAndGetUnitedSensorValue(type, true));
+        //    barSensorValues = barSensorValues.TakeLast(specificCount).ToList();
 
-            var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, specificCount);
+        //    var history = _monitoringCore.GetSensorHistory(_testProductName, barSensorValues[0].Path, specificCount);
 
-            TestBarSensorsHistoryData(barSensorValues, history, specificCount - 1);
-        }
+        //    TestBarSensorsHistoryData(barSensorValues, history, specificCount - 1);
+        //}
 
 
         [Fact]
@@ -248,28 +248,28 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                                .ToDictionary(s => s.Key, s => s.TakeLast(specificCount.Value).ToList());
         }
 
-        private List<SensorValueBase> AddAndGetBarSensorValues(int count, SensorType type)
-        {
-            var barSensorValues = new List<SensorValueBase>(count);
+        //private List<SensorValueBase> AddAndGetBarSensorValues(int count, SensorType type)
+        //{
+        //    var barSensorValues = new List<SensorValueBase>(count);
 
-            for (int i = 0; i < count; ++i)
-            {
-                var unaccountedSensorValueWithMinEndTime = _sensorValuesFactory.BuildUnitedSensorValue(type, true);
-                _monitoringCore.AddSensorValue(unaccountedSensorValueWithMinEndTime);
+        //    for (int i = 0; i < count; ++i)
+        //    {
+        //        var unaccountedSensorValueWithMinEndTime = _sensorValuesFactory.BuildUnitedSensorValue(type, true);
+        //        _monitoringCore.AddSensorValue(unaccountedSensorValueWithMinEndTime);
 
-                barSensorValues.Add(AddAndGetUnitedSensorValue(type));
-            }
+        //        barSensorValues.Add(AddAndGetUnitedSensorValue(type));
+        //    }
 
-            return barSensorValues;
-        }
+        //    return barSensorValues;
+        //}
 
-        private UnitedSensorValue AddAndGetUnitedSensorValue(SensorType type, bool useMinEndTime = false)
-        {
-            var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type, useMinEndTime);
+        //private UnitedSensorValue AddAndGetUnitedSensorValue(SensorType type, bool useMinEndTime = false)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type, useMinEndTime);
 
-            _monitoringCore.AddSensorValue(sensorValue);
+        //    _monitoringCore.AddSensorValue(sensorValue);
 
-            return sensorValue;
-        }
+        //    return sensorValue;
+        //}
     }
 }

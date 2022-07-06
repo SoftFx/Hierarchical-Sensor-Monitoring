@@ -135,61 +135,61 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "UnitedSensorValues One")]
-        public async Task AddUnitedSensorValueTest(SensorType sensorType)
-        {
-            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "UnitedSensorValues One")]
+        //public async Task AddUnitedSensorValueTest(SensorType sensorType)
+        //{
+        //    var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
 
-            _monitoringCore.AddSensorValue(unitedValue);
+        //    _monitoringCore.AddSensorValue(unitedValue);
 
-            await FullSeveralSensorValuesTestAsync(new List<SensorValueBase>() { unitedValue },
-                                                   _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
-        }
+        //    await FullSeveralSensorValuesTestAsync(new List<SensorValueBase>() { unitedValue },
+        //                                           _valuesCache.GetSensors,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
+        //}
 
-        [Theory]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "UnitedBarSensorValues One")]
-        public void AddUnitedBarSensorValueTest(SensorType type)
-        {
-            var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(type, isMinEndTime: true);
+        //[Theory]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "UnitedBarSensorValues One")]
+        //public void AddUnitedBarSensorValueTest(SensorType type)
+        //{
+        //    var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(type, isMinEndTime: true);
 
-            _monitoringCore.AddSensorValue(unitedValue);
+        //    _monitoringCore.AddSensorValue(unitedValue);
 
-            var lastBarValue = _barStorage.GetLastValue(_testProductName, unitedValue.Path);
+        //    var lastBarValue = _barStorage.GetLastValue(_testProductName, unitedValue.Path);
 
-            Assert.Equal(_testProductName, lastBarValue.ProductName);
-            Assert.Equal(SensorValuesTester.GetSensorValueType(unitedValue), lastBarValue.ValueType);
-            SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, lastBarValue.Value);
-        }
+        //    Assert.Equal(_testProductName, lastBarValue.ProductName);
+        //    Assert.Equal(SensorValuesTester.GetSensorValueType(unitedValue), lastBarValue.ValueType);
+        //    SensorValuesTester.TestBarSensorFromUnitedSensor(unitedValue, lastBarValue.Value);
+        //}
 
-        [Theory]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "UnitedSensorValues Several Random")]
-        public async Task AddRandomUnitedSensorValuesTest(int count)
-        {
-            var unitedValues = GetRandomUnitedSensors(count);
+        //[Theory]
+        //[InlineData(10)]
+        //[InlineData(50)]
+        //[InlineData(100)]
+        //[InlineData(500)]
+        //[InlineData(1000)]
+        //[Trait("Category", "UnitedSensorValues Several Random")]
+        //public async Task AddRandomUnitedSensorValuesTest(int count)
+        //{
+        //    var unitedValues = GetRandomUnitedSensors(count);
 
-            unitedValues.ForEach(_monitoringCore.AddSensorValue);
+        //    unitedValues.ForEach(_monitoringCore.AddSensorValue);
 
-            await FullSeveralSensorValuesTestAsync(unitedValues,
-                                                   _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
-        }
+        //    await FullSeveralSensorValuesTestAsync(unitedValues,
+        //                                           _valuesCache.GetSensors,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
+        //}
 
 
         private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, GetSensorsFromCache getSensorsFromCache,
@@ -287,13 +287,13 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             return sensorValues;
         }
 
-        private List<SensorValueBase> GetRandomUnitedSensors(int size)
-        {
-            var sensorValues = new List<SensorValueBase>(size);
-            for (int i = 0; i < size; ++i)
-                sensorValues.Add(_sensorValuesFactory.BuildRandomUnitedSensorValue());
+        //private List<SensorValueBase> GetRandomUnitedSensors(int size)
+        //{
+        //    var sensorValues = new List<SensorValueBase>(size);
+        //    for (int i = 0; i < size; ++i)
+        //        sensorValues.Add(_sensorValuesFactory.BuildRandomUnitedSensorValue());
 
-            return sensorValues;
-        }
+        //    return sensorValues;
+        //}
     }
 }
