@@ -16,7 +16,7 @@ namespace HSMServer.Core.Model
         internal abstract bool HasData { get; }
 
 
-        internal abstract void AddValue(BaseValue value);
+        internal abstract bool AddValue(BaseValue value);
 
         internal abstract void AddValue(byte[] valueBytes);
 
@@ -37,8 +37,6 @@ namespace HSMServer.Core.Model
 
         internal override bool HasData => _cachedValues.Count > 0;
 
-        internal IDatabaseCore Database { get; init; }
-
 
         internal ValuesStorage()
         {
@@ -46,10 +44,12 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override void AddValue(BaseValue value)
+        internal override bool AddValue(BaseValue value)
         {
             if (value != null && value is T valueT)
                 _cachedValues.Add(valueT);
+
+            return true;
         }
 
         internal override void AddValue(byte[] valueBytes)

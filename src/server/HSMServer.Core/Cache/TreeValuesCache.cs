@@ -640,7 +640,7 @@ namespace HSMServer.Core.Cache
 
         private BaseSensorModel GetSensorModel(SensorEntity entity)
         {
-            var sensor = BaseSensorModel.GetModel(entity, _databaseCore);
+            var sensor = BaseSensorModel.GetModel(entity);
 
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
