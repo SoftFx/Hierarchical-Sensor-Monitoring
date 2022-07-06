@@ -96,8 +96,6 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal void SetProduct(string productId) => ProductId = productId;
-
         internal void BuildProductNameAndPath(ProductModel parentProduct)
         {
             var pathParts = new List<string>() { DisplayName };

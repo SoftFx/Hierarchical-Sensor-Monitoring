@@ -38,19 +38,23 @@ namespace HSMServer.Core.Model
 
         private string FileSizeToNormalString()
         {
-            if (OriginalSize < SizeDenominator)
-                return $"{OriginalSize} bytes";
+            const int maxGBCounter = 3;
 
-            double kb = OriginalSize / SizeDenominator;
-            if (kb < SizeDenominator)
-                return $"{kb:#,##0} KB";
+            int counter = 0;
+            double size = OriginalSize;
 
-            double mb = kb / SizeDenominator;
-            if (mb < SizeDenominator)
-                return $"{mb:#,##0.0} MB";
+            while (size > SizeDenominator && counter++ < maxGBCounter)
+                size /= SizeDenominator;
 
-            double gb = mb / SizeDenominator;
-            return $"{gb:#,##0.0} GB";
+            string units = counter switch
+            {
+                0 => "bytes",
+                1 => "KB",
+                2 => "MB",
+                _ => "GB",
+            };
+
+            return $"{size:F2} {units}";
         }
 
         private string GetFileNameString()
