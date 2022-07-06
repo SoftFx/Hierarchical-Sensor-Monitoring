@@ -1,22 +1,20 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 using HSMSensorDataObjects.BarData;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class DoubleBarSensorValue : BarSensorValueBase
+    public class DoubleBarSensorValue : BarValueSensorBase<double>
     {
         [DataMember]
-        public double LastValue { get; set; }
+        public override SensorType Type => SensorType.DoubleBarSensor;
+
         [DataMember]
-        public double Min { get; set; }
-        [DataMember]
-        public double Max { get; set; }
-        [DataMember]
-        public double Mean { get; set; }
-        [DataMember]
+        [Obsolete]
         public List<PercentileValueDouble> Percentiles { get; set; }
+
 
         public DoubleBarSensorValue()
         {
