@@ -5,9 +5,9 @@ namespace HSMServer.Core.Model
 {
     public sealed class DoubleBarSensorModel : BaseSensorModel<DoubleBarValue>
     {
-        public override SensorType Type { get; } = SensorType.DoubleBar;
+        protected override DoubleBarValuesStorage Storage { get; }
 
-        public override DoubleBarValuesStorage Storage { get; }
+        public override SensorType Type { get; } = SensorType.DoubleBar;
 
 
         internal DoubleBarSensorModel(string productId, string sensorName) : base(productId, sensorName) { }

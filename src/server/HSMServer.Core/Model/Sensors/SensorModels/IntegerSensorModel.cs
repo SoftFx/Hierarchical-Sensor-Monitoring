@@ -5,9 +5,9 @@ namespace HSMServer.Core.Model
 {
     public sealed class IntegerSensorModel : BaseSensorModel<IntegerValue>
     {
-        public override SensorType Type { get; } = SensorType.Integer;
+        protected override IntegerValuesStorage Storage { get; }
 
-        public override IntegerValuesStorage Storage { get; }
+        public override SensorType Type { get; } = SensorType.Integer;
 
 
         internal IntegerSensorModel(string productId, string sensorName) : base(productId, sensorName) { }

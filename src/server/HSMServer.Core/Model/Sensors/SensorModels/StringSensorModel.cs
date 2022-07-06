@@ -5,9 +5,9 @@ namespace HSMServer.Core.Model
 {
     public sealed class StringSensorModel : BaseSensorModel<StringValue>
     {
-        public override SensorType Type { get; } = SensorType.String;
+        protected override StringValuesStorage Storage { get; }
 
-        public override StringValuesStorage Storage { get; }
+        public override SensorType Type { get; } = SensorType.String;
 
 
         internal StringSensorModel(string productId, string sensorName) : base(productId, sensorName) { }

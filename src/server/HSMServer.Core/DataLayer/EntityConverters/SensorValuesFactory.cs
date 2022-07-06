@@ -89,18 +89,23 @@ namespace HSMServer.Core.DataLayer
                 Value = GetTypedData(element).ReadString(StringValuePropertyName),
             };
 
-        private static FileValue BuildFileValue(JsonElement element) =>
-            new()
+        private static FileValue BuildFileValue(JsonElement element)
+        {
+            var originalSize = element.ReadLong(OriginalSizePropertyName);
+            var content = GetTypedData(element).ReadBytes(FileContentPropertyName);
+
+            return new()
             {
                 Time = element.ReadDateTime(TimePropertyName),
                 ReceivingTime = element.ReadDateTime(RecievingTimePropertyName),
                 Status = GetStatus(element),
                 Comment = GetTypedData(element).ReadString(CommentPropertyName),
-                Value = GetTypedData(element).ReadBytes(FileContentPropertyName),
+                Value = content,
                 Name = GetTypedData(element).ReadString(FileNamePropertyName),
                 Extension = GetTypedData(element).ReadString(ExtensionPropertyName),
-                OriginalSize = element.ReadLong(OriginalSizePropertyName),
+                OriginalSize = originalSize == 0 ? content?.Length ?? 0 : originalSize,
             };
+        }
 
         private static IntegerBarValue BuildIntegerBarValue(JsonElement element) =>
             new()

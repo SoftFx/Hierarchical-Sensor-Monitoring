@@ -5,9 +5,9 @@ namespace HSMServer.Core.Model
 {
     public sealed class FileSensorModel : BaseSensorModel<FileValue>
     {
-        public override SensorType Type { get; } = SensorType.File;
+        protected override FileValuesStorage Storage { get; }
 
-        public override FileValuesStorage Storage { get; }
+        public override SensorType Type { get; } = SensorType.File;
 
 
         internal FileSensorModel(string productId, string sensorName) : base(productId, sensorName) { }

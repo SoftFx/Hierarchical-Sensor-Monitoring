@@ -1,29 +1,65 @@
 ﻿using HSMServer.Core.DataLayer;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class ValuesStorage<T> where T : BaseValue
+    public abstract class ValuesStorage
     {
-        public List<T> Values { get; } = new();
+        protected abstract int CacheSize { get; }
 
-        public IDatabaseCore Database { get; init; }
+        internal abstract string LatestValueInfo { get; }
+
+        internal abstract DateTime LastUpdateTime { get; }
+
+        internal abstract bool HasData { get; }
 
 
-        internal void AddValue(T value)
+        internal abstract void AddValue(BaseValue value);
+
+        internal abstract void AddValue(byte[] valueBytes);
+
+        internal abstract void Clear();
+    }
+
+
+    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
+    {
+        private readonly List<T> _cachedValues;
+
+
+        protected override int CacheSize => 100;
+
+        internal override string LatestValueInfo => _cachedValues.LastOrDefault()?.ShortInfo;
+
+        internal override DateTime LastUpdateTime => _cachedValues.LastOrDefault()?.ReceivingTime ?? DateTime.MinValue;
+
+        internal override bool HasData => _cachedValues.Count > 0;
+
+        internal IDatabaseCore Database { get; init; }
+
+
+        internal ValuesStorage()
         {
-            if (value != null)
-                Values.Add(value);
+            _cachedValues = new(CacheSize);
         }
 
-        internal void AddValue(byte[] valueBytes)
+
+        internal override void AddValue(BaseValue value)
+        {
+            if (value != null && value is T valueT)
+                _cachedValues.Add(valueT);
+        }
+
+        internal override void AddValue(byte[] valueBytes)
         {
             var value = valueBytes.ConvertToSensorValue<T>();
 
             if (value != null)
-                Values.Add((T)value);
+                _cachedValues.Add((T)value);
         }
 
-        internal void ClearValues() => Values.Clear();
+        internal override void Clear() => _cachedValues.Clear();
     }
 }

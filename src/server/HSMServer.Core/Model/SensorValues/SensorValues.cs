@@ -25,24 +25,23 @@ namespace HSMServer.Core.Model
 
         public long OriginalSize { get; init; }
 
+        public override string ShortInfo => GetShortDescription();
 
-        public override string ToString()
+
+        private string GetShortDescription()
         {
-            string sizeString = FileSizeToNormalString(GetFileSize());
-            string fileNameString = GetFileNameString(Name, Extension);
+            string sizeString = FileSizeToNormalString();
+            string fileNameString = GetFileNameString();
 
             return $"File size: {sizeString}. {fileNameString}";
         }
 
-        private long GetFileSize() =>
-            OriginalSize == 0 ? Value?.Length ?? 0 : OriginalSize;
-
-        private static string FileSizeToNormalString(long size)
+        private string FileSizeToNormalString()
         {
-            if (size < SizeDenominator)
-                return $"{size} bytes";
+            if (OriginalSize < SizeDenominator)
+                return $"{OriginalSize} bytes";
 
-            double kb = size / SizeDenominator;
+            double kb = OriginalSize / SizeDenominator;
             if (kb < SizeDenominator)
                 return $"{kb:#,##0} KB";
 
@@ -54,18 +53,18 @@ namespace HSMServer.Core.Model
             return $"{gb:#,##0.0} GB";
         }
 
-        private static string GetFileNameString(string fileName, string extension)
+        private string GetFileNameString()
         {
-            if (string.IsNullOrEmpty(extension) && string.IsNullOrEmpty(fileName))
+            if (string.IsNullOrEmpty(Extension) && string.IsNullOrEmpty(Name))
                 return "No file info specified!";
 
-            if (string.IsNullOrEmpty(fileName))
-                return $"Extension: {extension}.";
+            if (string.IsNullOrEmpty(Name))
+                return $"Extension: {Extension}.";
 
-            if (!string.IsNullOrEmpty(Path.GetExtension(fileName)))
-                return $"File name: {fileName}.";
+            if (!string.IsNullOrEmpty(Path.GetExtension(Name)))
+                return $"File name: {Name}.";
 
-            return $"File name: {Path.ChangeExtension(fileName, extension)}.";
+            return $"File name: {Path.ChangeExtension(Name, Extension)}.";
         }
     }
 

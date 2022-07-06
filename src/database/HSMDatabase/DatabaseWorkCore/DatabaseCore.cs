@@ -280,12 +280,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var newEntities = GetNewSensors();
 
             foreach (var newEntity in newEntities)
-            {
-                if (entities.ContainsKey(newEntity.Id))
-                    entities[newEntity.Id] = newEntity;
-                else
-                    entities.Add(newEntity.Id, newEntity);
-            }
+                entities[newEntity.Id] = newEntity;
 
             return entities.Values.ToList();
         }

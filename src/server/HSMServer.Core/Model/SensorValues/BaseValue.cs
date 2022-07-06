@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model
         public SensorStatus Status { get; init; }
 
 
-        public override string ToString() => null;
+        public abstract string ShortInfo { get; }
     }
 
 
@@ -44,7 +44,6 @@ namespace HSMServer.Core.Model
     {
         public T Value { get; init; }
 
-
-        public override string ToString() => Value.ToString();
+        public override string ShortInfo => Value.ToString();
     }
 }
