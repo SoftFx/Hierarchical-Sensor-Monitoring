@@ -288,7 +288,7 @@ namespace HSMServer.Controllers
                 var result = new Dictionary<string, string>(values.Count());
                 foreach (var value in valuesList)
                 {
-                    var convertedValue = value.ConvertToValue();
+                    var convertedValue = value.Convert();
 
                     if (!CanAddToQueue(convertedValue, out var message))
                         result[convertedValue.Key] = message;
@@ -319,8 +319,21 @@ namespace HSMServer.Controllers
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
-                    if (!CanAddToQueue(value.Decode(), out var message))
-                        result[value.Key] = message;
+                {
+                    BaseValue convertedValue = value.Type switch
+                    {
+                        SensorType.BooleanSensor => value.ConvertToBool(),
+                        SensorType.DoubleSensor => value.ConvertToDouble(),
+                        SensorType.IntSensor => value.ConvertToInt(),
+                        SensorType.StringSensor => value.ConvertToString(),
+                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
+                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
+                        _ => null
+                    };
+
+                    if (!CanAddToQueue(convertedValue, out var message))
+                        result[convertedValue.Key] = message;
+                }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }

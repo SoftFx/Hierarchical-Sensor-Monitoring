@@ -5,17 +5,24 @@ namespace HSMSensorDataObjects.FullDataObject
 {
     [Obsolete]
     [DataContract]
-    public class UnitedSensorValue : StringSensorValue
+    public class UnitedSensorValue
     {
         [DataMember]
-        public new SensorType Type { get; set; }
-
+        public string Key { get; set; }
         [DataMember]
-        public string Data 
-        { 
-            get => Value;
-            set => Value = value;
-        }
+        public string Path { get; set; }
+        [DataMember]
+        public DateTime Time { get; set; }
+        [DataMember]
+        public string Comment { get; set; }
+        [DataMember]
+        public SensorStatus Status { get; set; }
+        [DataMember]
+        public string Description { get; set; }
+        [DataMember]
+        public SensorType Type { get; set; }
+        [DataMember]
+        public string Data { get; set; }
 
         public bool IsBarSensor()
         {

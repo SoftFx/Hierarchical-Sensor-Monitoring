@@ -7,7 +7,7 @@ namespace HSMServer.Core.Converters
 {
     public static class CommonSensorValuesToSensorValuesExtensions
     {
-        public static BaseValue ConvertToValue(this CommonSensorValue value) =>
+        public static BaseValue Convert(this CommonSensorValue value) =>
             value.SensorType switch
             {
                 SensorType.IntegerBarSensor => value.Convert<IntBarSensorValue>().Convert(),
