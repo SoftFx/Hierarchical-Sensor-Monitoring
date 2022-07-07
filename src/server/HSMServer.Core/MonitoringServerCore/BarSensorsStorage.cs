@@ -4,6 +4,7 @@ using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.MonitoringServerCore
 {

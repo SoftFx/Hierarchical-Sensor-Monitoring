@@ -5,6 +5,7 @@ using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {

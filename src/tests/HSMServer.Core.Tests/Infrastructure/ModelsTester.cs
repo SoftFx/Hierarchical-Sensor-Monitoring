@@ -147,10 +147,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.Equal(expected.Id, actual.Id.ToString());
             Assert.Equal(expected.ProductId, actual.ParentProduct?.Id);
-            Assert.Equal(expected.SensorName, actual.SensorName);
+            Assert.Equal(expected.DisplayName, actual.SensorName);
             Assert.Equal(expected.ProductName, actual.ProductName);
             Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(expected.SensorType, (int)actual.SensorType);
+            Assert.Equal(expected.Type, (int)actual.SensorType);
             Assert.True(string.IsNullOrEmpty(actual.ValidationError));
         }
 

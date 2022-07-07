@@ -17,7 +17,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         public void SensorModelConstructor_SensorEntity_Test()
         {
             var sensorEntity = EntitiesFactory.BuildSensorEntity();
-            var sensorDataEntity = EntitiesFactory.BuildSensorDataEntity(sensorEntity.Path, (byte)sensorEntity.SensorType);
+            var sensorDataEntity = EntitiesFactory.BuildSensorDataEntity(sensorEntity.Path, (byte)sensorEntity.Type);
 
             var sensor = new SensorModel(sensorEntity, sensorDataEntity);
             sensor.AddParent(new ProductModel(sensorEntity.ProductId, RandomGenerator.GetRandomString()));
@@ -126,7 +126,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         public void SensorModelToSensorDataEntityTest()
         {
             var entity = EntitiesFactory.BuildSensorEntity();
-            var dataEntity = EntitiesFactory.BuildSensorDataEntity(entity.Path, (byte)entity.SensorType);
+            var dataEntity = EntitiesFactory.BuildSensorDataEntity(entity.Path, (byte)entity.Type);
 
             var sensor = new SensorModel(entity, dataEntity);
 

@@ -40,7 +40,7 @@ namespace HSMServer.Core.DataLayer
         #region Sensors
 
         void RemoveSensor(string productName, string path);
-        void RemoveSensorWithMetadata(string productName, string path);
+        void RemoveSensorWithMetadata(string sensorId, string productName, string path);
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
         void PutSensorData(SensorDataEntity data, string productName);
@@ -51,7 +51,18 @@ namespace HSMServer.Core.DataLayer
         List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
 
+        Dictionary<byte[], (Guid sensorId, byte[] latestValue)> GetLatestValues(List<BaseSensorModel> sensors);
+
         List<SensorEntity> GetAllSensors();
+        void RemoveAllOldSensors();
+
+        #endregion
+
+        #region Policies
+
+        void AddPolicy(PolicyEntity policy);
+        List<byte[]> GetAllPolicies();
+
         #endregion
 
         #region User

@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMServer.Core.Model;
 using System;
 
 namespace HSMServer.Model.TreeViewModels

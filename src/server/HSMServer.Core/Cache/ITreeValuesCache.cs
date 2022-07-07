@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
 using System;
@@ -18,12 +19,12 @@ namespace HSMServer.Core.Cache
     public interface ITreeValuesCache
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
-        event Action<SensorModel, TransactionType> ChangeSensorEvent;
+        event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
         List<ProductModel> GetTree();
-        List<SensorModel> GetSensors();
+        List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName);

@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -187,32 +188,55 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
+        public Dictionary<byte[], (Guid sensorId, byte[] latestValue)> GetLatestValues(List<BaseSensorModel> sensors)
+        {
+            var result = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+
+            foreach (var sensor in sensors)
+            {
+                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
+                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+
+                result.Add(key, value);
+            }
+
+            var databases = _sensorsDatabases.GetAllDatabases();
+            databases.Reverse();
+
+            foreach (var database in databases)
+                database.FillLatestValues(result);
+
+            return result;
+        }
+
         #endregion
 
         #region Environment database : Sensor
 
-        public void AddSensor(SensorEntity entity) =>
+        public void AddSensor(SensorEntity entity)
+        {
+            _environmentDatabase.AddSensorIdToList(entity.Id);
+            _environmentDatabase.AddSensor(entity);
+        }
+
+        public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
         public void RemoveSensor(string productName, string path)
         {
             //TAM-90: Do not delete metadata when delete sensors
-            //_environmentDatabase.RemoveSensor(productName, path);
             var databases = _sensorsDatabases.GetAllDatabases();
             foreach (var database in databases)
-            {
                 database.DeleteAllSensorValues(productName, path);
-            }
         }
 
-        public void RemoveSensorWithMetadata(string productName, string path)
+        public void RemoveSensorWithMetadata(string sensorId, string productName, string path)
         {
-            _environmentDatabase.RemoveSensor(productName, path);
+            _environmentDatabase.RemoveSensor(sensorId);
+            _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
             RemoveSensor(productName, path);
         }
-
-        public void UpdateSensor(SensorEntity entity) => AddSensor(entity);
 
         public void PutSensorData(SensorDataEntity entity, string productName)
         {
@@ -251,21 +275,57 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorEntity> GetAllSensors()
         {
-            var oldEntities = _environmentDatabase.GetSensorsInfo();
-            if (oldEntities == null || oldEntities.Count == 0)
-                return new List<SensorEntity>();
+            var oldEntities = _environmentDatabase.GetSensorsStrOld();
+            var entities = oldEntities.Select(e => e.ConvertToEntity()).ToDictionary(e => e.Id);
+            var newEntities = GetNewSensors();
 
-            foreach (var oldEntity in oldEntities)
+            foreach (var newEntity in newEntities)
+                entities[newEntity.Id] = newEntity;
+
+            return entities.Values.ToList();
+        }
+
+        public void RemoveAllOldSensors() =>
+            _environmentDatabase.RemoveAllOldSensors();
+
+        private List<SensorEntity> GetNewSensors()
+        {
+            var sensorsIds = _environmentDatabase.GetAllSensorsIds();
+
+            var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
+            foreach (var sensorId in sensorsIds)
             {
-                if (!string.IsNullOrEmpty(oldEntity.Id))
-                    continue;
-
-                oldEntity.Id = Guid.NewGuid().ToString();
-                oldEntity.ProductId = string.Empty;
-                oldEntity.IsConverted = true;
+                var sensor = _environmentDatabase.GetSensorEntity(sensorId);
+                if (sensor != null)
+                    sensorEntities.Add(sensor);
             }
 
-            return oldEntities;
+            return sensorEntities;
+        }
+
+        #endregion
+
+        #region Policies
+
+        public void AddPolicy(PolicyEntity entity)
+        {
+            _environmentDatabase.AddPolicyIdToList(entity.Id);
+            _environmentDatabase.AddPolicy(entity);
+        }
+
+        public List<byte[]> GetAllPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+
+            var policies = new List<byte[]>(policiesIds.Count);
+            foreach (var policyId in policiesIds)
+            {
+                var policy = _environmentDatabase.GetPolicy(policyId);
+                if (policy != null && policy.Length != 0)
+                    policies.Add(policy);
+            }
+
+            return policies;
         }
 
         #endregion
@@ -309,7 +369,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region AccessKey
 
-        public void RemoveAccessKey(Guid id) 
+        public void RemoveAccessKey(Guid id)
         {
             var strId = id.ToString();
 
@@ -325,15 +385,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(Guid id) => 
+        public AccessKeyEntity GetAccessKey(Guid id) =>
             _environmentDatabase.GetAccessKey(id.ToString());
-        
+
         public List<AccessKeyEntity> GetAccessKeys()
         {
             var keys = new List<AccessKeyEntity>();
             var keyIds = _environmentDatabase.GetAccessKeyList();
 
-            foreach(var keyId in keyIds)
+            foreach (var keyId in keyIds)
             {
                 var keyEntity = _environmentDatabase.GetAccessKey(keyId);
                 if (keyEntity != null)
