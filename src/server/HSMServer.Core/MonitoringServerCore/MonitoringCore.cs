@@ -117,6 +117,8 @@ namespace HSMServer.Core.MonitoringServerCore
 
                 bool saveToDb = ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName,
                     timeCollected);
+
+                _treeValuesCache.AddNewSensorValue(storeInfo);
                 //ToDo
                 //_treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult, saveToDb);
             }

@@ -23,6 +23,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
+        private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases = new();
         private readonly IDatabaseSettings _databaseSettings;
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -34,6 +35,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings ?? new DatabaseSettings());
 
             OpenAllExistingSensorDatabases();
+            OpenAllExistingSensorValuesDbs();
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
@@ -50,6 +52,21 @@ namespace HSMDatabase.DatabaseWorkCore
                         _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
+            }
+        }
+
+        private void OpenAllExistingSensorValuesDbs()
+        {
+            var sensorValuesDirectories =
+                Directory.GetDirectories(_databaseSettings.DatabaseFolder, $"{_databaseSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+
+            foreach (var directory in sensorValuesDirectories)
+            {
+                GetDatesFromFolderName(directory, out long from, out long to);
+
+                var databases = _sensorValuesDatabases.InitializeAndGetDatabases(from, to);
+                foreach (var dbPath in Directory.GetDirectories(directory))
+                    databases.OpenDatabase(dbPath);
             }
         }
 
@@ -236,6 +253,16 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
             RemoveSensor(productName, path);
+        }
+
+        public void AddSensorValue(SensorValueEntity valueEntity)
+        {
+            var dbs = _sensorValuesDatabases.GetDatabases(valueEntity.ReceivingTime);
+
+            var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To, valueEntity.SensorId);
+            dbs.OpenDatabase(dbName);
+
+            dbs.PutSensorValue(valueEntity);
         }
 
         public void PutSensorData(SensorDataEntity entity, string productName)
@@ -488,6 +515,20 @@ namespace HSMDatabase.DatabaseWorkCore
 
             bool isToTicks = long.TryParse(splitResults[2], out long toTicks);
             to = isToTicks ? new DateTime(toTicks) : DateTime.MinValue;
+        }
+
+        private static void GetDatesFromFolderName(string folder, out long from, out long to)
+        {
+            from = 0;
+            to = 0;
+
+            var splitResults = folder.Split('_');
+
+            if (long.TryParse(splitResults[1], out long fromTicks))
+                from = fromTicks;
+
+            if (long.TryParse(splitResults[2], out long toTicks))
+                to = toTicks;
         }
 
         #endregion

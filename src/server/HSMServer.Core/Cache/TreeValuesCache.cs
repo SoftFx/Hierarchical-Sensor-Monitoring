@@ -9,6 +9,7 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
 using System.Collections.Concurrent;
@@ -267,15 +268,15 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        public void AddNewSensorValue(BaseValue sensorValue, string key, string path)
+        public void AddNewSensorValue(StoreInfo sensorValue)
         {
-            if (!TryGetProductByKey(key, out var product, out _))
+            if (!TryGetProductByKey(sensorValue.Key, out var product, out _))
                 return;
 
             var productName = product.DisplayName;
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, path);
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
 
-            var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
+            var sensorName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
             if (sensor == null)
             {
@@ -285,17 +286,15 @@ namespace HSMServer.Core.Cache
                     DisplayName = sensorName,
                 };
 
-                sensor = SensorModelFactory.Build(sensorValue, entity);
+                sensor = SensorModelFactory.Build(sensorValue.BaseValue, entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
-            else
-                sensor.AddValue(sensorValue); // TODO there is saving value to db
 
-            //if (saveDataToDb)
-            //    _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+            if (sensor.AddValue(sensorValue.BaseValue)) // TODO there is saving value to db
+                _databaseCore.AddSensorValue(sensorValue.BaseValue.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }

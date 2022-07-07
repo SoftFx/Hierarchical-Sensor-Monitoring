@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 using System;
 using System.Collections.Generic;
 
@@ -45,5 +46,6 @@ namespace HSMServer.Core.Cache
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
         void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult, bool saveDataToDb);
+        void AddNewSensorValue(StoreInfo sensorValue);
     }
 }
