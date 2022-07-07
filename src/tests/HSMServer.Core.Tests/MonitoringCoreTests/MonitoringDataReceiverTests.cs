@@ -72,23 +72,23 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         //                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
         //}
 
-        [Theory]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "One")]
-        public void AddBarSensorValueTest(SensorType type)
-        {
-            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
-            (sensorValue as BarSensorValueBase).EndTime = System.DateTime.MinValue;
+        //[Theory]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "One")]
+        //public void AddBarSensorValueTest(SensorType type)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+        //    (sensorValue as BarSensorValueBase).EndTime = System.DateTime.MinValue;
 
-            _monitoringCore.AddSensorValue(sensorValue);
+        //    _monitoringCore.AddSensorValue(sensorValue);
 
-            var lastBarValue = _barStorage.GetLastValue(_testProductName, sensorValue.Path);
+        //    var lastBarValue = _barStorage.GetLastValue(_testProductName, sensorValue.Path);
 
-            Assert.Equal(_testProductName, lastBarValue.ProductName);
-            Assert.Equal(SensorValuesTester.GetSensorValueType(sensorValue), lastBarValue.ValueType);
-            Assert.Equal(sensorValue, lastBarValue.Value);
-        }
+        //    Assert.Equal(_testProductName, lastBarValue.ProductName);
+        //    Assert.Equal(SensorValuesTester.GetSensorValueType(sensorValue), lastBarValue.ValueType);
+        //    Assert.Equal(sensorValue, lastBarValue.Value);
+        //}
 
 
         //[Theory]

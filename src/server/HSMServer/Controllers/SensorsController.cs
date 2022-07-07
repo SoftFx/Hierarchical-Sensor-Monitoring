@@ -370,9 +370,8 @@ namespace HSMServer.Controllers
         {
             if (_cache.TryCheckKeyPermissions(storeInfo.Key, storeInfo.Path, out message))
             {
-                //ToDo
-                //_updatesQueue.AddItem(value);
-                //return true;
+                _updatesQueue.AddItem((storeInfo, value));
+                return true;
             }
 
             return false;

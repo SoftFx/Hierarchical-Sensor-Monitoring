@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 
@@ -6,9 +6,9 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public interface IUpdatesQueue : IDisposable
     {
-        event Action<List<SensorValueBase>> NewItemsEvent;
+        event Action<List<(StoreInfo, BaseValue)>> NewItemsEvent;
 
-        void AddItem(SensorValueBase sensorValue);
-        void AddItems(List<SensorValueBase> sensorValues);
+        void AddItem((StoreInfo, BaseValue) storeWithBase);
+        void AddItems(List<(StoreInfo, BaseValue)> storesWithBases);
     }
 }
