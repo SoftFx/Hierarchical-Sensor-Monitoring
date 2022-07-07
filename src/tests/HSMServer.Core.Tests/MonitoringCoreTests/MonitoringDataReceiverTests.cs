@@ -51,26 +51,26 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "One")]
-        public async Task AddSensorValueTest(SensorType type)
-        {
-            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[InlineData(SensorType.FileSensorBytes)]
+        //[Trait("Category", "One")]
+        //public async Task AddSensorValueTest(SensorType type)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
-            _monitoringCore.AddSensorValue(sensorValue);
+        //    _monitoringCore.AddSensorValue(sensorValue);
 
-            await FullSensorValueTestAsync(sensorValue,
-                                           _valuesCache.GetSensors,
-                                           _databaseCoreManager.DatabaseCore.GetOneValueSensorValue,
-                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
-        }
+        //    await FullSensorValueTestAsync(sensorValue,
+        //                                   _valuesCache.GetSensors,
+        //                                   _databaseCoreManager.DatabaseCore.GetOneValueSensorValue,
+        //                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
+        //}
 
         [Theory]
         [InlineData(SensorType.IntegerBarSensor)]
@@ -91,48 +91,48 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         }
 
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "Several")]
-        public async Task AddSeveralSensorValuesTest(SensorType type)
-        {
-            var sensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
-            for (int i = 0; i < SeveralSensorValuesCount; ++i)
-                sensorValues.Add(_sensorValuesFactory.BuildSensorValue(type));
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[InlineData(SensorType.FileSensorBytes)]
+        //[Trait("Category", "Several")]
+        //public async Task AddSeveralSensorValuesTest(SensorType type)
+        //{
+        //    var sensorValues = new List<SensorValueBase>(SeveralSensorValuesCount);
+        //    for (int i = 0; i < SeveralSensorValuesCount; ++i)
+        //        sensorValues.Add(_sensorValuesFactory.BuildSensorValue(type));
 
-            sensorValues.ForEach(_monitoringCore.AddSensorValue);
+        //    sensorValues.ForEach(_monitoringCore.AddSensorValue);
 
-            await FullSeveralSensorValuesTestAsync(sensorValues,
-                                                   _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
-        }
+        //    await FullSeveralSensorValuesTestAsync(sensorValues,
+        //                                           _valuesCache.GetSensors,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
+        //}
 
 
-        [Theory]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "Random")]
-        public async Task AddRandomSensorValuesTest(int count)
-        {
-            var sensorValues = GetRandomSensorValues(count);
+        //[Theory]
+        //[InlineData(10)]
+        //[InlineData(50)]
+        //[InlineData(100)]
+        //[InlineData(500)]
+        //[InlineData(1000)]
+        //[Trait("Category", "Random")]
+        //public async Task AddRandomSensorValuesTest(int count)
+        //{
+        //    var sensorValues = GetRandomSensorValues(count);
 
-            sensorValues.ForEach(_monitoringCore.AddSensorValue);
+        //    sensorValues.ForEach(_monitoringCore.AddSensorValue);
 
-            await FullSeveralSensorValuesTestAsync(sensorValues,
-                                                   _valuesCache.GetSensors,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
-                                                   _databaseCoreManager.DatabaseCore.GetAllSensors);
-        }
+        //    await FullSeveralSensorValuesTestAsync(sensorValues,
+        //                                           _valuesCache.GetSensors,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensorHistory,
+        //                                           _databaseCoreManager.DatabaseCore.GetAllSensors);
+        //}
 
 
         //[Theory]
