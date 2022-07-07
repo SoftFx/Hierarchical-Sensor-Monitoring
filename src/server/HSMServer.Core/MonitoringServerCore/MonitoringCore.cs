@@ -55,10 +55,10 @@ namespace HSMServer.Core.MonitoringServerCore
         }
 
 
-        private void UpdatesQueueNewItemsHandler(IEnumerable<(StoreInfo, BaseValue)> storesWithBases)
+        private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
-            foreach (var storeWithBase in storesWithBases)
-                AddSensorValue(storeWithBase);
+            foreach (var store in storeInfos)
+                AddSensorValue(store);
         }
 
         #region Sensor saving
@@ -101,7 +101,7 @@ namespace HSMServer.Core.MonitoringServerCore
             _databaseCore.PutSensorData(dataObject, productName);
         }
 
-        public void AddSensorValue<T>((StoreInfo storeInfo, T baseValue) storeWithValue) where T : BaseValue
+        public void AddSensorValue(StoreInfo storeInfo)
         {
             try
             {
@@ -112,17 +112,17 @@ namespace HSMServer.Core.MonitoringServerCore
                 //if (!CheckValidationResult(value, validationResult))
                     //return;
 
-                if (!_treeValuesCache.TryGetProductByKey(storeWithValue.storeInfo.Key, out var product, out _))
+                if (!_treeValuesCache.TryGetProductByKey(storeInfo.Key, out var product, out _))
                     return;
 
-                bool saveToDb = ProcessBarSensorValue(storeWithValue.baseValue, product.DisplayName,
+                bool saveToDb = ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName,
                     timeCollected);
                 //ToDo
                 //_treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult, saveToDb);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to add value for sensor '{storeWithValue.storeInfo.Path}'");
+                _logger.LogError(e, $"Failed to add value for sensor '{storeInfo.Path}'");
             }
         }
 

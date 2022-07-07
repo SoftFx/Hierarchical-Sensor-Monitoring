@@ -13,29 +13,29 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         private const int Delay = 10;
         private const int PackageMaxSize = 100;
 
-        private readonly ConcurrentQueue<(StoreInfo, BaseValue)> _queue;
+        private readonly ConcurrentQueue<StoreInfo> _queue;
 
         private bool _run;
 
-        public event Action<List<(StoreInfo, BaseValue)>> NewItemsEvent;
+        public event Action<List<StoreInfo>> NewItemsEvent;
 
 
         public UpdatesQueue()
         {
-            _queue = new ConcurrentQueue<(StoreInfo, BaseValue)>();
+            _queue = new ConcurrentQueue<StoreInfo>();
             _run = true;
 
             ThreadPool.QueueUserWorkItem(RunManageThread);
         }
 
 
-        public void AddItem((StoreInfo, BaseValue) storeWithBase) =>
-            _queue.Enqueue(storeWithBase);
+        public void AddItem(StoreInfo storeInfo) =>
+            _queue.Enqueue(storeInfo);
 
-        public void AddItems(List<(StoreInfo, BaseValue)> storesWithBases)
+        public void AddItems(List<StoreInfo> storeInfos)
         {
-            foreach(var tuple in storesWithBases)
-                AddItem(tuple);
+            foreach(var store in storeInfos)
+                AddItem(store);
         }
 
         public void Dispose() => _run = false;
@@ -55,9 +55,9 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<(StoreInfo, BaseValue)> GetDataPackage()
+        private List<StoreInfo> GetDataPackage()
         {
-            var data = new List<(StoreInfo, BaseValue)>(PackageMaxSize);
+            var data = new List<StoreInfo>(PackageMaxSize);
 
             for (int i = 0; i < PackageMaxSize; ++i)
             {

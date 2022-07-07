@@ -55,9 +55,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -85,9 +84,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -115,9 +113,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -145,9 +142,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -175,9 +171,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -205,9 +200,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -235,9 +229,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.ConvertToFileSensorBytes().Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.ConvertToFileSensorBytes().Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -266,9 +259,8 @@ namespace HSMServer.Controllers
             try
             {
                 _dataCollector.ReportSensorsCount(1);
-                var convertedValue = sensorValue.Convert();
 
-                if (CanAddToQueue(convertedValue, BuildStoreInfo(sensorValue, convertedValue),
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
                     return Ok(sensorValue);
 
@@ -306,9 +298,8 @@ namespace HSMServer.Controllers
                 foreach (var value in valuesList)
                 {
                     var sensorValue = value.Convert();
-                    var baseValue = sensorValue.Convert();
 
-                    if (!CanAddToQueue(baseValue, BuildStoreInfo(sensorValue, baseValue), out var message))
+                    if (!CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                         result[sensorValue.Key] = message;
                 }
 
@@ -348,10 +339,14 @@ namespace HSMServer.Controllers
                         SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
                         _ => null
                     };
-                    var storeInfo = new StoreInfo { Key = value.Key, Path = value.Path,
-                        BaseValue = convertedValue };
+                    var storeInfo = new StoreInfo
+                    {
+                        Key = value.Key,
+                        Path = value.Path,
+                        BaseValue = convertedValue
+                    };
 
-                    if (!CanAddToQueue(convertedValue, storeInfo, out var message))
+                    if (!CanAddToQueue(storeInfo, out var message))
                         result[storeInfo.Key] = message;
                 }
 
@@ -365,12 +360,12 @@ namespace HSMServer.Controllers
         }
 
 
-        private bool CanAddToQueue(BaseValue value, StoreInfo storeInfo,
+        private bool CanAddToQueue(StoreInfo storeInfo,
             out string message)
         {
             if (_cache.TryCheckKeyPermissions(storeInfo.Key, storeInfo.Path, out message))
             {
-                _updatesQueue.AddItem((storeInfo, value));
+                _updatesQueue.AddItem(storeInfo);
                 return true;
             }
 
