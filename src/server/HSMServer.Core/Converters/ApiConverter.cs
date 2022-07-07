@@ -1,6 +1,5 @@
 ﻿using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
-using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
 using System;
 using System.Text.Json;
@@ -12,99 +11,99 @@ namespace HSMServer.Core.Converters
         public static BooleanValue Convert(this BoolSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Value
             };
 
         public static BooleanValue ConvertToBool(this UnitedSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = bool.TryParse(value.Data, out var result) && result,
             };
 
         public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Value
             };
 
         public static IntegerValue ConvertToInt(this UnitedSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = int.TryParse(value.Data, out var result) ? result : 0
             };
 
         public static DoubleValue Convert(this DoubleSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Value
             };
 
         public static DoubleValue ConvertToDouble(this UnitedSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = double.TryParse(value.Data, out double result) ? result : 0
             };
 
         public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Value
             };
 
         public static StringValue ConvertToString(this UnitedSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Data
             };
 
         public static FileValue Convert(this FileSensorBytesValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Value = value.Value,
                 Name = value.FileName,
                 Extension = value.Extension,
@@ -114,11 +113,11 @@ namespace HSMServer.Core.Converters
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Count = value.Count,
                 OpenTime = value.OpenTime,
                 CloseTime = value.CloseTime,
@@ -134,11 +133,11 @@ namespace HSMServer.Core.Converters
 
             return new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Count = barData.Count,
                 OpenTime = barData.StartTime.ToUniversalTime(),
                 CloseTime = (barData.EndTime == DateTime.MinValue ? DateTime.Now : barData.EndTime).ToUniversalTime(),
@@ -152,11 +151,11 @@ namespace HSMServer.Core.Converters
         public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Count = value.Count,
                 OpenTime = value.OpenTime,
                 CloseTime = value.CloseTime,
@@ -172,11 +171,11 @@ namespace HSMServer.Core.Converters
 
             return new()
             {
-                Key = value.Key,
-                Path = value.Path,
+                //Key = value.Key,
+                //Path = value.Path,
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.Convert(),
                 Count = barData.Count,
                 OpenTime = barData.StartTime,
                 CloseTime = barData.EndTime,
@@ -186,5 +185,14 @@ namespace HSMServer.Core.Converters
                 LastValue = barData.LastValue
             };
         }
+
+        public static SensorStatus Convert(this HSMSensorDataObjects.SensorStatus status) => status switch
+            {
+                HSMSensorDataObjects.SensorStatus.Ok => SensorStatus.Ok,
+                HSMSensorDataObjects.SensorStatus.Unknown => SensorStatus.Unknown,
+                HSMSensorDataObjects.SensorStatus.Error => SensorStatus.Error,
+                HSMSensorDataObjects.SensorStatus.Warning => SensorStatus.Warning,
+                _ => SensorStatus.Unknown
+            };
     }
 }

@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
 using System.Text;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
 {
@@ -290,8 +291,8 @@ namespace HSMServer.Controllers
                 {
                     var convertedValue = value.Convert();
 
-                    if (!CanAddToQueue(convertedValue, out var message))
-                        result[convertedValue.Key] = message;
+                    //if (!CanAddToQueue(convertedValue, out var message))
+                        //result[convertedValue.Key] = message;
                 }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -331,8 +332,8 @@ namespace HSMServer.Controllers
                         _ => null
                     };
 
-                    if (!CanAddToQueue(convertedValue, out var message))
-                        result[convertedValue.Key] = message;
+                    //if (!CanAddToQueue(convertedValue, out var message))
+                        //result[convertedValue.Key] = message;
                 }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -347,12 +348,13 @@ namespace HSMServer.Controllers
 
         private bool CanAddToQueue(BaseValue value, out string message)
         {
-            if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
-            {
+            message = string.Empty;
+            //if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
+            //{
                 //ToDo
                 //_updatesQueue.AddItem(value);
-                return true;
-            }
+                //return true;
+            //}
 
             return false;
         }
