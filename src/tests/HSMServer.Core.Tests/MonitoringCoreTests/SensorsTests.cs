@@ -39,22 +39,22 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
-        [Theory]
-        [InlineData(1)]
-        [InlineData(100)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetAllSensorsHistoryDataTest(int count)
-        {
-            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
+        //[Theory]
+        //[InlineData(1)]
+        //[InlineData(100)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetAllSensorsHistoryDataTest(int count)
+        //{
+        //    var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
 
-            foreach (var sensorValue in sensorValues)
-            {
-                var history = _monitoringCore.GetAllSensorHistory(_testProductName, sensorValue.Key);
+        //    foreach (var sensorValue in sensorValues)
+        //    {
+        //        var history = _monitoringCore.GetAllSensorHistory(_testProductName, sensorValue.Key);
 
-                for (int i = 0; i < sensorValue.Value.Count; ++i)
-                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
-            }
-        }
+        //        for (int i = 0; i < sensorValue.Value.Count; ++i)
+        //            SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+        //    }
+        //}
 
         //[Theory]
         //[InlineData(SensorType.IntegerBarSensor)]
@@ -72,26 +72,26 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         //    TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
         //}
 
-        [Theory]
-        [InlineData(1)]
-        [InlineData(100)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetSensorsHistoryDataFromToTest(int count)
-        {
-            DateTime from = DateTime.UtcNow;
+        //[Theory]
+        //[InlineData(1)]
+        //[InlineData(100)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetSensorsHistoryDataFromToTest(int count)
+        //{
+        //    DateTime from = DateTime.UtcNow;
 
-            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
+        //    var sensorValues = AddRandomSensorValuesAndGetTheirValues(count);
 
-            DateTime to = DateTime.UtcNow;
+        //    DateTime to = DateTime.UtcNow;
 
-            foreach (var sensorValue in sensorValues)
-            {
-                var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, from, to);
+        //    foreach (var sensorValue in sensorValues)
+        //    {
+        //        var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, from, to);
 
-                for (int i = 0; i < sensorValue.Value.Count; ++i)
-                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
-            }
-        }
+        //        for (int i = 0; i < sensorValue.Value.Count; ++i)
+        //            SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+        //    }
+        //}
 
         //[Theory]
         //[InlineData(SensorType.IntegerBarSensor)]
@@ -113,24 +113,24 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         //    TestBarSensorsHistoryData(barSensorValues, history, sensorValuesCount);
         //}
 
-        [Theory]
-        [InlineData(1)]
-        [InlineData(100)]
-        [Trait("Category", "Get Sensors History Data")]
-        public void GetSensorsHistoryDataSpecificCountTest(int count)
-        {
-            const int specificCount = 5;
+        //[Theory]
+        //[InlineData(1)]
+        //[InlineData(100)]
+        //[Trait("Category", "Get Sensors History Data")]
+        //public void GetSensorsHistoryDataSpecificCountTest(int count)
+        //{
+        //    const int specificCount = 5;
 
-            var sensorValues = AddRandomSensorValuesAndGetTheirValues(count, specificCount);
+        //    var sensorValues = AddRandomSensorValuesAndGetTheirValues(count, specificCount);
 
-            foreach (var sensorValue in sensorValues)
-            {
-                var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, specificCount);
+        //    foreach (var sensorValue in sensorValues)
+        //    {
+        //        var history = _monitoringCore.GetSensorHistory(_testProductName, sensorValue.Key, specificCount);
 
-                for (int i = 0; i < sensorValue.Value.Count; ++i)
-                    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
-            }
-        }
+        //        for (int i = 0; i < sensorValue.Value.Count; ++i)
+        //            SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue.Value[i], history[i]);
+        //    }
+        //}
 
         //[Theory]
         //[InlineData(SensorType.IntegerBarSensor)]
@@ -176,22 +176,22 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
 
-        [Fact]
-        [Trait("Category", "File sensor bytes compressing/decompressing content")]
-        public void FileSensorBytesCompressingDecompressingContentTest()
-        {
-            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-            var originalContent = sensorValue.FileContent;
+        //[Fact]
+        //[Trait("Category", "File sensor bytes compressing/decompressing content")]
+        //public void FileSensorBytesCompressingDecompressingContentTest()
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    var originalContent = sensorValue.FileContent;
 
-            _monitoringCore.AddSensorValue(sensorValue);
+        //    _monitoringCore.AddSensorValue(sensorValue);
 
-            Assert.NotEqual(sensorValue.FileContent, originalContent);
+        //    Assert.NotEqual(sensorValue.FileContent, originalContent);
 
-            var (actualContent, _) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, sensorValue.Path);
+        //    var (actualContent, _) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, sensorValue.Path);
 
-            Assert.Equal(originalContent.Length, actualContent.Length);
-            Assert.Equal(originalContent, actualContent);
-        }
+        //    Assert.Equal(originalContent.Length, actualContent.Length);
+        //    Assert.Equal(originalContent, actualContent);
+        //}
 
 
         private static void TestBarSensorsHistoryData(List<SensorValueBase> expected, List<SensorHistoryData> actual, int sensorValuesCount)
@@ -222,31 +222,31 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }
         }
 
-        private SensorValueBase AddAndGetRandomSensorValue(string specificPathPart = null)
-        {
-            var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
+        //private SensorValueBase AddAndGetRandomSensorValue(string specificPathPart = null)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildRandomSensorValue();
 
-            if (!string.IsNullOrEmpty(specificPathPart))
-                sensorValue.Path = $"{sensorValue.Path}{specificPathPart}";
+        //    if (!string.IsNullOrEmpty(specificPathPart))
+        //        sensorValue.Path = $"{sensorValue.Path}{specificPathPart}";
 
-            _monitoringCore.AddSensorValue(sensorValue);
+        //    _monitoringCore.AddSensorValue(sensorValue);
 
-            return sensorValue;
-        }
+        //    return sensorValue;
+        //}
 
-        private Dictionary<string, List<SensorValueBase>> AddRandomSensorValuesAndGetTheirValues(int countToAdd, int? specificCount = null)
-        {
-            if (!specificCount.HasValue)
-                specificCount = countToAdd;
+        //private Dictionary<string, List<SensorValueBase>> AddRandomSensorValuesAndGetTheirValues(int countToAdd, int? specificCount = null)
+        //{
+        //    if (!specificCount.HasValue)
+        //        specificCount = countToAdd;
 
-            var sensorValues = new List<SensorValueBase>();
+        //    var sensorValues = new List<SensorValueBase>();
 
-            for (int i = 0; i < countToAdd; ++i)
-                sensorValues.Add(AddAndGetRandomSensorValue());
+        //    for (int i = 0; i < countToAdd; ++i)
+        //        sensorValues.Add(AddAndGetRandomSensorValue());
 
-            return sensorValues.GroupBy(s => s.Path)
-                               .ToDictionary(s => s.Key, s => s.TakeLast(specificCount.Value).ToList());
-        }
+        //    return sensorValues.GroupBy(s => s.Path)
+        //                       .ToDictionary(s => s.Key, s => s.TakeLast(specificCount.Value).ToList());
+        //}
 
         //private List<SensorValueBase> AddAndGetBarSensorValues(int count, SensorType type)
         //{
