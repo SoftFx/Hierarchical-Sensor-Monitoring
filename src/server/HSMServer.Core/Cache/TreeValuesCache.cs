@@ -279,7 +279,13 @@ namespace HSMServer.Core.Cache
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
             if (sensor == null)
             {
-                sensor = BaseSensorModel.GetModel(sensorValue, parentProduct.Id, sensorName);
+                SensorEntity entity = new()
+                {
+                    ProductId = parentProduct.Id,
+                    DisplayName = sensorName,
+                };
+
+                sensor = SensorModelFactory.Build(sensorValue, entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
@@ -640,7 +646,7 @@ namespace HSMServer.Core.Cache
 
         private BaseSensorModel GetSensorModel(SensorEntity entity)
         {
-            var sensor = BaseSensorModel.GetModel(entity, _databaseCore);
+            var sensor = SensorModelFactory.Build(entity);
 
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);

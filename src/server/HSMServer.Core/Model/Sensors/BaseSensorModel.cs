@@ -1,10 +1,8 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.DataLayer;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -26,11 +24,11 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
-        public Guid Id { get; }
+        public Guid Id { get; private set; }
 
-        public Guid? AuthorId { get; }
+        public Guid? AuthorId { get; private set; }
 
-        public DateTime CreationDate { get; }
+        public DateTime CreationDate { get; private set; }
 
         public string ProductId { get; private set; }
 
@@ -60,43 +58,12 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
-        private BaseSensorModel()
+        public BaseSensorModel()
         {
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
         }
 
-        internal BaseSensorModel(string productId, string sensorName) : this()
-        {
-            ProductId = productId;
-            DisplayName = sensorName;
-        }
-
-        internal BaseSensorModel(SensorEntity entity)
-        {
-            Id = Guid.Parse(entity.Id);
-            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ProductId = entity.ProductId;
-            CreationDate = new DateTime(entity.CreationDate);
-            DisplayName = entity.DisplayName;
-            Description = entity.Description;
-            State = (SensorState)entity.State;
-            Unit = entity.Unit;
-        }
-
-
-        internal abstract SensorEntity ToEntity();
-
-        internal virtual void AddPolicy(Policy policy)
-        {
-            _systemPolicies.Add(policy);
-
-            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-
-        internal void SetProduct(string productId) => ProductId = productId;
 
         internal void BuildProductNameAndPath(ProductModel parentProduct)
         {
@@ -121,63 +88,26 @@ namespace HSMServer.Core.Model
             Unit = sensor.Unit;
         }
 
-        internal void AddValue(BaseValue value) => Storage.AddValue(value);
 
-        internal void AddValue(byte[] valueBytes) => Storage.AddValue(valueBytes);
-
-        internal void ClearValues() => Storage.Clear();
-
-
-        internal static BaseSensorModel GetModel(SensorEntity entity, IDatabaseCore db) =>
-            (SensorType)entity.Type switch
-            {
-                SensorType.Boolean => new BooleanSensorModel(entity, db),
-                SensorType.Integer => new IntegerSensorModel(entity, db),
-                SensorType.Double => new DoubleSensorModel(entity, db),
-                SensorType.String => new StringSensorModel(entity, db),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity, db),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity, db),
-                SensorType.File => new FileSensorModel(entity, db),
-                _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
-            };
-
-        internal static BaseSensorModel GetModel(BaseValue value, string productId, string name) =>
-            value switch
-            {
-                BooleanValue => new BooleanSensorModel(productId, name),
-                IntegerValue => new IntegerSensorModel(productId, name),
-                DoubleValue => new DoubleSensorModel(productId, name),
-                StringValue => new StringSensorModel(productId, name),
-                IntegerBarValue => new IntegerBarSensorModel(productId, name),
-                DoubleBarValue => new DoubleBarSensorModel(productId, name),
-                FileValue => new FileSensorModel(productId, name),
-                _ => throw new ArgumentException($"Unexpected sensor value type {value.GetType()}"),
-            };
-    }
-
-
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
-    {
-        private readonly List<Policy<T>> _userPolicies = new();
-
-
-        protected override ValuesStorage<T> Storage { get; }
-
-
-        internal BaseSensorModel(string productId, string sensorName) : base(productId, sensorName) { }
-
-        internal BaseSensorModel(SensorEntity entity) : base(entity) { }
-
-
-        internal override void AddPolicy(Policy policy)
+        internal BaseSensorModel ApplyEntity(SensorEntity entity)
         {
-            if (policy is Policy<T> customPolicy)
-                _userPolicies.Add(customPolicy);
-            else
-                base.AddPolicy(policy);
+            if (!string.IsNullOrEmpty(entity.Id) && Guid.TryParse(entity.Id, out var entityId))
+                Id = entityId;
+
+            if (entity.CreationDate != DateTime.MinValue.Ticks)
+                CreationDate = new DateTime(entity.CreationDate);
+
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            ProductId = entity.ProductId;
+            DisplayName = entity.DisplayName;
+            Description = entity.Description;
+            State = (SensorState)entity.State;
+            Unit = entity.Unit;
+
+            return this;
         }
 
-        internal override SensorEntity ToEntity() =>
+        internal SensorEntity ToEntity() =>
             new()
             {
                 Id = Id.ToString(),
@@ -192,14 +122,22 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
-        private List<string> GetPolicyIds()
+
+        internal abstract bool AddValue(BaseValue value);
+
+        internal abstract void AddValue(byte[] valueBytes);
+
+        internal void ClearValues() => Storage.Clear();
+
+
+        internal virtual void AddPolicy(Policy policy)
         {
-            var policyIds = new List<string>(_systemPolicies.Count + _userPolicies.Count);
+            _systemPolicies.Add(policy);
 
-            policyIds.AddRange(_systemPolicies.Select(p => p.Id.ToString()));
-            policyIds.AddRange(_userPolicies.Select(p => p.Id.ToString()));
-
-            return policyIds;
+            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
+                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
+
+        protected abstract List<string> GetPolicyIds();
     }
 }

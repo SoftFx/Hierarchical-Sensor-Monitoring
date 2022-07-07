@@ -76,12 +76,8 @@ namespace HSMServer.Core.Cache.Entities
             SubProducts.TryAdd(product.Id, product);
         }
 
-        internal void AddSensor(BaseSensorModel sensor)
-        {
-            sensor.SetProduct(Id);
-
+        internal void AddSensor(BaseSensorModel sensor) =>
             Sensors.TryAdd(sensor.Id, sensor);
-        }
 
         internal ProductEntity ToProductEntity() =>
             new()

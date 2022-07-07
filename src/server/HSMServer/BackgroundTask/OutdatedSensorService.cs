@@ -56,9 +56,8 @@ namespace HSMServer.BackgroundTask
                         sensorsToRemove.Add(sensor.Id);
                     }
 
-                    // TODO: check it for live db
-                    //foreach (var sensorId in sensorsToRemove)
-                    //    _treeValuesCache.RemoveSensorData(sensorId);
+                    foreach (var sensorId in sensorsToRemove)
+                        _treeValuesCache.RemoveSensorData(sensorId);
 
                     _logger.LogInformation($"{sensorsToRemove.Count} sensors removed.");
                     _lastChecked = DateTime.Now;
