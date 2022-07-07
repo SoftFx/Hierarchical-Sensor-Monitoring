@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.DataLayer;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,10 +14,6 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasData { get; }
 
-
-        internal abstract bool AddValue(BaseValue value);
-
-        internal abstract void AddValue(byte[] valueBytes);
 
         internal abstract void Clear();
     }
@@ -44,20 +39,9 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override bool AddValue(BaseValue value)
+        internal virtual void AddValue(T value)
         {
-            if (value != null && value is T valueT)
-                _cachedValues.Add(valueT);
-
-            return true;
-        }
-
-        internal override void AddValue(byte[] valueBytes)
-        {
-            var value = valueBytes.ConvertToSensorValue<T>();
-
-            if (value != null)
-                _cachedValues.Add((T)value);
+            _cachedValues.Add(value);
         }
 
         internal override void Clear() => _cachedValues.Clear();

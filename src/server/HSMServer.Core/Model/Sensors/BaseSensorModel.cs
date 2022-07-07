@@ -3,7 +3,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -66,17 +65,6 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract SensorEntity ToEntity();
-
-        internal virtual void AddPolicy(Policy policy)
-        {
-            _systemPolicies.Add(policy);
-
-            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-
         internal void BuildProductNameAndPath(ProductModel parentProduct)
         {
             var pathParts = new List<string>() { DisplayName };
@@ -100,61 +88,10 @@ namespace HSMServer.Core.Model
             Unit = sensor.Unit;
         }
 
-        internal bool AddValue(BaseValue value) => Storage.AddValue(value);
 
-        internal void AddValue(byte[] valueBytes) => Storage.AddValue(valueBytes);
-
-        internal void ClearValues() => Storage.Clear();
-
-
-        internal static BaseSensorModel GetModel(SensorEntity entity)
+        internal BaseSensorModel ApplyEntity(SensorEntity entity)
         {
-            BaseSensorModel BuildSensor<T>() where T : BaseSensorModel, new() =>
-                new T().ApplyEntity(entity);
-
-            return (SensorType)entity.Type switch
-            {
-                SensorType.Boolean => BuildSensor<BooleanSensorModel>(),
-                SensorType.Integer => BuildSensor<IntegerSensorModel>(),
-                SensorType.Double => BuildSensor<DoubleSensorModel>(),
-                SensorType.String => BuildSensor<StringSensorModel>(),
-                SensorType.IntegerBar => BuildSensor<IntegerBarSensorModel>(),
-                SensorType.DoubleBar => BuildSensor<DoubleBarSensorModel>(),
-                SensorType.File => BuildSensor<FileSensorModel>(),
-                _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
-            };
-        }
-
-        internal static BaseSensorModel GetModel(BaseValue value, string productId, string name)
-        {
-            BaseSensorModel BuildSensor<T>() where T : BaseSensorModel, new()
-            {
-                SensorEntity entity = new()
-                {
-                    ProductId = productId,
-                    DisplayName = name,
-                };
-
-                return new T().ApplyEntity(entity);
-            }
-
-            return value switch
-            {
-                BooleanValue => BuildSensor<BooleanSensorModel>(),
-                IntegerValue => BuildSensor<IntegerSensorModel>(),
-                DoubleValue => BuildSensor<DoubleSensorModel>(),
-                StringValue => BuildSensor<StringSensorModel>(),
-                IntegerBarValue => BuildSensor<IntegerBarSensorModel>(),
-                DoubleBarValue => BuildSensor<DoubleBarSensorModel>(),
-                FileValue => BuildSensor<FileSensorModel>(),
-                _ => throw new ArgumentException($"Unexpected sensor value type {value.GetType()}"),
-            };
-        }
-
-        private BaseSensorModel ApplyEntity(SensorEntity entity)
-        {
-            var entityId = Guid.Parse(entity.Id);
-            if (entityId != Guid.Empty)
+            if (!string.IsNullOrEmpty(entity.Id) && Guid.TryParse(entity.Id, out var entityId))
                 Id = entityId;
 
             if (entity.CreationDate != DateTime.MinValue.Ticks)
@@ -169,26 +106,8 @@ namespace HSMServer.Core.Model
 
             return this;
         }
-    }
 
-
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
-    {
-        private readonly List<Policy<T>> _userPolicies = new();
-
-
-        protected override ValuesStorage<T> Storage { get; }
-
-
-        internal override void AddPolicy(Policy policy)
-        {
-            if (policy is Policy<T> customPolicy)
-                _userPolicies.Add(customPolicy);
-            else
-                base.AddPolicy(policy);
-        }
-
-        internal override SensorEntity ToEntity() =>
+        internal SensorEntity ToEntity() =>
             new()
             {
                 Id = Id.ToString(),
@@ -203,14 +122,22 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
-        private List<string> GetPolicyIds()
+
+        internal abstract bool AddValue(BaseValue value);
+
+        internal abstract void AddValue(byte[] valueBytes);
+
+        internal void ClearValues() => Storage.Clear();
+
+
+        internal virtual void AddPolicy(Policy policy)
         {
-            var policyIds = new List<string>(_systemPolicies.Count + _userPolicies.Count);
+            _systemPolicies.Add(policy);
 
-            policyIds.AddRange(_systemPolicies.Select(p => p.Id.ToString()));
-            policyIds.AddRange(_userPolicies.Select(p => p.Id.ToString()));
-
-            return policyIds;
+            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
+                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
+
+        protected abstract List<string> GetPolicyIds();
     }
 }
