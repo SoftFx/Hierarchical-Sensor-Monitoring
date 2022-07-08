@@ -263,7 +263,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearValues();
-            _databaseCore.RemoveSensor(sensor.ProductName, sensor.Path);
+            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }

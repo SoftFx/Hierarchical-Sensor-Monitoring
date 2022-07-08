@@ -239,12 +239,10 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void RemoveSensor(string productName, string path)
+        public void ClearSensorValues(string sensorId, string productName, string path)
         {
-            //TAM-90: Do not delete metadata when delete sensors
-            var databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases)
-                database.DeleteAllSensorValues(productName, path);
+            RemoveSensor(productName, path);
+            RemoveSensor(sensorId);
         }
 
         public void RemoveSensorWithMetadata(string sensorId, string productName, string path)
@@ -253,6 +251,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
             RemoveSensor(productName, path);
+            RemoveSensor(sensorId);
         }
 
         public void AddSensorValue(SensorValueEntity valueEntity)
@@ -288,6 +287,24 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
             GetSensorHistoryDatas(GetSensorData(productName, path, n));
+
+        private void RemoveSensor(string productName, string path)
+        {
+            //TAM-90: Do not delete metadata when delete sensors
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+                database.DeleteAllSensorValues(productName, path);
+        }
+
+        private void RemoveSensor(string sensorId)
+        {
+            var databases = _sensorValuesDatabases.GetAllDatabases();
+            foreach (var db in databases)
+            {
+                db.DisposeDatabase(sensorId);
+                Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
+            }
+        }
 
         private static List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)
         {

@@ -48,5 +48,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to write data for {entity.SensorId}");
             }
         }
+
+        public void DisposeDatabase(string sensorId)
+        {
+            try
+            {
+                _openedDbs[sensorId].Dispose();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
+            }
+        }
     }
 }
