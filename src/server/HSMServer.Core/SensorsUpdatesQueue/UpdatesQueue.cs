@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -34,7 +33,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public void AddItems(List<StoreInfo> storeInfos)
         {
-            foreach(var store in storeInfos)
+            foreach (var store in storeInfos)
                 AddItem(store);
         }
 

@@ -119,8 +119,6 @@ namespace HSMServer.Core.MonitoringServerCore
                     timeCollected);
 
                 _treeValuesCache.AddNewSensorValue(storeInfo);
-                //ToDo
-                //_treeValuesCache.AddNewSensorValue(value, timeCollected, validationResult, saveToDb);
             }
             catch (Exception e)
             {
