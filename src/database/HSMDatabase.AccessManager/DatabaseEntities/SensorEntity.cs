@@ -31,10 +31,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public List<string> Policies { get; init; }
 
-        [Obsolete]
-        public string Path { get; set; }
-        [Obsolete]
-        public string ProductName { get; set; }
 
         [JsonIgnore]
         public bool IsConverted { get; set; }
