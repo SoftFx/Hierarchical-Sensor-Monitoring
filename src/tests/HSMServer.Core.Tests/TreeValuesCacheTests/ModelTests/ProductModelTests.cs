@@ -42,26 +42,26 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         }
 
 
-        [Fact]
-        [Trait("Category", "ProductModel to ProductEntity")]
-        public void ProductModelToProductEntityTest()
-        {
-            var subProductId = Guid.NewGuid().ToString();
-            var sensor1Id = Guid.NewGuid().ToString();
-            var sensor2Id = Guid.NewGuid().ToString();
-            var entity = EntitiesFactory.BuildProductEntity(parent: null)
-                                        .AddSubProduct(subProductId)
-                                        .AddSensor(sensor1Id)
-                                        .AddSensor(sensor2Id);
+        //[Fact]
+        //[Trait("Category", "ProductModel to ProductEntity")]
+        //public void ProductModelToProductEntityTest()
+        //{
+        //    var subProductId = Guid.NewGuid().ToString();
+        //    var sensor1Id = Guid.NewGuid().ToString();
+        //    var sensor2Id = Guid.NewGuid().ToString();
+        //    var entity = EntitiesFactory.BuildProductEntity(parent: null)
+        //                                .AddSubProduct(subProductId)
+        //                                .AddSensor(sensor1Id)
+        //                                .AddSensor(sensor2Id);
 
-            var product = new ProductModel(entity);
-            product.AddSubProduct(new ProductModel(subProductId, RandomGenerator.GetRandomString()));
-            product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor1Id }, null));
-            product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor2Id }, null));
+        //    var product = new ProductModel(entity);
+        //    product.AddSubProduct(new ProductModel(subProductId, RandomGenerator.GetRandomString()));
+        //    product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor1Id }, null));
+        //    product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor2Id }, null));
 
-            var productEntity = product.ToProductEntity();
+        //    var productEntity = product.ToProductEntity();
 
-            ModelsTester.TestProductModel(productEntity, product);
-        }
+        //    ModelsTester.TestProductModel(productEntity, product);
+        //}
     }
 }

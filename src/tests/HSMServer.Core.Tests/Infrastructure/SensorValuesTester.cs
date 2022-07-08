@@ -128,7 +128,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                IntBarSensorValue => SensorType.IntegerBarSensor,
                DoubleBarSensorValue => SensorType.DoubleBarSensor,
                FileSensorBytesValue => SensorType.FileSensorBytes,
-               UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
+               //UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
                _ => (SensorType)0,
            };
 
@@ -146,7 +146,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 IntBarSensorValue intBarSensorValue => GetSensorValueTypedData(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetSensorValueTypedData(fileSensorBytesValue),
-                UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
+                //UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
                 _ => null,
             };
 

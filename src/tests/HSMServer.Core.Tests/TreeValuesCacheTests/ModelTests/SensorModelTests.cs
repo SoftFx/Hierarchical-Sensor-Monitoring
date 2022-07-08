@@ -58,23 +58,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             Assert.Equal(originalContentSize, sensor.OriginalFileSensorContentSize);
         }
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "SensorModel constructor")]
-        public void SensorModelConstructor_UnitedSensor_Test(SensorType type)
-        {
-            var timeCollected = DateTime.UtcNow;
-            var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "SensorModel constructor")]
+        //public void SensorModelConstructor_UnitedSensor_Test(SensorType type)
+        //{
+        //    var timeCollected = DateTime.UtcNow;
+        //    var sensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
 
-            var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
+        //    var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
 
-            ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
-        }
+        //    ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
+        //}
 
 
         [Fact]

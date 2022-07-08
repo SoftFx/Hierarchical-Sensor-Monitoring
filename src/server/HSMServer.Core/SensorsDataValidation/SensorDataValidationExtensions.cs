@@ -41,7 +41,7 @@ namespace HSMServer.Core.SensorsDataValidation
             value switch
             {
                 StringSensorValue stringSensorValue => stringSensorValue.Validate(),
-                UnitedSensorValue unitedSensorValue => unitedSensorValue.ValidateUnitedSensorData() + unitedSensorValue.ValidateUnitedSensorType(),
+                //UnitedSensorValue unitedSensorValue => unitedSensorValue.ValidateUnitedSensorData() + unitedSensorValue.ValidateUnitedSensorType(),
                 _ => new ValidationResult(value),
             };
 
@@ -56,27 +56,27 @@ namespace HSMServer.Core.SensorsDataValidation
             return new ValidationResult(value);
         }
 
-        private static ValidationResult ValidateUnitedSensorData(this UnitedSensorValue value)
-        {
-            if (value.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
-            {
-                value.Data = value.Data[0..ValidationConstants.MaxUnitedSensorDataLength];
-                return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
-            }
+        //private static ValidationResult ValidateUnitedSensorData(this UnitedSensorValue value)
+        //{
+        //    if (value.Data.Length > ValidationConstants.MaxUnitedSensorDataLength)
+        //    {
+        //        value.Data = value.Data[0..ValidationConstants.MaxUnitedSensorDataLength];
+        //        return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
+        //    }
 
-            return new ValidationResult(value);
-        }
+        //    return new ValidationResult(value);
+        //}
 
-        private static ValidationResult ValidateUnitedSensorType(this UnitedSensorValue value) =>
-            value.Type switch
-            {
-                SensorType.BooleanSensor or
-                SensorType.IntSensor or
-                SensorType.DoubleSensor or
-                SensorType.StringSensor or
-                SensorType.IntegerBarSensor or
-                SensorType.DoubleBarSensor => new ValidationResult(value),
-                _ => PredefinedValidationResults.IncorrectTypeValidationResult,
-            };
+        //private static ValidationResult ValidateUnitedSensorType(this UnitedSensorValue value) =>
+        //    value.Type switch
+        //    {
+        //        SensorType.BooleanSensor or
+        //        SensorType.IntSensor or
+        //        SensorType.DoubleSensor or
+        //        SensorType.StringSensor or
+        //        SensorType.IntegerBarSensor or
+        //        SensorType.DoubleBarSensor => new ValidationResult(value),
+        //        _ => PredefinedValidationResults.IncorrectTypeValidationResult,
+        //    };
     }
 }
