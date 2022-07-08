@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.MonitoringServerCore;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;

@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HSMServer.Core.Cache
+namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public sealed class UpdatesQueue : IUpdatesQueue
     {

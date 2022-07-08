@@ -1,12 +1,14 @@
 ﻿using HSMServer.Core.Model;
 
-namespace HSMServer.Core.Cache
+namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public readonly struct StoreInfo
     {
-        public readonly string Path { get; init; }
-        public readonly string Key { get; init; }
-        public readonly BaseValue BaseValue { get; init; }
+        public string Path { get; init; }
+
+        public string Key { get; init; }
+
+        public BaseValue BaseValue { get; init; }
 
 
         public void Deconstruct(out string key, out string path, out BaseValue baseValue)

@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Converters;
@@ -8,7 +7,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
 using System.Collections.Concurrent;
@@ -262,13 +261,15 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearValues();
-            _databaseCore.RemoveSensor(sensor.ProductName, sensor.Path);
+            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        public void AddNewSensorValue(BaseValue sensorValue, string key, string path)
+        public void AddNewSensorValue(StoreInfo storeInfo)
         {
+            (string key, string path, BaseValue value) = storeInfo;
+
             if (!TryGetProductByKey(key, out var product, out _))
                 return;
 
@@ -285,53 +286,15 @@ namespace HSMServer.Core.Cache
                     DisplayName = sensorName,
                 };
 
-                sensor = SensorModelFactory.Build(sensorValue, entity);
+                sensor = SensorModelFactory.Build(value, entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
-            else
-                sensor.AddValue(sensorValue); // TODO there is saving value to db
 
-            //if (saveDataToDb)
-            //    _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
-
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
-        }
-
-        // TODO use another method AddNewSensorValue
-        public void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected,
-            ValidationResult validationResult, bool saveDataToDb = true)
-        {
-            if (!TryGetProductByKey(sensorValue.Key, out var product, out _))
-                return;
-
-            var productName = product.DisplayName;
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, sensorValue.Path);
-
-            var newSensorValueName = sensorValue.Path.Split(CommonConstants.SensorPathSeparator)[^1];
-            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == newSensorValueName).Value;
-            //if (sensor == null)
-            //{
-            //    sensor = new SensorModel(sensorValue, productName, timeCollected, validationResult);
-            //    parentProduct.AddSensor(sensor);
-
-            //    AddSensor(sensor);
-            //    UpdateProduct(parentProduct);
-            //}
-            //else
-            //{
-            //    bool isMetadataUpdated = sensor.IsSensorMetadataUpdated(sensorValue);
-
-            //    sensor.UpdateData(sensorValue, timeCollected, validationResult);
-
-            //    if (isMetadataUpdated)
-            //        _databaseCore.UpdateSensor(sensor.ToSensorEntity());
-            //}
-
-            //if (saveDataToDb)
-            //    _databaseCore.PutSensorData(sensor.ToSensorDataEntity(), productName);
+            if (sensor.AddValue(value))
+                _databaseCore.AddSensorValue(value.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
