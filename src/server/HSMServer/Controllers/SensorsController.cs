@@ -362,7 +362,7 @@ namespace HSMServer.Controllers
         private bool CanAddToQueue(StoreInfo storeInfo,
             out string message)
         {
-            if (_cache.TryCheckKeyPermissions(storeInfo.Key, storeInfo.Path, out message))
+            if (_cache.TryCheckKeyPermissions(storeInfo, out message))
             {
                 _updatesQueue.AddItem(storeInfo);
                 return true;

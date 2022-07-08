@@ -7,7 +7,7 @@ using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal class TimeDatabaseDictionary : ITimeDatabaseDictionary
+    internal sealed class TimeDatabaseDictionary : ITimeDatabaseDictionary
     {
         private readonly object _accessLock = new object();
         private readonly SortedSet<ISensorsDatabase> _sensorsDatabases;

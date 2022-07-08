@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 
 namespace HSMServer.Core.Model
 {
@@ -35,7 +36,17 @@ namespace HSMServer.Core.Model
 
         public SensorStatus Status { get; init; }
 
-        public abstract string ShortInfo { get; }    
+
+        public abstract string ShortInfo { get; }
+
+
+        internal SensorValueEntity ToEntity(Guid sensorId) =>
+            new()
+            {
+                SensorId = sensorId.ToString(),
+                ReceivingTime = ReceivingTime.Ticks,
+                Value = this,
+            };
     }
 
 

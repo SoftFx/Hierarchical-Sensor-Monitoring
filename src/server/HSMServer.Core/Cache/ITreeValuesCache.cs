@@ -1,8 +1,6 @@
-﻿using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
 
@@ -33,7 +31,7 @@ namespace HSMServer.Core.Cache
         string GetProductNameById(string id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
         bool TryGetProductByKey(string key, out ProductModel product, out string message);
-        bool TryCheckKeyPermissions(string key, string path, out string message);
+        bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
@@ -44,7 +42,6 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
-        void AddNewSensorValue(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult, bool saveDataToDb);
-        void AddNewSensorValue(BaseValue sensorValue, string key, string path);
+        void AddNewSensorValue(StoreInfo sensorValue);
     }
 }
