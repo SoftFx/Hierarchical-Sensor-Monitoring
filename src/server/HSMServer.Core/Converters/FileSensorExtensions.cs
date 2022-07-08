@@ -5,6 +5,7 @@ using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model.Sensor;
 using System.Text;
 using System.Text.Json;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Converters
 {

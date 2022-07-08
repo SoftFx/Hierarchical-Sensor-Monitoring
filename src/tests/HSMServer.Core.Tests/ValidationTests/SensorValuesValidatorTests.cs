@@ -25,18 +25,18 @@ namespace HSMServer.Core.Tests.ValidationTests
         private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
 
 
-        [Fact]
-        [Trait("Category", "SensorValueBase")]
-        public void LongPathValidationTest()
-        {
-            var unitedValue = BuildUnitedSensorValue(TooLongSensorValuesPathPartsCount);
+        //[Fact]
+        //[Trait("Category", "SensorValueBase")]
+        //public void LongPathValidationTest()
+        //{
+        //    var unitedValue = BuildUnitedSensorValue(TooLongSensorValuesPathPartsCount);
 
-            var result = unitedValue.Validate();
+        //    var result = unitedValue.Validate();
 
-            Assert.Equal(ResultType.Error, result.ResultType);
-            Assert.Equal(ValidationConstants.PathTooLong, result.Error);
-            Assert.True(string.IsNullOrEmpty(result.Warning));
-        }
+        //    Assert.Equal(ResultType.Error, result.ResultType);
+        //    Assert.Equal(ValidationConstants.PathTooLong, result.Error);
+        //    Assert.True(string.IsNullOrEmpty(result.Warning));
+        //}
 
         [Fact]
         [Trait("Category", "SensorValueBase")]
@@ -51,14 +51,14 @@ namespace HSMServer.Core.Tests.ValidationTests
             Assert.True(string.IsNullOrEmpty(result.Warning));
         }
 
-        [Fact]
-        [Trait("Category", "SensorValueBase")]
-        public void SensorValueValidationTest()
-        {
-            var unitedValue = BuildUnitedSensorValue(MaxSensorValuesPathPartsCount);
+        //[Fact]
+        //[Trait("Category", "SensorValueBase")]
+        //public void SensorValueValidationTest()
+        //{
+        //    var unitedValue = BuildUnitedSensorValue(MaxSensorValuesPathPartsCount);
 
-            TestCorrectData(unitedValue.Validate());
-        }
+        //    TestCorrectData(unitedValue.Validate());
+        //}
 
         [Fact]
         [Trait("Category", "StringSensorValue")]
@@ -99,78 +99,78 @@ namespace HSMServer.Core.Tests.ValidationTests
             TestCorrectData(stringSensorValue.Validate());
         }
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "UnitedSensorValue")]
-        public void UnitedSensorValueWarningValidationTest(SensorType type)
-        {
-            var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "UnitedSensorValue")]
+        //public void UnitedSensorValueWarningValidationTest(SensorType type)
+        //{
+        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
+        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
 
-            var result = unitedSensorValue.Validate();
+        //    var result = unitedSensorValue.Validate();
 
-            Assert.Equal(ResultType.Warning, result.ResultType);
-            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
-            Assert.True(string.IsNullOrEmpty(result.Error));
-        }
+        //    Assert.Equal(ResultType.Warning, result.ResultType);
+        //    Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
+        //    Assert.True(string.IsNullOrEmpty(result.Error));
+        //}
 
-        [Theory]
-        [InlineData(SensorType.FileSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "UnitedSensorValue")]
-        public void UnitedSensorValueErrorValidationTest(SensorType type)
-        {
-            var unitedSensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
-            unitedSensorValue.Type = type;
+        //[Theory]
+        //[InlineData(SensorType.FileSensor)]
+        //[InlineData(SensorType.FileSensorBytes)]
+        //[Trait("Category", "UnitedSensorValue")]
+        //public void UnitedSensorValueErrorValidationTest(SensorType type)
+        //{
+        //    var unitedSensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
+        //    unitedSensorValue.Type = type;
 
-            var result = unitedSensorValue.Validate();
+        //    var result = unitedSensorValue.Validate();
 
-            Assert.Equal(ResultType.Error, result.ResultType);
-            Assert.Equal(ValidationConstants.FailedToParseType, result.Error);
-            Assert.True(string.IsNullOrEmpty(result.Warning));
-        }
+        //    Assert.Equal(ResultType.Error, result.ResultType);
+        //    Assert.Equal(ValidationConstants.FailedToParseType, result.Error);
+        //    Assert.True(string.IsNullOrEmpty(result.Warning));
+        //}
 
-        [Fact]
-        [Trait("Category", "UnitedSensorValue")]
-        public void UnitedSensorValueAllErrorsValidationTest()
-        {
-            var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensorBytes);
-            unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
-            unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
+        //[Fact]
+        //[Trait("Category", "UnitedSensorValue")]
+        //public void UnitedSensorValueAllErrorsValidationTest()
+        //{
+        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensorBytes);
+        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
+        //    unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
 
-            var result = unitedSensorValue.Validate();
+        //    var result = unitedSensorValue.Validate();
 
-            var errors = new List<string>(2)
-            {
-                ValidationConstants.FailedToParseType,
-                ValidationConstants.PathTooLong
-            };
+        //    var errors = new List<string>(2)
+        //    {
+        //        ValidationConstants.FailedToParseType,
+        //        ValidationConstants.PathTooLong
+        //    };
 
-            Assert.Equal(ResultType.Error, result.ResultType);
-            Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
-            Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
-        }
+        //    Assert.Equal(ResultType.Error, result.ResultType);
+        //    Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
+        //    Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
+        //}
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "UnitedSensorValue")]
-        public void UnitedSensorValueValidationTest(SensorType type)
-        {
-            var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-            unitedSensorValue.Data = RandomGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "UnitedSensorValue")]
+        //public void UnitedSensorValueValidationTest(SensorType type)
+        //{
+        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
+        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
 
-            TestCorrectData(unitedSensorValue.Validate());
-        }
+        //    TestCorrectData(unitedSensorValue.Validate());
+        //}
 
 
         private UnitedSensorValue BuildUnitedSensorValue(int pathParts)

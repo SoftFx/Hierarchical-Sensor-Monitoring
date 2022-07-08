@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -110,12 +111,12 @@ namespace HSMServer.Model.TreeViewModels
             }
         }
 
-        private void ChangeSensorHandler(SensorModel model, TransactionType transaction)
+        private void ChangeSensorHandler(BaseSensorModel model, TransactionType transaction)
         {
             switch (transaction)
             {
                 case TransactionType.Add:
-                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
+                    if (Nodes.TryGetValue(model.ProductId, out var parent))
                         AddNewSensorViewModel(model, parent);
 
                     break;
@@ -130,7 +131,7 @@ namespace HSMServer.Model.TreeViewModels
                 case TransactionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
 
-                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
+                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                     break;
@@ -179,7 +180,7 @@ namespace HSMServer.Model.TreeViewModels
             return node;
         }
 
-        private void AddNewSensorViewModel(SensorModel sensor, ProductNodeViewModel parent)
+        private void AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
         {
             var viewModel = new SensorNodeViewModel(sensor);
 

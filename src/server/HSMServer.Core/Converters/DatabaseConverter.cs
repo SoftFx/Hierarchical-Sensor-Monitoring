@@ -5,6 +5,7 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Sensor;
 using System.Collections.Generic;
 using System.Linq;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Converters
 {

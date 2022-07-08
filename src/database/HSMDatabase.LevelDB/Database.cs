@@ -161,6 +161,27 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+        {
+            try
+            {
+                var iterator = _database.CreateIterator();
+
+                foreach (var (key, value) in keyValuePairs)
+                {
+                    if (value.latestValue == null)
+                    {
+                        for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key); iterator.Next())
+                            keyValuePairs[key] = (value.sensorId, iterator.Value());
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
         public List<byte[]> GetAllStartingWithAndSeek(byte[] startWithKey, byte[] seekKey)
         {
             try

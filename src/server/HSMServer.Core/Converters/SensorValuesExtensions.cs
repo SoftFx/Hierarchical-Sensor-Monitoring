@@ -16,7 +16,7 @@ namespace HSMServer.Core.Converters
             new()
             {
                 Path = sensorValue.Path,
-                Status = (byte)sensorValue.Status.GetWorst(validationStatus),
+                //Status = (byte)sensorValue.Status.GetWorst(validationStatus), // TODO this method won't be exist? bexause SensorValueBase = BaseValue = SensorDataEntity
                 Time = sensorValue.Time.ToUniversalTime(),
                 TimeCollected = timeCollected.ToUniversalTime(),
                 Timestamp = GetTimestamp(sensorValue.Time),

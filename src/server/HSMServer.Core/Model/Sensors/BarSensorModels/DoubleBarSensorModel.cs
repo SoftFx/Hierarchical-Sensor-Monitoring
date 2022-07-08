@@ -2,6 +2,8 @@
 {
     public sealed class DoubleBarSensorModel : BaseSensorModel<DoubleBarValue>
     {
-        public override DoubleBarValuesStorage Storage { get; } = new();
+        protected override DoubleBarValuesStorage Storage { get; } = new DoubleBarValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.DoubleBar;
     }
 }

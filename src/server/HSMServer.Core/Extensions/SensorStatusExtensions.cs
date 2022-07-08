@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMServer.Core.Model;
 
 namespace HSMServer.Core.Extensions
 {

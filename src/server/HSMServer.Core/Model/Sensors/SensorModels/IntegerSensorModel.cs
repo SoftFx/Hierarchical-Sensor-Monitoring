@@ -2,6 +2,8 @@
 {
     public sealed class IntegerSensorModel : BaseSensorModel<IntegerValue>
     {
-        public override IntegerValuesStorage Storage { get; } = new();
+        protected override IntegerValuesStorage Storage { get; } = new IntegerValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.Integer;
     }
 }

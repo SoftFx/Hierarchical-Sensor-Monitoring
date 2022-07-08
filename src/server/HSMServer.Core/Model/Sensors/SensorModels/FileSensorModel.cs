@@ -2,6 +2,8 @@
 {
     public sealed class FileSensorModel : BaseSensorModel<FileValue>
     {
-        public override FileValuesStorage Storage { get; } = new();
+        protected override FileValuesStorage Storage { get; } = new FileValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.File;
     }
 }

@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -22,6 +23,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly ITimeDatabaseDictionary _sensorsDatabases;
+        private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases = new();
         private readonly IDatabaseSettings _databaseSettings;
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -33,6 +35,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings ?? new DatabaseSettings());
 
             OpenAllExistingSensorDatabases();
+            OpenAllExistingSensorValuesDbs();
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
@@ -49,6 +52,21 @@ namespace HSMDatabase.DatabaseWorkCore
                         _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
                     _sensorsDatabases.AddDatabase(database);
                 }
+            }
+        }
+
+        private void OpenAllExistingSensorValuesDbs()
+        {
+            var sensorValuesDirectories =
+                Directory.GetDirectories(_databaseSettings.DatabaseFolder, $"{_databaseSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+
+            foreach (var directory in sensorValuesDirectories)
+            {
+                GetDatesFromFolderName(directory, out long from, out long to);
+
+                var databases = _sensorValuesDatabases.InitializeAndGetDatabases(from, to);
+                foreach (var dbPath in Directory.GetDirectories(directory))
+                    databases.OpenDatabase(dbPath);
             }
         }
 
@@ -187,32 +205,64 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
+        public Dictionary<byte[], (Guid sensorId, byte[] latestValue)> GetLatestValues(List<BaseSensorModel> sensors)
+        {
+            var result = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+
+            foreach (var sensor in sensors)
+            {
+                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
+                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+
+                result.Add(key, value);
+            }
+
+            var databases = _sensorsDatabases.GetAllDatabases();
+            databases.Reverse();
+
+            foreach (var database in databases)
+                database.FillLatestValues(result);
+
+            return result;
+        }
+
         #endregion
 
         #region Environment database : Sensor
 
-        public void AddSensor(SensorEntity entity) =>
+        public void AddSensor(SensorEntity entity)
+        {
+            _environmentDatabase.AddSensorIdToList(entity.Id);
+            _environmentDatabase.AddSensor(entity);
+        }
+
+        public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void RemoveSensor(string productName, string path)
+        public void ClearSensorValues(string sensorId, string productName, string path)
         {
-            //TAM-90: Do not delete metadata when delete sensors
-            //_environmentDatabase.RemoveSensor(productName, path);
-            var databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases)
-            {
-                database.DeleteAllSensorValues(productName, path);
-            }
+            RemoveSensorData(productName, path);
+            RemoveSensorValues(sensorId);
         }
 
-        public void RemoveSensorWithMetadata(string productName, string path)
+        public void RemoveSensorWithMetadata(string sensorId, string productName, string path)
         {
-            _environmentDatabase.RemoveSensor(productName, path);
+            _environmentDatabase.RemoveSensor(sensorId);
+            _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
-            RemoveSensor(productName, path);
+            RemoveSensorData(productName, path);
+            RemoveSensorValues(sensorId);
         }
 
-        public void UpdateSensor(SensorEntity entity) => AddSensor(entity);
+        public void AddSensorValue(SensorValueEntity valueEntity)
+        {
+            var dbs = _sensorValuesDatabases.GetLatestDatabases(valueEntity.ReceivingTime);
+
+            var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To, valueEntity.SensorId);
+            dbs.OpenDatabase(dbName);
+
+            dbs.PutSensorValue(valueEntity);
+        }
 
         public void PutSensorData(SensorDataEntity entity, string productName)
         {
@@ -238,6 +288,26 @@ namespace HSMDatabase.DatabaseWorkCore
         public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
             GetSensorHistoryDatas(GetSensorData(productName, path, n));
 
+        private void RemoveSensorData(string productName, string path)
+        {
+            //TAM-90: Do not delete metadata when delete sensors
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+                database.DeleteAllSensorValues(productName, path);
+        }
+
+        private void RemoveSensorValues(string sensorId)
+        {
+            var databases = _sensorValuesDatabases.GetAllDatabases();
+
+            foreach (var db in databases)
+                if (db.IsDatabaseExists(sensorId))
+                {
+                    db.DisposeDatabase(sensorId);
+                    Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
+                }
+        }
+
         private static List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)
         {
             var historyCount = history?.Count ?? 0;
@@ -251,21 +321,57 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorEntity> GetAllSensors()
         {
-            var oldEntities = _environmentDatabase.GetSensorsInfo();
-            if (oldEntities == null || oldEntities.Count == 0)
-                return new List<SensorEntity>();
+            var oldEntities = _environmentDatabase.GetSensorsStrOld();
+            var entities = oldEntities.Select(e => e.ConvertToEntity()).ToDictionary(e => e.Id);
+            var newEntities = GetNewSensors();
 
-            foreach (var oldEntity in oldEntities)
+            foreach (var newEntity in newEntities)
+                entities[newEntity.Id] = newEntity;
+
+            return entities.Values.ToList();
+        }
+
+        public void RemoveAllOldSensors() =>
+            _environmentDatabase.RemoveAllOldSensors();
+
+        private List<SensorEntity> GetNewSensors()
+        {
+            var sensorsIds = _environmentDatabase.GetAllSensorsIds();
+
+            var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
+            foreach (var sensorId in sensorsIds)
             {
-                if (!string.IsNullOrEmpty(oldEntity.Id))
-                    continue;
-
-                oldEntity.Id = Guid.NewGuid().ToString();
-                oldEntity.ProductId = string.Empty;
-                oldEntity.IsConverted = true;
+                var sensor = _environmentDatabase.GetSensorEntity(sensorId);
+                if (sensor != null)
+                    sensorEntities.Add(sensor);
             }
 
-            return oldEntities;
+            return sensorEntities;
+        }
+
+        #endregion
+
+        #region Policies
+
+        public void AddPolicy(PolicyEntity entity)
+        {
+            _environmentDatabase.AddPolicyIdToList(entity.Id);
+            _environmentDatabase.AddPolicy(entity);
+        }
+
+        public List<byte[]> GetAllPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+
+            var policies = new List<byte[]>(policiesIds.Count);
+            foreach (var policyId in policiesIds)
+            {
+                var policy = _environmentDatabase.GetPolicy(policyId);
+                if (policy != null && policy.Length != 0)
+                    policies.Add(policy);
+            }
+
+            return policies;
         }
 
         #endregion
@@ -309,7 +415,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region AccessKey
 
-        public void RemoveAccessKey(Guid id) 
+        public void RemoveAccessKey(Guid id)
         {
             var strId = id.ToString();
 
@@ -325,15 +431,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(Guid id) => 
+        public AccessKeyEntity GetAccessKey(Guid id) =>
             _environmentDatabase.GetAccessKey(id.ToString());
-        
+
         public List<AccessKeyEntity> GetAccessKeys()
         {
             var keys = new List<AccessKeyEntity>();
             var keyIds = _environmentDatabase.GetAccessKeyList();
 
-            foreach(var keyId in keyIds)
+            foreach (var keyId in keyIds)
             {
                 var keyEntity = _environmentDatabase.GetAccessKey(keyId);
                 if (keyEntity != null)
@@ -428,6 +534,20 @@ namespace HSMDatabase.DatabaseWorkCore
 
             bool isToTicks = long.TryParse(splitResults[2], out long toTicks);
             to = isToTicks ? new DateTime(toTicks) : DateTime.MinValue;
+        }
+
+        private static void GetDatesFromFolderName(string folder, out long from, out long to)
+        {
+            from = 0;
+            to = 0;
+
+            var splitResults = folder.Split('_');
+
+            if (long.TryParse(splitResults[1], out long fromTicks))
+                from = fromTicks;
+
+            if (long.TryParse(splitResults[2], out long toTicks))
+                to = toTicks;
         }
 
         #endregion

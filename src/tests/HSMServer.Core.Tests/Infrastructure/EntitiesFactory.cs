@@ -55,11 +55,11 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Id = Guid.NewGuid().ToString(),
                 ProductId = parent?.Length == 0 ? Guid.NewGuid().ToString() : parent,
-                SensorName = name ?? RandomGenerator.GetRandomString(),
+                DisplayName = name ?? RandomGenerator.GetRandomString(),
                 ProductName = RandomGenerator.GetRandomString(),
                 Path = RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
-                SensorType = RandomGenerator.GetRandomByte(),
+                Type = RandomGenerator.GetRandomByte(),
                 ExpectedUpdateIntervalTicks = RandomGenerator.GetRandomInt(),
                 Unit = RandomGenerator.GetRandomString(),
             };

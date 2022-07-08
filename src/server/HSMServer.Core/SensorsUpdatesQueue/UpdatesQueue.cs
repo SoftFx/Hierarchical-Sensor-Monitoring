@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -13,29 +12,29 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         private const int Delay = 10;
         private const int PackageMaxSize = 100;
 
-        private readonly ConcurrentQueue<SensorValueBase> _queue;
+        private readonly ConcurrentQueue<StoreInfo> _queue;
 
         private bool _run;
 
-        public event Action<List<SensorValueBase>> NewItemsEvent;
+        public event Action<List<StoreInfo>> NewItemsEvent;
 
 
         public UpdatesQueue()
         {
-            _queue = new ConcurrentQueue<SensorValueBase>();
+            _queue = new ConcurrentQueue<StoreInfo>();
             _run = true;
 
             ThreadPool.QueueUserWorkItem(RunManageThread);
         }
 
 
-        public void AddItem(SensorValueBase sensorValue) =>
-            _queue.Enqueue(sensorValue);
+        public void AddItem(StoreInfo storeInfo) =>
+            _queue.Enqueue(storeInfo);
 
-        public void AddItems(List<SensorValueBase> sensorValues)
+        public void AddItems(List<StoreInfo> storeInfos)
         {
-            foreach (var value in sensorValues)
-                AddItem(value);
+            foreach (var store in storeInfos)
+                AddItem(store);
         }
 
         public void Dispose() => _run = false;
@@ -55,9 +54,9 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<SensorValueBase> GetDataPackage()
+        private List<StoreInfo> GetDataPackage()
         {
-            var data = new List<SensorValueBase>(PackageMaxSize);
+            var data = new List<StoreInfo>(PackageMaxSize);
 
             for (int i = 0; i < PackageMaxSize; ++i)
             {

@@ -1,6 +1,6 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.AccessManager
 {
@@ -17,5 +17,7 @@ namespace HSMDatabase.AccessManager
         List<SensorDataEntity> GetAllSensorValues(string productName, string path);
         List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
+
+        void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
     }
 }

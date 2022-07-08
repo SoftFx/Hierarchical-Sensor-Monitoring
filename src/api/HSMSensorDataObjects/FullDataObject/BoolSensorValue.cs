@@ -13,11 +13,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public bool BoolValue 
         { 
             get => Value;
-            set 
-            { 
-                Value = value; 
-                BoolValue = value; 
-            }
+            set => Value = value;
         }
     }
 }

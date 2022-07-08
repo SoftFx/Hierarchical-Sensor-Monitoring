@@ -2,6 +2,8 @@
 {
     public sealed class StringSensorModel : BaseSensorModel<StringValue>
     {
-        public override StringValuesStorage Storage { get; } = new();
+        protected override StringValuesStorage Storage { get; } = new StringValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.String;
     }
 }

@@ -1,11 +1,11 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
-using NLog;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
@@ -86,6 +86,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
             values.Sort((v1, v2) => v2.TimeCollected.CompareTo(v1.TimeCollected));
             return values.First(v => v.Path == path);
+        }
+
+        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+        {
+            try
+            {
+                _database.FillLatestValues(keyValuePairs);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to fill sensors latest values");
+            }
         }
 
         public List<SensorDataEntity> GetAllSensorValues(string productName, string path)
