@@ -27,6 +27,7 @@ namespace HSMServer.Core.Cache
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
+        private readonly IUpdatesQueue _updatesQueue;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
@@ -37,16 +38,26 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
+        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
+
+            _updatesQueue = updatesQueue;
+            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
             _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
+        }
+
+
+        public void Dispose()
+        {
+            _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
+            _updatesQueue?.Dispose();
         }
 
 
@@ -266,7 +277,14 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-        public void AddNewSensorValue(StoreInfo storeInfo)
+
+        private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
+        {
+            foreach (var store in storeInfos)
+                AddNewSensorValue(store);
+        }
+
+        private void AddNewSensorValue(StoreInfo storeInfo)
         {
             (string key, string path, BaseValue value) = storeInfo;
 
@@ -293,11 +311,14 @@ namespace HSMServer.Core.Cache
                 UpdateProduct(parentProduct);
             }
 
+            // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
+            // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
             if (sensor.AddValue(value))
                 _databaseCore.AddSensorValue(value.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
+
 
         private void Initialize()
         {
