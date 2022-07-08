@@ -38,15 +38,13 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseCoreManager.DatabaseCore, configProviderLogger);
 
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseCoreManager.DatabaseCore,
                 _barStorage,
                 configurationProvider,
-                _updatesQueue,
-                _valuesCache,
                 monitoringLogger);
         }
 

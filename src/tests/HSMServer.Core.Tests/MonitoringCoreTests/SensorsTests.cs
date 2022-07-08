@@ -33,8 +33,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _databaseCoreManager.DatabaseCore,
                 barStorage,
                 configurationProvider.Object,
-                _updatesQueue,
-                new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager),
                 monitoringLogger);
         }
 

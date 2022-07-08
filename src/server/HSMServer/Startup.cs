@@ -88,7 +88,7 @@ namespace HSMServer
             }
 
             var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
+            lifeTimeService?.ApplicationStopping.Register(OnShutdown, (app.ApplicationServices.GetService<MonitoringCore>(), app.ApplicationServices.GetService<ITreeValuesCache>()));
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -130,10 +130,13 @@ namespace HSMServer
             app.UseHttpsRedirection();
         }
 
-        private void OnShutdown(object service)
+        private void OnShutdown(object services)
         {
-            if (service is MonitoringCore monitoringCore)
+            if (services is (MonitoringCore monitoringCore, ITreeValuesCache cache))
+            {
                 monitoringCore.Dispose();
+                cache.Dispose();
+            }
 
             // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();
