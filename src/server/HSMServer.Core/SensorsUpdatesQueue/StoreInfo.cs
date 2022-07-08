@@ -5,7 +5,9 @@ namespace HSMServer.Core.SensorsUpdatesQueue
     public readonly struct StoreInfo
     {
         public string Path { get; init; }
+
         public string Key { get; init; }
+
         public BaseValue BaseValue { get; init; }
 
 

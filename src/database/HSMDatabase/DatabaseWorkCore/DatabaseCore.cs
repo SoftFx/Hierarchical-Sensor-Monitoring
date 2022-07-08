@@ -241,8 +241,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void ClearSensorValues(string sensorId, string productName, string path)
         {
-            RemoveSensor(productName, path);
-            RemoveSensor(sensorId);
+            RemoveSensorData(productName, path);
+            RemoveSensorValues(sensorId);
         }
 
         public void RemoveSensorWithMetadata(string sensorId, string productName, string path)
@@ -250,13 +250,13 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveSensor(sensorId);
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
-            RemoveSensor(productName, path);
-            RemoveSensor(sensorId);
+            RemoveSensorData(productName, path);
+            RemoveSensorValues(sensorId);
         }
 
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
-            var dbs = _sensorValuesDatabases.GetDatabases(valueEntity.ReceivingTime);
+            var dbs = _sensorValuesDatabases.GetLatestDatabases(valueEntity.ReceivingTime);
 
             var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To, valueEntity.SensorId);
             dbs.OpenDatabase(dbName);
@@ -288,7 +288,7 @@ namespace HSMDatabase.DatabaseWorkCore
         public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
             GetSensorHistoryDatas(GetSensorData(productName, path, n));
 
-        private void RemoveSensor(string productName, string path)
+        private void RemoveSensorData(string productName, string path)
         {
             //TAM-90: Do not delete metadata when delete sensors
             var databases = _sensorsDatabases.GetAllDatabases();
@@ -296,7 +296,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 database.DeleteAllSensorValues(productName, path);
         }
 
-        private void RemoveSensor(string sensorId)
+        private void RemoveSensorValues(string sensorId)
         {
             var databases = _sensorValuesDatabases.GetAllDatabases();
 

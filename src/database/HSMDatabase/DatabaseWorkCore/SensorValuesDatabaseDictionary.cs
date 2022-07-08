@@ -19,7 +19,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return databases;
         }
 
-        internal ISensorValuesDatabase GetDatabases(long time)
+        internal ISensorValuesDatabase GetLatestDatabases(long time)
         {
             var latestDbs = _sensorDbs.LastOrDefault();
             if (latestDbs != null && latestDbs.From <= time && latestDbs.To >= time)
