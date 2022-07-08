@@ -12,19 +12,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.ProductName);
 
 
-        [Fact]
-        [Trait("Category", "SensorModel constructor")]
-        public void SensorModelConstructor_SensorEntity_Test()
-        {
-            var sensorEntity = EntitiesFactory.BuildSensorEntity();
-            var sensorDataEntity = EntitiesFactory.BuildSensorDataEntity(sensorEntity.Type);
+        //[Fact]
+        //[Trait("Category", "SensorModel constructor")]
+        //public void SensorModelConstructor_SensorEntity_Test()
+        //{
+        //    var sensorEntity = EntitiesFactory.BuildSensorEntity();
+        //    var sensorDataEntity = EntitiesFactory.BuildSensorDataEntity(sensorEntity.Type);
 
-            var sensor = new SensorModel(sensorEntity, sensorDataEntity);
-            sensor.AddParent(new ProductModel(sensorEntity.ProductId, RandomGenerator.GetRandomString()));
+        //    var sensor = new SensorModel(sensorEntity, sensorDataEntity);
+        //    sensor.AddParent(new ProductModel(sensorEntity.ProductId, RandomGenerator.GetRandomString()));
 
-            ModelsTester.TestSensorModel(sensorEntity, sensor);
-            ModelsTester.TestSensorModel(sensorDataEntity, sensor);
-        }
+        //    ModelsTester.TestSensorModel(sensorEntity, sensor);
+        //    ModelsTester.TestSensorModel(sensorDataEntity, sensor);
+        //}
 
         [Theory]
         [InlineData(SensorType.BooleanSensor)]
