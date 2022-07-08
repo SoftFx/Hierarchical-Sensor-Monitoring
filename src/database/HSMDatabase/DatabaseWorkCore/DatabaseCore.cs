@@ -299,11 +299,13 @@ namespace HSMDatabase.DatabaseWorkCore
         private void RemoveSensor(string sensorId)
         {
             var databases = _sensorValuesDatabases.GetAllDatabases();
+
             foreach (var db in databases)
-            {
-                db.DisposeDatabase(sensorId);
-                Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
-            }
+                if (db.IsDatabaseExists(sensorId))
+                {
+                    db.DisposeDatabase(sensorId);
+                    Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
+                }
         }
 
         private static List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)

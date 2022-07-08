@@ -29,9 +29,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void OpenDatabase(string dbPath)
         {
-            var dbKey = Path.GetFileName(dbPath);
-            if (!_openedDbs.ContainsKey(dbKey))
-                _openedDbs.Add(dbKey, new LevelDBDatabaseAdapter(dbPath));
+            var sensorId = Path.GetFileName(dbPath);
+            if (!IsDatabaseExists(sensorId))
+                _openedDbs.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
         }
 
         public void PutSensorValue(SensorValueEntity entity)
@@ -48,6 +48,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to write data for {entity.SensorId}");
             }
         }
+
+        public bool IsDatabaseExists(string sensorId) => _openedDbs.ContainsKey(sensorId);
 
         public void DisposeDatabase(string sensorId)
         {

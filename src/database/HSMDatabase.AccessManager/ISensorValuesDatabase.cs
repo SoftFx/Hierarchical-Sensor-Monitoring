@@ -13,6 +13,8 @@ namespace HSMDatabase.AccessManager
 
         void PutSensorValue(SensorValueEntity entity);
 
+        bool IsDatabaseExists(string sensorId);
+
         void DisposeDatabase(string sensorId);
     }
 }
