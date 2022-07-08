@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HSMServer.Core.SensorsUpdatesQueue
+namespace HSMServer.Core.Cache
 {
     public interface IUpdatesQueue : IDisposable
     {

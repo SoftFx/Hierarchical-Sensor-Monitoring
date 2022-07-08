@@ -4,7 +4,6 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
-using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

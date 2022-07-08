@@ -1,12 +1,11 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HSMServer.Core.SensorsUpdatesQueue
+namespace HSMServer.Core.Cache
 {
     public sealed class UpdatesQueue : IUpdatesQueue
     {
@@ -34,7 +33,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public void AddItems(List<StoreInfo> storeInfos)
         {
-            foreach(var store in storeInfos)
+            foreach (var store in storeInfos)
                 AddItem(store);
         }
 
