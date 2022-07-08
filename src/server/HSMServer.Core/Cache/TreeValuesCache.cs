@@ -313,8 +313,8 @@ namespace HSMServer.Core.Cache
 
             // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
             // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
-            if (sensor.AddValue(value))
-                _databaseCore.AddSensorValue(value.ToEntity(sensor.Id));
+            if (sensor.TryAddValue(value, out var cachedValue))
+                _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }

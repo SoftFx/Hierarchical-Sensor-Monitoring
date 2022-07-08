@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -21,7 +22,7 @@ namespace HSMServer.Core.Model
 
     public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
     {
-        private readonly List<T> _cachedValues;
+        private readonly ConcurrentQueue<T> _cachedValues = new();
 
 
         protected override int CacheSize => 100;
@@ -30,18 +31,17 @@ namespace HSMServer.Core.Model
 
         internal override DateTime LastUpdateTime => _cachedValues.LastOrDefault()?.ReceivingTime ?? DateTime.MinValue;
 
-        internal override bool HasData => _cachedValues.Count > 0;
+        internal override bool HasData => !_cachedValues.IsEmpty;
 
 
-        internal ValuesStorage()
+        internal virtual T AddValue(T value)
         {
-            _cachedValues = new(CacheSize);
-        }
+            _cachedValues.Enqueue(value);
 
+            if (_cachedValues.Count > CacheSize)
+                _cachedValues.TryDequeue(out _);
 
-        internal virtual void AddValue(T value)
-        {
-            _cachedValues.Add(value);
+            return value;
         }
 
         internal override void Clear() => _cachedValues.Clear();
