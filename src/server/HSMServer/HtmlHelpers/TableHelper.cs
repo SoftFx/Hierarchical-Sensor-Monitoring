@@ -512,7 +512,7 @@ namespace HSMServer.HtmlHelpers
         }
 
         private static string GetHistoryRawComment(string comment) =>
-            _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
+            !string.IsNullOrEmpty(comment) && _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
 
         #endregion
 

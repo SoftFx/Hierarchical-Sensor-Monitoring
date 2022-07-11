@@ -120,28 +120,28 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.Path, out string product, out string path);
+            ParseProductAndPath(model.EncodedId, out string product, out string path);
             List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
             var processedData = processor.ProcessHistory(unprocessedData);
-            return new HtmlString(TableHelper.CreateHistoryTable(processedData, model.Path));
+            return new HtmlString(TableHelper.CreateHistoryTable(processedData, model.EncodedId));
         }
 
         [HttpPost]
         public HtmlString History([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.Path, out string product, out string path);
+            ParseProductAndPath(model.EncodedId, out string product, out string path);
             return GetHistory(product, path, model.Type, model.From, model.To,
                 GetPeriodType(model.From, model.To));
         }
 
         [HttpPost]
-        public HtmlString HistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
+            ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
-            return new HtmlString(TableHelper.CreateHistoryTable(result, encodedPath));
+            return new HtmlString(TableHelper.CreateHistoryTable(result, encodedId));
         }
 
         private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
@@ -157,7 +157,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.Path, out string product, out string path);
+            ParseProductAndPath(model.EncodedId, out string product, out string path);
             List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
             var processedData = processor.ProcessHistory(unprocessedData);
@@ -167,14 +167,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.Path, out string product, out string path);
+            ParseProductAndPath(model.EncodedId, out string product, out string path);
             return GetRawHistory(product, path, model.Type, model.From, model.To);
         }
 
         [HttpPost]
-        public JsonResult RawHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
+            ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
             return new JsonResult(result);
@@ -190,10 +190,10 @@ namespace HSMServer.Controllers
             return new JsonResult(processedData);
         }
 
-        public FileResult ExportHistory([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type,
+        public FileResult ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
+            ParseProductAndPath(encodedId, out string product, out string path);
             DateTime fromUTC = from.ToUniversalTime();
             DateTime toUTC = to.ToUniversalTime();
             List<SensorHistoryData> historyList = _sensorsInterface.GetSensorHistory(product, path,
@@ -203,9 +203,9 @@ namespace HSMServer.Controllers
             return GetExportHistory(historyList, type, fileName);
         }
 
-        public FileResult ExportHistoryAll([FromQuery(Name = "Path")] string encodedPath, [FromQuery(Name = "Type")] int type)
+        public FileResult ExportHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            ParseProductAndPath(encodedPath, out string product, out string path);
+            ParseProductAndPath(encodedId, out string product, out string path);
             List<SensorHistoryData> historyList = _sensorsInterface.GetAllSensorHistory(product, path);
             string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
             return GetExportHistory(historyList, type, fileName);
