@@ -2,12 +2,6 @@
   "version": 1,
   "dependencies": {
     ".NETStandard,Version=v2.0": {
-      "HSMDataCollector.HSMSensorDataObjects": {
-        "type": "Direct",
-        "requested": "[2.1.31, )",
-        "resolved": "2.1.31",
-        "contentHash": "ORFedMcCcTvFNWQladtmZL+bKwa97em9oXwk0te6R+LBNMkxPXfLJ5JhVDQIbP2UmcV1wmVenrw8l5Yrsr9OjQ=="
-      },
       "Microsoft.CSharp": {
         "type": "Direct",
         "requested": "[4.7.0, )",
@@ -639,6 +633,9 @@
           "Microsoft.NETCore.Targets": "1.1.0",
           "System.Runtime": "4.3.0"
         }
+      },
+      "HSMDataCollector.HSMSensorDataObjects": {
+        "type": "Project"
       }
     }
   }
