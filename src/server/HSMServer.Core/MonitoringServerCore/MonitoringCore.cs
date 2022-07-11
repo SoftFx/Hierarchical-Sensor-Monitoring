@@ -2,7 +2,6 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
@@ -11,7 +10,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.SensorsDataValidation;
-using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -32,8 +30,8 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ILogger<MonitoringCore> _logger;
 
 
-        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage, IConfigurationProvider configurationProvider,
-            ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
+        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage, 
+            IConfigurationProvider configurationProvider, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseCore = databaseCore;

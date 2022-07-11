@@ -60,7 +60,6 @@ namespace HSMServer.Core.Cache
             _updatesQueue?.Dispose();
         }
 
-
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
@@ -285,7 +284,7 @@ namespace HSMServer.Core.Cache
                 AddNewSensorValue(store);
         }
 
-        public void AddNewSensorValue(StoreInfo storeInfo)
+        private void AddNewSensorValue(StoreInfo storeInfo)
         {
             (string key, string path, BaseValue value) = storeInfo;
 
@@ -312,8 +311,10 @@ namespace HSMServer.Core.Cache
                 UpdateProduct(parentProduct);
             }
 
-            if (sensor.AddValue(value))
-                _databaseCore.AddSensorValue(value.ToEntity(sensor.Id));
+            // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
+            // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
+            if (sensor.TryAddValue(value, out var cachedValue))
+                _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }

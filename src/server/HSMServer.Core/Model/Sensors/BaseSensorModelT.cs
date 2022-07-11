@@ -12,12 +12,17 @@ namespace HSMServer.Core.Model
         protected override ValuesStorage<T> Storage { get; }
 
 
-        internal override bool AddValue(BaseValue value)
+        // TODO : false only if there is some system exception or smth like this (because if false - value is not saved to db)
+        internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
         {
             if (value is T valueT)
-                Storage.AddValue(valueT);
+            {
+                cachedValue = Storage.AddValue(valueT);
+                return true;
+            }
 
-            return true;
+            cachedValue = default;
+            return false;
         }
 
         internal override void AddValue(byte[] valueBytes)

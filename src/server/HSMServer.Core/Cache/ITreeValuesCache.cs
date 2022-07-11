@@ -15,7 +15,7 @@ namespace HSMServer.Core.Cache
     }
 
 
-    public interface ITreeValuesCache
+    public interface ITreeValuesCache : IDisposable
     {
         event Action<ProductModel, TransactionType> ChangeProductEvent;
         event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
@@ -43,6 +43,5 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
-        void AddNewSensorValue(StoreInfo sensorValue);
     }
 }

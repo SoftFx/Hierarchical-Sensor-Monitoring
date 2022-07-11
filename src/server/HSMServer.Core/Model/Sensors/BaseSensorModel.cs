@@ -123,7 +123,7 @@ namespace HSMServer.Core.Model
             };
 
 
-        internal abstract bool AddValue(BaseValue value);
+        internal abstract bool TryAddValue(BaseValue value, out BaseValue cachedValue);
 
         internal abstract void AddValue(byte[] valueBytes);
 
