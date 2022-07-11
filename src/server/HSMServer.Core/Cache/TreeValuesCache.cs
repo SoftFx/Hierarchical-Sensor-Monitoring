@@ -7,6 +7,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
 using System.Collections.Concurrent;
@@ -26,6 +27,7 @@ namespace HSMServer.Core.Cache
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
+        private readonly IUpdatesQueue _updatesQueue;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
@@ -36,16 +38,26 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager)
+        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
+
+            _updatesQueue = updatesQueue;
+            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             _tree = new ConcurrentDictionary<string, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
             _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
             Initialize();
+        }
+        
+
+        public void Dispose()
+        {
+            _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
+            _updatesQueue?.Dispose();
         }
 
 
@@ -265,6 +277,12 @@ namespace HSMServer.Core.Cache
             _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+        }
+
+        private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
+        {
+            foreach (var store in storeInfos)
+                AddNewSensorValue(store);
         }
 
         public void AddNewSensorValue(StoreInfo storeInfo)

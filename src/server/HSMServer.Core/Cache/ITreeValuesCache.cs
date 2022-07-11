@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.SensorsUpdatesQueue;
 using System;
 using System.Collections.Generic;
 

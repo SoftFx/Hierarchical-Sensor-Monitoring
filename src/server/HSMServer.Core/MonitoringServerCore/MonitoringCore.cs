@@ -11,6 +11,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.SensorsDataValidation;
+using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -29,35 +30,21 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly IDatabaseCore _databaseCore;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly ILogger<MonitoringCore> _logger;
-        private readonly IUpdatesQueue _updatesQueue;
-        private readonly ITreeValuesCache _treeValuesCache;
 
 
         public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage, IConfigurationProvider configurationProvider,
-            IUpdatesQueue updatesQueue, ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
+            ITreeValuesCache treeValuesCache, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseCore = databaseCore;
             _barsStorage = barsStorage;
             _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
-            _updatesQueue = updatesQueue;
-            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-
-            _treeValuesCache = treeValuesCache;
-
             Thread.Sleep(1000);
 
             _logger.LogInformation("Monitoring core initialized");
 
             SensorDataValidationExtensions.Initialize(configurationProvider);
-        }
-
-
-        private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
-        {
-            foreach (var store in storeInfos)
-                AddSensorValue(store);
         }
 
         #region Sensor saving
@@ -98,31 +85,6 @@ namespace HSMServer.Core.MonitoringServerCore
         private void SaveSensorValue(SensorDataEntity dataObject, string productName)
         {
             _databaseCore.PutSensorData(dataObject, productName);
-        }
-
-        public void AddSensorValue(StoreInfo storeInfo)
-        {
-            try
-            {
-                DateTime timeCollected = DateTime.UtcNow;
-
-                //ToDo
-                //var validationResult = value.Validate();
-                //if (!CheckValidationResult(value, validationResult))
-                    //return;
-
-                if (!_treeValuesCache.TryGetProductByKey(storeInfo.Key, out var product, out _))
-                    return;
-
-                bool saveToDb = ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName,
-                    timeCollected);
-
-                _treeValuesCache.AddNewSensorValue(storeInfo);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"Failed to add value for sensor '{storeInfo.Path}'");
-            }
         }
 
         private bool CheckValidationResult(SensorValueBase value, SensorsDataValidation.ValidationResult validationResult)
@@ -236,7 +198,6 @@ namespace HSMServer.Core.MonitoringServerCore
             foreach (var lastBarValue in lastBarsValues)
                 ProcessExtendedBarData(lastBarValue);
 
-            _updatesQueue?.Dispose();
             _barsStorage?.Dispose();
         }
     }
