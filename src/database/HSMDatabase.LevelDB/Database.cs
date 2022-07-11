@@ -118,6 +118,24 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public byte[] GetLatestValue()
+        {
+            try
+            {
+                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator.SeekToLast();
+
+                if (iterator.IsValid)
+                    return iterator.Value();
+            }
+            catch (Exception ex)
+            {
+                throw new ServerDatabaseException(ex.Message, ex);
+            }
+
+            return null;
+        }
+
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
             try

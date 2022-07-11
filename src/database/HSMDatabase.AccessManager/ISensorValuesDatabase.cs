@@ -16,5 +16,7 @@ namespace HSMDatabase.AccessManager
         bool IsDatabaseExists(string sensorId);
 
         void DisposeDatabase(string sensorId);
+
+        byte[] GetLatestValue(string sensorId);
     }
 }
