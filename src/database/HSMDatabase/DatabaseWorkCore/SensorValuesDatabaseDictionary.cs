@@ -31,6 +31,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return InitializeAndGetDatabases(from, to);
         }
 
-        internal List<ISensorValuesDatabase> GetAllDatabases() => _sensorDbs;
+        internal List<ISensorValuesDatabase> GetAllDatabases() => _sensorDbs.ToList();
     }
 }

@@ -62,5 +62,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
             }
         }
+
+        public byte[] GetLatestValue(string sensorId) => _openedDbs[sensorId].GetLatestValue();
     }
 }

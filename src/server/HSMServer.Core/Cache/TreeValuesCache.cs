@@ -640,11 +640,11 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var sensorValues = _databaseCore.GetLatestValues(_sensors.Values.ToList());
+            var sensorValues = _databaseCore.GetLatestValues(GetSensors());
 
-            foreach (var (_, value) in sensorValues)
-                if (_sensors.TryGetValue(value.sensorId, out var sensor))
-                    sensor.AddValue(value.latestValue);
+            foreach (var (sensorId, value) in sensorValues)
+                if (_sensors.TryGetValue(sensorId, out var sensor))
+                    sensor.AddValue(value);
         }
 
         private static Dictionary<Guid, Policy> GetPolicyModels(List<byte[]> policyEntities)

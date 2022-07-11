@@ -205,25 +205,66 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
-        public Dictionary<byte[], (Guid sensorId, byte[] latestValue)> GetLatestValues(List<BaseSensorModel> sensors)
+        public Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors)
         {
-            var result = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+            var result = FillLatestValues(sensors);
+
+            return FillRemainingLatestValues(sensors, result);
+        }
+
+        private Dictionary<Guid, byte[]> FillLatestValues(List<BaseSensorModel> sensors)
+        {
+            var result = new Dictionary<Guid, byte[]>(sensors.Count);
+
+            foreach (var sensor in sensors)
+                result.Add(sensor.Id, null);
+
+            var databases = _sensorValuesDatabases.GetAllDatabases();
+            databases.Reverse();
+
+            foreach (var (sensorId, _) in result)
+            {
+                var key = sensorId.ToString();
+
+                foreach (var database in databases)
+                {
+                    if (database.IsDatabaseExists(key))
+                    {
+                        result[sensorId] = database.GetLatestValue(key);
+                        break;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private Dictionary<Guid, byte[]> FillRemainingLatestValues(List<BaseSensorModel> sensors, Dictionary<Guid, byte[]> latestValues)
+        {
+            var remainingResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
 
             foreach (var sensor in sensors)
             {
+                if (latestValues[sensor.Id] != null)
+                    continue;
+
                 byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
                 (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
 
-                result.Add(key, value);
+                remainingResult.Add(key, value);
             }
 
             var databases = _sensorsDatabases.GetAllDatabases();
             databases.Reverse();
 
             foreach (var database in databases)
-                database.FillLatestValues(result);
+                database.FillLatestValues(remainingResult);
 
-            return result;
+            foreach (var (_, (sensorId, value)) in remainingResult)
+                if (value != null)
+                    latestValues[sensorId] = value;
+
+            return latestValues;
         }
 
         #endregion
