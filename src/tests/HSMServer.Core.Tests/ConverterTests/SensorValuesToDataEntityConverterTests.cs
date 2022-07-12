@@ -115,21 +115,21 @@ namespace HSMServer.Core.Tests.ConverterTests
         //    Assert.Equal((byte)SensorStatus.Warning, dataEntity.Status);
         //}
 
-        [Fact]
-        [Trait("Category", "Compressing content")]
-        public void SensorValueToSensorDataEntityConverter_CompressingContent_Test()
-        {
-            var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-            var originalContent = fileSensorValue.FileContent;
-            var compressedContent = CompressionHelper.GetCompressedData(originalContent);
+        //[Fact]
+        //[Trait("Category", "Compressing content")]
+        //public void SensorValueToSensorDataEntityConverter_CompressingContent_Test()
+        //{
+        //    var fileSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    var originalContent = fileSensorValue.FileContent;
+        //    var compressedContent = CompressionHelper.GetCompressedData(originalContent);
 
-            var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Unknown);
-            var actualData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
+        //    var dataEntity = fileSensorValue.ConvertWithContentCompression(_timeCollected, SensorStatus.Unknown);
+        //    var actualData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
 
-            Assert.Equal(originalContent.Length, dataEntity.OriginalFileSensorContentSize);
-            Assert.Equal(compressedContent.Length, actualData.FileContent.Length);
-            Assert.Equal(compressedContent, actualData.FileContent);
-            Assert.NotEqual(originalContent, compressedContent);
-        }
+        //    Assert.Equal(originalContent.Length, dataEntity.OriginalFileSensorContentSize);
+        //    Assert.Equal(compressedContent.Length, actualData.FileContent.Length);
+        //    Assert.Equal(compressedContent, actualData.FileContent);
+        //    Assert.NotEqual(originalContent, compressedContent);
+        //}
     }
 }
