@@ -10,9 +10,7 @@ namespace HSMServer.Core.Model
         {
             var compressed = value.CompressContent();
 
-            base.AddValue(compressed);
-
-            return compressed;
+            return base.AddValue(compressed); ;
         } 
     }
 }

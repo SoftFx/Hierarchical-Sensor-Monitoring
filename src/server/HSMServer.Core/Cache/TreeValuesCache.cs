@@ -52,7 +52,7 @@ namespace HSMServer.Core.Cache
 
             Initialize();
         }
-        
+
 
         public void Dispose()
         {

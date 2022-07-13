@@ -16,15 +16,13 @@ namespace HSMServer.Core.Helpers
                 dstream.Write(sensorValue.Value, 0, sensorValue.Value.Length);
             }
 
-            var newValue = sensorValue with
+            return sensorValue with
             {
                 Value = output.ToArray()
             };
-
-            return newValue;
         }
 
-        //ToDo
+        //ToDo: refactor to new models
         internal static byte[] GetDecompressedContent(SensorHistoryData historyData, FileSensorBytesData data)
         {
             if (historyData.OriginalFileSensorContentSize == 0)
