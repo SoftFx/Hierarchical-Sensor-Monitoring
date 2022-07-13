@@ -30,7 +30,7 @@ namespace HSMServer.Core.MonitoringServerCore
         private readonly ILogger<MonitoringCore> _logger;
 
 
-        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage, 
             IConfigurationProvider configurationProvider, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
@@ -44,7 +44,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
             SensorDataValidationExtensions.Initialize(configurationProvider);
         }
-
 
         #region Sensor saving
 

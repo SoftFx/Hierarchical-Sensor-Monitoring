@@ -60,7 +60,6 @@ namespace HSMServer.Core.Cache
             _updatesQueue?.Dispose();
         }
 
-
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
@@ -143,8 +142,10 @@ namespace HSMServer.Core.Cache
             return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
 
-        public bool TryCheckKeyPermissions(string key, string path, out string message)
+        public bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message)
         {
+            (string key, string path, _) = storeInfo;
+
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
             {
                 message = ErrorPathKey;
@@ -277,7 +278,6 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
-
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -318,7 +318,6 @@ namespace HSMServer.Core.Cache
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
-
 
         private void Initialize()
         {
