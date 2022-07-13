@@ -293,10 +293,27 @@ namespace HSMServer.Core.Cache
             int remainingCount = count - values.Count;
             if (remainingCount > 0)
             {
-                var oldestValueTime = values.LastOrDefault()?.ReceivingTime ?? DateTime.MaxValue;
+                var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
                 values.AddRange(sensor.ConvertValues(
                     _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, oldestValueTime, remainingCount)));
             }
+
+            return values;
+        }
+
+        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to)
+        {
+            var values = new List<BaseValue>(1 << 5);
+
+            if (_sensors.TryGetValue(sensorId, out var sensor))
+            {
+                values.AddRange(sensor.GetValues(from, to));
+                values.Reverse();
+            }
+
+            var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
+            values.AddRange(sensor.ConvertValues(
+                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
 
             return values;
         }

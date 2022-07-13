@@ -306,12 +306,19 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count)
         {
-            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
-            var result = GetSensorValues(sensorId, toBytes, count);
+            var result = GetSensorValues(sensorId, to, count);
 
             var remainingCount = count - result.Count;
             if (remainingCount > 0)
                 result.AddRange(GetSensorValues(productName, path, to, remainingCount));
+
+            return result;
+        }
+
+        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to)
+        {
+            var result = GetSensorValues(sensorId, from, to);
+            result.AddRange(GetSensorValues(productName, path, from, to));
 
             return result;
         }
@@ -360,8 +367,9 @@ namespace HSMDatabase.DatabaseWorkCore
                 database.DeleteAllSensorValues(productName, path);
         }
 
-        private List<byte[]> GetSensorValues(string sensorId, byte[] to, int count)
+        private List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
         {
+            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
             var remainingCount = count;
             var result = new List<byte[]>(count);
 
@@ -369,7 +377,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var database in databases)
             {
                 if (database.IsDatabaseExists(sensorId))
-                    result.AddRange(database.GetLatestValues(sensorId, to, remainingCount));
+                    result.AddRange(database.GetValues(sensorId, toBytes, remainingCount));
 
                 remainingCount = count - result.Count;
                 if (remainingCount == 0)
@@ -392,6 +400,42 @@ namespace HSMDatabase.DatabaseWorkCore
                 remainingCount = count - result.Count;
                 if (remainingCount == 0)
                     break;
+            }
+
+            return result;
+        }
+
+        private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to)
+        {
+            var result = new List<byte[]>(1 << 5);
+
+            var fromBytes = Encoding.UTF8.GetBytes(from.Ticks.ToString());
+            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
+
+            var databases = _sensorValuesDatabases.GetSortedDatabases();
+            foreach (var database in databases)
+            {
+                if (database.To < from.Ticks || database.From > to.Ticks)
+                    continue;
+
+                if (database.IsDatabaseExists(sensorId))
+                    result.AddRange(database.GetValues(sensorId, fromBytes, toBytes));
+            }
+
+            return result;
+        }
+
+        private List<byte[]> GetSensorValues(string productName, string path, DateTime from, DateTime to)
+        {
+            var result = new List<byte[]>(1 << 5);
+
+            var databases = _sensorsDatabases.GetSortedDatabases();
+            foreach (var database in databases)
+            {
+                if (database.DatabaseMaxTicks < from.Ticks || database.DatabaseMinTicks > to.Ticks)
+                    continue;
+
+                result.AddRange(database.GetSensorValuesBytesBetween(productName, path, from, to));
             }
 
             return result;

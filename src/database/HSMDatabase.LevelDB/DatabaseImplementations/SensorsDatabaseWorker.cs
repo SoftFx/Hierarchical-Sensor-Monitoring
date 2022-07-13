@@ -178,12 +178,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
+        public List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to)
+        {
+            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, from));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
+            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+
+            try
+            {
+                var result = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
+                result.Reverse();
+
+                return result;
+            }
+            catch (Exception)
+            { }
+
+            return new();
+        }
+
         public List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count)
         {
-            var result = new List<byte[]>(count);
-
-            byte[] toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
-            byte[] startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
+            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
 
             try
             {
@@ -192,7 +209,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception)
             { }
 
-            return result;
+            return new();
         }
 
         private List<SensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key, string path)

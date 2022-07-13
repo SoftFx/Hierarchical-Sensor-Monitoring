@@ -65,7 +65,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public byte[] GetLatestValue(string sensorId) => _openedDbs[sensorId].GetLatestValue();
 
-        public List<byte[]> GetLatestValues(string sensorId, byte[] to, int count) =>
-            _openedDbs[sensorId].GetLatesValues(to, count);
+        public List<byte[]> GetValues(string sensorId, byte[] to, int count) =>
+            _openedDbs[sensorId].GetValues(to, count);
+
+        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to) =>
+            _openedDbs[sensorId].GetValuesBetween(from, to);
     }
 }

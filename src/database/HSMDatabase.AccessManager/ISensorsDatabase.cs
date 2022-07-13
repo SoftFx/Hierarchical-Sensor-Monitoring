@@ -19,6 +19,7 @@ namespace HSMDatabase.AccessManager
         List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count);
         List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
         List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
+        List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to);
 
         void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
     }
