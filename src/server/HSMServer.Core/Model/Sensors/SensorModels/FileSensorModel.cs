@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Core.Model
+﻿using HSMServer.Core.Helpers;
+
+namespace HSMServer.Core.Model
 {
     public sealed class FileSensorModel : BaseSensorModel<FileValue>
     {

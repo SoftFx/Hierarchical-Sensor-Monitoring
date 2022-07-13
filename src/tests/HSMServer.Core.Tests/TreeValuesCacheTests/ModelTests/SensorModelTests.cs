@@ -26,37 +26,37 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         //    ModelsTester.TestSensorModel(sensorDataEntity, sensor);
         //}
 
-        [Theory]
-        [InlineData(SensorType.BooleanSensor)]
-        [InlineData(SensorType.IntSensor)]
-        [InlineData(SensorType.DoubleSensor)]
-        [InlineData(SensorType.StringSensor)]
-        [InlineData(SensorType.IntegerBarSensor)]
-        [InlineData(SensorType.DoubleBarSensor)]
-        [Trait("Category", "SensorModel constructor")]
-        public void SensorModelConstructor_SensorValue_Test(SensorType type)
-        {
-            var timeCollected = DateTime.UtcNow;
-            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+        //[Theory]
+        //[InlineData(SensorType.BooleanSensor)]
+        //[InlineData(SensorType.IntSensor)]
+        //[InlineData(SensorType.DoubleSensor)]
+        //[InlineData(SensorType.StringSensor)]
+        //[InlineData(SensorType.IntegerBarSensor)]
+        //[InlineData(SensorType.DoubleBarSensor)]
+        //[Trait("Category", "SensorModel constructor")]
+        //public void SensorModelConstructor_SensorValue_Test(SensorType type)
+        //{
+        //    var timeCollected = DateTime.UtcNow;
+        //    var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
 
-            var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
+        //    var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
 
-            ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
-        }
+        //    ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
+        //}
 
-        [Fact]
-        [Trait("Category", "SensorModel constructor")]
-        public void SensorModelConstructor_FileSensorBytes_Test()
-        {
-            var timeCollected = DateTime.UtcNow;
-            var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
-            int originalContentSize = sensorValue.FileContent.Length;
+        //[Fact]
+        //[Trait("Category", "SensorModel constructor")]
+        //public void SensorModelConstructor_FileSensorBytes_Test()
+        //{
+        //    var timeCollected = DateTime.UtcNow;
+        //    var sensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    int originalContentSize = sensorValue.FileContent.Length;
 
-            var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
+        //    var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
 
-            ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
-            Assert.Equal(originalContentSize, sensor.OriginalFileSensorContentSize);
-        }
+        //    ModelsTester.TestSensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, sensor);
+        //    Assert.Equal(originalContentSize, sensor.OriginalFileSensorContentSize);
+        //}
 
         //[Theory]
         //[InlineData(SensorType.BooleanSensor)]
@@ -89,22 +89,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             ModelsTester.TestSensorModel(updating, sensor);
         }
 
-        [Fact]
-        [Trait("Category", "SensorModel updating")]
-        public void SensorModel_UpdateData_Test()
-        {
-            var timeCollected = DateTime.UtcNow;
-            var sensorValue = _sensorValuesFactory.BuildBoolSensorValue();
+        //[Fact]
+        //[Trait("Category", "SensorModel updating")]
+        //public void SensorModel_UpdateData_Test()
+        //{
+        //    var timeCollected = DateTime.UtcNow;
+        //    var sensorValue = _sensorValuesFactory.BuildBoolSensorValue();
 
-            var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
+        //    var sensor = new SensorModel(sensorValue, TestProductsManager.ProductName, timeCollected, new ValidationResult(sensorValue));
 
-            var updatedTimeCollected = DateTime.UtcNow.AddDays(1);
-            var updatedSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
+        //    var updatedTimeCollected = DateTime.UtcNow.AddDays(1);
+        //    var updatedSensorValue = _sensorValuesFactory.BuildFileSensorBytesValue();
 
-            sensor.UpdateData(updatedSensorValue, updatedTimeCollected, new ValidationResult(sensorValue));
+        //    sensor.UpdateData(updatedSensorValue, updatedTimeCollected, new ValidationResult(sensorValue));
 
-            ModelsTester.TestSensorModelData(updatedSensorValue, updatedTimeCollected, sensor);
-        }
+        //    ModelsTester.TestSensorModelData(updatedSensorValue, updatedTimeCollected, sensor);
+        //}
 
 
         [Fact]

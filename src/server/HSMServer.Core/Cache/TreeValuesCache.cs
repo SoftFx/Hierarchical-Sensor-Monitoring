@@ -52,13 +52,14 @@ namespace HSMServer.Core.Cache
 
             Initialize();
         }
-        
+
 
         public void Dispose()
         {
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
         }
+
 
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
