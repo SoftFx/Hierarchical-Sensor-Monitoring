@@ -3,6 +3,7 @@ using LevelDB;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -118,7 +119,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public byte[] GetLatestValue()
+        internal byte[] GetLatestValue()
         {
             try
             {
@@ -136,6 +137,30 @@ namespace HSMDatabase.LevelDB
             return null;
         }
 
+        internal List<byte[]> GetLatesValues(byte[] to, int count)
+        {
+            var values = new List<byte[]>(count);
+
+            try
+            {
+                var iterator = _database.CreateIterator(new ReadOptions());
+                for (iterator.SeekToLast(); iterator.IsValid; iterator.Prev())
+                {
+                    if (!iterator.Key().SequenceEqual(to) && iterator.Key().IsSmallerOrEquals(to))
+                        values.Add(iterator.Value());
+
+                    if (values.Count == count)
+                        break;
+                }
+
+                return values;
+            }
+            catch (Exception ex)
+            {
+                throw new ServerDatabaseException(ex.Message, ex);
+            }
+        }
+
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
             try
@@ -149,6 +174,30 @@ namespace HSMDatabase.LevelDB
                     {
                         values.Add(iterator.Value());
                     }
+                }
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public List<byte[]> GetStartingWithTo(byte[] to, byte[] startWithKey, int count)
+        {
+            try
+            {
+                var values = new List<byte[]>(count);
+                var iterator = _database.CreateIterator(new ReadOptions());
+
+                for (iterator.SeekToLast(); iterator.IsValid; iterator.Prev())
+                {
+                    if (iterator.Key().StartsWith(startWithKey) && !iterator.Key().SequenceEqual(to) && iterator.Key().IsSmallerOrEquals(to))
+                        values.Add(iterator.Value());
+
+                    if (values.Count == count)
+                        break;
                 }
 
                 return values;

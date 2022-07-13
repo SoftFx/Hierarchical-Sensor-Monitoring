@@ -33,6 +33,9 @@ namespace HSMServer.Core.Model
                 Storage.AddValue(valueT);
         }
 
+        internal override List<BaseValue> ConvertValues(List<byte[]> valuesBytes) =>
+            valuesBytes.Select(v => v.ConvertToSensorValue<T>()).ToList();
+
 
         internal override void AddPolicy(Policy policy)
         {

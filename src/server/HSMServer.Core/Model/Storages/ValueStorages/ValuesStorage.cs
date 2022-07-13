@@ -17,6 +17,8 @@ namespace HSMServer.Core.Model
 
 
         internal abstract void Clear();
+
+        internal abstract List<BaseValue> GetValues(int count);
     }
 
 
@@ -45,5 +47,8 @@ namespace HSMServer.Core.Model
         }
 
         internal override void Clear() => _cachedValues.Clear();
+
+        internal override List<BaseValue> GetValues(int count) =>
+            _cachedValues.Take(count).Select(v => v as BaseValue).ToList();
     }
 }

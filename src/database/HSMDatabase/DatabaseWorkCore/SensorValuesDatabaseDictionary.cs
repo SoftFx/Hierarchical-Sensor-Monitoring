@@ -32,5 +32,13 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         internal List<ISensorValuesDatabase> GetAllDatabases() => _sensorDbs.ToList();
+
+        internal List<ISensorValuesDatabase> GetSortedDatabases()
+        {
+            var databases = GetAllDatabases();
+            databases.Reverse();
+
+            return databases;
+        }
     }
 }

@@ -219,8 +219,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var sensor in sensors)
                 result.Add(sensor.Id, null);
 
-            var databases = _sensorValuesDatabases.GetAllDatabases();
-            databases.Reverse();
+            var databases = _sensorValuesDatabases.GetSortedDatabases();
 
             foreach (var (sensorId, _) in result)
             {
@@ -305,6 +304,18 @@ namespace HSMDatabase.DatabaseWorkCore
             dbs.PutSensorValue(valueEntity);
         }
 
+        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count)
+        {
+            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
+            var result = GetSensorValues(sensorId, toBytes, count);
+
+            var remainingCount = count - result.Count;
+            if (remainingCount > 0)
+                result.AddRange(GetSensorValues(productName, path, to, remainingCount));
+
+            return result;
+        }
+
         public void PutSensorData(SensorDataEntity entity, string productName)
         {
             var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
@@ -329,14 +340,6 @@ namespace HSMDatabase.DatabaseWorkCore
         public List<SensorHistoryData> GetSensorHistory(string productName, string path, int n) =>
             GetSensorHistoryDatas(GetSensorData(productName, path, n));
 
-        private void RemoveSensorData(string productName, string path)
-        {
-            //TAM-90: Do not delete metadata when delete sensors
-            var databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases)
-                database.DeleteAllSensorValues(productName, path);
-        }
-
         private void RemoveSensorValues(string sensorId)
         {
             var databases = _sensorValuesDatabases.GetAllDatabases();
@@ -347,6 +350,51 @@ namespace HSMDatabase.DatabaseWorkCore
                     db.DisposeDatabase(sensorId);
                     Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
                 }
+        }
+
+        private void RemoveSensorData(string productName, string path)
+        {
+            //TAM-90: Do not delete metadata when delete sensors
+            var databases = _sensorsDatabases.GetAllDatabases();
+            foreach (var database in databases)
+                database.DeleteAllSensorValues(productName, path);
+        }
+
+        private List<byte[]> GetSensorValues(string sensorId, byte[] to, int count)
+        {
+            var remainingCount = count;
+            var result = new List<byte[]>(count);
+
+            var databases = _sensorValuesDatabases.GetSortedDatabases();
+            foreach (var database in databases)
+            {
+                if (database.IsDatabaseExists(sensorId))
+                    result.AddRange(database.GetLatestValues(sensorId, to, remainingCount));
+
+                remainingCount = count - result.Count;
+                if (remainingCount == 0)
+                    break;
+            }
+
+            return result;
+        }
+
+        private List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count)
+        {
+            var remainingCount = count;
+            var result = new List<byte[]>(count);
+
+            var databases = _sensorsDatabases.GetSortedDatabases();
+            foreach (var database in databases)
+            {
+                result.AddRange(database.GetSensorValues(productName, path, to, remainingCount));
+
+                remainingCount = count - result.Count;
+                if (remainingCount == 0)
+                    break;
+            }
+
+            return result;
         }
 
         private static List<SensorHistoryData> GetSensorHistoryDatas(List<SensorDataEntity> history)

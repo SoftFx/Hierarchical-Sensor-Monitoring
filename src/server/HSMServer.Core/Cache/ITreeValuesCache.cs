@@ -43,5 +43,7 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
+
+        List<BaseValue> GetSensorValues(Guid sensorId, int count);
     }
 }

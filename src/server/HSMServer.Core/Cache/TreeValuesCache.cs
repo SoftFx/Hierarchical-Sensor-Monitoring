@@ -278,6 +278,29 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+
+        public List<BaseValue> GetSensorValues(Guid sensorId, int count)
+        {
+            var values = new List<BaseValue>(count);
+
+            if (_sensors.TryGetValue(sensorId, out var sensor))
+            {
+                values.AddRange(sensor.GetValues(count));
+                values.Reverse();
+            }
+
+            int remainingCount = count - values.Count;
+            if (remainingCount > 0)
+            {
+                var oldestValueTime = values.LastOrDefault()?.ReceivingTime ?? DateTime.MaxValue;
+                values.AddRange(sensor.ConvertValues(
+                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, oldestValueTime, remainingCount)));
+            }
+
+            return values;
+        }
+
+
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -318,6 +341,7 @@ namespace HSMServer.Core.Cache
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
+
 
         private void Initialize()
         {

@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager
 {
@@ -18,5 +19,7 @@ namespace HSMDatabase.AccessManager
         void DisposeDatabase(string sensorId);
 
         byte[] GetLatestValue(string sensorId);
+
+        List<byte[]> GetLatestValues(string sensorId, byte[] to, int count);
     }
 }

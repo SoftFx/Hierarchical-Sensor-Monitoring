@@ -127,7 +127,11 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddValue(byte[] valueBytes);
 
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
         internal void ClearValues() => Storage.Clear();
+
+        internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
 
 
         internal virtual void AddPolicy(Policy policy)

@@ -55,6 +55,7 @@ namespace HSMServer.Core.DataLayer
         SensorHistoryData GetOneValueSensorValue(string productName, string path);
 
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
+        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
         void RemoveAllOldSensors();

@@ -120,6 +120,10 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(model.EncodedId);
+
+            var values = _treeValuesCache.GetSensorValues(sensorId, DEFAULT_REQUESTED_COUNT);
+
             ParseProductAndPath(model.EncodedId, out string product, out string path);
             List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
@@ -157,6 +161,10 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(model.EncodedId);
+
+            var values = _treeValuesCache.GetSensorValues(sensorId, DEFAULT_REQUESTED_COUNT);
+
             ParseProductAndPath(model.EncodedId, out string product, out string path);
             List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
             IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
