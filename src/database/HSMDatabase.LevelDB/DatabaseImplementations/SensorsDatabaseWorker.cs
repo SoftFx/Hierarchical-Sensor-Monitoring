@@ -107,13 +107,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return GetValuesWithKeyEqualOrGreater(bytesKey, path);
         }
 
-        public List<byte[]> GetAllSensorValuesBytes(string productName, string path)
-        {
-            var bytesKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
-
-            return GetValuesBytesWithKeyEqualOrGreater(bytesKey);
-        }
-
         public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
@@ -238,20 +231,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return result;
-        }
-
-        private List<byte[]> GetValuesBytesWithKeyEqualOrGreater(byte[] key)
-        {
-            try
-            {
-                return _database.GetAllStartingWith(key);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read all sensors values bytes for {Encoding.UTF8.GetString(key)}");
-            }
-
-            return new List<byte[]>();
         }
 
         public void Dispose() => _database.Dispose();

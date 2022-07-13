@@ -318,6 +318,14 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
+        public List<BaseValue> GetAllSensorValues(Guid sensorId)
+        {
+            var from = DateTime.MinValue;
+            var to = DateTime.MaxValue;
+
+            return GetSensorValues(sensorId, from, to);
+        }
+
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {

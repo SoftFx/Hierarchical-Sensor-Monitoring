@@ -69,6 +69,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             _openedDbs[sensorId].GetValues(to, count);
 
         public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to) =>
-            _openedDbs[sensorId].GetValuesBetween(from, to);
+            _openedDbs[sensorId].GetValues(from, to);
     }
 }

@@ -160,7 +160,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetValuesBetween(byte[] from, byte[] to)
+        public List<byte[]> GetValues(byte[] from, byte[] to)
         {
             var values = new List<byte[]>(1 << 5);
 

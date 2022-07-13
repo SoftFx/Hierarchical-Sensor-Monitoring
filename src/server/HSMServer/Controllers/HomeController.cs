@@ -142,6 +142,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+
             ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
@@ -185,6 +188,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+
             ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
