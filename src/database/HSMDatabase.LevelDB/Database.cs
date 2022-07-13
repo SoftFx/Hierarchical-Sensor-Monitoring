@@ -143,13 +143,10 @@ namespace HSMDatabase.LevelDB
             try
             {
                 var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.SeekToLast(); iterator.IsValid; iterator.Prev())
+                for (iterator.SeekToLast(); iterator.IsValid && values.Count != count; iterator.Prev())
                 {
                     if (iterator.Key().IsSmallerOrEquals(to))
                         values.Add(iterator.Value());
-
-                    if (values.Count == count)
-                        break;
                 }
 
                 return values;
@@ -209,13 +206,10 @@ namespace HSMDatabase.LevelDB
                 var values = new List<byte[]>(count);
                 var iterator = _database.CreateIterator(new ReadOptions());
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) && values.Count != count; iterator.Next())
                 {
                     if (iterator.Key().IsSmallerOrEquals(to))
                         values.Add(iterator.Value());
-
-                    if (values.Count == count)
-                        break;
                 }
 
                 values.Reverse(); // from newest to oldest
