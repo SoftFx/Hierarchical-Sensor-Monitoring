@@ -1,235 +1,205 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Model.Sensor;
+﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
-    internal class IntBarHistoryProcessor : HistoryProcessorBase
+    internal sealed class IntBarHistoryProcessor : HistoryProcessorBase
     {
-        //private readonly List<int> _Q1List = new List<int>();
-        //private readonly List<int> _Q3List = new List<int>();
-        //private readonly List<int> _MedianList = new List<int>();
-        private readonly List<int> _percentilesList = new List<int>();
-        private readonly List<KeyValuePair<int, int>> _MeanList = new List<KeyValuePair<int, int>>();
+        private readonly List<KeyValuePair<int, int>> _MeanList = new();
 
-        public IntBarHistoryProcessor()
+
+        protected override List<BaseValue> ProcessHistory(List<BaseValue> values, TimeSpan compressionInterval)
         {
+            if (values == null || values.Count == 0)
+                return new();
 
-        }
-        public IntBarHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
-        {
-        }
+            if (values.Count == 1)
+                return values;
 
-        protected override List<SensorHistoryData> ProcessHistoryInternal(List<SensorHistoryData> uncompressedData,
-            TimeSpan compressionInterval)
-        {
-            if(uncompressedData == null || !uncompressedData.Any())
-                return new List<SensorHistoryData>();
+            var result = new List<BaseValue>();
 
-            if (uncompressedData.Count == 1)
-                return uncompressedData;
+            var initTime = (values.First() as BarBaseValue).OpenTime;
+            var summary = new SummaryBarItem<int>() { Count = 0, Max = int.MinValue, Min = int.MaxValue, OpenTime = initTime, CloseTime = initTime };
+            var nextBarTime = initTime + compressionInterval;
 
-            List<IntBarSensorData> typedDatas = GetTypeDatas(uncompressedData);
-            List<SensorHistoryData> result = new List<SensorHistoryData>();
-            IntBarSensorData currentItem = new IntBarSensorData() {Count = 0, Max = int.MinValue, Min = int.MaxValue};
-            DateTime startDate = typedDatas[0].StartTime;
-            int processingCount = 0;
-            bool needToAddCurrentAsSingle = false;
-            bool addingCurrent = false;
-            for (int i = 0; i < typedDatas.Count; ++i)
+            for (int i = 0; i < values.Count; ++i)
             {
-                //We must add current processed object if its period bigger than interval,
-                //or if current object is longer than than interval, or if we are processing the last object
-                if (typedDatas[i].EndTime - typedDatas[i].StartTime > compressionInterval ||
-                    (processingCount > 0 && startDate + compressionInterval < typedDatas[i].EndTime
-                                         && i == typedDatas.Count - 1))
-                {
-                    needToAddCurrentAsSingle = true;
-                }
-
-                //Just process current bar as usual if it is not the last & in the interval
-                if (typedDatas[i].EndTime < startDate + compressionInterval && i == typedDatas.Count - 1)
-                {
-                    AddDataToList(typedDatas[i]);
-                    ProcessItem(typedDatas[i], currentItem);
-                    addingCurrent = true;
-                }
-
-                //Finish bar if necessary. We finish previous bar if we are adding current as single
-                //or if we are processing the last bar or if next bar is not in the interval
-                if (i > 0 && (startDate + compressionInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
-                    || i == typedDatas.Count - 1))
-                {
-                    if (processingCount > 0)
-                    {
-                        AddDataFromLists(currentItem);
-                        ClearLists();
-                        currentItem.StartTime = startDate;
-                        currentItem.EndTime = addingCurrent ? typedDatas[i].EndTime : typedDatas[i - 1].EndTime;
-                        result.Add(Convert(currentItem));
-                        currentItem = new IntBarSensorData() { Count = 0, Max = int.MinValue, Min = int.MaxValue };
-                        processingCount = 0;
-                    }
-                }
-
-                //We add current bar to list if needed, and proceed to the next one
-                if (needToAddCurrentAsSingle)
-                {
-                    result.Add(Convert(typedDatas[i]));
-                    needToAddCurrentAsSingle = false;
-                    if (i != typedDatas.Count - 1)
-                    {
-                        startDate = typedDatas[i + 1].StartTime;
-                        continue;
-                    }
-                }
-
-                //if (i == typedDatas.Count - 1)
-                //{
-                //    result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
-                //}
-
-                //Start new bar, might need this right after finished previous
-                //We start new bar if we finished previous and there are more objects in the list
-                //We continue after starting because we have already processed it
-                if (processingCount == 0 && i != typedDatas.Count - 1)
-                {
-                    startDate = typedDatas[i].StartTime;
-                    AddDataToList(typedDatas[i]);
-                    ProcessItem(typedDatas[i], currentItem);
-                    ++processingCount;
+                if (values[i] is not IntegerBarValue value || value.CloseTime == DateTime.MinValue)
                     continue;
+
+                if (summary.CloseTime + (value.CloseTime - value.OpenTime) <= nextBarTime)
+                {
+                    ProcessItem(value, summary);
                 }
-                
-                //If we did not finish previous bar and did not add current, just add currently processed bar
-                // and continue
-                AddDataToList(typedDatas[i]);
-                ProcessItem(typedDatas[i], currentItem);
-                ++processingCount;
+                else
+                {
+                    result.Add(Convert(summary));
+                    summary = new SummaryBarItem<int>() { Count = value.Count, Max = value.Max, Min = value.Min, OpenTime = value.OpenTime, CloseTime = value.CloseTime };
+                    while (nextBarTime <= summary.CloseTime)
+                        nextBarTime += compressionInterval;
+                }
             }
+
+            result.Add(Convert(summary));
+
+            //var openTime = (values.First() as BarBaseValue).OpenTime;
+            //int processingCount = 0;
+            //bool needToAddCurrentAsSingle = false;
+            //bool addingCurrent = false;
+
+            //for (int i = values.Count - 1; i >= 0; --i)
+            //{
+            //    if (values[i] is not IntegerBarValue value)
+            //        continue;
+
+            //    //We must add current processed object if its period bigger than interval,
+            //    //or if current object is longer than than interval, or if we are processing the last object
+            //    if (value.CloseTime - value.OpenTime > compressionInterval ||
+            //        (processingCount > 0 && openTime + compressionInterval < value.CloseTime && i == 0))
+            //    {
+            //        needToAddCurrentAsSingle = true;
+            //    }
+
+            //    //Just process current bar as usual if it is not the last & in the interval
+            //    if (value.CloseTime < openTime + compressionInterval && i == 0)
+            //    {
+            //        AddValueToList(value);
+            //        ProcessItem(value, summary);
+            //        addingCurrent = true;
+            //    }
+
+            //    //Finish bar if necessary. We finish previous bar if we are adding current as single
+            //    //or if we are processing the last bar or if next bar is not in the interval
+            //    if (i < values.Count - 1 && (openTime + compressionInterval < value.CloseTime || needToAddCurrentAsSingle || i == 0))
+            //    {
+            //        if (processingCount > 0)
+            //        {
+            //            AddValueFromLists(summary);
+            //            ClearLists();
+            //            summary.OpenTime = openTime;
+            //            summary.CloseTime = addingCurrent ? value.CloseTime : (values[i + 1] as BarBaseValue).CloseTime;
+            //            result.Add(Convert(summary));
+            //            summary = new SummaryBarItem<int>() { Count = 0, Max = int.MinValue, Min = int.MaxValue };
+            //            processingCount = 0;
+            //        }
+            //    }
+
+            //    //We add current bar to list if needed, and proceed to the next one
+            //    if (needToAddCurrentAsSingle)
+            //    {
+            //        result.Add(value);
+            //        needToAddCurrentAsSingle = false;
+            //        if (i != 0)
+            //        {
+            //            openTime = (values[i - 1] as BarBaseValue).OpenTime;
+            //            continue;
+            //        }
+            //    }
+
+            //    //Start new bar, might need this right after finished previous
+            //    //We start new bar if we finished previous and there are more objects in the list
+            //    //We continue after starting because we have already processed it
+            //    if (processingCount == 0 && i != 0)
+            //    {
+            //        openTime = value.OpenTime;
+            //        AddValueToList(value);
+            //        ProcessItem(value, summary);
+            //        ++processingCount;
+            //        continue;
+            //    }
+
+            //    //If we did not finish previous bar and did not add current, just add currently processed bar and continue
+            //    AddValueToList(value);
+            //    ProcessItem(value, summary);
+            //    ++processingCount;
+            //}
 
             return result;
         }
 
-        public override string GetCsvHistory(List<SensorHistoryData> originalData)
+        public override string GetCsvHistory(List<BaseValue> values)
         {
-            List<IntBarSensorData> typedDatas = GetTypeDatas(originalData);
-            StringBuilder sb = new StringBuilder();
-            sb.Append($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last{Environment.NewLine}");
-            for (int i = 0; i < typedDatas.Count; ++i)
+            var sb = new StringBuilder(values.Count);
+
+            sb.AppendLine($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last");
+            for (int i = 0; i < values.Count; ++i)
             {
-                sb.Append($"{i},{typedDatas[i].StartTime.ToUniversalTime():s},{typedDatas[i].EndTime.ToUniversalTime():s}" +
-                          $",{typedDatas[i].Min},{typedDatas[i].Max},{typedDatas[i].Mean},{typedDatas[i].Count}," +
-                          $"{typedDatas[i].LastValue}{Environment.NewLine}");
+                if (values[i] is IntegerBarValue value)
+                    sb.AppendLine($"{i},{value.OpenTime.ToUniversalTime():s},{value.CloseTime.ToUniversalTime():s},{value.Min},{value.Max},{value.Mean},{value.Count},{value.LastValue}");
             }
 
             return sb.ToString();
         }
 
-        private List<IntBarSensorData> GetTypeDatas(List<SensorHistoryData> uncompressedData)
-        {
-            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
-            List<IntBarSensorData> typedDatas = new List<IntBarSensorData>();
-            foreach (var unProcessed in uncompressedData)
-            {
-                try
-                {
-                    typedDatas.Add(JsonSerializer.Deserialize<IntBarSensorData>(unProcessed.TypedData));
-                }
-                catch (Exception e)
-                { }
-            }
-
-            return typedDatas;
-        }
-        private SensorHistoryData Convert(IntBarSensorData typedData)
-        {
-            SensorHistoryData result = new SensorHistoryData();
-            result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Time = typedData.EndTime;
-            result.SensorType = SensorType.IntegerBarSensor;
-            return result;
-        }
-
-        /// <summary>
-        /// This method applies possible changes to the current data item for fields, for which
-        /// collecting datas is not required
-        /// </summary>
-        /// <param name="data">Currently processed data item</param>
-        /// <param name="currentItem">Current summary item</param>
-        private void ProcessItem(IntBarSensorData data, IntBarSensorData currentItem)
-        {
-            currentItem.Count += data.Count;
-            if (data.Max > currentItem.Max)
-                currentItem.Max = data.Max;
-
-            if (data.Min < currentItem.Min)
-                currentItem.Min = data.Min;
-        }
-
-        /// <summary>
-        /// Add all percentiles to united percentile list for later calculations of Q1, median and Q3
-        /// </summary>
-        /// <param name="data"></param>
-        private void AddDataToList(IntBarSensorData data)
+        private void AddValueToList(IntegerBarValue value)
         {
             try
             {
-                _MeanList.Add(new KeyValuePair<int, int>(data.Mean, data.Count));
-                if (data.Percentiles != null && data.Percentiles.Any())
-                    _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
+                _MeanList.Add(new KeyValuePair<int, int>(value.Mean, value.Count));
             }
-            catch (Exception e)
-            {
-                
-            }
+            catch { }
         }
 
         /// <summary>
         /// Set fields, for which collecting lists of values is required
         /// </summary>
-        /// <param name="currentItem"></param>
-        private void AddDataFromLists(IntBarSensorData currentItem)
+        /// <param name="summary"></param>
+        private void AddValueFromLists(SummaryBarItem<int> summary)
         {
-            currentItem.Mean = CountMean(_MeanList);
-            currentItem.Percentiles = new List<PercentileValueInt>();
-            //Just add values that "seem to be fine" if there is no more data
-            if (_percentilesList.Count < 3)
-            {
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = currentItem.Mean });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = currentItem.Min });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = currentItem.Max });
-                return;
-            }
-
-            _percentilesList.Sort();
-            //Special case where Q1 and Q3 calculations may fail
-            if (_percentilesList.Count == 3)
-            {
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = _percentilesList[1] });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = _percentilesList[0] });
-                currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = _percentilesList[2] });
-                return;
-            }
-
-            //Calculate all percentiles normally
-            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.5, Value = CountMedian() });
-            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.25, Value = CountQ1() });
-            currentItem.Percentiles.Add(new PercentileValueInt() { Percentile = 0.75, Value = CountQ3() });
+            summary.Mean = CountMean(_MeanList);
         }
-        
+
+        private void ClearLists()
+        {
+            _MeanList.Clear();
+        }
+
+        private IntegerBarValue Convert(SummaryBarItem<int> summary)
+        {
+            var result = new IntegerBarValue()
+            {
+                Count = summary.Count,
+                OpenTime = summary.OpenTime,
+                CloseTime = summary.CloseTime,
+                Min = summary.Min,
+                Max = summary.Max,
+                Mean = CountMean(_MeanList),//summary.Mean,
+                Time = summary.CloseTime,
+            };
+
+            ClearLists();
+
+            return result;
+        }
+
+        /// <summary>
+        /// This method applies possible changes to the current data item for fields, for which collecting datas is not required
+        /// </summary>
+        /// <param name="value">Currently processed data item</param>
+        /// <param name="summary">Current summary item</param>
+        private void ProcessItem(IntegerBarValue value, SummaryBarItem<int> summary)
+        {
+            summary.CloseTime = value.CloseTime;
+            summary.Count += value.Count;
+
+            if (value.Max > summary.Max)
+                summary.Max = value.Max;
+
+            if (value.Min < summary.Min)
+                summary.Min = value.Min;
+
+            AddValueToList(value);
+        }
+
         /// <summary>
         /// Count mean from the list of all means
         /// </summary>
         /// <param name="means"></param>
         /// <returns></returns>
-        private int CountMean(List<KeyValuePair<int, int>> means)
+        private static int CountMean(List<KeyValuePair<int, int>> means)
         {
             if (means.Count < 1)
                 return 0;
@@ -247,71 +217,5 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
             return (int)(sum / commonCount);
         }
-
-        /// <summary>
-        /// Get median for the list of values, use average for odd index
-        /// </summary>
-        /// <returns>median from the percentiles list</returns>
-        private int CountMedian()
-        {
-            if (_percentilesList.Count % 2 == 1)
-            {
-                return _percentilesList[(_percentilesList.Count - 1) / 2];
-            }
-
-            var ind = _percentilesList.Count / 2;
-            return (_percentilesList[ind - 1] + _percentilesList[ind]) / 2;
-        }
-
-        /// <summary>
-        /// Get Q1 for the list of values, use average for odd index
-        /// </summary>
-        /// <returns>Q1 from the percentiles list</returns>
-        private int CountQ1()
-        {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
-
-            if (middle % 2 == 0)
-            {
-                int quart = middle / 2;
-                return (_percentilesList[quart] + _percentilesList[quart - 1]) / 2;
-            }
-
-            return _percentilesList[(middle - 1) / 2];
-        }
-
-        /// <summary>
-        /// Get Q3 for the list of values, use average for odd index
-        /// </summary>
-        /// <returns>Q3 from the percentiles list</returns>
-        private int CountQ3()
-        {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
-
-            if (middle % 2 == 0)
-            {
-                int index = _percentilesList.Count % 2 == 0
-                    ? (middle + _percentilesList.Count) / 2
-                    : (middle + _percentilesList.Count + 1) / 2;
-                return (_percentilesList[index] + _percentilesList[index + 1]) / 2;
-            }
-
-            return _percentilesList.Count % 2 == 0
-                ? _percentilesList[(middle + _percentilesList.Count + 1) / 2]
-                : _percentilesList[(middle + _percentilesList.Count) / 2];
-        }
-        private void ClearLists()
-        {
-            //_Q1List.Clear();
-            //_Q3List.Clear();
-            //_MedianList.Clear();
-            _percentilesList.Clear();
-            _MeanList.Clear();
-        }
-        //private void AddData(IntBarSensorData currentItem,)
     }
 }

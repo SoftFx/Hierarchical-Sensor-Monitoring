@@ -7,7 +7,6 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.MonitoringCoreInterface;
-using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -45,8 +44,6 @@ namespace HSMServer
             services.AddFluentValidation();
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
-
-            services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
 
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
             services.AddSingleton<IUserManager, UserManager>();

@@ -1,29 +1,17 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Model.Sensor;
+﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal class DoubleBarHistoryProcessor : HistoryProcessorBase
     {
         private readonly NumberFormatInfo _format;
-        //private readonly List<double> _Q1List = new List<double>();
-        //private readonly List<double> _Q3List = new List<double>();
-        //private readonly List<double> _MedianList = new List<double>();
-        private readonly List<double> _percentilesList = new List<double>();
-        private readonly List<KeyValuePair<double, int>> _MeanList = new List<KeyValuePair<double, int>>();
-        public DoubleBarHistoryProcessor(TimeSpan periodInterval) : base(periodInterval)
-        {
-            _format = new NumberFormatInfo();
-            _format.NumberDecimalSeparator = ".";
-        }
+        private readonly List<KeyValuePair<double, int>> _MeanList = new();
+
 
         public DoubleBarHistoryProcessor()
         {
@@ -31,179 +19,167 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             _format.NumberDecimalSeparator = ".";
         }
 
-        protected override List<SensorHistoryData> ProcessHistoryInternal(List<SensorHistoryData> uncompressedData, 
-            TimeSpan compressionInterval)
+
+        protected override List<BaseValue> ProcessHistory(List<BaseValue> values, TimeSpan compressionInterval)
         {
-            if (uncompressedData == null || !uncompressedData.Any())
-                return new List<SensorHistoryData>();
+            if (values == null || values.Count == 0)
+                return new();
 
-            if (uncompressedData.Count == 1)
-                return uncompressedData;
+            if (values.Count == 1)
+                return values;
 
-            List<DoubleBarSensorData> typedDatas = GetTypeDatas(uncompressedData);
-            List<SensorHistoryData> result = new List<SensorHistoryData>();
-            DoubleBarSensorData currentItem = new DoubleBarSensorData() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
-            DateTime startDate = typedDatas[0].StartTime;
-            int processingCount = 0;
-            bool needToAddCurrentAsSingle = false;
-            bool addingCurrent = false;
-            for (int i = 0; i < typedDatas.Count; ++i)
+            var result = new List<BaseValue>();
+
+            var initTime = (values.First() as BarBaseValue).OpenTime;
+            var summary = new SummaryBarItem<double>() { Count = 0, Max = int.MinValue, Min = int.MaxValue, OpenTime = initTime, CloseTime = initTime };
+            var nextBarTime = initTime + compressionInterval;
+
+            for (int i = 0; i < values.Count; ++i)
             {
-                if (typedDatas[i].EndTime - typedDatas[i].StartTime > compressionInterval ||
-                    (processingCount > 0 && startDate + compressionInterval < typedDatas[i].EndTime
-                                         && i == typedDatas.Count - 1))
-                {
-                    needToAddCurrentAsSingle = true;
-                }
-
-                if (typedDatas[i].EndTime < startDate + compressionInterval && i == typedDatas.Count - 1)
-                {
-                    AddDataToList(typedDatas[i]);
-                    ProcessItem(typedDatas[i], currentItem);
-                    addingCurrent = true;
-                }
-                //Finish bar if necessary
-                if (i > 0 && (startDate + compressionInterval < typedDatas[i].EndTime || needToAddCurrentAsSingle
-                    || i == typedDatas.Count - 1))
-                {
-                    if (processingCount > 0)
-                    {
-                        AddDataFromLists(currentItem);
-                        ClearLists();
-                        currentItem.StartTime = startDate;
-                        currentItem.EndTime = addingCurrent ? typedDatas[i].EndTime : typedDatas[i - 1].EndTime;
-                        result.Add(Convert(currentItem));
-                        currentItem = new DoubleBarSensorData() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
-                        processingCount = 0;
-                    }
-                }
-
-                if (needToAddCurrentAsSingle)
-                {
-                    result.Add(Convert(typedDatas[i]));
-                    needToAddCurrentAsSingle = false;
-                    if (i != typedDatas.Count - 1)
-                    {
-                        startDate = typedDatas[i + 1].StartTime;
-                        continue;
-                    }
-                }
-
-                //if (i == typedDatas.Count - 1)
-                //{
-                //    result.Add(Convert(typedDatas[i], typedDatas[i].EndTime));
-                //}
-
-                //Start new bar, might need this right after finished previous
-                if (processingCount == 0 && i != typedDatas.Count - 1)
-                {
-                    startDate = typedDatas[i].StartTime;
-                    AddDataToList(typedDatas[i]);
-                    ProcessItem(typedDatas[i], currentItem);
-                    ++processingCount;
+                if (values[i] is not DoubleBarValue value || value.CloseTime == DateTime.MinValue)
                     continue;
-                }
 
-                AddDataToList(typedDatas[i]);
-                ProcessItem(typedDatas[i], currentItem);
-                ++processingCount;
+                if (summary.CloseTime + (value.CloseTime - value.OpenTime) <= nextBarTime)
+                {
+                    ProcessItem(value, summary);
+                }
+                else
+                {
+                    result.Add(Convert(summary));
+                    summary = new SummaryBarItem<double>() { Count = value.Count, Max = value.Max, Min = value.Min, OpenTime = value.OpenTime, CloseTime = value.CloseTime };
+                    while (nextBarTime <= summary.CloseTime)
+                        nextBarTime += compressionInterval;
+                }
             }
+
+            result.Add(Convert(summary));
+
+
+            //var result = new List<BaseValue>();
+
+            //var summary = new SummaryBarItem<double>() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
+            //var openTime = (values.Last() as BarBaseValue).OpenTime;
+            //int processingCount = 0;
+            //bool needToAddCurrentAsSingle = false;
+            //bool addingCurrent = false;
+
+            //for (int i = values.Count - 1; i >= 0; --i)
+            //{
+            //    if (values[i] is not DoubleBarValue value)
+            //        continue;
+
+            //    if (value.CloseTime - value.OpenTime > compressionInterval ||
+            //        (processingCount > 0 && openTime + compressionInterval < value.CloseTime && i == 0))
+            //    {
+            //        needToAddCurrentAsSingle = true;
+            //    }
+
+            //    if (value.CloseTime < openTime + compressionInterval && i == 0)
+            //    {
+            //        AddValueToList(value);
+            //        ProcessItem(value, summary);
+            //        addingCurrent = true;
+            //    }
+
+            //    if (i < values.Count - 1 && (openTime + compressionInterval < value.CloseTime || needToAddCurrentAsSingle || i == 0))
+            //    {
+            //        if (processingCount > 0)
+            //        {
+            //            AddValueFromLists(summary);
+            //            ClearLists();
+            //            summary.OpenTime = openTime;
+            //            summary.CloseTime = addingCurrent ? value.CloseTime : (values[i + 1] as BarBaseValue).CloseTime;
+            //            result.Add(Convert(summary));
+            //            summary = new SummaryBarItem<double>() { Count = 0, Max = double.MinValue, Min = double.MaxValue };
+            //            processingCount = 0;
+            //        }
+            //    }
+
+            //    if (needToAddCurrentAsSingle)
+            //    {
+            //        result.Add(value);
+            //        needToAddCurrentAsSingle = false;
+            //        if (i != 0)
+            //        {
+            //            openTime = (values[i - 1] as BarBaseValue).OpenTime;
+            //            continue;
+            //        }
+            //    }
+
+            //    if (processingCount == 0 && i != 0)
+            //    {
+            //        openTime = value.OpenTime;
+            //        AddValueToList(value);
+            //        ProcessItem(value, summary);
+            //        ++processingCount;
+            //        continue;
+            //    }
+
+            //    AddValueToList(value);
+            //    ProcessItem(value, summary);
+            //    ++processingCount;
+            //}
+
             return result;
         }
 
-        public override string GetCsvHistory(List<SensorHistoryData> originalData)
+        public override string GetCsvHistory(List<BaseValue> values)
         {
-            List<DoubleBarSensorData> typedDatas = GetTypeDatas(originalData);
-            StringBuilder sb = new StringBuilder();
-            sb.Append($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last{Environment.NewLine}");
-            for (int i = 0; i < typedDatas.Count; ++i)
+            var sb = new StringBuilder(values.Count);
+
+            sb.AppendLine($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last");
+            for (int i = 0; i < values.Count; ++i)
             {
-                sb.Append($"{i},{typedDatas[i].StartTime.ToUniversalTime():s},{typedDatas[i].EndTime.ToUniversalTime():s}," +
-                          $"{typedDatas[i].Min.ToString(_format)},{typedDatas[i].Max.ToString(_format)}," +
-                          $"{typedDatas[i].Mean.ToString(_format)},{typedDatas[i].Count}," +
-                          $"{typedDatas[i].LastValue.ToString(_format)}{Environment.NewLine}");
+                if (values[i] is DoubleBarValue value)
+                    sb.AppendLine($"{i},{value.OpenTime.ToUniversalTime():s},{value.CloseTime.ToUniversalTime():s},{value.Min.ToString(_format)}," +
+                                  $"{value.Max.ToString(_format)},{value.Mean.ToString(_format)},{value.Count},{value.LastValue.ToString(_format)}");
             }
 
             return sb.ToString();
         }
 
-        private List<DoubleBarSensorData> GetTypeDatas(List<SensorHistoryData> uncompressedData)
-        {
-            uncompressedData.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
-            List<DoubleBarSensorData> typedDatas = new List<DoubleBarSensorData>();
-            foreach (var unProcessed in uncompressedData)
-            {
-                try
-                {
-                    typedDatas.Add(JsonSerializer.Deserialize<DoubleBarSensorData>(unProcessed.TypedData));
-                }
-                catch (Exception e)
-                { }
-            }
-
-            return typedDatas;
-        }
-
-        private SensorHistoryData Convert(DoubleBarSensorData typedData)
-        {
-            SensorHistoryData result = new SensorHistoryData();
-            result.TypedData = JsonSerializer.Serialize(typedData);
-            result.Time = typedData.EndTime;
-            result.SensorType = SensorType.DoubleBarSensor;
-            return result;
-        }
-
-        private void ProcessItem(DoubleBarSensorData data, DoubleBarSensorData currentItem)
-        {
-            currentItem.Count += data.Count;
-            if (data.Max > currentItem.Max)
-                currentItem.Max = data.Max;
-
-            if (data.Min < currentItem.Min)
-                currentItem.Min = data.Min;
-        }
-
-        private void AddDataToList(DoubleBarSensorData data)
+        private void AddValueToList(DoubleBarValue value)
         {
             try
             {
-                _MeanList.Add(new KeyValuePair<double, int>(data.Mean, data.Count));
-                if(data.Percentiles != null && data.Percentiles.Any())
-                    _percentilesList.AddRange(data.Percentiles.Select(p => p.Value));
+                _MeanList.Add(new KeyValuePair<double, int>(value.Mean, value.Count));
             }
-            catch (Exception e)
-            {
-                
-            }
+            catch { }
         }
 
-        private void AddDataFromLists(DoubleBarSensorData currentItem)
+        private void AddValueFromLists(SummaryBarItem<double> summary)
         {
-            currentItem.Mean = CountMean(_MeanList);
-            currentItem.Percentiles = new List<PercentileValueDouble>();
-            //var median = _MedianList[(int) (_MedianList.Count / 2)];
-            if (_percentilesList.Count < 3)
-            {
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = currentItem.Mean });
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = currentItem.Min });
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = currentItem.Max });
-                return;
-            }
-
-            _percentilesList.Sort();
-            if (_percentilesList.Count == 3)
-            {
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = _percentilesList[1] });
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = _percentilesList[0] });
-                currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = _percentilesList[2] });
-                return;
-            }
-            currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.5, Value = CountMedian() });
-            currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.25, Value = CountQ1() });
-            currentItem.Percentiles.Add(new PercentileValueDouble() { Percentile = 0.75, Value = CountQ3() });
+            summary.Mean = CountMean(_MeanList);
         }
 
-        private double CountMean(List<KeyValuePair<double, int>> means)
+        private void ClearLists()
+        {
+            _MeanList.Clear();
+        }
+
+        private static DoubleBarValue Convert(SummaryBarItem<double> summary) =>
+          new()
+          {
+              Count = summary.Count,
+              OpenTime = summary.OpenTime,
+              CloseTime = summary.CloseTime,
+              Min = summary.Min,
+              Max = summary.Max,
+              Mean = summary.Mean,
+              Time = summary.CloseTime,
+          };
+
+        private static void ProcessItem(DoubleBarValue value, SummaryBarItem<double> summary)
+        {
+            summary.Count += value.Count;
+            if (value.Max > summary.Max)
+                summary.Max = value.Max;
+
+            if (value.Min < summary.Min)
+                summary.Min = value.Min;
+        }
+
+        private static double CountMean(List<KeyValuePair<double, int>> means)
         {
             if (means.Count < 1)
                 return 0.0;
@@ -220,58 +196,6 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 return 0.0;
 
             return sum / commonCount;
-        }
-        private double CountMedian()
-        {
-            if (_percentilesList.Count % 2 == 1)
-            {
-                return _percentilesList[(_percentilesList.Count - 1) / 2];
-            }
-
-            var ind = _percentilesList.Count / 2;
-            return (_percentilesList[ind - 1] + _percentilesList[ind]) / 2;
-        }
-
-        private double CountQ1()
-        {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
-
-            if (middle % 2 == 0)
-            {
-                int quart = middle / 2;
-                return (_percentilesList[quart] + _percentilesList[quart - 1]) / 2;
-            }
-
-            return _percentilesList[(middle - 1) / 2];
-        }
-
-        private double CountQ3()
-        {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
-
-            if (middle % 2 == 0)
-            {
-                int index = _percentilesList.Count % 2 == 0
-                    ? (middle + _percentilesList.Count) / 2
-                    : (middle + _percentilesList.Count + 1) / 2;
-                return (_percentilesList[index] + _percentilesList[index + 1]) / 2;
-            }
-
-            return _percentilesList.Count % 2 == 0
-                ? _percentilesList[(middle + _percentilesList.Count + 1) / 2]
-                : _percentilesList[(middle + _percentilesList.Count) / 2];
-        }
-        private void ClearLists()
-        {
-            //_Q1List.Clear();
-            //_Q3List.Clear();
-            //_MedianList.Clear();
-            _percentilesList.Clear();
-            _MeanList.Clear();
         }
     }
 }

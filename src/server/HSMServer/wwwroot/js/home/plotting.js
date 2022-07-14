@@ -1,7 +1,7 @@
 ﻿function displayGraph(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
 
-    //console.log('converted graph data:', convertedData);
+    console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     if (zoomData === undefined || zoomData === null) {
         Plotly.newPlot(graphElementId, convertedData);    
@@ -46,19 +46,19 @@ function convertToGraphData(graphData, graphType, graphName) {
             timeList = getTimeList(escapedData);
             return getSimpleGraphData(timeList, data, "bar");
         case "1":
-            data = getIntegersData(escapedData);
+            data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
             return getSimpleGraphData(timeList, data, "scatter");
         case "2":
-            data = getDoublesData(escapedData);
+            data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
             return getSimpleGraphData(timeList, data, "scatter");
         case "4":
-            deserialized = getDeserializedBarsData(escapedData);
-            return createBarGraphData(deserialized, graphName);
+            //deserialized = getDeserializedBarsData(escapedData);
+            return createBarGraphData(escapedData, graphName);
         case "5":
-            deserialized = getDeserializedBarsData(escapedData);
-            return createBarGraphData(deserialized, graphName);
+            //deserialized = getDeserializedBarsData(escapedData);
+            return createBarGraphData(escapedData, graphName);
         default:
             return undefined;
     }
@@ -67,8 +67,8 @@ function convertToGraphData(graphData, graphType, graphName) {
 //Boolean 
 {
     function getBoolData(escapedItems) {
-        let bools = escapedItems.map(function(i) {
-            let currentBoolean = JSON.parse(i.typedData).BoolValue === true;
+        let bools = escapedItems.map(function (i) {
+            let currentBoolean = i.value === true;
             return currentBoolean ? 1 : 0;
         });
 
@@ -79,6 +79,9 @@ function convertToGraphData(graphData, graphType, graphName) {
 //Simple plots: integer and double
 {
     function getSimpleGraphData(timeList, dataList, chartType) {
+        console.log(timeList);
+        console.log(dataList);
+        console.log(chartType);
         let data = [
             {
                 x: timeList,
@@ -90,23 +93,12 @@ function convertToGraphData(graphData, graphType, graphName) {
         return data;
     }
 
-    function getIntegersData(escapedItems) {
-        let integers = escapedItems.map(function (i) {
-            //let date = new Date();
-            //console.log(i);
-            //console.log(date - new Date(Date.parse(i.time)));
-            return JSON.parse(i.typedData).IntValue;
+    function getNumbersData(escapedItems) {
+        let numbers = escapedItems.map(function (i) {
+            return i.value;
         });
 
-        return integers;
-    }
-
-    function getDoublesData(escapedItems) {
-        let doubles = escapedItems.map(function (i) {
-            return JSON.parse(i.typedData).DoubleValue;
-        });
-
-        return doubles;
+        return numbers;
     }
 
     function getTimeList(escapedItems) {
@@ -119,45 +111,48 @@ function convertToGraphData(graphData, graphType, graphName) {
 //Boxplots
 {
 
-    function getDeserializedBarsData(escapedItems) {
-        let deserialized = escapedItems.map(function (i) {
-            return JSON.parse(i.typedData);
-        });
+    //function getDeserializedBarsData(escapedItems) {
+    //    let deserialized = escapedItems.map(function (i) {
+    //        return JSON.parse(i.typedData);
+    //    });
 
-        return deserialized;
-    }
+    //    return deserialized;
+    //}
 
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
-            if (d.EndTime.startsWith("0001")) {
-                return d.StartTime;
+            if (d.closeTime.toString().startsWith("0001")) {
+                return d.openTime;
             }
-            return d.EndTime;
+            return d.closeTime;
         });
     }
 
     function createBarGraphData(escapedBarsData, graphName) {
         let max = getBarsMax(escapedBarsData);
         let min = getBarsMin(escapedBarsData);
-        let median = getBarsMedian(escapedBarsData);
-        let q1 = getBarsQ1(escapedBarsData);
-        let q3 = getBarsQ3(escapedBarsData);
+        //let median = getBarsMedian(escapedBarsData);
+        //let q1 = getBarsQ1(escapedBarsData);
+        //let q3 = getBarsQ3(escapedBarsData);
         let mean = getBarsMean(escapedBarsData);
         let timeList = getTimeFromBars(escapedBarsData);
+
         let data =
         [
             {
                 "type": "box",
                 "name": graphName,
-                "q1": q1,
-                "median": median,
-                "q3": q3,
+                "q1": min,
+                "median": mean,
+                "q3": max,
                 "mean": mean,
                 "lowerfence": min,
                 "upperfence": max,
                 "x": timeList
             }
         ];
+
+        console.log(data);
 
         return data;
     }
@@ -166,55 +161,55 @@ function convertToGraphData(graphData, graphType, graphName) {
     {
         function getBarsMin(escapedBarsData) {
             return escapedBarsData.map(function (d) {
-                return d.Min;
+                return d.min;
             });
         }
 
         function getBarsMax(escapedBarsData) {
             return escapedBarsData.map(function (d) {
-                return d.Max;
+                return d.max;
             });
         }
 
-        function getBarsMedian(escapedBarsData) {
-            let medians = new Array();
+        //function getBarsMedian(escapedBarsData) {
+        //    let medians = new Array();
 
-            escapedBarsData.map(function (d) {
-                d.Percentiles.filter(p => p.Percentile === 0.5).map(function (p) {
-                    medians.push(p.Value);
-                });
-            });
+        //    escapedBarsData.map(function (d) {
+        //        d.Percentiles.filter(p => p.Percentile === 0.5).map(function (p) {
+        //            medians.push(p.Value);
+        //        });
+        //    });
 
-            return medians;
-        }
+        //    return medians;
+        //}
 
-        function getBarsQ1(escapedBarsData) {
-            let q1s = new Array();
+        //function getBarsQ1(escapedBarsData) {
+        //    let q1s = new Array();
 
-            escapedBarsData.map(function (d) {
-                d.Percentiles.filter(p => p.Percentile === 0.25).map(function (p) {
-                    q1s.push(p.Value);
-                });
-            });
+        //    escapedBarsData.map(function (d) {
+        //        d.Percentiles.filter(p => p.Percentile === 0.25).map(function (p) {
+        //            q1s.push(p.Value);
+        //        });
+        //    });
 
-            return q1s;
-        }
+        //    return q1s;
+        //}
 
-        function getBarsQ3(escapedBarsData) {
-            let q3s = new Array();
+        //function getBarsQ3(escapedBarsData) {
+        //    let q3s = new Array();
 
-            escapedBarsData.map(function (d) {
-                d.Percentiles.filter(p => p.Percentile === 0.75).map(function (p) {
-                    q3s.push(p.Value);
-                });
-            });
+        //    escapedBarsData.map(function (d) {
+        //        d.Percentiles.filter(p => p.Percentile === 0.75).map(function (p) {
+        //            q3s.push(p.Value);
+        //        });
+        //    });
 
-            return q3s;
-        }
+        //    return q3s;
+        //}
 
         function getBarsMean(escapedBarsData) {
             return escapedBarsData.map(function (d) {
-                return d.Mean;
+                return d.mean;
             });
         }
     }
