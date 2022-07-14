@@ -66,16 +66,16 @@ namespace HSMServer.Core.Cache.Entities
             }
         }
 
-        internal SensorModel(SensorValueBase sensorValue, string productName,
-            DateTime timeCollected, ValidationResult validationResult)
-        {
-            Id = Guid.NewGuid();
-            SensorName = GetSensorName(sensorValue.Path);
-            ProductName = productName;
-            Path = sensorValue.Path;
+        //internal SensorModel(SensorValueBase sensorValue, string productName,
+        //    DateTime timeCollected, ValidationResult validationResult)
+        //{
+        //    Id = Guid.NewGuid();
+        //    SensorName = GetSensorName(sensorValue.Path);
+        //    ProductName = productName;
+        //    Path = sensorValue.Path;
 
-            UpdateData(sensorValue, timeCollected, validationResult);
-        }
+        //    UpdateData(sensorValue, timeCollected, validationResult);
+        //}
 
 
         internal void AddParent(ProductModel product) => ParentProduct = product;
@@ -87,24 +87,24 @@ namespace HSMServer.Core.Cache.Entities
             Unit = sensor.Unit;
         }
 
-        internal void UpdateData(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
-        {
-            if (sensorValue is FileSensorBytesValue fileSensor)
-            {
-                OriginalFileSensorContentSize = fileSensor.FileContent.Length;
-                sensorValue = fileSensor.CompressContent();
-            }
+        //internal void UpdateData(SensorValueBase sensorValue, DateTime timeCollected, ValidationResult validationResult)
+        //{
+        //    if (sensorValue is FileSensorBytesValue fileSensor)
+        //    {
+        //        OriginalFileSensorContentSize = fileSensor.FileContent.Length;
+        //        sensorValue = fileSensor.CompressContent();
+        //    }
 
-            Description = sensorValue.Description;
-            SensorType = SensorTypeFactory.GetSensorType(sensorValue);
-            TypedData = TypedDataFactory.GetTypedData(sensorValue);
-            SensorTime = sensorValue.Time;
-            LastUpdateTime = timeCollected;
-            ValidationError = validationResult.Error;
+        //    Description = sensorValue.Description;
+        //    SensorType = SensorTypeFactory.GetSensorType(sensorValue);
+        //    TypedData = TypedDataFactory.GetTypedData(sensorValue);
+        //    SensorTime = sensorValue.Time;
+        //    LastUpdateTime = timeCollected;
+        //    ValidationError = validationResult.Error;
 
-            var sensorStatus = GetSensorStatus(validationResult);
-            Status = sensorStatus > sensorValue.Status ? sensorStatus : sensorValue.Status;
-        }
+        //    var sensorStatus = GetSensorStatus(validationResult);
+        //    Status = sensorStatus > sensorValue.Status ? sensorStatus : sensorValue.Status;
+        //}
 
         internal bool IsSensorMetadataUpdated(SensorValueBase sensorValue) =>
             sensorValue.Description != Description || SensorTypeFactory.GetSensorType(sensorValue) != SensorType;

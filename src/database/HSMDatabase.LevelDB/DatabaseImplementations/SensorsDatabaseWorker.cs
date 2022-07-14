@@ -107,13 +107,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return GetValuesWithKeyEqualOrGreater(bytesKey, path);
         }
 
-        public List<byte[]> GetAllSensorValuesBytes(string productName, string path)
-        {
-            var bytesKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
-
-            return GetValuesBytesWithKeyEqualOrGreater(bytesKey);
-        }
-
         public List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from)
         {
             var readKey = PrefixConstants.GetSensorWriteValueKey(productName, path, from);
@@ -178,12 +171,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
+        public List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to)
+        {
+            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, from));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
+            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+
+            try
+            {
+                var result = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
+                result.Reverse();
+
+                return result;
+            }
+            catch (Exception)
+            { }
+
+            return new();
+        }
+
         public List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count)
         {
-            var result = new List<byte[]>(count);
-
-            byte[] toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
-            byte[] startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
+            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
 
             try
             {
@@ -192,7 +202,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception)
             { }
 
-            return result;
+            return new();
         }
 
         private List<SensorDataEntity> GetValuesWithKeyEqualOrGreater(byte[] key, string path)
@@ -221,20 +231,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return result;
-        }
-
-        private List<byte[]> GetValuesBytesWithKeyEqualOrGreater(byte[] key)
-        {
-            try
-            {
-                return _database.GetAllStartingWith(key);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read all sensors values bytes for {Encoding.UTF8.GetString(key)}");
-            }
-
-            return new List<byte[]>();
         }
 
         public void Dispose() => _database.Dispose();

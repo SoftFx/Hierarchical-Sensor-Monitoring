@@ -20,6 +20,8 @@ namespace HSMDatabase.AccessManager
 
         byte[] GetLatestValue(string sensorId);
 
-        List<byte[]> GetLatestValues(string sensorId, byte[] to, int count);
+        List<byte[]> GetValues(string sensorId, byte[] to, int count);
+
+        List<byte[]> GetValues(string sensorId, byte[] from, byte[] to);
     }
 }

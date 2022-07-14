@@ -135,21 +135,27 @@ namespace HSMServer.Controllers
         public HtmlString History([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.EncodedId, out string product, out string path);
-            return GetHistory(product, path, model.Type, model.From, model.To,
+            return GetHistory(model.EncodedId, product, path, model.Type, model.From, model.To,
                 GetPeriodType(model.From, model.To));
         }
 
         [HttpPost]
         public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+
             ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
             return new HtmlString(TableHelper.CreateHistoryTable(result, encodedId));
         }
 
-        private HtmlString GetHistory(string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
+        private HtmlString GetHistory(string encodedId, string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetSensorValues(sensorId, from.ToUniversalTime(), to.ToUniversalTime());
+
             List<SensorHistoryData> unprocessedData =
                 _sensorsInterface.GetSensorHistory(product, path, from.ToUniversalTime(), to.ToUniversalTime());
 
@@ -176,20 +182,26 @@ namespace HSMServer.Controllers
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
             ParseProductAndPath(model.EncodedId, out string product, out string path);
-            return GetRawHistory(product, path, model.Type, model.From, model.To);
+            return GetRawHistory(model.EncodedId, product, path, model.Type, model.From, model.To);
         }
 
         [HttpPost]
         public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+
             ParseProductAndPath(encodedId, out string product, out string path);
             var result = _sensorsInterface.GetAllSensorHistory(product, path);
 
             return new JsonResult(result);
         }
 
-        private JsonResult GetRawHistory(string product, string path, int type, DateTime from, DateTime to)
+        private JsonResult GetRawHistory(string encodedId, string product, string path, int type, DateTime from, DateTime to)
         {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+            var values = _treeValuesCache.GetSensorValues(sensorId, from.ToUniversalTime(), to.ToUniversalTime());
+
             List<SensorHistoryData> unprocessedData =
                 _sensorsInterface.GetSensorHistory(product, path, from.ToUniversalTime(), to.ToUniversalTime());
 
