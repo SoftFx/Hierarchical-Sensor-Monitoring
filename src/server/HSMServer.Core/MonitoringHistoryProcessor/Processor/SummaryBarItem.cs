@@ -1,8 +1,10 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
-    internal class SummaryBarItem<T> where T : struct
+    internal sealed class SummaryBarItem<T> where T : struct
     {
         public int Count { get; set; }
 
@@ -15,5 +17,17 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         public T Max { get; set; }
 
         public T Mean { get; set; }
+
+        public Dictionary<double, T> Percentiles { get; set; }
+
+
+        public SummaryBarItem(BarBaseValue<T> value)
+        {
+            Count = value.Count;
+            Max = value.Max;
+            Min = value.Min;
+            OpenTime = value.OpenTime;
+            CloseTime = value.CloseTime;
+        }
     }
 }

@@ -1,7 +1,7 @@
 ﻿function displayGraph(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
 
-    console.log('converted graph data:', convertedData);
+    //console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     if (zoomData === undefined || zoomData === null) {
         Plotly.newPlot(graphElementId, convertedData);    
@@ -79,9 +79,6 @@ function convertToGraphData(graphData, graphType, graphName) {
 //Simple plots: integer and double
 {
     function getSimpleGraphData(timeList, dataList, chartType) {
-        console.log(timeList);
-        console.log(dataList);
-        console.log(chartType);
         let data = [
             {
                 x: timeList,
@@ -131,9 +128,9 @@ function convertToGraphData(graphData, graphType, graphName) {
     function createBarGraphData(escapedBarsData, graphName) {
         let max = getBarsMax(escapedBarsData);
         let min = getBarsMin(escapedBarsData);
-        //let median = getBarsMedian(escapedBarsData);
-        //let q1 = getBarsQ1(escapedBarsData);
-        //let q3 = getBarsQ3(escapedBarsData);
+        let median = getBarsMedian(escapedBarsData);
+        let q1 = getBarsQ1(escapedBarsData);
+        let q3 = getBarsQ3(escapedBarsData);
         let mean = getBarsMean(escapedBarsData);
         let timeList = getTimeFromBars(escapedBarsData);
 
@@ -142,17 +139,15 @@ function convertToGraphData(graphData, graphType, graphName) {
             {
                 "type": "box",
                 "name": graphName,
-                "q1": min,
-                "median": mean,
-                "q3": max,
+                "q1": q1,
+                "median": median,
+                "q3": q3,
                 "mean": mean,
                 "lowerfence": min,
                 "upperfence": max,
                 "x": timeList
             }
         ];
-
-        console.log(data);
 
         return data;
     }
@@ -171,41 +166,35 @@ function convertToGraphData(graphData, graphType, graphName) {
             });
         }
 
-        //function getBarsMedian(escapedBarsData) {
-        //    let medians = new Array();
+        function getBarsMedian(escapedBarsData) {
+            let medians = new Array();
 
-        //    escapedBarsData.map(function (d) {
-        //        d.Percentiles.filter(p => p.Percentile === 0.5).map(function (p) {
-        //            medians.push(p.Value);
-        //        });
-        //    });
+            escapedBarsData.map(function (d) {
+                medians.push(d.percentiles[0.5]);
+            });
 
-        //    return medians;
-        //}
+            return medians;
+        }
 
-        //function getBarsQ1(escapedBarsData) {
-        //    let q1s = new Array();
+        function getBarsQ1(escapedBarsData) {
+            let q1s = new Array();
 
-        //    escapedBarsData.map(function (d) {
-        //        d.Percentiles.filter(p => p.Percentile === 0.25).map(function (p) {
-        //            q1s.push(p.Value);
-        //        });
-        //    });
+            escapedBarsData.map(function (d) {
+                q1s.push(d.percentiles[0.25]);
+            });
 
-        //    return q1s;
-        //}
+            return q1s;
+        }
 
-        //function getBarsQ3(escapedBarsData) {
-        //    let q3s = new Array();
+        function getBarsQ3(escapedBarsData) {
+            let q3s = new Array();
 
-        //    escapedBarsData.map(function (d) {
-        //        d.Percentiles.filter(p => p.Percentile === 0.75).map(function (p) {
-        //            q3s.push(p.Value);
-        //        });
-        //    });
+            escapedBarsData.map(function (d) {
+                q3s.push(d.percentiles[0.75]);
+            });
 
-        //    return q3s;
-        //}
+            return q3s;
+        }
 
         function getBarsMean(escapedBarsData) {
             return escapedBarsData.map(function (d) {

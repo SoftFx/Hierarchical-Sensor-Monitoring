@@ -14,7 +14,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         public List<BaseValue> ProcessHistory(List<BaseValue> values)
         {
-            values = values.OrderBy(v => v.Time).ToList();//.Sort((d1, d2) => d1.Time.CompareTo(d2.Time));
+            values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
 
             if (values.Count < 2)
                 return values;
