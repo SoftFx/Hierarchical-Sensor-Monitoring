@@ -318,6 +318,14 @@ namespace HSMServer.Core.Cache
             return GetSensorValues(sensorId, from, to);
         }
 
+        public FileValue GetFileSensorValue(Guid sensorId)
+        {
+            if (_sensors.TryGetValue(sensorId, out var sensor) && sensor is FileSensorModel fileSensor && fileSensor.HasData)
+                return fileSensor.GetValue();
+
+            return null;
+        }
+
         private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
         {
             var values = new List<BaseValue>(1 << 6);

@@ -209,29 +209,30 @@ namespace HSMServer.Controllers
         [HttpGet]
         public FileResult GetFile([FromQuery(Name = "Selected")] string encodedId)
         {
-            var (productName, path) = GetSensorProductAndPath(encodedId);
+            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
 
-            var (content, extension) = _sensorsInterface.GetFileSensorValueData(productName, path);
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
-            var fileName = $"{path.Replace('/', '_')}.{extension}";
-
-            return File(content, GetFileTypeByExtension(fileName), fileName);
+            return File(value.Value, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string encodedId)
         {
-            var (productName, path) = GetSensorProductAndPath(encodedId);
+            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
 
-            var (content, extension) = _sensorsInterface.GetFileSensorValueData(productName, path);
-
-            var fileContentsStream = new MemoryStream(content);
-            var fileName = $"{path.Replace('/', '_')}.{extension}";
+            var fileContentsStream = new MemoryStream(value.Value);
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
             return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
         }
 
-        private string GetFileTypeByExtension(string fileName)
+        private FileValue GetFileSensorValue(string encodedId) =>
+            _treeValuesCache.GetFileSensorValue(SensorPathHelper.DecodeGuid(encodedId));
+
+        private static string GetFileTypeByExtension(string fileName)
         {
             var provider = new FileExtensionContentTypeProvider();
             if (!provider.TryGetContentType(fileName, out var contentType))

@@ -1,6 +1,4 @@
-﻿using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensor;
+﻿using HSMServer.Core.Model;
 using System.IO;
 using System.IO.Compression;
 
@@ -22,20 +20,19 @@ namespace HSMServer.Core.Helpers
             };
         }
 
-        //ToDo: refactor to new models
-        internal static byte[] GetDecompressedContent(SensorHistoryData historyData, FileSensorBytesData data)
+        internal static FileValue DecompressContent(this FileValue value)
         {
-            if (historyData.OriginalFileSensorContentSize == 0)
-                return data.FileContent;
+            if (value.Value.Length == value.OriginalSize)
+                return value;
 
-            using var input = new MemoryStream(data.FileContent);
+            using var input = new MemoryStream(value.Value);
             using var output = new MemoryStream();
             using (var dstream = new DeflateStream(input, CompressionMode.Decompress))
             {
                 dstream.CopyTo(output);
             }
 
-            return output.ToArray();
+            return value with { Value = output.ToArray() };
         }
     }
 }

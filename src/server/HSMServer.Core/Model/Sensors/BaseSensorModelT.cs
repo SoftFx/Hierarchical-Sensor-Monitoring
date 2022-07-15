@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
             var value = valueBytes.ConvertToSensorValue<T>();
 
             if (value != null && value is T valueT)
-                Storage.AddValue(valueT);
+                Storage.AddValueBase(valueT);
         }
 
         internal override List<BaseValue> ConvertValues(List<byte[]> valuesBytes) =>

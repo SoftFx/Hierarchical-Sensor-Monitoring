@@ -38,7 +38,7 @@ namespace HSMServer.Core.Model
         internal override bool HasData => !_cachedValues.IsEmpty;
 
 
-        internal virtual T AddValue(T value)
+        internal T AddValueBase(T value)
         {
             _cachedValues.Enqueue(value);
 
@@ -48,6 +48,8 @@ namespace HSMServer.Core.Model
             return value;
         }
 
+        internal virtual T AddValue(T value) => AddValueBase(value);
+
         internal override void Clear() => _cachedValues.Clear();
 
         internal override List<BaseValue> GetValues(int count) =>
@@ -55,5 +57,7 @@ namespace HSMServer.Core.Model
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
             _cachedValues.Where(v => v.ReceivingTime >= from && v.ReceivingTime <= to).Select(v => (BaseValue)v).ToList();
+
+        protected T GetLatestValue() => _cachedValues.LastOrDefault();
     }
 }

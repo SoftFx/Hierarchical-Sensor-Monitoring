@@ -180,7 +180,7 @@ namespace HSMServer.Core.MonitoringServerCore
             try
             {
                 var fileData = JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData);
-                return (FileSensorContentCompressionHelper.GetDecompressedContent(sensorHistoryData, fileData), fileData.Extension);
+                return _defaultFileSensorData;// (FileSensorContentCompressionHelper.GetDecompressedContent(sensorHistoryData, fileData), fileData.Extension);
             }
             catch
             {

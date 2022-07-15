@@ -47,5 +47,6 @@ namespace HSMServer.Core.Cache
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
         List<BaseValue> GetAllSensorValues(Guid sensorId);
+        FileValue GetFileSensorValue(Guid sensorId);
     }
 }
