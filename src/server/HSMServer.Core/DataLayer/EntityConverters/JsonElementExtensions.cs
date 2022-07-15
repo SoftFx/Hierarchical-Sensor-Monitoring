@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text.Json;
 
 namespace HSMServer.Core.DataLayer
@@ -33,5 +34,24 @@ namespace HSMServer.Core.DataLayer
 
         internal static byte[] ReadBytes(this JsonElement element, string propertyName) =>
             element.TryGetProperty(propertyName, out var property) ? property.GetBytesFromBase64() : default;
+
+        internal static Dictionary<double, T> ReadPercentiles<T>(this JsonElement element,
+            string propertyName, Func<JsonElement, T> readPercentileValue)
+        {
+            var percentiles = new Dictionary<double, T>(1 << 2);
+
+            if (element.TryGetProperty(propertyName, out var property))
+            {
+                foreach (var percentile in property.EnumerateArray())
+                {
+                    var key = percentile.ReadDouble(SensorValuesFactory.PercentileKeyPropertyName);
+                    var value = readPercentileValue(percentile);
+
+                    percentiles.Add(key, value);
+                }
+            }
+
+            return percentiles;
+        }
     }
 }
