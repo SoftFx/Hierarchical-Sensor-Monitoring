@@ -2,14 +2,26 @@
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BarValuesStorage<T> : ValuesStorage<T> where T : BarBaseValue , IDisposable
+    public abstract class BarValuesStorage<T> : ValuesStorage<T>, IDisposable where T : BarBaseValue
     {
         private T _lastValue;
 
 
         internal override T AddValue(T value)
         {
-            if (_lastValue != null && _lastValue.OpenTime != value.OpenTime)
+            if (_lastValue == null && value.CloseTime == DateTime.MinValue)
+            {
+                _lastValue = value;
+                return null;
+            }
+            
+            else if (_lastValue == null && value.CloseTime != DateTime.MinValue)
+            {
+                base.AddValue(value);
+                return value;
+            }
+
+            else if  (_lastValue != null)
             {
                 var addedValue = _lastValue;
                 base.AddValue(_lastValue);
