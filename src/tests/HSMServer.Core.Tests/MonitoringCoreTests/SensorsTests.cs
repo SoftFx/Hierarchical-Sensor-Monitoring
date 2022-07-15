@@ -149,29 +149,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         //}
 
 
-        [Fact]
-        [Trait("Category", "Get FileSensor data (content & extension)")]
-        public void GetFileSensorValueBytesTest()
-        {
-            var (content, extension) = _monitoringCore.GetFileSensorValueData(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
+        //[Fact]
+        //[Trait("Category", "Get FileSensor data (content & extension)")]
+        //public void GetFileSensorValueBytesTest()
+        //{
+        //    var (content, extension) = _monitoringCore.GetFileSensorValueData(RandomGenerator.GetRandomString(), RandomGenerator.GetRandomString());
 
-            Assert.Empty(content);
-            Assert.Empty(extension);
-        }
+        //    Assert.Empty(content);
+        //    Assert.Empty(extension);
+        //}
 
-        [Theory]
-        [InlineData(SensorType.FileSensor)]
-        [InlineData(SensorType.FileSensorBytes)]
-        [Trait("Category", "Get FileSensor data (content & extension)")]
-        public void GetFileSensorContentTest(SensorType type)
-        {
-            (byte[] expectedContent, string expectedExtension, string path) = AddFileSensorAndGetItsContentExtensionAndPath(type);
+        //[Theory]
+        //[InlineData(SensorType.FileSensor)]
+        //[InlineData(SensorType.FileSensorBytes)]
+        //[Trait("Category", "Get FileSensor data (content & extension)")]
+        //public void GetFileSensorContentTest(SensorType type)
+        //{
+        //    (byte[] expectedContent, string expectedExtension, string path) = AddFileSensorAndGetItsContentExtensionAndPath(type);
 
-            var (actualContent, actualExtension) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, path);
+        //    var (actualContent, actualExtension) = _monitoringCore.GetFileSensorValueData(TestProductsManager.ProductName, path);
 
-            Assert.Equal(expectedContent, actualContent);
-            Assert.Equal(expectedExtension, actualExtension);
-        }
+        //    Assert.Equal(expectedContent, actualContent);
+        //    Assert.Equal(expectedExtension, actualExtension);
+        //}
 
 
         //[Fact]

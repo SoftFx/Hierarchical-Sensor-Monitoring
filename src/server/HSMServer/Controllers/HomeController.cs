@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Helpers;
@@ -29,17 +28,12 @@ namespace HSMServer.Controllers
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
-        private readonly ISensorsInterface _sensorsInterface;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public HomeController(
-            ISensorsInterface sensorsInterface,
-            ITreeValuesCache treeValuesCache,
-            TreeViewModel treeViewModel)
+        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
         {
-            _sensorsInterface = sensorsInterface;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
         }

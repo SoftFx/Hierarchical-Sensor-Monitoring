@@ -10,7 +10,6 @@ namespace HSMDatabase.LevelDB
     public class LevelDBDatabaseAdapter : IDisposable
     {
         private readonly DB _database;
-        private readonly string _name;
 
 
         public LevelDBDatabaseAdapter(string name)
@@ -22,10 +21,8 @@ namespace HSMDatabase.LevelDB
             databaseOptions.BlockSize = 204800;
             databaseOptions.WriteBufferSize = 8388608;
 
-            //databaseOptions.Comparator = Comparator.Create("BytewiseComparator", new ByteArraysComparer());
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
 
-            _name = name;
             try
             {
                 _database = new DB(name, databaseOptions);
@@ -35,8 +32,6 @@ namespace HSMDatabase.LevelDB
                 throw new ServerDatabaseException("Failed to open database", e);
             }
         }
-
-        public string Name => _name;
 
         public void Delete(byte[] key)
         {
@@ -78,11 +73,6 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
-        }
-
-        public byte[] Read(byte[] key)
-        {
-            return _database.Get(key);
         }
 
         public void Put(byte[] key, byte[] value)
@@ -263,26 +253,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetAllStartingWithAndSeek(byte[] startWithKey, byte[] seekKey)
-        {
-            try
-            {
-                List<byte[]> values = new List<byte[]>();
-                var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.Seek(seekKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey);
-                    iterator.Next())
-                {
-                    values.Add(iterator.Value());
-                }
-
-                return values;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
-            }
-        }
-
         public List<byte[]> GetPageStartingWith(byte[] startWithKey, int page, int pageSize)
         {
             int skip = (page - 1) * pageSize;
@@ -309,51 +279,9 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        //private void ArrToDebug(byte[] array)
-        //{
-        //    StringBuilder sb = new StringBuilder();
-        //    for (int i = 0; i < array.Length; ++i)
-        //    {
-        //        sb.Append($"{array[i]} ");
-        //    }
-        //    Debug.Print($"Array {sb.ToString()}");
-        //}
         public void Dispose()
         {
             _database?.Dispose();
         }
-
-        //private class ByteArraysComparer : IComparer<NativeArray>
-        //{
-        //    public int Compare(NativeArray x, NativeArray y)
-        //    {
-        //        unsafe
-        //        {
-        //            //might need to compare length via bytes too
-        //            int* xLengthPtr = (int*) x.byteLength.ToPointer();
-        //            int* yLengthPtr = (int*) y.byteLength.ToPointer();
-        //            var lengthCompare = (*xLengthPtr).CompareTo(*yLengthPtr);
-        //            if (lengthCompare != 0) return lengthCompare;
-        //            int len = (*xLengthPtr);
-        //            int i = 0;
-        //            byte* xStartPointer = (byte*) x.baseAddr.ToPointer();
-        //            byte* yStartPointer = (byte*) y.baseAddr.ToPointer();
-        //            byte* xStartCopy = &(*xStartPointer);
-        //            byte* yStartCopy = &(*yStartPointer);
-        //            while (i++ < len)
-        //            {
-        //                var cmpRes = (*xStartCopy).CompareTo(*yStartCopy);
-        //                if (cmpRes != 0)
-        //                    return cmpRes;
-
-        //                ++xStartCopy;
-        //                ++yStartCopy;
-        //            }
-
-        //            return 0;
-        //        }
-        //    }
-        //}
-
     }
 }

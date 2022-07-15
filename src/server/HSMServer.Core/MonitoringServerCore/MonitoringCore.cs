@@ -1,36 +1,26 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
-using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.SensorsDataValidation;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : ISensorsInterface, IDisposable
+    public class MonitoringCore : IDisposable
     {
-        private static readonly (byte[], string) _defaultFileSensorData = (Array.Empty<byte>(), string.Empty);
-
         private readonly IDatabaseCore _databaseCore;
         private readonly IBarSensorsStorage _barsStorage;
         private readonly ILogger<MonitoringCore> _logger;
 
 
-        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage, 
+        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage,
             IConfigurationProvider configurationProvider, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
@@ -118,74 +108,6 @@ namespace HSMServer.Core.MonitoringServerCore
 
             _barsStorage.Remove(product, value.Path);
             return true;
-        }
-
-        #endregion
-
-        #region Sensors History
-
-        public List<SensorHistoryData> GetSensorHistory(string product, string path, DateTime from, DateTime to)
-        {
-            var historyValues = _databaseCore.GetSensorHistory(product, path,
-                from, to);
-            var lastValue = _barsStorage.GetLastValue(product, path);
-            if (lastValue != null && lastValue.TimeCollected < to && lastValue.TimeCollected > from)
-            {
-                historyValues.Add(lastValue.Convert());
-            }
-            return historyValues;
-        }
-
-        public List<SensorHistoryData> GetAllSensorHistory(string product, string path)
-        {
-            var allValues = _databaseCore.GetAllSensorHistory(product, path);
-            var lastValue = _barsStorage.GetLastValue(product, path);
-            if (lastValue != null)
-            {
-                allValues.Add(lastValue.Convert());
-            }
-            return allValues;
-        }
-
-        public List<SensorHistoryData> GetSensorHistory(string product, string path, int n)
-        {
-            List<SensorHistoryData> historyList = _databaseCore.GetSensorHistory(product, path, n);
-            var lastValue = _barsStorage.GetLastValue(product, path);
-            if (lastValue != null)
-            {
-                historyList.Add(lastValue.Convert());
-            }
-
-            if (n != -1)
-            {
-                historyList = historyList.TakeLast(n).ToList();
-            }
-
-            return historyList;
-        }
-
-        public (byte[] content, string extension) GetFileSensorValueData(string product, string path)
-        {
-            var sensorHistoryData = _databaseCore.GetOneValueSensorValue(product, path);
-
-            if (sensorHistoryData == null)
-                return _defaultFileSensorData;
-
-            if (sensorHistoryData.SensorType == SensorType.FileSensor)
-                sensorHistoryData = sensorHistoryData.ConvertToFileSensorBytes();
-
-            if (sensorHistoryData.SensorType != SensorType.FileSensorBytes)
-                return _defaultFileSensorData;
-
-            try
-            {
-                var fileData = JsonSerializer.Deserialize<FileSensorBytesData>(sensorHistoryData.TypedData);
-                return _defaultFileSensorData;// (FileSensorContentCompressionHelper.GetDecompressedContent(sensorHistoryData, fileData), fileData.Extension);
-            }
-            catch
-            {
-                return _defaultFileSensorData;
-            }
         }
 
         #endregion

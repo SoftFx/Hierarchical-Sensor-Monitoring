@@ -6,7 +6,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -55,7 +54,6 @@ namespace HSMServer
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
