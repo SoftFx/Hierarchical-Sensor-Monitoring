@@ -228,11 +228,7 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel GetAccessKey(Guid id)
-        {
-            _keys.TryGetValue(id, out var key);
-            return key;
-        }
+        public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
 
         public void UpdateSensor(SensorUpdate updatedSensor)
         {
@@ -281,6 +277,8 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+        public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
+
 
         public List<BaseValue> GetSensorValues(Guid sensorId, int count)
         {
@@ -310,14 +308,6 @@ namespace HSMServer.Core.Cache
                 _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
 
             return values;
-        }
-
-        public FileValue GetFileSensorValue(Guid sensorId)
-        {
-            if (_sensors.TryGetValue(sensorId, out var sensor) && sensor is FileSensorModel fileSensor && fileSensor.HasData)
-                return fileSensor.LastValue as FileValue;
-
-            return null;
         }
 
         private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)

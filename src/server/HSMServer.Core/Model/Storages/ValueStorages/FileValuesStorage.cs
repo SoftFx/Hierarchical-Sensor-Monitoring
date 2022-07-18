@@ -14,10 +14,9 @@ namespace HSMServer.Core.Model
 
         internal override FileValue AddValueBase(FileValue value)
         {
-            if (value.OriginalSize != value.Value.Length)
-                value = value.DecompressContent();
-
-            _lastValue = value;
+            _lastValue = value.OriginalSize != value.Value.Length
+                ? value.DecompressContent()
+                : value;
 
             return base.AddValueBase(value);
         }

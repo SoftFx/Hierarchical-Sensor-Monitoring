@@ -220,15 +220,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
             if (middle % 2 == 0)
             {
-                int index = _percentilesList.Count % 2 == 0
-                    ? (middle + _percentilesList.Count) / 2
-                    : (middle + _percentilesList.Count + 1) / 2;
+                int index = (middle + _percentilesList.Count + 1) / 2;
+
                 return Average(_percentilesList[index], _percentilesList[index + 1]);
             }
 
-            return _percentilesList.Count % 2 == 0
-                ? _percentilesList[(middle + _percentilesList.Count + 1) / 2]
-                : _percentilesList[(middle + _percentilesList.Count) / 2];
+            return _percentilesList[(middle + _percentilesList.Count + 1) / 2];
         }
     }
 }

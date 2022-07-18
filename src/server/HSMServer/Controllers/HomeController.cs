@@ -229,7 +229,7 @@ namespace HSMServer.Controllers
         }
 
         private FileValue GetFileSensorValue(string encodedId) =>
-            _treeValuesCache.GetFileSensorValue(SensorPathHelper.DecodeGuid(encodedId));
+            _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
         private static string GetFileTypeByExtension(string fileName)
         {
