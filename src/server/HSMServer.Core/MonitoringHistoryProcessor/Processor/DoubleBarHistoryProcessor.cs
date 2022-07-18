@@ -37,6 +37,6 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         protected override double Convert(decimal value) => (double)value;
 
         protected override decimal GetComposition(double value1, int value2) =>
-            (decimal)(value1 * value2);
+            (decimal)value1 * value2;
     }
 }

@@ -38,7 +38,6 @@ function convertToGraphData(graphData, graphType, graphName) {
     let escapedData = JSON.parse(graphData);
 
     let data;
-    let deserialized;
     let timeList;
     switch (graphType) {
         case "0":
@@ -54,10 +53,8 @@ function convertToGraphData(graphData, graphType, graphName) {
             timeList = getTimeList(escapedData);
             return getSimpleGraphData(timeList, data, "scatter");
         case "4":
-            //deserialized = getDeserializedBarsData(escapedData);
             return createBarGraphData(escapedData, graphName);
         case "5":
-            //deserialized = getDeserializedBarsData(escapedData);
             return createBarGraphData(escapedData, graphName);
         default:
             return undefined;
@@ -107,15 +104,6 @@ function convertToGraphData(graphData, graphType, graphName) {
 
 //Boxplots
 {
-
-    //function getDeserializedBarsData(escapedItems) {
-    //    let deserialized = escapedItems.map(function (i) {
-    //        return JSON.parse(i.typedData);
-    //    });
-
-    //    return deserialized;
-    //}
-
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
             if (d.closeTime.toString().startsWith("0001")) {

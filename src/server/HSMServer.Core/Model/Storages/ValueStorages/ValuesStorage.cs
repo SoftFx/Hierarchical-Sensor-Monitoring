@@ -7,13 +7,9 @@ namespace HSMServer.Core.Model
 {
     public abstract class ValuesStorage
     {
-        protected abstract int CacheSize { get; }
-
-        internal abstract string LatestValueInfo { get; }
-
-        internal abstract DateTime LastUpdateTime { get; }
-
         internal abstract bool HasData { get; }
+
+        internal abstract BaseValue LastValue { get; }
 
 
         internal abstract void Clear();
@@ -29,16 +25,14 @@ namespace HSMServer.Core.Model
         private readonly ConcurrentQueue<T> _cachedValues = new();
 
 
-        protected override int CacheSize => 100;
-
-        internal override string LatestValueInfo => _cachedValues.LastOrDefault()?.ShortInfo;
-
-        internal override DateTime LastUpdateTime => _cachedValues.LastOrDefault()?.ReceivingTime ?? DateTime.MinValue;
+        protected virtual int CacheSize => 100;
 
         internal override bool HasData => !_cachedValues.IsEmpty;
 
+        internal override BaseValue LastValue => _cachedValues.LastOrDefault();
 
-        internal T AddValueBase(T value)
+
+        internal virtual T AddValueBase(T value)
         {
             _cachedValues.Enqueue(value);
 
@@ -57,7 +51,5 @@ namespace HSMServer.Core.Model
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
             _cachedValues.Where(v => v.ReceivingTime >= from && v.ReceivingTime <= to).Select(v => (BaseValue)v).ToList();
-
-        protected T GetLatestValue() => _cachedValues.LastOrDefault();
     }
 }

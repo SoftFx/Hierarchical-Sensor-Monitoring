@@ -51,9 +51,9 @@ namespace HSMServer.Core.Model
         public string Path { get; private set; }
 
 
-        public string LatestValueInfo => Storage.LatestValueInfo;
+        public BaseValue LastValue => Storage.LastValue;
 
-        public DateTime LastUpdateTime => Storage.LastUpdateTime;
+        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public bool HasData => Storage.HasData;
 

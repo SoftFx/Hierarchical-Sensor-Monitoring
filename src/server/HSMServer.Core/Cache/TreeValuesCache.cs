@@ -315,7 +315,7 @@ namespace HSMServer.Core.Cache
         public FileValue GetFileSensorValue(Guid sensorId)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor) && sensor is FileSensorModel fileSensor && fileSensor.HasData)
-                return fileSensor.GetValue();
+                return fileSensor.LastValue as FileValue;
 
             return null;
         }

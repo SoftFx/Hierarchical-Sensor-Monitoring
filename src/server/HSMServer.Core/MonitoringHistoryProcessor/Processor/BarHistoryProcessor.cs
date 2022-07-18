@@ -8,7 +8,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, IComparable
     {
-        private readonly List<KeyValuePair<T, int>> _meanList = new();
+        private readonly List<(T, int)> _meanList = new();
         private readonly List<T> _percentilesList = new();
 
 
@@ -43,9 +43,6 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             if (values == null || values.Count == 0)
                 return new();
 
-            if (values.Count == 1)
-                return values;
-
             var result = new List<BaseValue>();
 
             var oldestValue = values.First() as BarBaseValue<T>;
@@ -57,11 +54,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 if (values[i] is not BarBaseValue<T> value || value.CloseTime == DateTime.MinValue)
                     continue;
 
-                if (summary.CloseTime + (value.CloseTime - value.OpenTime) <= nextBarTime)
-                {
-                    ProcessItem(value, summary);
-                }
-                else
+                if (summary.CloseTime + (value.CloseTime - value.OpenTime) > nextBarTime)
                 {
                     result.Add(Convert(summary));
 
@@ -69,6 +62,8 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                     while (nextBarTime <= summary.CloseTime)
                         nextBarTime += compressionInterval;
                 }
+                else
+                    ProcessItem(value, summary);
             }
 
             result.Add(Convert(summary));
@@ -80,7 +75,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         {
             try
             {
-                _meanList.Add(new KeyValuePair<T, int>(value.Mean, value.Count));
+                _meanList.Add((value.Mean, value.Count));
 
                 if (value.Percentiles != null && value.Percentiles.Count > 0)
                     _percentilesList.AddRange(value.Percentiles.Select(p => p.Value));
@@ -164,7 +159,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         /// </summary>
         /// <param name="means"></param>
         /// <returns></returns>
-        private T CountMean(List<KeyValuePair<T, int>> means)
+        private T CountMean(List<(T mean, int count)> means)
         {
             if (means.Count < 1)
                 return default;
@@ -173,8 +168,8 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             int commonCount = 0;
             foreach (var meanPair in means)
             {
-                sum += GetComposition(meanPair.Key, meanPair.Value);
-                commonCount += meanPair.Value;
+                sum += GetComposition(meanPair.mean, meanPair.count);
+                commonCount += meanPair.count;
             }
 
             if (commonCount < 1)
@@ -204,9 +199,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         /// <returns>Q1 from the percentiles list</returns>
         private T CountQ1()
         {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
+            int middle = (_percentilesList.Count + 1) / 2;
 
             if (middle % 2 == 0)
             {
@@ -223,9 +216,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         /// <returns>Q3 from the percentiles list</returns>
         private T CountQ3()
         {
-            int middle = _percentilesList.Count % 2 == 0
-                ? _percentilesList.Count / 2
-                : (_percentilesList.Count + 1) / 2;
+            int middle = (_percentilesList.Count + 1) / 2;
 
             if (middle % 2 == 0)
             {

@@ -5,8 +5,5 @@
         protected override FileValuesStorage Storage { get; } = new FileValuesStorage();
 
         public override SensorType Type { get; } = SensorType.File;
-
-
-        internal FileValue GetValue() => Storage.GetDecompressedLatestValue();
     }
 }

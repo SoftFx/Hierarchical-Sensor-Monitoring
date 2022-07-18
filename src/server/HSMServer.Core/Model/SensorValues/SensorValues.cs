@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -26,7 +25,6 @@ namespace HSMServer.Core.Model
 
         public long OriginalSize { get; init; }
 
-        [JsonIgnore]
         public override string ShortInfo => GetShortDescription();
 
 
