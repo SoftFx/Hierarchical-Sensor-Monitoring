@@ -16,11 +16,8 @@ namespace HSMServer.Core.Model
                     _lastValue = value;
                     return null;
                 }
-                else
-                {
-                    base.AddValue(value);
-                    return value;
-                }
+                else 
+                    return base.AddValue(value);
             }         
             else
             {
@@ -28,11 +25,9 @@ namespace HSMServer.Core.Model
                 {
                     CloseTime = DateTime.UtcNow 
                 };
-
-                base.AddValue(addedValue);
                 _lastValue = value;
 
-                return addedValue;
+                return base.AddValue(addedValue);
             }
         }
 

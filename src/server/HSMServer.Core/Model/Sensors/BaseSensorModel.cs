@@ -147,6 +147,6 @@ namespace HSMServer.Core.Model
         protected abstract List<string> GetPolicyIds();
 
 
-        public virtual void Dispose() => Storage.Dispose();
+        public void Dispose() => Storage.Dispose();
     }
 }
