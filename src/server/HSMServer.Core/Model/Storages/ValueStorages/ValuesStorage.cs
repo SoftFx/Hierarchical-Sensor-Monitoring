@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class ValuesStorage
+    public abstract class ValuesStorage : IDisposable
     {
         protected abstract int CacheSize { get; }
 
@@ -21,6 +21,9 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> GetValues(int count);
 
         internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
+
+
+        public virtual void Dispose() { }
     }
 
 

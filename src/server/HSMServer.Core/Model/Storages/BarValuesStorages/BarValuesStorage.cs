@@ -9,32 +9,35 @@ namespace HSMServer.Core.Model
 
         internal override T AddValue(T value)
         {
-            if (_lastValue == null && value.CloseTime == DateTime.MinValue)
+            if (_lastValue == null)
             {
-                _lastValue = value;
-                return null;
-            }
-            
-            else if (_lastValue == null && value.CloseTime != DateTime.MinValue)
+                if (value.CloseTime == DateTime.MinValue)
+                {
+                    _lastValue = value;
+                    return null;
+                }
+                else
+                {
+                    base.AddValue(value);
+                    return value;
+                }
+            }         
+            else
             {
-                base.AddValue(value);
-                return value;
-            }
+                var addedValue = _lastValue with 
+                {
+                    CloseTime = DateTime.UtcNow 
+                };
 
-            else if  (_lastValue != null)
-            {
-                var addedValue = _lastValue;
-                base.AddValue(_lastValue);
+                base.AddValue(addedValue);
                 _lastValue = value;
 
                 return addedValue;
             }
-
-            return null;
         }
 
 
-        public void Dispose()
+        public override void Dispose()
         {
             if (_lastValue != null) 
                 base.AddValue(_lastValue);

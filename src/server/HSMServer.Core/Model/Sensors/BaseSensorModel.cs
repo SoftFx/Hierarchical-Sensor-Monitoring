@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel
+    public abstract class BaseSensorModel : IDisposable
     {
         protected readonly List<Policy> _systemPolicies = new();
 
@@ -145,5 +145,8 @@ namespace HSMServer.Core.Model
         }
 
         protected abstract List<string> GetPolicyIds();
+
+
+        public virtual void Dispose() => Storage.Dispose();
     }
 }

@@ -58,6 +58,9 @@ namespace HSMServer.Core.Cache
         {
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
+
+            foreach (var sensor in _sensors.Values)
+                sensor.Dispose();
         }
 
 
