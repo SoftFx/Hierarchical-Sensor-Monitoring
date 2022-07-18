@@ -29,6 +29,9 @@ namespace HSMServer.Core.DataLayer
         private const string MaxPropertyName = "Max";
         private const string MeanPropertyName = "Mean";
         private const string LastValuePropertyName = "LastValue";
+        private const string PercentilesPropertyName = "Percentiles";
+        private const string PercentileValuePropertyName = "Value";
+        internal const string PercentileKeyPropertyName = "Percentile";
 
 
         internal static BaseValue BuildValue<T>(JsonElement rootElement)
@@ -121,6 +124,7 @@ namespace HSMServer.Core.DataLayer
                 Max = GetTypedData(element).ReadInt(MaxPropertyName),
                 Mean = GetTypedData(element).ReadInt(MeanPropertyName),
                 LastValue = GetTypedData(element).ReadInt(LastValuePropertyName),
+                Percentiles = GetTypedData(element).ReadPercentiles(PercentilesPropertyName, el => el.ReadInt(PercentileValuePropertyName)),
             };
 
         private static DoubleBarValue BuildDoubleBarValue(JsonElement element) =>
@@ -137,6 +141,7 @@ namespace HSMServer.Core.DataLayer
                 Max = GetTypedData(element).ReadDouble(MaxPropertyName),
                 Mean = GetTypedData(element).ReadDouble(MeanPropertyName),
                 LastValue = GetTypedData(element).ReadDouble(LastValuePropertyName),
+                Percentiles = GetTypedData(element).ReadPercentiles(PercentilesPropertyName, el => el.ReadDouble(PercentileValuePropertyName)),
             };
 
         private static SensorStatus GetStatus(JsonElement element)

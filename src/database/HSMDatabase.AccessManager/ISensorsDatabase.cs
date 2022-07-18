@@ -13,10 +13,8 @@ namespace HSMDatabase.AccessManager
         long GetSensorSize(string productName, string path);
         void PutSensorData(SensorDataEntity sensorData, string productName);
         void DeleteAllSensorValues(string productName, string path);
-        SensorDataEntity GetLatestSensorValue(string productName, string path);
-        List<SensorDataEntity> GetAllSensorValues(string productName, string path);
-        List<SensorDataEntity> GetSensorValuesFrom(string productName, string path, DateTime from);
-        List<SensorDataEntity> GetSensorValuesBetween(string productName, string path, DateTime from, DateTime to);
+        List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count);
+        List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to);
 
         void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
     }

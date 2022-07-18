@@ -10,5 +10,6 @@ namespace HSMDatabase.DatabaseWorkCore
         ISensorsDatabase GetDatabase(DateTime time);
         void AddDatabase(ISensorsDatabase database);
         List<ISensorsDatabase> GetAllDatabases();
+        List<ISensorsDatabase> GetSortedDatabases();
     }
 }

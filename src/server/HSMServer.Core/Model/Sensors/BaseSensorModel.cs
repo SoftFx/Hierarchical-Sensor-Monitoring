@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel
+    public abstract class BaseSensorModel : IDisposable
     {
         protected readonly List<Policy> _systemPolicies = new();
 
@@ -51,9 +51,9 @@ namespace HSMServer.Core.Model
         public string Path { get; private set; }
 
 
-        public string LatestValueInfo => Storage.LatestValueInfo;
+        public BaseValue LastValue => Storage.LastValue;
 
-        public DateTime LastUpdateTime => Storage.LastUpdateTime;
+        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public bool HasData => Storage.HasData;
 
@@ -127,7 +127,13 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddValue(byte[] valueBytes);
 
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
         internal void ClearValues() => Storage.Clear();
+
+        internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
+
+        internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
 
 
         internal virtual void AddPolicy(Policy policy)
@@ -139,5 +145,8 @@ namespace HSMServer.Core.Model
         }
 
         protected abstract List<string> GetPolicyIds();
+
+
+        public void Dispose() => Storage.Dispose();
     }
 }

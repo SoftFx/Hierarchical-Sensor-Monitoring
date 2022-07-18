@@ -58,7 +58,13 @@ namespace HSMServer.Core.Cache
         {
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
+
+            _databaseCore.Dispose();
+
+            foreach (var sensor in _sensors.Values)
+                sensor.Dispose();
         }
+
 
         public List<ProductModel> GetTree() => _tree.Values.ToList();
 
@@ -225,11 +231,7 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel GetAccessKey(Guid id)
-        {
-            _keys.TryGetValue(id, out var key);
-            return key;
-        }
+        public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
 
         public void UpdateSensor(SensorUpdate updatedSensor)
         {
@@ -278,6 +280,53 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+        public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
+
+
+        public List<BaseValue> GetSensorValues(Guid sensorId, int count)
+        {
+            List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(count);
+
+            (var sensor, var values) = GetCachedValues(sensorId, GetValues);
+
+            int remainingCount = count - values.Count;
+            if (remainingCount > 0)
+            {
+                var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
+                values.AddRange(sensor.ConvertValues(
+                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, oldestValueTime, remainingCount)));
+            }
+
+            return values;
+        }
+
+        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to)
+        {
+            List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
+
+            (var sensor, var values) = GetCachedValues(sensorId, GetValues);
+
+            var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
+            values.AddRange(sensor.ConvertValues(
+                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
+
+            return values;
+        }
+
+        private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
+        {
+            var values = new List<BaseValue>(1 << 6);
+
+            if (_sensors.TryGetValue(sensorId, out var sensor))
+            {
+                values.AddRange(getValuesFunc(sensor));
+                values.Reverse();
+            }
+
+            return (sensor, values);
+        }
+
+
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -313,11 +362,12 @@ namespace HSMServer.Core.Cache
 
             // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
             // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
-            if (sensor.TryAddValue(value, out var cachedValue))
+            if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
+
 
         private void Initialize()
         {

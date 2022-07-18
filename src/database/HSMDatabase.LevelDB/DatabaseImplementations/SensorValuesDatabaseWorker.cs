@@ -34,6 +34,24 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _openedDbs.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
         }
 
+        public void Dispose()
+        {
+            foreach (var (_, db) in _openedDbs)
+                db.Dispose();
+        }
+
+        public void DisposeDatabase(string sensorId)
+        {
+            try
+            {
+                _openedDbs[sensorId].Dispose();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
+            }
+        }
+
         public void PutSensorValue(SensorValueEntity entity)
         {
             var key = Encoding.UTF8.GetBytes(entity.ReceivingTime.ToString());
@@ -51,18 +69,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public bool IsDatabaseExists(string sensorId) => _openedDbs.ContainsKey(sensorId);
 
-        public void DisposeDatabase(string sensorId)
-        {
-            try
-            {
-                _openedDbs[sensorId].Dispose();
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
-            }
-        }
-
         public byte[] GetLatestValue(string sensorId) => _openedDbs[sensorId].GetLatestValue();
+
+        public List<byte[]> GetValues(string sensorId, byte[] to, int count) =>
+            _openedDbs[sensorId].GetValues(to, count);
+
+        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to) =>
+            _openedDbs[sensorId].GetValues(from, to);
     }
 }

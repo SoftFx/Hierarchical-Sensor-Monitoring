@@ -120,7 +120,7 @@ namespace HSMServer.Model.TreeViewModels
             Unit = model.Unit;
 
             HasData = model.HasData;
-            ShortStringValue = model.LatestValueInfo;
+            ShortStringValue = model.LastValue?.ShortInfo;
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);

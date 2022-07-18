@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -37,6 +38,7 @@ namespace HSMServer.Core.Model
         public SensorStatus Status { get; init; }
 
 
+        [JsonIgnore]
         public abstract string ShortInfo { get; }
 
 
@@ -54,6 +56,7 @@ namespace HSMServer.Core.Model
     {
         public T Value { get; init; }
 
+        [JsonIgnore]
         public override string ShortInfo => Value.ToString();
     }
 }
