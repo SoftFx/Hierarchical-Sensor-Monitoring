@@ -43,9 +43,9 @@ namespace HSMServer.Core.Cache
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
+        BaseSensorModel GetSensor(Guid sensorId);
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
-        List<BaseValue> GetAllSensorValues(Guid sensorId);
     }
 }

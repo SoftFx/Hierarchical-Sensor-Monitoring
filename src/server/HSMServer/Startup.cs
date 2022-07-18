@@ -6,8 +6,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.MonitoringCoreInterface;
-using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -46,8 +44,6 @@ namespace HSMServer
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
-            services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
@@ -58,7 +54,6 @@ namespace HSMServer
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<TreeViewModel>();
             services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();

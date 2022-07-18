@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
@@ -21,6 +22,8 @@ namespace HSMServer.Core.Model
         public T Mean { get; init; }
 
         public T LastValue { get; init; }
+
+        public Dictionary<double, T> Percentiles { get; init; } = new();
 
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";

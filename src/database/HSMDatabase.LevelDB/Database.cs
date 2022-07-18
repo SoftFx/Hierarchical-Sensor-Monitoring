@@ -10,22 +10,22 @@ namespace HSMDatabase.LevelDB
     public class LevelDBDatabaseAdapter : IDisposable
     {
         private readonly DB _database;
-        private readonly string _name;
+        private readonly ReadOptions _iteratorOptions = new();
 
 
         public LevelDBDatabaseAdapter(string name)
         {
-            Options databaseOptions = new Options();
-            databaseOptions.CreateIfMissing = true;
-            databaseOptions.MaxOpenFiles = 100000;
-            databaseOptions.CompressionLevel = CompressionLevel.SnappyCompression;
-            databaseOptions.BlockSize = 204800;
-            databaseOptions.WriteBufferSize = 8388608;
+            Options databaseOptions = new()
+            {
+                CreateIfMissing = true,
+                MaxOpenFiles = 100000,
+                CompressionLevel = CompressionLevel.SnappyCompression,
+                BlockSize = 204800,
+                WriteBufferSize = 8388608
+            };
 
-            //databaseOptions.Comparator = Comparator.Create("BytewiseComparator", new ByteArraysComparer());
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
 
-            _name = name;
             try
             {
                 _database = new DB(name, databaseOptions);
@@ -35,8 +35,6 @@ namespace HSMDatabase.LevelDB
                 throw new ServerDatabaseException("Failed to open database", e);
             }
         }
-
-        public string Name => _name;
 
         public void Delete(byte[] key)
         {
@@ -52,18 +50,22 @@ namespace HSMDatabase.LevelDB
 
         public void DeleteAllStartingWith(byte[] startWithKey)
         {
+            Iterator iterator = null;
+
             try
             {
-                var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey);
-                    iterator.Next())
-                {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
                     _database.Delete(iterator.Key());
-                }
             }
             catch (Exception e)
             {
                 throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
             }
         }
 
@@ -80,11 +82,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public byte[] Read(byte[] key)
-        {
-            return _database.Get(key);
-        }
-
         public void Put(byte[] key, byte[] value)
         {
             try
@@ -99,12 +96,14 @@ namespace HSMDatabase.LevelDB
 
         public long GetSize(byte[] startWithKey)
         {
+            Iterator iterator = null;
+
             try
             {
                 long size = 0;
-                var iterator = _database.CreateIterator();
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey);
-                    iterator.Next())
+                iterator = _database.CreateIterator();
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
                 {
                     size += iterator.Value().LongLength;
                     //TODO: possibly add startwithKey size
@@ -116,13 +115,19 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         internal byte[] GetLatestValue()
         {
+            Iterator iterator = null;
+
             try
             {
-                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator = _database.CreateIterator(_iteratorOptions);
                 iterator.SeekToLast();
 
                 if (iterator.IsValid)
@@ -132,17 +137,23 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(ex.Message, ex);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
 
             return null;
         }
 
         internal List<byte[]> GetValues(byte[] to, int count)
         {
+            Iterator iterator = null;
             var values = new List<byte[]>(count);
 
             try
             {
-                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator = _database.CreateIterator(_iteratorOptions);
+
                 for (iterator.SeekToLast(); iterator.IsValid && values.Count != count; iterator.Prev())
                 {
                     if (iterator.Key().IsSmallerOrEquals(to))
@@ -155,15 +166,20 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(ex.Message, ex);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         public List<byte[]> GetValues(byte[] from, byte[] to)
         {
+            Iterator iterator = null;
             var values = new List<byte[]>(1 << 5);
 
             try
             {
-                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator = _database.CreateIterator(_iteratorOptions);
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
                     values.Add(iterator.Value());
 
@@ -175,21 +191,24 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
+            Iterator iterator = null;
+            List<byte[]> values = new();
+
             try
             {
-                List<byte[]> values = new List<byte[]>();
-                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator = _database.CreateIterator(_iteratorOptions);
+
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                {
                     if (iterator.Key().StartsWith(startWithKey))
-                    {
                         values.Add(iterator.Value());
-                    }
-                }
 
                 return values;
             }
@@ -197,14 +216,20 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         public List<byte[]> GetStartingWithTo(byte[] to, byte[] startWithKey, int count)
         {
+            Iterator iterator = null;
+            var values = new List<byte[]>(count);
+
             try
             {
-                var values = new List<byte[]>(count);
-                var iterator = _database.CreateIterator(new ReadOptions());
+                iterator = _database.CreateIterator(_iteratorOptions);
 
                 for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) && values.Count != count; iterator.Next())
                 {
@@ -220,19 +245,23 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         public List<byte[]> GetAllStartingWith(byte[] startWithKey)
         {
+            Iterator iterator = null;
+            List<byte[]> values = new();
+
             try
             {
-                List<byte[]> values = new List<byte[]>();
-                var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey);
-                    iterator.Next())
-                {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
                     values.Add(iterator.Value());
-                }
 
                 return values;
             }
@@ -240,13 +269,19 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
         public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
         {
+            Iterator iterator = null;
+
             try
             {
-                var iterator = _database.CreateIterator();
+                iterator = _database.CreateIterator();
 
                 foreach (var (key, value) in keyValuePairs)
                 {
@@ -261,39 +296,26 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
-        }
-
-        public List<byte[]> GetAllStartingWithAndSeek(byte[] startWithKey, byte[] seekKey)
-        {
-            try
+            finally
             {
-                List<byte[]> values = new List<byte[]>();
-                var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.Seek(seekKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey);
-                    iterator.Next())
-                {
-                    values.Add(iterator.Value());
-                }
-
-                return values;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
+                iterator?.Dispose();
             }
         }
 
         public List<byte[]> GetPageStartingWith(byte[] startWithKey, int page, int pageSize)
         {
+            Iterator iterator = null;
+            List<byte[]> values = new();
+
             int skip = (page - 1) * pageSize;
             int index = 1;
             int lastIndex = page * pageSize;
+
             try
             {
-                List<byte[]> values = new List<byte[]>();
-                var iterator = _database.CreateIterator(new ReadOptions());
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) &&
-                    index <= lastIndex; iterator.Next(), ++index)
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) && index <= lastIndex; iterator.Next(), ++index)
                 {
                     if (index <= skip)
                         continue;
@@ -307,53 +329,15 @@ namespace HSMDatabase.LevelDB
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
+            finally
+            {
+                iterator?.Dispose();
+            }
         }
 
-        //private void ArrToDebug(byte[] array)
-        //{
-        //    StringBuilder sb = new StringBuilder();
-        //    for (int i = 0; i < array.Length; ++i)
-        //    {
-        //        sb.Append($"{array[i]} ");
-        //    }
-        //    Debug.Print($"Array {sb.ToString()}");
-        //}
         public void Dispose()
         {
             _database?.Dispose();
         }
-
-        //private class ByteArraysComparer : IComparer<NativeArray>
-        //{
-        //    public int Compare(NativeArray x, NativeArray y)
-        //    {
-        //        unsafe
-        //        {
-        //            //might need to compare length via bytes too
-        //            int* xLengthPtr = (int*) x.byteLength.ToPointer();
-        //            int* yLengthPtr = (int*) y.byteLength.ToPointer();
-        //            var lengthCompare = (*xLengthPtr).CompareTo(*yLengthPtr);
-        //            if (lengthCompare != 0) return lengthCompare;
-        //            int len = (*xLengthPtr);
-        //            int i = 0;
-        //            byte* xStartPointer = (byte*) x.baseAddr.ToPointer();
-        //            byte* yStartPointer = (byte*) y.baseAddr.ToPointer();
-        //            byte* xStartCopy = &(*xStartPointer);
-        //            byte* yStartCopy = &(*yStartPointer);
-        //            while (i++ < len)
-        //            {
-        //                var cmpRes = (*xStartCopy).CompareTo(*yStartCopy);
-        //                if (cmpRes != 0)
-        //                    return cmpRes;
-
-        //                ++xStartCopy;
-        //                ++yStartCopy;
-        //            }
-
-        //            return 0;
-        //        }
-        //    }
-        //}
-
     }
 }

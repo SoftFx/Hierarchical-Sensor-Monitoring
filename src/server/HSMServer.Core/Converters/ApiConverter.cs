@@ -2,9 +2,9 @@
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using System;
+using System.Linq;
 using System.Text.Json;
 using ObjectsSensorStatus = HSMSensorDataObjects.SensorStatus;
-using ObjectsSensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Converters
 {
@@ -106,7 +106,8 @@ namespace HSMServer.Core.Converters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
-                LastValue = value.LastValue
+                LastValue = value.LastValue,
+                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
 
         public static IntegerBarValue ConvertToIntBar(this UnitedSensorValue value)
@@ -124,7 +125,8 @@ namespace HSMServer.Core.Converters
                 Min = barData.Min,
                 Max = barData.Max,
                 Mean = barData.Mean,
-                LastValue = barData.LastValue
+                LastValue = barData.LastValue,
+                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
         }
 
@@ -140,7 +142,8 @@ namespace HSMServer.Core.Converters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
-                LastValue = value.LastValue
+                LastValue = value.LastValue,
+                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
 
         public static DoubleBarValue ConvertToDoubleBar(this UnitedSensorValue value)
@@ -158,11 +161,12 @@ namespace HSMServer.Core.Converters
                 Min = barData.Min,
                 Max = barData.Max,
                 Mean = barData.Mean,
-                LastValue = barData.LastValue
+                LastValue = barData.LastValue,
+                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
         }
 
-        public static SensorStatus Convert(this ObjectsSensorStatus status) => 
+        public static SensorStatus Convert(this ObjectsSensorStatus status) =>
             status switch
             {
                 ObjectsSensorStatus.Ok => SensorStatus.Ok,

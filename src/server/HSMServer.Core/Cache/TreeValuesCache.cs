@@ -59,6 +59,8 @@ namespace HSMServer.Core.Cache
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
 
+            _databaseCore.Dispose();
+
             foreach (var sensor in _sensors.Values)
                 sensor.Dispose();
         }
@@ -229,11 +231,7 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel GetAccessKey(Guid id)
-        {
-            _keys.TryGetValue(id, out var key);
-            return key;
-        }
+        public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
 
         public void UpdateSensor(SensorUpdate updatedSensor)
         {
@@ -282,6 +280,8 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+        public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
+
 
         public List<BaseValue> GetSensorValues(Guid sensorId, int count)
         {
@@ -311,14 +311,6 @@ namespace HSMServer.Core.Cache
                 _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
 
             return values;
-        }
-
-        public List<BaseValue> GetAllSensorValues(Guid sensorId)
-        {
-            var from = DateTime.MinValue;
-            var to = DateTime.MaxValue;
-
-            return GetSensorValues(sensorId, from, to);
         }
 
         private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)

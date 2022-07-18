@@ -1,12 +1,9 @@
-﻿using HSMSensorDataObjects;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringCoreInterface;
 using HSMServer.Core.MonitoringHistoryProcessor;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
-using HSMServer.Core.MonitoringHistoryProcessor.Processor;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
 using HSMServer.Model;
@@ -19,6 +16,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 
@@ -30,21 +28,13 @@ namespace HSMServer.Controllers
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
-        private readonly ISensorsInterface _sensorsInterface;
         private readonly ITreeValuesCache _treeValuesCache;
-        private readonly IHistoryProcessorFactory _historyProcessorFactory;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public HomeController(
-            ISensorsInterface sensorsInterface,
-            ITreeValuesCache treeValuesCache,
-            IHistoryProcessorFactory factory,
-            TreeViewModel treeViewModel)
+        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
         {
-            _sensorsInterface = sensorsInterface;
             _treeValuesCache = treeValuesCache;
-            _historyProcessorFactory = factory;
             _treeViewModel = treeViewModel;
         }
 
@@ -120,156 +110,128 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
-            var sensorId = SensorPathHelper.DecodeGuid(model.EncodedId);
+            var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
-            var values = _treeValuesCache.GetSensorValues(sensorId, DEFAULT_REQUESTED_COUNT);
-
-            ParseProductAndPath(model.EncodedId, out string product, out string path);
-            List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
-            var processedData = processor.ProcessHistory(unprocessedData);
-            return new HtmlString(TableHelper.CreateHistoryTable(processedData, model.EncodedId));
+            return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
         }
 
         [HttpPost]
         public HtmlString History([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.EncodedId, out string product, out string path);
-            return GetHistory(model.EncodedId, product, path, model.Type, model.From, model.To,
-                GetPeriodType(model.From, model.To));
+            var values = GetSensorValues(model.EncodedId, model.From, model.To);
+
+            return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
         }
 
         [HttpPost]
-        public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
-        {
-            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
-            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+        public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
+            new(TableHelper.CreateHistoryTable(GetAllSensorValues(encodedId), type, encodedId));
 
-            ParseProductAndPath(encodedId, out string product, out string path);
-            var result = _sensorsInterface.GetAllSensorHistory(product, path);
-
-            return new HtmlString(TableHelper.CreateHistoryTable(result, encodedId));
-        }
-
-        private HtmlString GetHistory(string encodedId, string product, string path, int type, DateTime from, DateTime to, PeriodType periodType)
-        {
-            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
-            var values = _treeValuesCache.GetSensorValues(sensorId, from.ToUniversalTime(), to.ToUniversalTime());
-
-            List<SensorHistoryData> unprocessedData =
-                _sensorsInterface.GetSensorHistory(product, path, from.ToUniversalTime(), to.ToUniversalTime());
-
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
-            var processedData = processor.ProcessHistory(unprocessedData);
-            return new HtmlString(TableHelper.CreateHistoryTable(processedData, SensorPathHelper.Encode($"{product}/{path}")));
-        }
 
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
-            var sensorId = SensorPathHelper.DecodeGuid(model.EncodedId);
+            var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
-            var values = _treeValuesCache.GetSensorValues(sensorId, DEFAULT_REQUESTED_COUNT);
-
-            ParseProductAndPath(model.EncodedId, out string product, out string path);
-            List<SensorHistoryData> unprocessedData = _sensorsInterface.GetSensorHistory(product, path, DEFAULT_REQUESTED_COUNT);
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)model.Type);
-            var processedData = processor.ProcessHistory(unprocessedData);
-            return new JsonResult(processedData);
+            return GetJsonProcessedValues(values, model.Type);
         }
 
         [HttpPost]
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
-            ParseProductAndPath(model.EncodedId, out string product, out string path);
-            return GetRawHistory(model.EncodedId, product, path, model.Type, model.From, model.To);
+            var values = GetSensorValues(model.EncodedId, model.From, model.To);
+
+            return GetJsonProcessedValues(values, model.Type);
         }
 
         [HttpPost]
-        public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
-        {
-            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
-            var values = _treeValuesCache.GetAllSensorValues(sensorId);
+        public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
+            new(GetAllSensorValues(encodedId).Select(v => (object)v));
 
-            ParseProductAndPath(encodedId, out string product, out string path);
-            var result = _sensorsInterface.GetAllSensorHistory(product, path);
-
-            return new JsonResult(result);
-        }
-
-        private JsonResult GetRawHistory(string encodedId, string product, string path, int type, DateTime from, DateTime to)
-        {
-            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
-            var values = _treeValuesCache.GetSensorValues(sensorId, from.ToUniversalTime(), to.ToUniversalTime());
-
-            List<SensorHistoryData> unprocessedData =
-                _sensorsInterface.GetSensorHistory(product, path, from.ToUniversalTime(), to.ToUniversalTime());
-
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
-            var processedData = processor.ProcessHistory(unprocessedData);
-            return new JsonResult(processedData);
-        }
 
         public FileResult ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            ParseProductAndPath(encodedId, out string product, out string path);
             DateTime fromUTC = from.ToUniversalTime();
             DateTime toUTC = to.ToUniversalTime();
-            List<SensorHistoryData> historyList = _sensorsInterface.GetSensorHistory(product, path,
-                fromUTC, toUTC);
-            string fileName = $"{product}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
+
+            var (productName, path) = GetSensorProductAndPath(encodedId);
+            string fileName = $"{productName}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
-            return GetExportHistory(historyList, type, fileName);
+
+            var values = GetSensorValues(encodedId, fromUTC, toUTC);
+
+            return GetExportHistory(values, type, fileName);
         }
 
         public FileResult ExportHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            ParseProductAndPath(encodedId, out string product, out string path);
-            List<SensorHistoryData> historyList = _sensorsInterface.GetAllSensorHistory(product, path);
-            string fileName = $"{product}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
-            return GetExportHistory(historyList, type, fileName);
+            var (productName, path) = GetSensorProductAndPath(encodedId);
+            string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
+
+            return GetExportHistory(GetAllSensorValues(encodedId), type, fileName);
         }
 
-        private FileResult GetExportHistory(List<SensorHistoryData> dataList,
-            int type, string fileName)
+        private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
         {
-            IHistoryProcessor processor = _historyProcessorFactory.CreateProcessor((SensorType)type);
-            string csv = processor.GetCsvHistory(dataList);
-            byte[] fileContents = Encoding.UTF8.GetBytes(csv);
-            return File(fileContents, GetFileTypeByExtension(fileName), fileName);
+            var csv = HistoryProcessorFactory.BuildProcessor(type).GetCsvHistory(values);
+            var content = Encoding.UTF8.GetBytes(csv);
+
+            return File(content, GetFileTypeByExtension(fileName), fileName);
         }
+
+
+        private List<BaseValue> GetSensorValues(string encodedId, int count) =>
+            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
+
+        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to) =>
+            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+
+        private List<BaseValue> GetAllSensorValues(string encodedId)
+        {
+            var from = DateTime.MinValue;
+            var to = DateTime.MaxValue;
+
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+        }
+
+        private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
+            HistoryProcessorFactory.BuildProcessor(type).ProcessHistory(values);
+
+        private static JsonResult GetJsonProcessedValues(List<BaseValue> values, int type) =>
+            new(GetProcessedValues(values, type).Select(v => (object)v));
 
         #endregion
 
         #region File
 
         [HttpGet]
-        public FileResult GetFile([FromQuery(Name = "Selected")] string selectedSensor)
+        public FileResult GetFile([FromQuery(Name = "Selected")] string encodedId)
         {
-            ParseProductAndPath(selectedSensor, out var product, out var path);
+            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
 
-            var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
-            var fileName = $"{path.Replace('/', '_')}.{extension}";
-
-            return File(content, GetFileTypeByExtension(fileName), fileName);
+            return File(value.Value, GetFileTypeByExtension(fileName), fileName);
         }
 
         [HttpPost]
-        public IActionResult GetFileStream([FromQuery(Name = "Selected")] string selectedSensor)
+        public IActionResult GetFileStream([FromQuery(Name = "Selected")] string encodedId)
         {
-            ParseProductAndPath(selectedSensor, out var product, out var path);
+            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
 
-            var (content, extension) = _sensorsInterface.GetFileSensorValueData(product, path);
-
-            var fileContentsStream = new MemoryStream(content);
-            var fileName = $"{path.Replace('/', '_')}.{extension}";
+            var fileContentsStream = new MemoryStream(value.Value);
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
             return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
         }
 
-        private string GetFileTypeByExtension(string fileName)
+        private FileValue GetFileSensorValue(string encodedId) =>
+            _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
+
+        private static string GetFileTypeByExtension(string fileName)
         {
             var provider = new FileExtensionContentTypeProvider();
             if (!provider.TryGetContentType(fileName, out var contentType))
@@ -314,14 +276,13 @@ namespace HSMServer.Controllers
 
         #endregion
 
-        private void ParseProductAndPath(string encodedId, out string product, out string path)
+        private (string productName, string path) GetSensorProductAndPath(string encodedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(encodedId);
 
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
-            path = sensor?.Path;
-            product = sensor?.Product;
+            return (sensor?.Product, sensor?.Path);
         }
 
         private static PeriodType GetPeriodType(DateTime from, DateTime to)
