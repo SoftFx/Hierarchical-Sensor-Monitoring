@@ -544,6 +544,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
+            _sensorValuesDatabases.GetAllDatabases().ForEach(d => d.Dispose());
         }
     }
 }

@@ -58,6 +58,8 @@ namespace HSMServer.Core.Cache
         {
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
+
+            _databaseCore.Dispose();
         }
 
 
@@ -308,14 +310,6 @@ namespace HSMServer.Core.Cache
                 _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
 
             return values;
-        }
-
-        public List<BaseValue> GetAllSensorValues(Guid sensorId)
-        {
-            var from = DateTime.MinValue;
-            var to = DateTime.MaxValue;
-
-            return GetSensorValues(sensorId, from, to);
         }
 
         public FileValue GetFileSensorValue(Guid sensorId)

@@ -187,8 +187,13 @@ namespace HSMServer.Controllers
         private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to) =>
             _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
 
-        private List<BaseValue> GetAllSensorValues(string encodedId) =>
-            _treeValuesCache.GetAllSensorValues(SensorPathHelper.DecodeGuid(encodedId));
+        private List<BaseValue> GetAllSensorValues(string encodedId)
+        {
+            var from = DateTime.MinValue;
+            var to = DateTime.MaxValue;
+
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+        }
 
         private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
             HistoryProcessorFactory.BuildProcessor(type).ProcessHistory(values);
