@@ -60,6 +60,9 @@ namespace HSMServer.Core.Cache
             _updatesQueue?.Dispose();
 
             _databaseCore.Dispose();
+
+            foreach (var sensor in _sensors.Values)
+                sensor.Dispose();
         }
 
 
@@ -359,7 +362,7 @@ namespace HSMServer.Core.Cache
 
             // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
             // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
-            if (sensor.TryAddValue(value, out var cachedValue))
+            if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
