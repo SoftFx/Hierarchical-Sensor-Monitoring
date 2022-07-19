@@ -119,6 +119,8 @@ namespace HSMServer.Core.Model
 
             ValidationResult = PredefinedValidationResults.Success;
 
+            InitializeDefaultPolicies();
+
             return this;
         }
 
@@ -158,6 +160,8 @@ namespace HSMServer.Core.Model
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
+
+        protected virtual void InitializeDefaultPolicies() { }
 
 
         public void Dispose() => Storage.Dispose();

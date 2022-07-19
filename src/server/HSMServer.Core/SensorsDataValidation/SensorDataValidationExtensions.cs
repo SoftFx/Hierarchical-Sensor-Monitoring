@@ -51,7 +51,7 @@ namespace HSMServer.Core.SensorsDataValidation
             if (value.Value.Length > ValidationConstants.MAX_STRING_LENGTH)
             {
                 //value.Value = value.Value[0..ValidationConstants.MAX_STRING_LENGTH];
-                return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
+                return PredefinedValidationResults.GetTooLongSensorValueValidationResult();
             }
 
             return new ValidationResult();

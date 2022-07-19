@@ -5,5 +5,9 @@
         protected override StringValuesStorage Storage { get; } = new StringValuesStorage();
 
         public override SensorType Type { get; } = SensorType.String;
+
+
+        protected override void InitializeDefaultPolicies() =>
+            _policies.Add(new StringValueLengthPolicy());
     }
 }
