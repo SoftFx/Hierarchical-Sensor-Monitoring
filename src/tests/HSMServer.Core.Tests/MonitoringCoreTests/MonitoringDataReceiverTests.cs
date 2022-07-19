@@ -21,7 +21,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private const int SeveralSensorValuesCount = 3;
 
         private readonly string _testProductName = TestProductsManager.TestProduct.DisplayName;
-        private readonly BarSensorsStorage _barStorage;
         private readonly ITreeValuesCache _valuesCache;
 
         private delegate List<SensorModel> GetSensorsFromCache();
@@ -33,8 +32,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         public MonitoringDataReceiverTests(MonitoringDataReceiverFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
-            _barStorage = new BarSensorsStorage();
-
             var configProviderLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             var configurationProvider = new ConfigurationProvider(_databaseCoreManager.DatabaseCore, configProviderLogger);
 
@@ -43,7 +40,6 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseCoreManager.DatabaseCore,
-                _barStorage,
                 configurationProvider,
                 monitoringLogger);
         }

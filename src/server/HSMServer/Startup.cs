@@ -48,7 +48,6 @@ namespace HSMServer
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-            services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
@@ -127,11 +126,8 @@ namespace HSMServer
 
         private void OnShutdown(object services)
         {
-            if (services is (MonitoringCore monitoringCore, ITreeValuesCache cache))
-            {
-                monitoringCore.Dispose();
+            if (services is ITreeValuesCache cache)
                 cache.Dispose();
-            }
 
             // TODO!!! Remove this process Kill
             System.Diagnostics.Process.GetCurrentProcess().Kill();

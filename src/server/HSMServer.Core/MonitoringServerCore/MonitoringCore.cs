@@ -13,20 +13,17 @@ using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.MonitoringServerCore
 {
-    public class MonitoringCore : IDisposable
+    public class MonitoringCore
     {
         private readonly IDatabaseCore _databaseCore;
-        private readonly IBarSensorsStorage _barsStorage;
         private readonly ILogger<MonitoringCore> _logger;
 
 
-        public MonitoringCore(IDatabaseCore databaseCore, IBarSensorsStorage barsStorage,
+        public MonitoringCore(IDatabaseCore databaseCore,
             IConfigurationProvider configurationProvider, ILogger<MonitoringCore> logger)
         {
             _logger = logger;
             _databaseCore = databaseCore;
-            _barsStorage = barsStorage;
-            _barsStorage.IncompleteBarOutdated += BarsStorage_IncompleteBarOutdated;
 
             Thread.Sleep(1000);
 
@@ -98,27 +95,6 @@ namespace HSMServer.Core.MonitoringServerCore
             return true;
         }
 
-        private bool ProcessBarSensorValue(BarSensorValueBase value, string product, DateTime timeCollected)
-        {
-            if (value.EndTime == DateTime.MinValue)
-            {
-                _barsStorage.Add(value, product, timeCollected);
-                return false;
-            }
-
-            _barsStorage.Remove(product, value.Path);
-            return true;
-        }
-
         #endregion
-
-        public void Dispose()
-        {
-            var lastBarsValues = _barsStorage.GetAllLastValues();
-            foreach (var lastBarValue in lastBarsValues)
-                ProcessExtendedBarData(lastBarValue);
-
-            _barsStorage?.Dispose();
-        }
     }
 }
