@@ -79,11 +79,11 @@ namespace HSMServer.Core.MonitoringServerCore
         {
             if (validationResult.IsError)
             {
-                _logger.LogError($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
+                _logger.LogError($"Sensor data validation {validationResult.Result}(s). Sensor: '{value?.Path}', error(s): '{validationResult.Error}'");
                 return false;
             }
             else if (validationResult.IsWarning)
-                _logger.LogWarning($"Sensor data validation {validationResult.ResultType}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
+                _logger.LogWarning($"Sensor data validation {validationResult.Result}(s). Sensor: '{value?.Path}', warning(s): '{validationResult.Warning}'");
 
             return true;
         }

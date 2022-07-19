@@ -33,6 +33,8 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
+        public bool IsInitialized { get; private set; }
+
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
         public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
@@ -241,7 +243,7 @@ namespace HSMServer.Core.Cache
             sensor.Update(updatedSensor);
             _databaseCore.UpdateSensor(sensor.ToEntity());
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -254,7 +256,7 @@ namespace HSMServer.Core.Cache
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
+            OnChangeSensorEvent(sensor, TransactionType.Delete);
         }
 
         public void RemoveSensorsData(string productId)
@@ -277,10 +279,13 @@ namespace HSMServer.Core.Cache
             sensor.ClearValues();
             _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
+
+        public void OnChangeSensorEvent(BaseSensorModel model, TransactionType type) =>
+            ChangeSensorEvent?.Invoke(model, type);
 
 
         public List<BaseValue> GetSensorValues(Guid sensorId, int count)
@@ -361,11 +366,10 @@ namespace HSMServer.Core.Cache
             }
 
             // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
-            // TODO : saveToDb for bar values - MonitoingCore.ProcessBarSensorValue(storeInfo.BaseValue, product.DisplayName, sensor.ReceivingTime);
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
 
@@ -385,6 +389,8 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys(accessKeysEntities.ToList());
             _logger.Info($"{nameof(accessKeysEntities)} applied");
+
+            IsInitialized = true;
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
         }
@@ -581,7 +587,7 @@ namespace HSMServer.Core.Cache
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
+            OnChangeSensorEvent(sensor, TransactionType.Add);
         }
 
         private void UpdateProduct(ProductModel product)

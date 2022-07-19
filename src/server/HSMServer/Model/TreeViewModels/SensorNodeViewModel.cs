@@ -1,6 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Extensions;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 
@@ -10,12 +8,6 @@ namespace HSMServer.Model.TreeViewModels
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
-
-        private readonly TimeSpan _minimumUpdateInterval = new(0, 0, 5, 0);
-
-        private bool _isSensorValueOutdated;
-
-        private string _validationError;
 
 
         public Guid Id { get; }
@@ -42,36 +34,11 @@ namespace HSMServer.Model.TreeViewModels
 
         internal string Unit { get; private set; }
 
-        public override SensorStatus Status
-        {
-            get
-            {
-                var lastUpdateInterval = DateTime.UtcNow - UpdateTime;
+        internal BaseValue LastValue { get; private set; }
 
-                if (lastUpdateInterval < _minimumUpdateInterval || ExpectedUpdateInterval == TimeSpan.Zero ||
-                    lastUpdateInterval < ExpectedUpdateInterval)
-                {
-                    _isSensorValueOutdated = false;
-                    return base.Status;
-                }
+        public string ValidationError { get; private set; }
 
-                _isSensorValueOutdated = true;
-                return base.Status.GetWorst(SensorStatus.Warning);
-            }
-            protected set => base.Status = value;
-        }
-
-        public string ValidationError
-        {
-            get
-            {
-                if (_isSensorValueOutdated)
-                    return $"{_validationError}{Environment.NewLine}{ValidationConstants.SensorValueOutdated}";
-
-                return _validationError;
-            }
-            private set => _validationError = value;
-        }
+        public override SensorStatus Status { get; protected set; }
 
 
         public SensorNodeViewModel(BaseSensorModel model)
@@ -112,13 +79,13 @@ namespace HSMServer.Model.TreeViewModels
             SensorType = model.Type;
             Description = model.Description;
             UpdateTime = model.LastUpdateTime;
-            // TODO
-            //Status = model.Status;
-            //ValidationError = model.ValidationError;
+            Status = model.ValidationResult.Result;
+            ValidationError = model.ValidationResult.Message;
             Product = model.ProductName;
             Path = model.Path;
             Unit = model.Unit;
 
+            LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
 

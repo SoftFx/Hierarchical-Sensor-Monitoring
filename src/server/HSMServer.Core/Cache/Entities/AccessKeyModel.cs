@@ -77,6 +77,8 @@ namespace HSMServer.Core.Cache.Entities
         }
 
 
+        public bool HasExpired() => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
+
         public AccessKeyModel Update(AccessKeyUpdate model)
         {
             if (model.DisplayName != null)

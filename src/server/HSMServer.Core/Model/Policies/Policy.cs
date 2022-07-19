@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.Model
@@ -23,11 +24,7 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 Policy = this,
             };
-    }
 
-
-    public abstract class Policy<T> : Policy where T : BaseValue
-    {
-        protected Policy() : base() { }
+        internal abstract ValidationResult Validate<T>(T value) where T : BaseValue;
     }
 }

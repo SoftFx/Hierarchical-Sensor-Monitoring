@@ -1,8 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -16,7 +18,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : IDisposable
     {
-        protected readonly List<Policy> _systemPolicies = new();
+        protected readonly List<Policy> _policies = new();
 
 
         protected abstract ValuesStorage Storage { get; }
@@ -38,10 +40,6 @@ namespace HSMServer.Core.Model
 
         public SensorState State { get; private set; }
 
-        // TODO: Status & DataError -> ValidationResult
-        //public SensorStatus Status { get; private set; }
-        //public string DataError { get; private set; }
-
         public string Unit { get; private set; }
 
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
@@ -49,6 +47,8 @@ namespace HSMServer.Core.Model
         public string ProductName { get; private set; }
 
         public string Path { get; private set; }
+
+        public ValidationResult ValidationResult { get; protected set; }
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -62,6 +62,19 @@ namespace HSMServer.Core.Model
         {
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
+        }
+
+
+        public bool CheckExpectedUpdateInterval(BaseValue value)
+        {
+            if (ExpectedUpdateIntervalPolicy == null || value == null)
+                return false;
+
+            var validationMessage = ValidationResult.Message;
+
+            ValidationResult += ExpectedUpdateIntervalPolicy.Validate(value);
+
+            return ValidationResult.Message != validationMessage;
         }
 
 
@@ -104,6 +117,8 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Unit = entity.Unit;
 
+            ValidationResult = PredefinedValidationResults.Success;
+
             return this;
         }
 
@@ -119,7 +134,7 @@ namespace HSMServer.Core.Model
                 CreationDate = CreationDate.Ticks,
                 Type = (byte)Type,
                 State = (byte)State,
-                Policies = GetPolicyIds(),
+                Policies = _policies.Select(p => p.Id.ToString()).ToList(),
             };
 
 
@@ -138,13 +153,11 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddPolicy(Policy policy)
         {
-            _systemPolicies.Add(policy);
+            _policies.Add(policy);
 
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
-
-        protected abstract List<string> GetPolicyIds();
 
 
         public void Dispose() => Storage.Dispose();

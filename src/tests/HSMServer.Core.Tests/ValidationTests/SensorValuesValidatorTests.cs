@@ -46,7 +46,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = value.Validate();
 
-            Assert.Equal(ResultType.Error, result.ResultType);
+            Assert.Equal(ResultType.Error, result.Result);
             Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
             Assert.True(string.IsNullOrEmpty(result.Warning));
         }
@@ -69,7 +69,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = stringSensorValue.Validate();
 
-            Assert.Equal(ResultType.Warning, result.ResultType);
+            Assert.Equal(ResultType.Warning, result.Result);
             Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
             Assert.True(string.IsNullOrEmpty(result.Error));
         }
@@ -84,7 +84,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var result = stringSensorValue.Validate();
 
-            Assert.Equal(ResultType.Error, result.ResultType);
+            Assert.Equal(ResultType.Error, result.Result);
             Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
             Assert.Equal(ValidationConstants.PathTooLong, result.Error);
         }
@@ -184,7 +184,7 @@ namespace HSMServer.Core.Tests.ValidationTests
 
         private static void TestCorrectData(ValidationResult result)
         {
-            Assert.Equal(ResultType.Ok, result.ResultType);
+            Assert.Equal(ResultType.Ok, result.Result);
 
             Assert.True(string.IsNullOrEmpty(result.Warning));
             Assert.True(string.IsNullOrEmpty(result.Error));

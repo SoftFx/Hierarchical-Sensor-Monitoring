@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.DataLayer;
+using HSMServer.Core.SensorsDataValidation;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,20 +7,26 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly List<Policy<T>> _userPolicies = new();
+        private readonly ValidationResult _badValueType =
+            new($"Sensor value type is not {typeof(T).Name}", SensorStatus.Error);
 
 
         protected override ValuesStorage<T> Storage { get; }
 
 
-        // TODO : false only if there is some system exception or smth like this (because if false - value is not saved to db)
         internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
         {
+            ValidationResult = PredefinedValidationResults.Success;
+
             if (value is T valueT)
             {
+                Validate(valueT);
+
                 cachedValue = Storage.AddValue(valueT);
                 return true;
             }
+            else
+                ValidationResult += _badValueType;
 
             cachedValue = default;
             return false;
@@ -30,29 +37,23 @@ namespace HSMServer.Core.Model
             var value = valueBytes.ConvertToSensorValue<T>();
 
             if (value != null && value is T valueT)
+            {
+                Validate(valueT);
+
                 Storage.AddValueBase(valueT);
+            }
         }
 
         internal override List<BaseValue> ConvertValues(List<byte[]> valuesBytes) =>
             valuesBytes.Select(v => v.ConvertToSensorValue<T>()).ToList();
 
-
-        internal override void AddPolicy(Policy policy)
+        private void Validate(BaseValue value)
         {
-            if (policy is Policy<T> customPolicy)
-                _userPolicies.Add(customPolicy);
-            else
-                base.AddPolicy(policy);
-        }
+            if (value.Status != SensorStatus.Ok)
+                ValidationResult = new(value.Status);
 
-        protected override List<string> GetPolicyIds()
-        {
-            var policyIds = new List<string>(_systemPolicies.Count + _userPolicies.Count);
-
-            policyIds.AddRange(_systemPolicies.Select(p => p.Id.ToString()));
-            policyIds.AddRange(_userPolicies.Select(p => p.Id.ToString()));
-
-            return policyIds;
+            foreach (var policy in _policies)
+                ValidationResult += policy.Validate(value);
         }
     }
 }

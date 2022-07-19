@@ -105,8 +105,8 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ModifyStatus()
         {
-            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Unknown : VisibleSensors.Max(s => s.Status);
-            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Unknown : Nodes.Values.Max(n => n.Status);
+            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Ok : VisibleSensors.Max(s => s.Status);
+            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
 
             Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
         }
