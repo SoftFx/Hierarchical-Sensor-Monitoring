@@ -106,7 +106,7 @@ namespace HSMServer.Core.Model
                 ExpectedUpdateIntervalPolicy = null;
 
             else if (ExpectedUpdateIntervalPolicy == null)
-                ExpectedUpdateIntervalPolicy = new ExpectedUpdateIntervalPolicy(interval.Ticks);
+                AddPolicy(new ExpectedUpdateIntervalPolicy(interval.Ticks));
 
             else
                 ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval = interval.Ticks;
