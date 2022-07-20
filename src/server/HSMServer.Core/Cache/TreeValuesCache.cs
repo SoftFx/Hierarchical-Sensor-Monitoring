@@ -238,8 +238,12 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
                 return;
 
+            var oldInterval = sensor.ExpectedUpdateIntervalPolicy?.ExpectedUpdateInterval;
+            var intervalId = sensor.ExpectedUpdateIntervalPolicy?.Id;
+
             sensor.Update(updatedSensor);
             _databaseCore.UpdateSensor(sensor.ToEntity());
+            UpdateIntervalPolicy(intervalId, oldInterval, sensor.ExpectedUpdateIntervalPolicy);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -368,6 +372,21 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
+        private void UpdateIntervalPolicy(Guid? intervalId, long? oldInterval,
+            ExpectedUpdateIntervalPolicy newPolicy)
+        {
+            if (intervalId == null && oldInterval == null && newPolicy != null)
+                _databaseCore.AddPolicy(newPolicy.ToEntity());
+            else
+            {
+                if (newPolicy == null)
+                    _databaseCore.RemovePolicy(intervalId.Value);
+
+                else if (oldInterval.Value != newPolicy.ExpectedUpdateInterval)
+                    _databaseCore.UpdatePolicy(newPolicy.ToEntity());
+            }
+        }
+
 
         private void Initialize()
         {
@@ -408,6 +427,7 @@ namespace HSMServer.Core.Cache
         }
 
         private List<byte[]> RequestPolicies()
+        
         {
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
             var policyEntities = _databaseCore.GetAllPolicies();

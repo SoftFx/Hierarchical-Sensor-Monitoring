@@ -361,6 +361,16 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddPolicy(entity);
         }
 
+        public void UpdatePolicy(PolicyEntity entity) => _environmentDatabase.AddPolicy(entity);
+        
+        public void RemovePolicy(Guid id)
+        {
+            var strId = id.ToString();
+
+            _environmentDatabase.RemovePolicyFromList(strId);
+            _environmentDatabase.RemovePolicy(strId);
+        }
+
         public List<byte[]> GetAllPolicies()
         {
             var policiesIds = _environmentDatabase.GetAllPoliciesIds();

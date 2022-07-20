@@ -84,10 +84,24 @@ namespace HSMServer.Core.Model
         internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description;
-            //ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval); // TODO update expected update interval policy!!!
             Unit = sensor.Unit;
+
+            UpdateInterval(sensor.ExpectedUpdateInterval);
         }
 
+        internal void UpdateInterval(string intervalStr)
+        {
+            var interval = TimeSpan.Parse(intervalStr);
+
+            if (interval == TimeSpan.MinValue)
+                ExpectedUpdateIntervalPolicy = null;
+
+            else if (ExpectedUpdateIntervalPolicy == null)
+                ExpectedUpdateIntervalPolicy = new ExpectedUpdateIntervalPolicy(interval.Ticks);
+
+            else
+                ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval = interval.Ticks;
+        }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
         {
