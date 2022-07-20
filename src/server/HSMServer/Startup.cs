@@ -56,6 +56,7 @@ namespace HSMServer
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
+            services.AddHostedService<MonitoringBackgroundService>();
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 

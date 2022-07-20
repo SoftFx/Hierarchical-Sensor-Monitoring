@@ -2,6 +2,7 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Configuration;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Core.SensorsDataValidation
 {
@@ -19,7 +20,7 @@ namespace HSMServer.Core.SensorsDataValidation
         }
 
 
-        public static ValidationResult Validate(this SensorValueBase value)
+        public static ValidationResult Validate(this BaseValue value)
         {
             if (value == null)
                 return PredefinedValidationResults.NullObjectValidationResult;
@@ -28,32 +29,32 @@ namespace HSMServer.Core.SensorsDataValidation
         }
 
 
-        private static ValidationResult ValidateSensorPath(this SensorValueBase value)
+        private static ValidationResult ValidateSensorPath(this BaseValue value)
         {
-            var pathLength = value.Path.Split(CommonConstants.SensorPathSeparator).Length;
+            var pathLength = 10;// value.Path.Split(CommonConstants.SensorPathSeparator).Length;
 
             return pathLength > _maxPathLength
                 ? PredefinedValidationResults.TooLongPathValidationResult
-                : new ValidationResult(value);
+                : new ValidationResult();
         }
 
-        private static ValidationResult TypedValidate(this SensorValueBase value) =>
+        private static ValidationResult TypedValidate(this BaseValue value) =>
             value switch
             {
-                StringSensorValue stringSensorValue => stringSensorValue.Validate(),
+                StringValue stringSensorValue => stringSensorValue.Validate(),
                 //UnitedSensorValue unitedSensorValue => unitedSensorValue.ValidateUnitedSensorData() + unitedSensorValue.ValidateUnitedSensorType(),
-                _ => new ValidationResult(value),
+                _ => new ValidationResult(),
             };
 
-        private static ValidationResult Validate(this StringSensorValue value)
+        private static ValidationResult Validate(this StringValue value)
         {
-            if (value.StringValue.Length > ValidationConstants.MAX_STRING_LENGTH)
+            if (value.Value.Length > ValidationConstants.MAX_STRING_LENGTH)
             {
-                value.StringValue = value.StringValue[0..ValidationConstants.MAX_STRING_LENGTH];
-                return PredefinedValidationResults.GetTooLongSensorValueValidationResult(value);
+                //value.Value = value.Value[0..ValidationConstants.MAX_STRING_LENGTH];
+                return PredefinedValidationResults.GetTooLongSensorValueValidationResult();
             }
 
-            return new ValidationResult(value);
+            return new ValidationResult();
         }
 
         //private static ValidationResult ValidateUnitedSensorData(this UnitedSensorValue value)
