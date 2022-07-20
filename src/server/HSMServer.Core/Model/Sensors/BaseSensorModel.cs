@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
 

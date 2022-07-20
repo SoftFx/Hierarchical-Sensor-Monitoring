@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.Model

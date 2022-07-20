@@ -17,7 +17,7 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache
+    public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";

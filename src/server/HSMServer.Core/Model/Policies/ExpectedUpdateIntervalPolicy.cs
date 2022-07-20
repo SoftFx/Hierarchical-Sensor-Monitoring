@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.SensorsDataValidation;
-using System;
+﻿using System;
 
 namespace HSMServer.Core.Model
 {

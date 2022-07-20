@@ -1,6 +1,4 @@
-﻿using HSMServer.Core.SensorsDataValidation;
-
-namespace HSMServer.Core.Model
+﻿namespace HSMServer.Core.Model
 {
     internal sealed class StringValueLengthPolicy : Policy<StringValue>
     {

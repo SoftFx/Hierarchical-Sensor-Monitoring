@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.DataLayer;
-using HSMServer.Core.SensorsDataValidation;
 using System.Collections.Generic;
 using System.Linq;
 

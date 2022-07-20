@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HSMServer.Core.SensorsDataValidation
+namespace HSMServer.Core.Model
 {
     public readonly struct ValidationResult
     {
