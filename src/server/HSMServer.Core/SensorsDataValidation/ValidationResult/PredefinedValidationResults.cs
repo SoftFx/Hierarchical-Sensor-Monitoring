@@ -17,13 +17,5 @@ namespace HSMServer.Core.SensorsDataValidation
 
         internal static ValidationResult GetTooLongSensorValueValidationResult() =>
             new(ValidationConstants.SensorValueIsTooLong, SensorStatus.Warning);
-
-        internal static ValidationResult Success { get; } = new();
-
-        internal static ValidationResult OutdatedSensor { get; }
-            = new(ValidationConstants.SensorValueOutdated, SensorStatus.Warning);
-
-        internal static ValidationResult TooLongStringSensor { get; } =
-            new(ValidationConstants.SensorValueIsTooLong, SensorStatus.Warning);
     }
 }

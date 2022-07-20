@@ -4,7 +4,6 @@ using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -114,7 +113,7 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Unit = entity.Unit;
 
-            ValidationResult = PredefinedValidationResults.Success;
+            ValidationResult = ValidationResult.Success;
 
             return this;
         }

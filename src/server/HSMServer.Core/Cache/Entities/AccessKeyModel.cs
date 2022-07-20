@@ -42,6 +42,9 @@ namespace HSMServer.Core.Cache.Entities
         public string DisplayName { get; private set; }
 
 
+        public bool HasExpired => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
+
+
         public AccessKeyModel(AccessKeyEntity entity)
         {
             Id = Guid.Parse(entity.Id);
@@ -76,8 +79,6 @@ namespace HSMServer.Core.Cache.Entities
             ExpirationTime = DateTime.MaxValue;
         }
 
-
-        public bool HasExpired() => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
 
         public AccessKeyModel Update(AccessKeyUpdate model)
         {

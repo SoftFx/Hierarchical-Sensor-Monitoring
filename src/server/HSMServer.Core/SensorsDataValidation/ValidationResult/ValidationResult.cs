@@ -10,6 +10,9 @@ namespace HSMServer.Core.SensorsDataValidation
         private readonly HashSet<string> _errors;
 
 
+        internal static ValidationResult Success { get; } = new();
+
+
         public SensorStatus Result { get; }
 
 
@@ -60,11 +63,6 @@ namespace HSMServer.Core.SensorsDataValidation
                     break;
             }
 
-            Result = result;
-        }
-
-        internal ValidationResult(SensorStatus result) : this()
-        {
             Result = result;
         }
 

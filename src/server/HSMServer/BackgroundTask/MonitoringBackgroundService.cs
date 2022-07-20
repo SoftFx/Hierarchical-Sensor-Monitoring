@@ -8,7 +8,7 @@ namespace HSMServer.BackgroundTask
 {
     public sealed class MonitoringBackgroundService : BackgroundService
     {
-        private const int Delay = 60000;
+        private const int Delay = 60000; // 1 minute
 
         private readonly ITreeValuesCache _treeValuesCache;
 
@@ -43,8 +43,8 @@ namespace HSMServer.BackgroundTask
         private void UpdateAccessKeysState()
         {
             foreach (var key in _treeValuesCache.GetAccessKeys())
-                if (key.HasExpired())
-                    _treeValuesCache.UpdateAccessKey(new() { Id = key.Id, State = KeyState.Expired, });
+                if (key.HasExpired)
+                    _treeValuesCache.UpdateAccessKey(new() { Id = key.Id, State = KeyState.Expired });
         }
     }
 }

@@ -58,7 +58,7 @@ namespace HSMServer.Core.Model
 
         private bool TryValidate(BaseValue value, out T typedValue)
         {
-            ValidationResult = PredefinedValidationResults.Success;
+            ValidationResult = ValidationResult.Success;
 
             if (value is T valueT)
             {
@@ -77,7 +77,7 @@ namespace HSMServer.Core.Model
         private void Validate(T value)
         {
             if (value.Status != SensorStatus.Ok)
-                ValidationResult = new(value.Status);
+                ValidationResult = new($"User data has {value.Status} status", value.Status);
 
             foreach (var policy in _policies)
                 ValidationResult += policy.Validate(value);
