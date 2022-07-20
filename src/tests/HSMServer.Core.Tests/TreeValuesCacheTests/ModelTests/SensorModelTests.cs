@@ -1,8 +1,5 @@
-﻿using HSMSensorDataObjects;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.SensorsDataValidation;
+﻿using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Tests.Infrastructure;
-using System;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
