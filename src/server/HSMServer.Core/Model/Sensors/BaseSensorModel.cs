@@ -113,7 +113,7 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Unit = entity.Unit;
 
-            ValidationResult = ValidationResult.Success;
+            ValidationResult = ValidationResult.Ok;
 
             return this;
         }

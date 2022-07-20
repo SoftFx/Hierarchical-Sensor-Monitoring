@@ -13,9 +13,5 @@ namespace HSMServer.Core.SensorsDataValidation
 
         internal static ValidationResult IncorrectTypeValidationResult { get; } =
             new(ValidationConstants.FailedToParseType, SensorStatus.Error);
-
-
-        internal static ValidationResult GetTooLongSensorValueValidationResult() =>
-            new(ValidationConstants.SensorValueIsTooLong, SensorStatus.Warning);
     }
 }
