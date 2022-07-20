@@ -24,7 +24,11 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 Policy = this,
             };
+    }
 
-        internal abstract ValidationResult Validate<T>(T value) where T : BaseValue;
+
+    public abstract class Policy<T> : Policy where T : BaseValue
+    {
+        internal abstract ValidationResult Validate(T value);
     }
 }

@@ -18,9 +18,6 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : IDisposable
     {
-        protected readonly List<Policy> _policies = new();
-
-
         protected abstract ValuesStorage Storage { get; }
 
         public abstract SensorType Type { get; }
@@ -65,14 +62,14 @@ namespace HSMServer.Core.Model
         }
 
 
-        public bool CheckExpectedUpdateInterval(BaseValue value)
+        public bool CheckExpectedUpdateInterval()
         {
-            if (ExpectedUpdateIntervalPolicy == null || value == null)
+            if (ExpectedUpdateIntervalPolicy == null || !HasData)
                 return false;
 
             var validationMessage = ValidationResult.Message;
 
-            ValidationResult += ExpectedUpdateIntervalPolicy.Validate(value);
+            ValidationResult += ExpectedUpdateIntervalPolicy.Validate(LastValue);
 
             return ValidationResult.Message != validationMessage;
         }
@@ -119,8 +116,6 @@ namespace HSMServer.Core.Model
 
             ValidationResult = PredefinedValidationResults.Success;
 
-            InitializeDefaultPolicies();
-
             return this;
         }
 
@@ -136,7 +131,7 @@ namespace HSMServer.Core.Model
                 CreationDate = CreationDate.Ticks,
                 Type = (byte)Type,
                 State = (byte)State,
-                Policies = _policies.Select(p => p.Id.ToString()).ToList(),
+                Policies = GetPolicyIds(),
             };
 
 
@@ -155,13 +150,11 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddPolicy(Policy policy)
         {
-            _policies.Add(policy);
-
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
         }
 
-        protected virtual void InitializeDefaultPolicies() { }
+        protected abstract List<string> GetPolicyIds();
 
 
         public void Dispose() => Storage.Dispose();

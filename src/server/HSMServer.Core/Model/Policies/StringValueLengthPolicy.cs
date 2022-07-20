@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Model
 {
-    internal sealed class StringValueLengthPolicy : Policy
+    internal sealed class StringValueLengthPolicy : Policy<StringValue>
     {
         public int MaxStringLength { get; init; } = StringSensorModel.DefaultMaxStringLength;
 
@@ -11,9 +11,9 @@ namespace HSMServer.Core.Model
         public StringValueLengthPolicy() { }
 
 
-        internal override ValidationResult Validate<T>(T value)
+        internal override ValidationResult Validate(StringValue value)
         {
-            if (value is StringValue strValue && strValue.Value.Length > MaxStringLength)
+            if (value.Value.Length > MaxStringLength)
                 return PredefinedValidationResults.TooLongStringSensor;
 
             return PredefinedValidationResults.Success;

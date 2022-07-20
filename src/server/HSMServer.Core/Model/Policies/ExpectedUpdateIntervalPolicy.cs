@@ -13,7 +13,8 @@ namespace HSMServer.Core.Model
             ExpectedUpdateInterval = expectedUpdateInterval;
         }
 
-        internal override ValidationResult Validate<T>(T value)
+
+        internal ValidationResult Validate(BaseValue value)
         {
             if ((DateTime.UtcNow - value.ReceivingTime).Ticks > ExpectedUpdateInterval)
                 return PredefinedValidationResults.OutdatedSensor;

@@ -36,7 +36,7 @@ namespace HSMServer.BackgroundTask
         private void ValidateSensors()
         {
             foreach (var sensor in _treeValuesCache.GetSensors())
-                if (sensor.CheckExpectedUpdateInterval(sensor.LastValue))
+                if (sensor.CheckExpectedUpdateInterval())
                     _treeValuesCache.OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
