@@ -26,12 +26,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             : base(fixture, registerFixture)
         {
             var configurationProvider = new Mock<IConfigurationProvider>();
-            var barStorage = new BarSensorsStorage();
 
             var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
             _monitoringCore = new MonitoringCore(
                 _databaseCoreManager.DatabaseCore,
-                barStorage,
                 configurationProvider.Object,
                 monitoringLogger);
         }
