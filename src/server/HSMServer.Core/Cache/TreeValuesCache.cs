@@ -481,7 +481,7 @@ namespace HSMServer.Core.Cache
         private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
         {
             var entitiesToResave = new List<SensorEntity>();
-            var policiesToAdd = new Dictionary<string, Policy>();
+            var policiesToAdd = new Dictionary<string, List<Policy>>();
 
             foreach (var entity in entities)
             {
@@ -497,13 +497,20 @@ namespace HSMServer.Core.Cache
 
                     if (entity.IsConverted)
                     {
-                        if (entity.ExpectedUpdateIntervalTicks != 0)
+                        void AddPolicy(Policy policy)
                         {
-                            var policy = new ExpectedUpdateIntervalPolicy(entity.ExpectedUpdateIntervalTicks);
-
                             sensor.AddPolicy(policy);
-                            policiesToAdd.Add(entity.Id, policy);
+
+                            if (!policiesToAdd.ContainsKey(entity.Id))
+                                policiesToAdd.Add(entity.Id, new List<Policy>());
+                            policiesToAdd[entity.Id].Add(policy);
                         }
+
+                        if (entity.ExpectedUpdateIntervalTicks != 0)
+                            AddPolicy(new ExpectedUpdateIntervalPolicy(entity.ExpectedUpdateIntervalTicks));
+
+                        if (sensor is StringSensorModel)
+                            AddPolicy(new StringValueLengthPolicy());
 
                         entitiesToResave.Add(sensor.ToEntity());
                     }
@@ -661,7 +668,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void ResaveSensors(List<SensorEntity> entitiesToResave, Dictionary<string, Policy> policiesToAdd)
+        private void ResaveSensors(List<SensorEntity> entitiesToResave, Dictionary<string, List<Policy>> policiesToAdd)
         {
             if (entitiesToResave.Count == 0)
                 return;
@@ -670,8 +677,9 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in entitiesToResave)
             {
-                if (policiesToAdd.TryGetValue(sensor.Id, out Policy policy))
-                    _databaseCore.AddPolicy(policy.ToEntity());
+                if (policiesToAdd.TryGetValue(sensor.Id, out List<Policy> policies))
+                    foreach (var policy in policies)
+                        _databaseCore.AddPolicy(policy.ToEntity());
 
                 _databaseCore.AddSensor(sensor);
             }
