@@ -4,7 +4,6 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.Cache.Entities
@@ -145,15 +144,5 @@ namespace HSMServer.Core.Cache.Entities
 
 
         private static string GetSensorName(string path) => path?.Split(CommonConstants.SensorPathSeparator)?[^1];
-
-        private static SensorStatus GetSensorStatus(ValidationResult validationResult) =>
-            validationResult.ResultType switch
-            {
-                ResultType.Unknown => SensorStatus.Unknown,
-                ResultType.Ok => SensorStatus.Ok,
-                ResultType.Warning => SensorStatus.Warning,
-                ResultType.Error => SensorStatus.Error,
-                _ => throw new InvalidCastException($"Unknown validation result: {validationResult.ResultType}"),
-            };
     }
 }

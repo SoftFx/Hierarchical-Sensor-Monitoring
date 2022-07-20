@@ -28,6 +28,6 @@ namespace HSMServer.Core.Model
 
     public abstract class Policy<T> : Policy where T : BaseValue
     {
-        protected Policy() : base() { }
+        internal abstract ValidationResult Validate(T value);
     }
 }

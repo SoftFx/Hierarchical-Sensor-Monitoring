@@ -30,6 +30,7 @@ namespace HSMServer.Core.Converters
                 return policyType switch
                 {
                     nameof(ExpectedUpdateIntervalPolicy) => JsonSerializer.Deserialize<ExpectedUpdateIntervalPolicy>(ref reader),
+                    nameof(StringValueLengthPolicy) => JsonSerializer.Deserialize<StringValueLengthPolicy>(ref reader),
                     _ => throw new JsonException(UnexpectedPolicyTypeError),
                 };
             }

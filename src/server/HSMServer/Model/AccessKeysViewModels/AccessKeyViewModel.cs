@@ -8,9 +8,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 {
     public class AccessKeyViewModel
     {
-        private readonly DateTime _expirationTime;
-
-
         public Guid Id { get; }
 
         public ProductNodeViewModel ParentProduct { get; }
@@ -34,8 +31,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, string authorName)
         {
-            _expirationTime = accessKey.ExpirationTime;
-
             Id = accessKey.Id;
             ParentProduct = parent;
             AuthorName = authorName;
@@ -70,8 +65,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         }
 
         internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
-
-        internal bool HasExpired() => DateTime.UtcNow >= _expirationTime && State < KeyState.Expired;
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue

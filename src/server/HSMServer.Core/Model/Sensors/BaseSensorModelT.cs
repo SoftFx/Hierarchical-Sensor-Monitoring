@@ -6,30 +6,29 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly List<Policy<T>> _userPolicies = new();
+        private readonly ValidationResult _badValueType =
+            new($"Sensor value type is not {typeof(T).Name}", SensorStatus.Error);
+
+        private readonly List<Policy<T>> _policies = new();
 
 
         protected override ValuesStorage<T> Storage { get; }
 
 
-        // TODO : false only if there is some system exception or smth like this (because if false - value is not saved to db)
         internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
         {
-            if (value is T valueT)
-            {
-                cachedValue = Storage.AddValue(valueT);
-                return true;
-            }
+            var result = TryValidate(value, out var valueT);
 
-            cachedValue = default;
-            return false;
+            cachedValue = result ? Storage.AddValue(valueT) : default;
+
+            return result;
         }
 
         internal override void AddValue(byte[] valueBytes)
         {
             var value = valueBytes.ConvertToSensorValue<T>();
 
-            if (value != null && value is T valueT)
+            if (TryValidate(value, out var valueT))
                 Storage.AddValueBase(valueT);
         }
 
@@ -39,20 +38,48 @@ namespace HSMServer.Core.Model
 
         internal override void AddPolicy(Policy policy)
         {
-            if (policy is Policy<T> customPolicy)
-                _userPolicies.Add(customPolicy);
+            if (policy is Policy<T> policyT)
+                _policies.Add(policyT);
             else
                 base.AddPolicy(policy);
         }
 
         protected override List<string> GetPolicyIds()
         {
-            var policyIds = new List<string>(_systemPolicies.Count + _userPolicies.Count);
+            var policies = _policies.Select(p => p.Id.ToString()).ToList();
 
-            policyIds.AddRange(_systemPolicies.Select(p => p.Id.ToString()));
-            policyIds.AddRange(_userPolicies.Select(p => p.Id.ToString()));
+            if (ExpectedUpdateIntervalPolicy != null)
+                policies.Add(ExpectedUpdateIntervalPolicy.Id.ToString());
 
-            return policyIds;
+            return policies;
+        }
+
+
+        private bool TryValidate(BaseValue value, out T typedValue)
+        {
+            ValidationResult = ValidationResult.Ok;
+
+            if (value is T valueT)
+            {
+                Validate(valueT);
+
+                typedValue = valueT;
+                return true;
+            }
+
+            typedValue = default;
+            ValidationResult += _badValueType;
+
+            return false;
+        }
+
+        private void Validate(T value)
+        {
+            if (value.Status != SensorStatus.Ok)
+                ValidationResult = new($"User data has {value.Status} status", value.Status);
+
+            foreach (var policy in _policies)
+                ValidationResult += policy.Validate(value);
         }
     }
 }

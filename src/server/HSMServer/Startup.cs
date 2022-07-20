@@ -6,7 +6,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
@@ -52,10 +51,10 @@ namespace HSMServer
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<TreeViewModel>();
-            services.AddSingleton<MonitoringCore>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
+            services.AddHostedService<MonitoringBackgroundService>();
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
@@ -80,9 +79,6 @@ namespace HSMServer
             {
                 app.UseExceptionHandler("/Error");
             }
-
-            var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, (app.ApplicationServices.GetService<MonitoringCore>(), app.ApplicationServices.GetService<ITreeValuesCache>()));
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -122,15 +118,6 @@ namespace HSMServer
             });
 
             app.UseHttpsRedirection();
-        }
-
-        private void OnShutdown(object services)
-        {
-            if (services is ITreeValuesCache cache)
-                cache.Dispose();
-
-            // TODO!!! Remove this process Kill
-            System.Diagnostics.Process.GetCurrentProcess().Kill();
         }
     }
 }

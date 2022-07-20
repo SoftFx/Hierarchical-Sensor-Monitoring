@@ -6,7 +6,6 @@ using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
