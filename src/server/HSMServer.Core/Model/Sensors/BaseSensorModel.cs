@@ -14,7 +14,13 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel : IDisposable
+    internal interface IBarSensor
+    {
+        BarBaseValue LocalLastValue { get; }
+    }
+
+
+    public abstract class BaseSensorModel
     {
         protected abstract ValuesStorage Storage { get; }
 
@@ -153,8 +159,5 @@ namespace HSMServer.Core.Model
         }
 
         protected abstract List<string> GetPolicyIds();
-
-
-        public void Dispose() => Storage.Dispose();
     }
 }

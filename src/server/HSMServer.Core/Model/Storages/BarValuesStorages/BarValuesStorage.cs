@@ -3,30 +3,32 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BarValuesStorage<T> : ValuesStorage<T>, IDisposable where T : BarBaseValue
+    public abstract class BarValuesStorage<T> : ValuesStorage<T> where T : BarBaseValue
     {
-        private T _lastValue;
+        internal override bool HasData => LocalLastValue != default || base.HasData;
 
-        internal override BaseValue LastValue => _lastValue ?? base.LastValue;
+        internal override BaseValue LastValue => LocalLastValue ?? base.LastValue;
+
+        internal T LocalLastValue { get; private set; }
 
 
         internal override T AddValue(T value)
         {
-            var addedValue = _lastValue != null && _lastValue.OpenTime != value.OpenTime
-                ? base.AddValue(_lastValue)
+            var addedValue = LocalLastValue != null && LocalLastValue.OpenTime != value.OpenTime
+                ? base.AddValue(LocalLastValue)
                 : null;
 
-            _lastValue = value;
+            LocalLastValue = value;
 
             return addedValue;
         }
 
         internal override List<BaseValue> GetValues(int count)
         {
-            if (_lastValue != null)
+            if (LocalLastValue != null)
             {
                 var values = base.GetValues(count - 1);
-                values.Add(_lastValue);
+                values.Add(LocalLastValue);
 
                 return values;
             }
@@ -38,17 +40,10 @@ namespace HSMServer.Core.Model
         {
             var values = base.GetValues(from, to);
 
-            if (_lastValue != null && _lastValue.ReceivingTime >= from && _lastValue.ReceivingTime <= to)
-                values.Add(_lastValue);
+            if (LocalLastValue != null && LocalLastValue.ReceivingTime >= from && LocalLastValue.ReceivingTime <= to)
+                values.Add(LocalLastValue);
 
             return values;
-        }
-
-
-        public override void Dispose()
-        {
-            if (_lastValue != null)
-                base.AddValue(_lastValue);
         }
     }
 }
