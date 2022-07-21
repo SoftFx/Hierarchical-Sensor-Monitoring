@@ -4,6 +4,11 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal sealed class IntBarHistoryProcessor : BarHistoryProcessor<int>
     {
+        protected override int DefaultMax { get; } = int.MinValue;
+
+        protected override int DefaultMin { get; } = int.MaxValue;
+
+
         protected override IntegerBarValue GetBarValue(SummaryBarItem<int> summary) =>
             new()
             {
