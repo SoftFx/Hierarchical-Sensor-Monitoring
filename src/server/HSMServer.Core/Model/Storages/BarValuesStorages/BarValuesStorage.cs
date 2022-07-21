@@ -12,19 +12,13 @@ namespace HSMServer.Core.Model
 
         internal override T AddValue(T value)
         {
-            if (_lastValue == null || _lastValue.OpenTime == value.OpenTime)
-            {
-                _lastValue = value;
-                return null;
-            }
-            else
-            {
-                var addedValue = base.AddValue(_lastValue);
+            var addedValue = _lastValue != null && _lastValue.OpenTime != value.OpenTime
+                ? base.AddValue(_lastValue)
+                : null;
 
-                _lastValue = value;
+            _lastValue = value;
 
-                return addedValue;
-            }
+            return addedValue;
         }
 
         internal override List<BaseValue> GetValues(int count)
