@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="10.3.0" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.32" />
     <PackageReference Include="LightningDB" Version="0.13.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" Version="6.0.0" />
@@ -43,7 +44,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
     <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
     <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
