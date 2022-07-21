@@ -6,6 +6,7 @@
 - Github workflows have been uploaded
 - Project file structure has been changed
 - Libraries and nugets versioning has been fixed
+- Docker image size has been reduced from 300mb to 100mb
 
 ## Source code
 
