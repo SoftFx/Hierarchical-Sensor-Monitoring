@@ -6,7 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="2.1.38" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
   </ItemGroup>
 
