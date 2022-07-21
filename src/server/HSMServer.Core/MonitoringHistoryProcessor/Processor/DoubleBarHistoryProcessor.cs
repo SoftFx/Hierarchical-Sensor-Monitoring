@@ -8,6 +8,11 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         private readonly NumberFormatInfo _format;
 
 
+        protected override double DefaultMax { get; } = double.MinValue;
+
+        protected override double DefaultMin { get; } = double.MaxValue;
+
+
         public DoubleBarHistoryProcessor()
         {
             _format = new NumberFormatInfo { NumberDecimalSeparator = "." };

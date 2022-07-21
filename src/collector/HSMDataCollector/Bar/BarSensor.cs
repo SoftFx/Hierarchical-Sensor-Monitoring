@@ -38,18 +38,16 @@ namespace HSMDataCollector.Bar
         protected override void SendDataTimer(object state)
         {
             List<T> collected;
-            DateTime endTime;
             DateTime startTime;
             lock (_syncObject)
             {
                 collected = new List<T>(_valuesList);
                 startTime = barStart;
-                endTime = DateTime.Now;
                 barStart = DateTime.Now;
                 _valuesList.Clear();
             }
 
-            UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime, endTime);
+            UnitedSensorValue dataObject = GetSensorValueFromGenericList(collected, startTime);
             EnqueueValue(dataObject);
         }
 
@@ -88,18 +86,20 @@ namespace HSMDataCollector.Bar
         }
 
 
-        private UnitedSensorValue GetSensorValueFromGenericList(List<T> values, DateTime barStart, DateTime? barEnd = null)
+        private UnitedSensorValue GetSensorValueFromGenericList(List<T> values, DateTime barStart)
         {
             try
             {
+                var barEnd = barStart + TimeSpan.FromMilliseconds(_barTimerPeriod);
+
                 if (_type == SensorType.DoubleBarSensor)
                 {
                     var doublesList = values.OfType<double>().ToList();
-                    return GetDoubleDataObject(doublesList, barStart, barEnd ?? DateTime.MinValue);
+                    return GetDoubleDataObject(doublesList, barStart, barEnd);
                 }
 
                 var intList = values.OfType<int>().ToList();
-                return GetIntegerDataObject(intList, barStart, barEnd ?? DateTime.MinValue);
+                return GetIntegerDataObject(intList, barStart, barEnd);
             }
             catch (Exception e)
             {
@@ -115,6 +115,7 @@ namespace HSMDataCollector.Bar
             valueBase.Type = _type;
             valueBase.Time = time.ToUniversalTime();
             valueBase.Description = Description;
+            valueBase.Status = SensorStatus.Ok;
         }
         #region Double methods
 

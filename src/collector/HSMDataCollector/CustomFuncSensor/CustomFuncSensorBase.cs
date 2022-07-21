@@ -47,6 +47,7 @@ namespace HSMDataCollector.CustomFuncSensor
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
             valueObject.Type = Type;
+            valueObject.Status = SensorStatus.Ok;
 
             return valueObject;
         }
