@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.SensorsDataValidation;
 using HSMServer.Core.Tests.Infrastructure;
 using Moq;
 
@@ -15,8 +14,6 @@ namespace HSMServer.Core.Tests.ValidationTests
 
             var configLogger = CommonMoqs.CreateNullLogger<ConfigurationProvider>();
             IConfigurationProvider config = new ConfigurationProvider(databaseMoq.Object, configLogger);
-
-            SensorDataValidationExtensions.Initialize(config);
         }
     }
 }

@@ -1,15 +1,16 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.SensorsDataValidation;
-using System;
+﻿using System;
 
 namespace HSMServer.Core.Model
 {
     public sealed class ExpectedUpdateIntervalPolicy : Policy
     {
-        private readonly ValidationResult _outdatedSensor =
-            new(ValidationConstants.SensorValueOutdated, SensorStatus.Warning);
+        private const string SensorValueOutdated = "Sensor value is older than ExpectedUpdateInterval!";
+
+        private readonly ValidationResult _outdatedSensor = new(SensorValueOutdated, SensorStatus.Warning);
+
 
         public long ExpectedUpdateInterval { get; set; }
+
 
         public ExpectedUpdateIntervalPolicy(long expectedUpdateInterval) : base()
         {
@@ -22,7 +23,7 @@ namespace HSMServer.Core.Model
             if ((DateTime.UtcNow - value.ReceivingTime).Ticks > ExpectedUpdateInterval)
                 return _outdatedSensor;
 
-            return ValidationResult.Success;
+            return ValidationResult.Ok;
         }
     }
 }

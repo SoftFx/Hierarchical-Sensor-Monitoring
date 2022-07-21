@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HSMServer.Core.SensorsDataValidation
+namespace HSMServer.Core.Model
 {
     public readonly struct ValidationResult
     {
@@ -10,7 +10,7 @@ namespace HSMServer.Core.SensorsDataValidation
         private readonly HashSet<string> _errors;
 
 
-        internal static ValidationResult Success { get; } = new();
+        internal static ValidationResult Ok { get; } = new();
 
 
         public SensorStatus Result { get; }

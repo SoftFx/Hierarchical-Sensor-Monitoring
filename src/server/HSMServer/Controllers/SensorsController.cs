@@ -360,8 +360,7 @@ namespace HSMServer.Controllers
         }
 
 
-        private bool CanAddToQueue(StoreInfo storeInfo,
-            out string message)
+        private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
             if (_cache.TryCheckKeyPermissions(storeInfo, out message))
             {
@@ -372,7 +371,7 @@ namespace HSMServer.Controllers
             return false;
         }
 
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
         {
             return new StoreInfo
             {

@@ -15,7 +15,7 @@ namespace HSMServer.Core.Cache
     }
 
 
-    public interface ITreeValuesCache : IDisposable
+    public interface ITreeValuesCache
     {
         bool IsInitialized { get; }
 

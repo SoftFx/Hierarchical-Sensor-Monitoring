@@ -17,11 +17,13 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache
+    public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
+        private const string ErrorTooLongPath = "Path for the sensor is too long.";
+        private const string NotInitializedCacheError = "Cache is not initialized yet.";
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -160,10 +162,21 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
+            if (!IsInitialized)
+            {
+                message = NotInitializedCacheError;
+                return false;
+            }
+
             var parts = path.Split(CommonConstants.SensorPathSeparator);
             if (parts.Contains(string.Empty))
             {
                 message = ErrorInvalidPath;
+                return false;
+            }
+            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
+            {
+                message = ErrorTooLongPath;
                 return false;
             }
 
@@ -433,7 +446,6 @@ namespace HSMServer.Core.Cache
         }
 
         private List<byte[]> RequestPolicies()
-        
         {
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
             var policyEntities = _databaseCore.GetAllPolicies();

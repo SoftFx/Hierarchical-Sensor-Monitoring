@@ -1,12 +1,11 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.SensorsDataValidation;
-
-namespace HSMServer.Core.Model
+﻿namespace HSMServer.Core.Model
 {
     internal sealed class StringValueLengthPolicy : Policy<StringValue>
     {
-        private readonly ValidationResult _tooLongStringSensor =
-            new(ValidationConstants.SensorValueIsTooLong, SensorStatus.Warning);
+        private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
+
+        private readonly ValidationResult _tooLongStringSensor = new(SensorValueIsTooLong, SensorStatus.Warning);
+
 
         public int MaxStringLength { get; init; } = StringSensorModel.DefaultMaxStringLength;
 
@@ -20,7 +19,7 @@ namespace HSMServer.Core.Model
             if (value.Value.Length > MaxStringLength)
                 return _tooLongStringSensor;
 
-            return ValidationResult.Success;
+            return ValidationResult.Ok;
         }
     }
 }

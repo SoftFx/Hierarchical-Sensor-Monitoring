@@ -4,7 +4,6 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 
 namespace HSMServer.Core.Cache.Entities

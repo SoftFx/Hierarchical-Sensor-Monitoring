@@ -1,18 +1,15 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 {
@@ -37,11 +34,11 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
 
-            var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
-            _monitoringCore = new MonitoringCore(
-                _databaseCoreManager.DatabaseCore,
-                configurationProvider,
-                monitoringLogger);
+            //var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
+            //_monitoringCore = new MonitoringCore(
+            //    _databaseCoreManager.DatabaseCore,
+            //    configurationProvider,
+            //    monitoringLogger);
         }
 
 

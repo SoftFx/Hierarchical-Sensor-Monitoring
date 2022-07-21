@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.SensorsDataValidation;
 using System;
 using System.Collections.Generic;
 
@@ -127,7 +126,7 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Unit = entity.Unit;
 
-            ValidationResult = ValidationResult.Success;
+            ValidationResult = ValidationResult.Ok;
 
             return this;
         }

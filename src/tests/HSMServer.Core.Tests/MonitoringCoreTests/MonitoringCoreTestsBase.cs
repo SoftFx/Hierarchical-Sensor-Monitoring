@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -17,8 +16,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected readonly IUserManager _userManager;
         protected readonly IUpdatesQueue _updatesQueue;
-
-        protected MonitoringCore _monitoringCore;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)

@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.DataLayer;
-using HSMServer.Core.SensorsDataValidation;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -58,7 +57,7 @@ namespace HSMServer.Core.Model
 
         private bool TryValidate(BaseValue value, out T typedValue)
         {
-            ValidationResult = ValidationResult.Success;
+            ValidationResult = ValidationResult.Ok;
 
             if (value is T valueT)
             {

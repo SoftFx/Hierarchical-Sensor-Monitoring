@@ -4,7 +4,6 @@ using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model.Sensor;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
@@ -27,11 +26,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var configurationProvider = new Mock<IConfigurationProvider>();
 
-            var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
-            _monitoringCore = new MonitoringCore(
-                _databaseCoreManager.DatabaseCore,
-                configurationProvider.Object,
-                monitoringLogger);
+            //var monitoringLogger = CommonMoqs.CreateNullLogger<MonitoringCore>();
+            //_monitoringCore = new MonitoringCore(
+            //    _databaseCoreManager.DatabaseCore,
+            //    configurationProvider.Object,
+            //    monitoringLogger);
         }
 
 
