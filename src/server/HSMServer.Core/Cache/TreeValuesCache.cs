@@ -255,11 +255,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-
-            var oldInterval = sensor.ExpectedUpdateIntervalPolicy;
-            (var type, var newPolicy) = GetUpdatedIntervalPolicy(updatedSensor.ExpectedUpdateInterval, oldInterval);
-
-            sensor.ExpectedUpdateIntervalPolicy = (ExpectedUpdateIntervalPolicy) UpdatePolicy(type, newPolicy);
+            UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
             OnChangeSensorEvent(sensor, TransactionType.Update);
@@ -337,21 +333,19 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
-        public Policy UpdatePolicy(TransactionType? type, Policy policy)
+        public void UpdatePolicy(TransactionType type, Policy policy)
         {
             switch (type)
             {
                 case TransactionType.Add:
                     _databaseCore.AddPolicy(policy.ToEntity());
-                    return policy;
+                    return;
                 case TransactionType.Update: 
                     _databaseCore.UpdatePolicy(policy.ToEntity());
-                    return policy;
+                    return;
                 case TransactionType.Delete:
                     _databaseCore.RemovePolicy(policy.Id);
-                    return null;
-                default:
-                    return null;
+                    return;
             }
         }
 
@@ -409,24 +403,29 @@ namespace HSMServer.Core.Cache
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
-        private (TransactionType?, ExpectedUpdateIntervalPolicy) GetUpdatedIntervalPolicy(TimeSpan newInterval,
-            ExpectedUpdateIntervalPolicy oldPolicy)
+        private void UpdateIntervalPolicy(TimeSpan newInterval, BaseSensorModel sensor)
         {
+            var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
+
             if (oldPolicy == null && newInterval != TimeSpan.Zero)
-                return (TransactionType.Add, new ExpectedUpdateIntervalPolicy(newInterval.Ticks));
+            {
+                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.Ticks);
+                sensor.ExpectedUpdateIntervalPolicy = newPolicy;
+                UpdatePolicy(TransactionType.Add, newPolicy);
+            }
             else
             {
                 if (newInterval == TimeSpan.Zero)
-                    return (TransactionType.Delete, oldPolicy);
-
+                {
+                    sensor.ExpectedUpdateIntervalPolicy = null;
+                    UpdatePolicy(TransactionType.Delete, oldPolicy);
+                }
                 else if (newInterval.Ticks != oldPolicy.ExpectedUpdateInterval)
                 {
                     oldPolicy.ExpectedUpdateInterval = newInterval.Ticks;
-                    return (TransactionType.Update, oldPolicy);
+                    UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
             }
-
-            return (null, null);
         }
 
         private void Initialize()

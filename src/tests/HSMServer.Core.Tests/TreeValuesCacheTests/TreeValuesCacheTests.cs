@@ -531,7 +531,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 Id = id ?? Guid.NewGuid(),
                 Description = RandomGenerator.GetRandomString(),
-                ExpectedUpdateInterval = TimeSpan.FromMinutes(10).ToString(),
+                //ExpectedUpdateInterval = TimeSpan.FromMinutes(10).ToString(),
                 Unit = RandomGenerator.GetRandomString(),
             };
 

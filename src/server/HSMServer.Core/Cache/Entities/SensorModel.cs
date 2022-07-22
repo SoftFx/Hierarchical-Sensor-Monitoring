@@ -82,7 +82,7 @@ namespace HSMServer.Core.Cache.Entities
         internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description;
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval;
+            //ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval);
             Unit = sensor.Unit;
         }
 
