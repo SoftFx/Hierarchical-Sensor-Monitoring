@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
@@ -21,13 +20,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         public Dictionary<double, T> Percentiles { get; set; }
 
 
-        public SummaryBarItem(BarBaseValue<T> value)
+        public SummaryBarItem(DateTime openTime, DateTime closeTime, T max, T min)
         {
-            Count = value.Count;
-            Max = value.Max;
-            Min = value.Min;
-            OpenTime = value.OpenTime;
-            CloseTime = value.CloseTime;
+            OpenTime = openTime;
+            CloseTime = closeTime;
+            Max = max;
+            Min = min;
         }
     }
 }

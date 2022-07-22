@@ -13,7 +13,7 @@ namespace HSMDataCollector.Bar
         private Timer _smallTimer;
         protected object _syncObject;
         protected DateTime barStart;
-        private int _barTimerPeriod;
+        protected int _barTimerPeriod;
         private int _smallTimerPeriod;
         protected int _precision;
         /// <summary>

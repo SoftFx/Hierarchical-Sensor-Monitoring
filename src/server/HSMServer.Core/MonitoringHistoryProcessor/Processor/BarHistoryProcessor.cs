@@ -12,6 +12,11 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         private readonly List<T> _percentilesList = new();
 
 
+        protected abstract T DefaultMax { get; }
+
+        protected abstract T DefaultMin { get; }
+
+
         protected abstract BarBaseValue<T> GetBarValue(SummaryBarItem<T> summary);
 
         protected abstract decimal GetComposition(T value1, int value2);
@@ -46,8 +51,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             var result = new List<BaseValue>();
 
             var oldestValue = values.First() as BarBaseValue<T>;
-            SummaryBarItem<T> summary = new(oldestValue);
             DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
+
+            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin);
+            ProcessItem(oldestValue, summary);
 
             for (int i = 1; i < values.Count; ++i)
             {
@@ -58,7 +65,9 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 {
                     result.Add(Convert(summary));
 
-                    summary = new SummaryBarItem<T>(value);
+                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin);
+                    ProcessItem(value, summary);
+
                     while (nextBarTime <= summary.CloseTime)
                         nextBarTime += compressionInterval;
                 }

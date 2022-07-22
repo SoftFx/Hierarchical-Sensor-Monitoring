@@ -1,16 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup Label="NuGet package definition">
     <PackageId>HSMDataCollector.HSMSensorDataObjects</PackageId>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>AnyCPU</Platforms>
-    <Version>2.1.31</Version>
+    <Version>2.1.32</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-	  <Copyright>Copyright © 2022</Copyright>
-	  <IsPackable>true</IsPackable>
-	  <Description>Data objects for HSMDataCollector</Description>
+    <Copyright>Copyright © 2022</Copyright>
+    <IsPackable>true</IsPackable>
+    <Description>Data objects for HSMDataCollector</Description>
   </PropertyGroup>
 </Project>

@@ -38,6 +38,7 @@ namespace HSMDataCollector.InstantValue
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
             valueObject.Type = _type;
+            valueObject.Status = SensorStatus.Ok;
             EnqueueValue(valueObject);
         }
 
@@ -51,6 +52,7 @@ namespace HSMDataCollector.InstantValue
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
             valueObject.Type = _type;
+            valueObject.Status = SensorStatus.Ok;
             EnqueueValue(valueObject);
         }
         

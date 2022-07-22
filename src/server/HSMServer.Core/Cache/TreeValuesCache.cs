@@ -63,10 +63,11 @@ namespace HSMServer.Core.Cache
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
 
-            _databaseCore.Dispose();
-
             foreach (var sensor in _sensors.Values)
-                sensor.Dispose();
+                if (sensor is IBarSensor barModel && barModel.LocalLastValue != default)
+                    _databaseCore.AddSensorValue(barModel.LocalLastValue.ToEntity(sensor.Id));
+
+            _databaseCore.Dispose();
         }
 
 
