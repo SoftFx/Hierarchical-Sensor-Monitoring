@@ -16,7 +16,7 @@ namespace HSMSensorDataObjects.FullDataObject
         [DataMember]
         public string Comment { get; set; }
         [DataMember]
-        public SensorStatus Status { get; set; }
+        public SensorStatus Status { get; set; } = SensorStatus.Ok;
         [DataMember]
         public string Description { get; set; }
         [DataMember]

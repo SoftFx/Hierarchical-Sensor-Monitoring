@@ -22,7 +22,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public string Comment { get; set; }
 
         [DataMember]
-        public SensorStatus Status { get; set; }
+        public SensorStatus Status { get; set; } = SensorStatus.Ok;
 
         [Obsolete]
         [DataMember]

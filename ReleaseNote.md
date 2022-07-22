@@ -22,7 +22,7 @@
 
 # HSM DataObjects
 
-- Nuget package has been updated to v.2.1.32
+- Nuget package has been updated to v.2.1.33
 - Sensor values structure has been changed, but syntactic compatibility has been preserved
 - A lot of old classes have been marked as Obsolete
 
@@ -31,7 +31,7 @@
 # HSM Datacollector
 
 - Nuget package has been updated to v.2.1.38
-- HSM DataObjests package v.2.1.32 has been added
+- HSM DataObjests package v.2.1.33 has been added
 - Now default status for SensorValues is Ok
 - Now all bars have correct CloseTime value
 
