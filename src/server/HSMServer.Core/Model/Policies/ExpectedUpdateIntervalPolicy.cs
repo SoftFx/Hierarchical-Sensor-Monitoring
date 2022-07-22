@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model
         private readonly ValidationResult _outdatedSensor = new(SensorValueOutdated, SensorStatus.Warning);
 
 
-        public long ExpectedUpdateInterval { get; init; }
+        public long ExpectedUpdateInterval { get; set; }
 
 
         public ExpectedUpdateIntervalPolicy(long expectedUpdateInterval) : base()

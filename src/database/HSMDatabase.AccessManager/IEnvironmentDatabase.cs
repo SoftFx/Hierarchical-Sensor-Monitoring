@@ -44,7 +44,9 @@ namespace HSMDatabase.AccessManager
         #region
 
         void AddPolicyIdToList(string policyId);
+        void RemovePolicyFromList(string policyId);
         void AddPolicy(PolicyEntity policy);
+        void RemovePolicy(string policyId);
         List<string> GetAllPoliciesIds();
         byte[] GetPolicy(string policyId);
 

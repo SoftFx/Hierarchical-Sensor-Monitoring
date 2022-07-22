@@ -43,7 +43,7 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
 
         public string ProductName { get; private set; }
 
@@ -98,10 +98,8 @@ namespace HSMServer.Core.Model
         internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description;
-            //ExpectedUpdateInterval = TimeSpan.Parse(sensor.ExpectedUpdateInterval); // TODO update expected update interval policy!!!
             Unit = sensor.Unit;
         }
-
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
         {

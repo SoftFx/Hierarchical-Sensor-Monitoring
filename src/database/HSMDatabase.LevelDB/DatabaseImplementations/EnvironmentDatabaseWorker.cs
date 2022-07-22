@@ -363,6 +363,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public void RemovePolicyFromList(string id)
+        {
+            try
+            {
+                var policyIds = GetAllPoliciesIds();
+                policyIds.Remove(id);
+
+                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove Policy {id} from list");
+            }
+        }
+
         public void AddPolicy(PolicyEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
@@ -375,6 +390,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to add policy info for {entity.Id}");
+            }
+        }
+
+        public void RemovePolicy(string id)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                _database.Delete(bytesKey);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove Policy by {id}");
             }
         }
 

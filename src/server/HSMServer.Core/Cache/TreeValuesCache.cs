@@ -255,8 +255,9 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-            _databaseCore.UpdateSensor(sensor.ToEntity());
+            UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
+            _databaseCore.UpdateSensor(sensor.ToEntity());
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
@@ -332,6 +333,22 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
+        public void UpdatePolicy(TransactionType type, Policy policy)
+        {
+            switch (type)
+            {
+                case TransactionType.Add:
+                    _databaseCore.AddPolicy(policy.ToEntity());
+                    return;
+                case TransactionType.Update: 
+                    _databaseCore.UpdatePolicy(policy.ToEntity());
+                    return;
+                case TransactionType.Delete:
+                    _databaseCore.RemovePolicy(policy.Id);
+                    return;
+            }
+        }
+
         private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
         {
             var values = new List<BaseValue>(1 << 6);
@@ -386,6 +403,30 @@ namespace HSMServer.Core.Cache
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
+        private void UpdateIntervalPolicy(TimeSpan newInterval, BaseSensorModel sensor)
+        {
+            var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
+
+            if (oldPolicy == null && newInterval != TimeSpan.Zero)
+            {
+                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.Ticks);
+                sensor.ExpectedUpdateIntervalPolicy = newPolicy;
+                UpdatePolicy(TransactionType.Add, newPolicy);
+            }
+            else
+            {
+                if (newInterval == TimeSpan.Zero)
+                {
+                    sensor.ExpectedUpdateIntervalPolicy = null;
+                    UpdatePolicy(TransactionType.Delete, oldPolicy);
+                }
+                else if (newInterval.Ticks != oldPolicy.ExpectedUpdateInterval)
+                {
+                    oldPolicy.ExpectedUpdateInterval = newInterval.Ticks;
+                    UpdatePolicy(TransactionType.Update, oldPolicy);
+                }
+            }
+        }
 
         private void Initialize()
         {

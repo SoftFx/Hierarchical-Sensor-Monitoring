@@ -50,5 +50,7 @@ namespace HSMServer.Core.Cache
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+
+        void UpdatePolicy(TransactionType type, Policy policy);
     }
 }
