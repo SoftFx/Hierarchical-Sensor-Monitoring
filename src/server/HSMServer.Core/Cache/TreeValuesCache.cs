@@ -253,13 +253,14 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
                 return;
 
-            var oldInterval = sensor.ExpectedUpdateIntervalPolicy?.ExpectedUpdateInterval;
-            var intervalId = sensor.ExpectedUpdateIntervalPolicy?.Id;
-
             sensor.Update(updatedSensor);
-            _databaseCore.UpdateSensor(sensor.ToEntity());
-            UpdateIntervalPolicy(intervalId, oldInterval, sensor.ExpectedUpdateIntervalPolicy);
 
+            var oldInterval = sensor.ExpectedUpdateIntervalPolicy;
+            (var type, var newPolicy) = GetUpdatedIntervalPolicy(updatedSensor.ExpectedUpdateInterval, oldInterval);
+
+            sensor.ExpectedUpdateIntervalPolicy = (ExpectedUpdateIntervalPolicy) UpdatePolicy(type, newPolicy);
+
+            _databaseCore.UpdateSensor(sensor.ToEntity());
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
@@ -335,6 +336,24 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
+        public Policy UpdatePolicy(TransactionType? type, Policy policy)
+        {
+            switch (type)
+            {
+                case TransactionType.Add:
+                    _databaseCore.AddPolicy(policy.ToEntity());
+                    return policy;
+                case TransactionType.Update: 
+                    _databaseCore.UpdatePolicy(policy.ToEntity());
+                    return policy;
+                case TransactionType.Delete:
+                    _databaseCore.RemovePolicy(policy.Id);
+                    return null;
+                default:
+                    return null;
+            }
+        }
+
         private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
         {
             var values = new List<BaseValue>(1 << 6);
@@ -389,21 +408,25 @@ namespace HSMServer.Core.Cache
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
-        private void UpdateIntervalPolicy(Guid? intervalId, long? oldInterval,
-            ExpectedUpdateIntervalPolicy newPolicy)
+        private (TransactionType?, ExpectedUpdateIntervalPolicy) GetUpdatedIntervalPolicy(TimeSpan newInterval,
+            ExpectedUpdateIntervalPolicy oldPolicy)
         {
-            if (intervalId == null && oldInterval == null && newPolicy != null)
-                _databaseCore.AddPolicy(newPolicy.ToEntity());
+            if (oldPolicy == null && newInterval != TimeSpan.Zero)
+                return (TransactionType.Add, new ExpectedUpdateIntervalPolicy(newInterval.Ticks));
             else
             {
-                if (newPolicy == null)
-                    _databaseCore.RemovePolicy(intervalId.Value);
+                if (newInterval == TimeSpan.Zero)
+                    return (TransactionType.Delete, oldPolicy);
 
-                else if (oldInterval.Value != newPolicy.ExpectedUpdateInterval)
-                    _databaseCore.UpdatePolicy(newPolicy.ToEntity());
+                else if (newInterval.Ticks != oldPolicy.ExpectedUpdateInterval)
+                {
+                    oldPolicy.ExpectedUpdateInterval = newInterval.Ticks;
+                    return (TransactionType.Update, oldPolicy);
+                }
             }
-        }
 
+            return (null, null);
+        }
 
         private void Initialize()
         {

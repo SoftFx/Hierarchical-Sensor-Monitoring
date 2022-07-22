@@ -37,7 +37,7 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; private set; }
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
 
         public string ProductName { get; private set; }
 
@@ -93,22 +93,6 @@ namespace HSMServer.Core.Model
         {
             Description = sensor.Description;
             Unit = sensor.Unit;
-
-            UpdateInterval(sensor.ExpectedUpdateInterval);
-        }
-
-        internal void UpdateInterval(string intervalStr)
-        {
-            var interval = TimeSpan.Parse(intervalStr);
-
-            if (interval == TimeSpan.MinValue)
-                ExpectedUpdateIntervalPolicy = null;
-
-            else if (ExpectedUpdateIntervalPolicy == null)
-                AddPolicy(new ExpectedUpdateIntervalPolicy(interval.Ticks));
-
-            else
-                ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval = interval.Ticks;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)

@@ -72,8 +72,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(BaseSensorModel model)
         {
-            if (model.ExpectedUpdateIntervalPolicy != null)
-                ExpectedUpdateInterval = new TimeSpan(model.ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval);
+            ExpectedUpdateInterval = model.ExpectedUpdateIntervalPolicy == null ? TimeSpan.Zero
+                : new TimeSpan(model.ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval);
 
             Name = model.DisplayName;
             SensorType = model.Type;

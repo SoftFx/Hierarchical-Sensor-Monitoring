@@ -264,12 +264,14 @@ namespace HSMServer.Controllers
             var viewModel = new SensorInfoViewModel(sensor);
             viewModel.Update(updateModel);
 
+            TimeSpan.TryParse(viewModel.ExpectedUpdateInterval, out var interval);
+
             _treeValuesCache.UpdateSensor(
                 new SensorUpdate
                 {
                     Id = sensor.Id,
                     Description = viewModel.Description,
-                    ExpectedUpdateInterval = viewModel.ExpectedUpdateInterval,
+                    ExpectedUpdateInterval = interval,
                     Unit = viewModel.Unit
                 });
         }
