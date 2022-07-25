@@ -646,6 +646,9 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor)
         {
+            if (_tree.TryGetValue(sensor.ProductId, out var product))
+                sensor.BuildProductNameAndPath(product);
+
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 

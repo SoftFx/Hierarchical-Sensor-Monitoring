@@ -26,7 +26,7 @@ namespace HSMServer.Model.Validators
         // TODO: Remove IsUniqName validation after fixing saving products in db (ProductName to Id)
         private bool IsUniqueName(string name)
         {
-            var products = _treeValuesCache.GetTree();
+            var products = _treeValuesCache.GetProducts(null);
 
             return products?.FirstOrDefault(x =>
                 x.DisplayName.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;
