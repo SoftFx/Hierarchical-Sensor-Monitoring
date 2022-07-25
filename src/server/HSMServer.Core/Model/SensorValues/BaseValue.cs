@@ -32,9 +32,6 @@ namespace HSMServer.Core.Model
 
         public DateTime Time { get; init; }
 
-        // TODO: if this property is necessary
-        //public SensorType Type { get; init; }
-
         public SensorStatus Status { get; init; }
 
 

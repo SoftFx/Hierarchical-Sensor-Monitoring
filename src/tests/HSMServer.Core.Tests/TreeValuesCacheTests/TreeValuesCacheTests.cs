@@ -1,10 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
-using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Converters;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -15,6 +14,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
+using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
@@ -59,17 +59,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
 
-        //[Fact]
-        //[Trait("Category", "Initialization")]
-        //public async void SensorsInitializationTest()
-        //{
-        //    await Task.Delay(1000);
+        [Fact]
+        [Trait("Category", "Initialization")]
+        public async void SensorsInitializationTest()
+        {
+            await Task.Delay(1000);
 
-        //    var expectedSensors = _databaseCoreManager.DatabaseCore.GetAllSensors();
-        //    var actualSensors = _valuesCache.GetSensors();
+            var expectedSensors = _databaseCoreManager.DatabaseCore.GetAllSensors();
+            var actualSensors = _valuesCache.GetSensors();
 
-        //    TestSensors(expectedSensors, actualSensors);
-        //}
+            TestSensors(expectedSensors, actualSensors);
+        }
 
 
         [Theory]
@@ -153,59 +153,59 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                                    _databaseCoreManager.DatabaseCore.GetProduct);
         }
 
-        //[Fact]
-        //[Trait("Category", "Remove product(s)")]
-        //public async void RemoveProductTest()
-        //{
-        //    int updatedProductsCount = 0;
-        //    int deletedProductsCount = 0;
-        //    void RemoveProductEventHandler(ProductModel product, TransactionType type)
-        //    {
-        //        Assert.NotNull(product);
+        [Fact]
+        [Trait("Category", "Remove product(s)")]
+        public async void RemoveProductTest()
+        {
+            int updatedProductsCount = 0;
+            int deletedProductsCount = 0;
+            void RemoveProductEventHandler(ProductModel product, TransactionType type)
+            {
+                Assert.NotNull(product);
 
-        //        if (type == TransactionType.Update)
-        //            updatedProductsCount++;
-        //        else
-        //            deletedProductsCount++;
-        //    }
+                if (type == TransactionType.Update)
+                    updatedProductsCount++;
+                else
+                    deletedProductsCount++;
+            }
 
-        //    int deletedSensorsCount = 0;
-        //    void RemoveSensorEventHandler(SensorModel sensor, TransactionType type)
-        //    {
-        //        Assert.NotNull(sensor);
-        //        Assert.Equal(TransactionType.Delete, type);
+            int deletedSensorsCount = 0;
+            void RemoveSensorEventHandler(BaseSensorModel sensor, TransactionType type)
+            {
+                Assert.NotNull(sensor);
+                Assert.Equal(TransactionType.Delete, type);
 
-        //        deletedSensorsCount++;
-        //    }
+                deletedSensorsCount++;
+            }
 
 
-        //    await Task.Delay(100);
+            await Task.Delay(100);
 
-        //    var product = GetProductByName("subProduct0_product0");
-        //    var parentProduct = product.ParentProduct;
+            var product = GetProductByName("subProduct0_product0");
+            var parentProduct = product.ParentProduct;
 
-        //    var expectedDeletedProductIds = GetAllProductIdsInBranch(product);
-        //    var expectedDeletedSensorIds = GetAllSensorIdsInBranch(product);
+            var expectedDeletedProductIds = GetAllProductIdsInBranch(product);
+            var expectedDeletedSensorIds = GetAllSensorIdsInBranch(product);
 
-        //    _valuesCache.ChangeProductEvent += RemoveProductEventHandler;
-        //    _valuesCache.ChangeSensorEvent += RemoveSensorEventHandler;
+            _valuesCache.ChangeProductEvent += RemoveProductEventHandler;
+            _valuesCache.ChangeSensorEvent += RemoveSensorEventHandler;
 
-        //    _valuesCache.RemoveProduct(product.Id);
+            _valuesCache.RemoveProduct(product.Id);
 
-        //    _valuesCache.ChangeProductEvent -= RemoveProductEventHandler;
-        //    _valuesCache.ChangeSensorEvent -= RemoveSensorEventHandler;
+            _valuesCache.ChangeProductEvent -= RemoveProductEventHandler;
+            _valuesCache.ChangeSensorEvent -= RemoveSensorEventHandler;
 
-        //    Assert.Equal(deletedSensorsCount, expectedDeletedSensorIds.Count);
-        //    Assert.Equal(deletedProductsCount, expectedDeletedProductIds.Count);
-        //    foreach (var productId in expectedDeletedProductIds)
-        //        TestRemovedProduct(productId,
-        //                           _valuesCache.GetProductNameById,
-        //                           _valuesCache.GetProduct,
-        //                           _databaseCoreManager.DatabaseCore.GetProduct);
+            Assert.Equal(deletedSensorsCount, expectedDeletedSensorIds.Count);
+            Assert.Equal(deletedProductsCount, expectedDeletedProductIds.Count);
+            foreach (var productId in expectedDeletedProductIds)
+                TestRemovedProduct(productId,
+                                   _valuesCache.GetProductNameById,
+                                   _valuesCache.GetProduct,
+                                   _databaseCoreManager.DatabaseCore.GetProduct);
 
-        //    Assert.Equal(1, updatedProductsCount);
-        //    Assert.DoesNotContain(product.Id, parentProduct.SubProducts.Keys);
-        //}
+            Assert.Equal(1, updatedProductsCount);
+            Assert.DoesNotContain(product.Id, parentProduct.SubProducts.Keys);
+        }
 
         [Fact]
         [Trait("Category", "Products without parent")]
@@ -262,44 +262,44 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        //[Fact]
-        //[Trait("Category", "Get sensor (convert to Entity and back)")]
-        //public void CloneSensorTest()
-        //{
-        //    var sensor = GetSensorByNameFromCache("sensor0");
+        [Fact]
+        [Trait("Category", "Get sensor (convert to Entity and back)")]
+        public void CloneSensorTest()
+        {
+            var sensor = GetSensorByNameFromCache("sensor0");
 
-        //    var clonedSensor = GetClonedSensorModel(sensor);
+            var clonedSensor = GetClonedSensorModel(sensor);
 
-        //    ModelsTester.TestSensorModel(sensor, clonedSensor);
-        //}
+            ModelsTester.AssertModels(sensor, clonedSensor);
+        }
 
-        //[Fact]
-        //[Trait("Category", "Update sensor(s)")]
-        //public void UpdateSensorsTest()
-        //{
-        //    var sensor = GetClonedSensorModel(GetSensorByNameFromCache("sensor0"));
-        //    var sensorUpdate = BuildSensorUpdate(sensor.Id);
+        [Fact]
+        [Trait("Category", "Update sensor(s)")]
+        public void UpdateSensorsTest()
+        {
+            var sensor = GetClonedSensorModel(GetSensorByNameFromCache("sensor0"));
+            var sensorUpdate = SensorModelFactory.BuildSensorUpdate(sensor.Id);
 
-        //    int updatedSensorsCount = 0;
-        //    void UpdateSensorEventHandler(SensorModel updatedSensor, TransactionType type)
-        //    {
-        //        Assert.NotNull(updatedSensor);
-        //        Assert.Equal(TransactionType.Update, type);
+            int updatedSensorsCount = 0;
+            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, TransactionType type)
+            {
+                Assert.NotNull(updatedSensor);
+                Assert.Equal(TransactionType.Update, type);
 
-        //        ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
+                ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
 
-        //        updatedSensorsCount++;
-        //    }
+                updatedSensorsCount++;
+            }
 
-        //    _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
+            _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-        //    _valuesCache.UpdateSensor(sensorUpdate);
+            _valuesCache.UpdateSensor(sensorUpdate);
 
-        //    _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
+            _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
-        //    Assert.Equal(1, updatedSensorsCount);
-        //    TestSensoUpdates(sensor, sensorUpdate);
-        //}
+            Assert.Equal(1, updatedSensorsCount);
+            TestSensoUpdates(sensor, sensorUpdate);
+        }
 
         //[Fact]
         //[Trait("Category", "Update sensor(s)")]
@@ -526,16 +526,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         //}
 
 
-        internal static SensorUpdate BuildSensorUpdate(Guid? id = null) =>
-            new()
-            {
-                Id = id ?? Guid.NewGuid(),
-                Description = RandomGenerator.GetRandomString(),
-                //ExpectedUpdateInterval = TimeSpan.FromMinutes(10).ToString(),
-                Unit = RandomGenerator.GetRandomString(),
-            };
-
-
         private async Task TestProductsWithoutParent(List<ProductModel> actualProducts)
         {
             await Task.Delay(100);
@@ -548,50 +538,73 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private ProductModel GetProductByName(string name) =>
             _valuesCache.GetTree().FirstOrDefault(p => p.DisplayName == name);
 
-        //private SensorModel GetSensorByNameFromCache(string name) =>
-        //    _valuesCache.GetSensors().FirstOrDefault(s => s.SensorName == name);
+        private BaseSensorModel GetSensorByNameFromCache(string name) =>
+            _valuesCache.GetSensors().FirstOrDefault(s => s.DisplayName == name);
 
-        //private SensorModel GetSensorByIdFromCache(Guid id) =>
-        //    _valuesCache.GetSensors().FirstOrDefault(s => s.Id == id);
+        private BaseSensorModel GetSensorByIdFromCache(Guid id) => _valuesCache.GetSensor(id);
 
         private SensorEntity GetSensorByIdFromDb(Guid id) =>
             _databaseCoreManager.DatabaseCore.GetAllSensors().FirstOrDefault(s => s.Id == id.ToString());
 
-        private SensorValueBase BuildSensorValue(SensorType type, string path)
-        {
-            var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
-            sensorValue.Path = path;
-            sensorValue.Description = RandomGenerator.GetRandomString();
+        //private SensorValueBase BuildSensorValue(SensorType type, string path)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildSensorValue(type);
+        //    sensorValue.Path = path;
+        //    sensorValue.Description = RandomGenerator.GetRandomString();
 
-            return sensorValue;
-        }
+        //    return sensorValue;
+        //}
 
 
-        private void TestSensors(List<SensorEntity> expected, List<SensorModel> actual)
+        private void TestSensors(List<SensorEntity> expected, List<BaseSensorModel> actual)
         {
             Assert.Equal(expected.Count, actual.Count);
 
+            var expectedSensorValues = _databaseCoreManager.DatabaseCore.GetLatestValues(actual);
             var actualDict = actual.ToDictionary(s => s.Id);
+
             foreach (var expectedSensor in expected)
             {
-                var actualSensor = actualDict[Guid.Parse(expectedSensor.Id)];
-                //var expectedSensorData = _databaseCoreManager.DatabaseCore.GetLatestSensorValue(expectedSensor.ProductName, expectedSensor.Path);
+                var sensorId = Guid.Parse(expectedSensor.Id);
+                var actualSensor = actualDict[sensorId];
 
                 ModelsTester.TestSensorModel(expectedSensor, actualSensor);
-                //ModelsTester.TestSensorModel(expectedSensorData, actualSensor);
+                ModelsTester.TestSensorModel(expectedSensorValues[sensorId], actualSensor);
             }
         }
 
-        //private void TestSensoUpdates(SensorModel sensor, SensorUpdate sensorUpdate)
-        //{
-        //    var actualSensorFromCache = GetSensorByIdFromCache(sensor.Id);
-        //    var actualSensorFromDb = GetSensorByIdFromDb(sensor.Id);
+        private void TestSensoUpdates(BaseSensorModel sensor, SensorUpdate sensorUpdate)
+        {
+            var actualSensorFromCache = GetSensorByIdFromCache(sensor.Id);
+            var actualSensorFromDb = GetSensorByIdFromDb(sensor.Id);
 
-        //    ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromCache);
-        //    ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromDb);
-        //    ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
-        //    ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
-        //}
+            ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromCache);
+            ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromDb);
+            ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
+            ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
+
+            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ExpectedUpdateIntervalPolicy.Id);
+
+            ModelsTester.TestExpectedUpdateIntervalPolicy(sensorUpdate, actualExpectedUpdateIntervalPolicy);
+            ModelsTester.AssertModels(actualSensorFromCache.ExpectedUpdateIntervalPolicy, actualExpectedUpdateIntervalPolicy);
+        }
+
+        private Policy GetPolicyByIdFromDb(Guid id)
+        {
+            var policyEntities = _databaseCoreManager.DatabaseCore.GetAllPolicies();
+
+            var serializeOptions = new JsonSerializerOptions();
+            serializeOptions.Converters.Add(new PolicyDeserializationConverter());
+
+            foreach (var entity in policyEntities)
+            {
+                var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
+                if (policy.Id == id)
+                    return policy;
+            }
+
+            return null;
+        }
 
         //private void TestClearedSensor(Guid clearedSensorId)
         //{
@@ -609,7 +622,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         //}
 
         private static void TestRemovedProduct(string productId, GetProductNameById getProductName,
-            GetProduct getProduct, GetProductFromDb getProductFromDb)
+        GetProduct getProduct, GetProductFromDb getProductFromDb)
         {
             Assert.Null(getProductName?.Invoke(productId));
             Assert.Null(getProduct?.Invoke(productId));
@@ -652,20 +665,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return sensors;
         }
 
-        private static SensorModel GetClonedSensorModel(SensorModel sensor)
+        private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
-            var sensorEntity = sensor.ToSensorEntity();
-            var sensorDataEntity = sensor.ToSensorDataEntity();
+            var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
+            clonedSensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensor.ProductId));
 
-            var clonedSensor = new SensorModel(sensorEntity, sensorDataEntity);
-            clonedSensor.AddParent(sensor.ParentProduct);
+            clonedSensor.TryAddValue(sensor.LastValue, out _);
 
             return clonedSensor;
         }
 
         private void InitializeDatabase()
         {
-            var (products, sensors, sensorsData) = GenerateTestData();
+            var (products, sensors, sensorValues) = GenerateTestData();
 
             foreach (var product in products)
                 _databaseCoreManager.DatabaseCore.AddProduct(product);
@@ -673,15 +685,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensor in sensors)
                 _databaseCoreManager.DatabaseCore.AddSensor(sensor);
 
-            foreach (var sensorData in sensorsData)
-                _databaseCoreManager.DatabaseCore.PutSensorData(sensorData.sensorData, sensorData.product);
+            foreach (var sensorValue in sensorValues)
+                _databaseCoreManager.DatabaseCore.AddSensorValue(sensorValue);
         }
 
-        private static (List<ProductEntity>, List<SensorEntity>, List<(string product, SensorDataEntity sensorData)>) GenerateTestData()
+        private static (List<ProductEntity>, List<SensorEntity>, List<SensorValueEntity>) GenerateTestData()
         {
             var products = new List<ProductEntity>(1 << 3);
             var sensors = new List<SensorEntity>(1 << 3);
-            var sensorsData = new List<(string product, SensorDataEntity sensorData)>(1 << 3);
+            var sensorValues = new List<SensorValueEntity>(1 << 3);
 
             for (int i = 0; i < 2; ++i)
             {
@@ -696,15 +708,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Id = Guid.NewGuid().ToString(),
                         ProductId = product.Id,
                         DisplayName = $"sensor{j}",
-                        Type = (int)SensorType.BooleanSensor,
+                        Type = (byte)SensorType.Boolean,
                     };
-                    var sensorData = new SensorDataEntity()
+                    var boolValue = new BooleanValue()
                     {
-                        Path = $"sensor{j}",
-                        TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensor.Type,
-                        TypedData = JsonSerializer.Serialize(new BoolSensorData() { BoolValue = true, Comment = "sensorData" }),
-                        Status = (byte)SensorStatus.Warning,
+                        Time = DateTime.UtcNow,
+                        Status = SensorStatus.Warning,
+                        Comment = "sensorValue",
+                        Value = true,
+                    };
+                    var sensorValue = new SensorValueEntity()
+                    {
+                        SensorId = sensor.Id,
+                        ReceivingTime = boolValue.ReceivingTime.Ticks,
+                        Value = boolValue,
                     };
 
                     product.AddSubProduct(subProduct.Id);
@@ -719,15 +736,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Id = Guid.NewGuid().ToString(),
                         ProductId = subSubProduct.Id,
                         DisplayName = "sensor",
-                        Type = (int)SensorType.IntSensor,
+                        Type = (int)SensorType.Integer,
                     };
-                    var sensorForSubSubProductData = new SensorDataEntity()
+                    var intValue = new IntegerValue()
                     {
-                        Path = $"{subProduct.DisplayName}/{subSubProduct.DisplayName}/sensor",
-                        TimeCollected = DateTime.UtcNow,
-                        DataType = (byte)sensorForSubSubProduct.Type,
-                        TypedData = JsonSerializer.Serialize(new IntSensorData() { IntValue = 12345, Comment = "sensorData1" }),
-                        Status = (byte)SensorStatus.Ok,
+                        Time = DateTime.UtcNow,
+                        Status = SensorStatus.Ok,
+                        Comment = "sensorValue1",
+                        Value = 12345,
+                    };
+                    var sensorForSubSubProductValue = new SensorValueEntity()
+                    {
+                        SensorId = sensorForSubSubProduct.Id,
+                        ReceivingTime = intValue.ReceivingTime.Ticks,
+                        Value = intValue,
                     };
 
                     subSubProduct.AddSensor(sensorForSubSubProduct.Id);
@@ -738,14 +760,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     sensors.Add(sensor);
                     sensors.Add(sensorForSubSubProduct);
 
-                    sensorsData.Add((product.DisplayName, sensorData));
-                    sensorsData.Add((product.DisplayName, sensorForSubSubProductData));
+                    sensorValues.Add(sensorValue);
+                    sensorValues.Add(sensorForSubSubProductValue);
                 }
 
                 products.Add(product);
             }
 
-            return (products, sensors, sensorsData);
+            return (products, sensors, sensorValues);
         }
     }
 }
