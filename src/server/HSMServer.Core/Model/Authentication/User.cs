@@ -3,11 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using HSMCommon.Attributes;
 
 namespace HSMServer.Core.Model.Authentication
 {
-    [SwaggerIgnore]
     public class User : ClaimsPrincipal
     {
         public Guid Id { get; set; }

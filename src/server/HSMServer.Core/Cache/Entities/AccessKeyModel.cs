@@ -1,11 +1,9 @@
-﻿using HSMCommon.Attributes;
-using HSMCommon.Constants;
+﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 
 namespace HSMServer.Core.Cache.Entities
 {
-    [SwaggerIgnore]
     [Flags]
     public enum KeyPermissions : long
     {
@@ -14,7 +12,6 @@ namespace HSMServer.Core.Cache.Entities
         CanAddSensors = 4
     }
 
-    [SwaggerIgnore]
     public enum KeyState : byte
     {
         Active = 0,

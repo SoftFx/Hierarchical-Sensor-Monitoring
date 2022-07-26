@@ -1,4 +1,6 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -7,11 +9,13 @@ namespace HSMSensorDataObjects.FullDataObject
     public class BoolSensorValue : ValueBase<bool>
     {
         [DataMember]
+        [DefaultValue((int)SensorType.BooleanSensor)]
         public override SensorType Type => SensorType.BooleanSensor;
 
         [Obsolete]
-        public bool BoolValue 
-        { 
+        [SwaggerExclude]
+        public bool BoolValue
+        {
             get => Value;
             set => Value = value;
         }

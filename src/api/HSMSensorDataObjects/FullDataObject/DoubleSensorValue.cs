@@ -1,4 +1,6 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -7,10 +9,12 @@ namespace HSMSensorDataObjects.FullDataObject
     public class DoubleSensorValue : ValueBase<double>
     {
         [DataMember]
+        [DefaultValue((int)SensorType.DoubleSensor)]
         public override SensorType Type => SensorType.DoubleSensor;
 
         [Obsolete]
-        public double DoubleValue 
+        [SwaggerExclude]
+        public double DoubleValue
         {
             get => Value;
             set => Value = value;

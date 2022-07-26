@@ -16,12 +16,9 @@
             </summary>
         </member>
         <member name="T:HSMServer.Controllers.SensorsController">
-             <summary>
-             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods. Default product key is
-            
-                 2201cd7959dc87a1dc82b8abf29f48
-             
-             </summary>
+            <summary>
+            Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
+            </summary>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntSensorValue)">
             <summary>
@@ -80,7 +77,6 @@
             <param name="values"></param>
             <returns></returns>
         </member>
-        <!-- Badly formed XML comment ignored for member "T:HSMServer.Controllers.ValuesController" -->
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles

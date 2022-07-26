@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 using HSMSensorDataObjects.BarData;
 
@@ -9,6 +10,7 @@ namespace HSMSensorDataObjects.FullDataObject
     public class IntBarSensorValue : BarValueSensorBase<int>
     {
         [DataMember]
+        [DefaultValue((int)SensorType.IntegerBarSensor)]
         public override SensorType Type => SensorType.IntegerBarSensor;
 
         [DataMember]
