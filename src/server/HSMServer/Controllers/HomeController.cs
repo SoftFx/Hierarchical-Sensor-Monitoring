@@ -110,6 +110,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
+            if (model == null)
+                return null;
+
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
             return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
@@ -118,6 +121,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public HtmlString History([FromBody] GetSensorHistoryModel model)
         {
+            if (model == null)
+                return null;
+
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
             return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
@@ -131,6 +137,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
+            if (model == null)
+                return null;
+
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
             return GetJsonProcessedValues(values, model.Type);
@@ -139,6 +148,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
+            if (model == null)
+                return null;
+
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
             return GetJsonProcessedValues(values, model.Type);

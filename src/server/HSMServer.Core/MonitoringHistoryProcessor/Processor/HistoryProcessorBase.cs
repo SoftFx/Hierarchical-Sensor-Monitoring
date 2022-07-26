@@ -20,6 +20,9 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
                 return values;
 
             var interval = CountInterval(values);
+            if (interval == TimeSpan.Zero)
+                return values;
+
             return ProcessHistory(values, interval);
         }
 
