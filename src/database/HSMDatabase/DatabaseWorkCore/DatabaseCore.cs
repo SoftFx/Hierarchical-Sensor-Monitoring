@@ -239,6 +239,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (db.IsDatabaseExists(sensorId))
                 {
                     db.DisposeDatabase(sensorId);
+                    db.RemoveDatabase(sensorId);
                     Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
                 }
         }

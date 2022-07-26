@@ -52,6 +52,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public void RemoveDatabase(string sensorId) => _openedDbs.Remove(sensorId);
+
         public void PutSensorValue(SensorValueEntity entity)
         {
             var key = Encoding.UTF8.GetBytes(entity.ReceivingTime.ToString());
