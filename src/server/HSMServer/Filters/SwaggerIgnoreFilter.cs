@@ -71,7 +71,7 @@ namespace HSMServer.Filters
                     var swaggerName = schema.Properties.Keys.FirstOrDefault(u => string.Equals(u, propName, StringComparison.OrdinalIgnoreCase));
 
                     if (swaggerName != null) 
-                        schema.Properties[swaggerName].Default = new Microsoft.OpenApi.Any.OpenApiString(defaultAttribute.Value.ToString());
+                        schema.Properties[swaggerName].Default = new Microsoft.OpenApi.Any.OpenApiString(defaultAttribute.Value.ToString().ToLower());
                 }
             }
         }

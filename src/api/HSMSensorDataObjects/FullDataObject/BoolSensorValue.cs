@@ -19,5 +19,12 @@ namespace HSMSensorDataObjects.FullDataObject
             get => Value;
             set => Value = value;
         }
+
+        [DefaultValue(false)]
+        public override bool Value 
+        { 
+            get => base.Value; 
+            set => base.Value = value; 
+        }
     }
 }
