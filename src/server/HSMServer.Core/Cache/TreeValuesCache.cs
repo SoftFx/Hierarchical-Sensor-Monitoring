@@ -376,8 +376,7 @@ namespace HSMServer.Core.Cache
             if (!TryGetProductByKey(key, out var product, out _))
                 return;
 
-            var productName = product.DisplayName;
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, path);
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, path);
 
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
@@ -593,12 +592,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
-            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
-            if (parentProduct == null)
-                parentProduct = AddProduct(productName);
-
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
