@@ -9,6 +9,7 @@ namespace HSMDatabase.DatabaseWorkCore
     internal sealed class SensorValuesDatabaseDictionary
     {
         private readonly List<ISensorValuesDatabase> _sensorDbs = new();
+        private readonly object _locker = new();
 
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
@@ -31,14 +32,17 @@ namespace HSMDatabase.DatabaseWorkCore
 
         internal ISensorValuesDatabase GetNewestDatabases(long time)
         {
-            var newestDbs = _sensorDbs.FirstOrDefault();
-            if (newestDbs != null && newestDbs.From <= time && newestDbs.To >= time)
-                return newestDbs;
+            lock (_locker)
+            {
+                var newestDbs = _sensorDbs.FirstOrDefault();
+                if (newestDbs != null && newestDbs.From <= time && newestDbs.To >= time)
+                    return newestDbs;
 
-            var from = DateTimeMethods.GetMinDateTimeTicks(time);
-            var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+                var from = DateTimeMethods.GetMinDateTimeTicks(time);
+                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-            return InsertAndGetNewDatabases(from, to);
+                return InsertAndGetNewDatabases(from, to);
+            }
         }
 
         internal List<ISensorValuesDatabase> GetAllDatabases() => _sensorDbs.ToList();
