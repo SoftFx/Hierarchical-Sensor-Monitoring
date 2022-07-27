@@ -340,7 +340,7 @@ namespace HSMServer.Core.Cache
                 case TransactionType.Add:
                     _databaseCore.AddPolicy(policy.ToEntity());
                     return;
-                case TransactionType.Update: 
+                case TransactionType.Update:
                     _databaseCore.UpdatePolicy(policy.ToEntity());
                     return;
                 case TransactionType.Delete:
@@ -649,10 +649,21 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
 
+            if (sensor is StringSensorModel)
+                AddStringValueLengthPolicy(sensor);
+
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
             OnChangeSensorEvent(sensor, TransactionType.Add);
+        }
+
+        private void AddStringValueLengthPolicy(BaseSensorModel sensor)
+        {
+            var policy = new StringValueLengthPolicy();
+
+            sensor.AddPolicy(policy);
+            _databaseCore.AddPolicy(policy.ToEntity());
         }
 
         private void UpdateProduct(ProductModel product)
