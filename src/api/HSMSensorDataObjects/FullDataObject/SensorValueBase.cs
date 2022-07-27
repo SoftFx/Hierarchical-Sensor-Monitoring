@@ -1,5 +1,7 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
 using System.Runtime.Serialization;
+using System.ComponentModel;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
@@ -22,10 +24,12 @@ namespace HSMSensorDataObjects.FullDataObject
         public string Comment { get; set; }
 
         [DataMember]
+        [DefaultValue((int)SensorStatus.Ok)]
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
 
         [Obsolete]
         [DataMember]
+        [SwaggerExclude]
         public string Description { get; set; }
     }
 
@@ -33,6 +37,6 @@ namespace HSMSensorDataObjects.FullDataObject
     public abstract class ValueBase<T> : SensorValueBase
     {
         [DataMember]
-        public T Value { get; set; }
+        public virtual T Value { get; set; }
     }
 }

@@ -9,18 +9,25 @@ namespace HSMSensorDataObjects.FullDataObject
     {
         [DataMember]
         public string Key { get; set; }
+
         [DataMember]
         public string Path { get; set; }
+
         [DataMember]
         public DateTime Time { get; set; }
+
         [DataMember]
         public string Comment { get; set; }
+
         [DataMember]
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
+
         [DataMember]
         public string Description { get; set; }
+
         [DataMember]
         public SensorType Type { get; set; }
+
         [DataMember]
         public string Data { get; set; }
 

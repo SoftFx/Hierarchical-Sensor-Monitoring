@@ -58,14 +58,18 @@ namespace HSMServer
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
-            services.AddSwaggerGen();
+            services.AddSwaggerGen(o =>
+            {
+                o.UseInlineDefinitionsForEnums();
+            });
 
             services.ConfigureSwaggerGen(options =>
             {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
                 options.IncludeXmlComments(xmlPath, true);
-                options.DocumentFilter<SwaggerIgnoreFilter>();
+                options.DocumentFilter<SwaggerIgnoreClassFilter>();
+                options.SchemaFilter<SwaggerExcludePropertiesFilter>();
             });
         }
 

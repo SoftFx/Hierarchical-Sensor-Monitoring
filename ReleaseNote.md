@@ -16,13 +16,14 @@
 - Base logic for Sensor Policy has been added (ExpectedUpdateInterval and StringValueLength have been converted to policies)
 - Memory using for new style sensor data has been reduced by 50%
 - Server load time has been reduced by 50%
-- Bugfixing and refactoring
+- Swagger API page has been refactored
+- Bugfixing and refactorin
 
 *Note: All old sensors will be converted to the new style during the first server start*
 
 # HSM DataObjects
 
-- Nuget package has been updated to v.2.1.33
+- Nuget package has been updated to v.2.1.34
 - Sensor values structure has been changed, but syntactic compatibility has been preserved
 - A lot of old classes have been marked as Obsolete
 
@@ -30,8 +31,8 @@
 
 # HSM Datacollector
 
-- Nuget package has been updated to v.2.1.38
-- HSM DataObjests package v.2.1.33 has been added
+- Nuget package has been updated to v.2.1.39
+- HSM DataObjests package v.2.1.34 has been added
 - Now default status for SensorValues is Ok
 - Now all bars have correct CloseTime value
 

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 using System.Text;
 
@@ -11,14 +13,16 @@ namespace HSMSensorDataObjects.FullDataObject
         private string _fileContent;
 
         [DataMember]
+        [DefaultValue((int)SensorType.FileSensor)]
         public override SensorType Type => SensorType.FileSensor;
 
         [DataMember]
+        [DefaultValue("txt")]
         public string Extension { get; set; }
 
         [Obsolete]
         [DataMember]
-        public string FileContent 
+        public string FileContent
         {
             get => _fileContent;
             set
@@ -27,6 +31,14 @@ namespace HSMSensorDataObjects.FullDataObject
                 _fileContent = value;
             }
         }
+
+        [SwaggerExclude]
+        public override byte[] Value
+        {
+            get => base.Value;
+            set => base.Value = value;
+        }
+
 
         [DataMember]
         public string FileName { get; set; }

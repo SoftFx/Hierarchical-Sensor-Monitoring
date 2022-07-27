@@ -1,6 +1,7 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.Swagger;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
@@ -19,10 +20,7 @@ using SensorType = HSMSensorDataObjects.SensorType;
 namespace HSMServer.Controllers
 {
     /// <summary>
-    /// Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods. Default product key is
-    ///
-    ///     2201cd7959dc87a1dc82b8abf29f48
-    /// 
+    /// Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -279,6 +277,7 @@ namespace HSMServer.Controllers
         /// <param name="values"></param>
         /// <returns></returns>
         [HttpPost("list")]
+        [SwaggerIgnore]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
