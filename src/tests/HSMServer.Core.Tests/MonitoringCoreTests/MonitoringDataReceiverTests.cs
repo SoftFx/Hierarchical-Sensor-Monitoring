@@ -241,8 +241,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         {
             var parentProduct = _valuesCache.GetProduct(sensorValue.Key);
 
-            ModelsTester.TestSensorModel(sensorValue, parentProduct.DisplayName, sensorModel, parentProduct);
-            ModelsTester.TestSensorModelData(sensorValue, sensorModel);
+            //ModelsTester.TestSensorModel(sensorValue, parentProduct.DisplayName, sensorModel, parentProduct);
+            //ModelsTester.TestSensorModelData(sensorValue, sensorModel);
         }
 
         private void TestSeveralSensorHistoryDataFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
