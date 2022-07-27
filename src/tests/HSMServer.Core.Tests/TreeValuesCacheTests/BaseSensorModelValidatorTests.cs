@@ -1,28 +1,45 @@
-using HSMCommon.Constants;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Tests.Infrastructure;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Xunit;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Tests.MonitoringCoreTests;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 
-namespace HSMServer.Core.Tests.ValidationTests
+namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
-    public class SensorValuesValidatorTests : IClassFixture<ValidationFixture>
+    public class BaseSensorModelValidatorTests : MonitoringCoreTestsBase<ValidationFixture>
     {
-        private const int TooLongSensorValuesPathPartsCount = 11;
-        private const int MaxSensorValuesPathPartsCount = 10;
+        private readonly ITreeValuesCache _valuesCache;
 
-        private const int TooLongStringSensorValueSize = 151;
-        private const int MaxStringSensorValueSize = 150;
+        //private const int TooLongSensorValuesPathPartsCount = 11;
+        //private const int MaxSensorValuesPathPartsCount = 10;
 
-        private const int TooLongUnitedSensorValueDataSize = 1025;
-        private const int MaxUnitedSensorValueDataSize = 1024;
+        //private const int TooLongStringSensorValueSize = 151;
+        //private const int MaxStringSensorValueSize = 150;
+
+        //private const int TooLongUnitedSensorValueDataSize = 1025;
+        //private const int MaxUnitedSensorValueDataSize = 1024;
 
 
-        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
+        //private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
 
+
+        public BaseSensorModelValidatorTests(ValidationFixture fixture, DatabaseRegisterFixture registerFixture)
+            : base(fixture, registerFixture)
+        {
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
+        }
+
+        //[Fact]
+        //[Trait("Category", "SensorValueBase")]
+        //public void NullSensorValueValidationTest()
+        //{
+        //    const SensorValueBase value = null;
+
+        //    var result = value.Validate();
+
+        //    Assert.Equal(ResultType.Error, result.Result);
+        //    Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
+        //    Assert.True(string.IsNullOrEmpty(result.Warning));
+        //}
 
         //[Fact]
         //[Trait("Category", "SensorValueBase")]
@@ -37,18 +54,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         //    Assert.True(string.IsNullOrEmpty(result.Warning));
         //}
 
-        //[Fact]
-        //[Trait("Category", "SensorValueBase")]
-        //public void NullSensorValueValidationTest()
-        //{
-        //    const SensorValueBase value = null;
 
-        //    var result = value.Validate();
-
-        //    Assert.Equal(ResultType.Error, result.Result);
-        //    Assert.Equal(ValidationConstants.ObjectIsNull, result.Error);
-        //    Assert.True(string.IsNullOrEmpty(result.Warning));
-        //}
 
         //[Fact]
         //[Trait("Category", "SensorValueBase")]
@@ -172,13 +178,13 @@ namespace HSMServer.Core.Tests.ValidationTests
         //}
 
 
-        private UnitedSensorValue BuildUnitedSensorValue(int pathParts)
-        {
-            var sensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
-            sensorValue.Path = GetSensorPath(pathParts);
+        //private UnitedSensorValue BuildUnitedSensorValue(int pathParts)
+        //{
+        //    var sensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
+        //    sensorValue.Path = GetSensorPath(pathParts);
 
-            return sensorValue;
-        }
+        //    return sensorValue;
+        //}
 
 
         //private static void TestCorrectData(ValidationResult result)
@@ -189,7 +195,7 @@ namespace HSMServer.Core.Tests.ValidationTests
         //    Assert.True(string.IsNullOrEmpty(result.Error));
         //}
 
-        private static string GetSensorPath(int pathParts) =>
-             string.Join('/', Enumerable.Range(0, pathParts));
+        //private static string GetSensorPath(int pathParts) =>
+        //     string.Join('/', Enumerable.Range(0, pathParts));
     }
 }
