@@ -412,7 +412,7 @@ namespace HSMServer.Core.Cache
                 sensor.ExpectedUpdateIntervalPolicy = newPolicy;
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
-            else
+            else if (oldPolicy != null)
             {
                 if (newInterval == TimeSpan.Zero)
                 {
