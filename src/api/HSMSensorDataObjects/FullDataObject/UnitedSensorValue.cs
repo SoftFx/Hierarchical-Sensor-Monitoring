@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -20,6 +21,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public string Comment { get; set; }
 
         [DataMember]
+        [DefaultValue((int)SensorStatus.Ok)]
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
 
         [DataMember]
