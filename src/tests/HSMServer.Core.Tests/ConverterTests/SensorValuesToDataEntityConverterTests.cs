@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class SensorValuesToDataEntityConverterTests : IClassFixture<EntitiesConverterFixture>
     {
-        private readonly SensorValuesFactory _sensorValuesFactory;
+        private readonly ApiSensorValuesFactory _sensorValuesFactory;
         private readonly DateTime _timeCollected;
 
 

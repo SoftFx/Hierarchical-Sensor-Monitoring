@@ -1,7 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using System;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class SensorModelFactory
     {
@@ -22,5 +24,14 @@ namespace HSMServer.Core.Model
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
+
+        internal static SensorUpdate BuildSensorUpdate(Guid? id = null) =>
+            new()
+            {
+                Id = id ?? Guid.NewGuid(),
+                Description = RandomGenerator.GetRandomString(),
+                ExpectedUpdateInterval = TimeSpan.FromMinutes(10),
+                Unit = RandomGenerator.GetRandomString(),
+            };
     }
 }

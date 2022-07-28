@@ -9,7 +9,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 {
     public class ExtendedBarSensorDataToHistoryDataConverterTests : IClassFixture<EntitiesConverterFixture>
     {
-        private readonly SensorValuesFactory _sensorValuesFactory;
+        private readonly ApiSensorValuesFactory _sensorValuesFactory;
 
 
         public ExtendedBarSensorDataToHistoryDataConverterTests(EntitiesConverterFixture fixture) =>
