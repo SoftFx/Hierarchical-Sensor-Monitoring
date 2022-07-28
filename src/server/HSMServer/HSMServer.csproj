@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="10.3.0" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="2.1.39" />
     <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.34" />
     <PackageReference Include="LightningDB" Version="0.13.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
