@@ -1,11 +1,12 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
     public readonly struct ValidationResult
     {
+        private const string UnexpectedBehaviorMessage = "Unexpected behavior or error";
+
         private readonly HashSet<string> _warnings;
         private readonly HashSet<string> _errors;
 
@@ -30,6 +31,8 @@ namespace HSMServer.Core.Model
                     messageParts.Add(Warning);
                 if (_errors.Count > 0)
                     messageParts.Add(Error);
+                if (Result == SensorStatus.Unknown)
+                    messageParts.Add(UnexpectedBehaviorMessage);
 
                 return string.Join(Environment.NewLine, messageParts);
             }
