@@ -1,37 +1,36 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
     public readonly struct ValidationResult
     {
-        private readonly HashSet<string> _warnings;
-        private readonly HashSet<string> _errors;
-
-
         internal static ValidationResult Ok { get; } = new();
 
 
-        public SensorStatus Result { get; }
+        private HashSet<string> Messages { get; init; } = new();
+
+        private HashSet<string> Warnings { get; init; } = new();
+
+        private HashSet<string> Errors { get; init; } = new();
 
 
-        public string Warning => string.Join(Environment.NewLine, _warnings);
+        public SensorStatus Result { get; init; } = SensorStatus.Ok;
 
-        public string Error => string.Join(Environment.NewLine, _errors);
 
         public string Message
         {
             get
             {
-                var messageParts = new List<string>(2);
+                var messageParts = new List<string>(3)
+                {
+                    JoinStrings(Messages),
+                    JoinStrings(Warnings),
+                    JoinStrings(Errors),
+                };
 
-                if (_warnings.Count > 0)
-                    messageParts.Add(Warning);
-                if (_errors.Count > 0)
-                    messageParts.Add(Error);
-
-                return string.Join(Environment.NewLine, messageParts);
+                return JoinStrings(messageParts);
             }
         }
 
@@ -45,42 +44,38 @@ namespace HSMServer.Core.Model
 
         public ValidationResult()
         {
-            _warnings = new HashSet<string>();
-            _errors = new HashSet<string>();
-
-            Result = SensorStatus.Ok;
+            Messages = new HashSet<string>();
+            Warnings = new HashSet<string>();
+            Errors = new HashSet<string>();
         }
 
-        internal ValidationResult(string messagge, SensorStatus result) : this()
+        internal ValidationResult(string message, SensorStatus result) : this()
         {
             switch (result)
             {
                 case SensorStatus.Warning:
-                    _warnings.Add(messagge);
+                    Warnings.Add(message);
                     break;
                 case SensorStatus.Error:
-                    _errors.Add(messagge);
+                    Errors.Add(message);
+                    break;
+                default:
+                    Messages.Add(message);
                     break;
             }
 
             Result = result;
         }
 
-        private ValidationResult(HashSet<string> warnings, HashSet<string> errors) : this()
+
+        private static string JoinStrings(IEnumerable<string> items)
         {
-            _warnings = warnings;
-            _errors = errors;
-
-            if (_errors.Count > 0)
-                Result = SensorStatus.Error;
-            else if (_warnings.Count > 0)
-                Result = SensorStatus.Warning;
+            return string.Join(Environment.NewLine, items.Where(u => !string.IsNullOrEmpty(u)));
         }
-
 
         public static ValidationResult operator +(ValidationResult result1, ValidationResult result2)
         {
-            HashSet<string> GetUnionErrors(HashSet<string> errors1, HashSet<string> errors2)
+            static HashSet<string> GetUnionErrors(HashSet<string> errors1, HashSet<string> errors2)
             {
                 var errors = new HashSet<string>(errors1);
                 errors.UnionWith(errors2);
@@ -88,7 +83,14 @@ namespace HSMServer.Core.Model
                 return errors;
             }
 
-            return new(GetUnionErrors(result1._warnings, result2._warnings), GetUnionErrors(result1._errors, result2._errors));
+            return new()
+            {
+                Result = result1.Result > result2.Result ? result1.Result : result2.Result,
+
+                Messages = GetUnionErrors(result1.Messages, result2.Messages),
+                Warnings = GetUnionErrors(result1.Warnings, result2.Warnings),
+                Errors = GetUnionErrors(result1.Errors, result2.Errors),
+            };
         }
     }
 }
