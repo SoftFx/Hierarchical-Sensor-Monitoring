@@ -174,7 +174,7 @@ namespace HSMServer.Controllers
                     out var message))
                     return Ok(sensorValue);
 
-                return StatusCode(406, sensorValue);
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {

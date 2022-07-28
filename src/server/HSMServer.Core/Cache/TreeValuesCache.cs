@@ -369,15 +369,14 @@ namespace HSMServer.Core.Cache
                 AddNewSensorValue(store);
         }
 
-        private void AddNewSensorValue(StoreInfo storeInfo)
+        public void AddNewSensorValue(StoreInfo storeInfo)
         {
             (string key, string path, BaseValue value) = storeInfo;
 
             if (!TryGetProductByKey(key, out var product, out _))
                 return;
 
-            var productName = product.DisplayName;
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, path);
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, path);
 
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
@@ -387,16 +386,16 @@ namespace HSMServer.Core.Cache
                 {
                     ProductId = parentProduct.Id,
                     DisplayName = sensorName,
+                    Type = (byte)value.Type,
                 };
 
-                sensor = SensorModelFactory.Build(value, entity);
+                sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
 
-            // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
@@ -413,7 +412,7 @@ namespace HSMServer.Core.Cache
                 sensor.ExpectedUpdateIntervalPolicy = newPolicy;
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
-            else
+            else if (oldPolicy != null)
             {
                 if (newInterval == TimeSpan.Zero)
                 {
@@ -593,12 +592,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
-            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
-            if (parentProduct == null)
-                parentProduct = AddProduct(productName);
-
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {

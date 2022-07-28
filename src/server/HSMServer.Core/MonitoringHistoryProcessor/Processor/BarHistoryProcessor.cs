@@ -187,54 +187,33 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             return Convert(sum / commonCount);
         }
 
-        /// <summary>
-        /// Get median for the list of values, use average for odd index
-        /// </summary>
         /// <returns>median from the percentiles list</returns>
         private T CountMedian()
         {
-            if (_percentilesList.Count % 2 == 1)
-            {
-                return _percentilesList[(_percentilesList.Count - 1) / 2];
-            }
+            var index = _percentilesList.Count - 1;
 
-            var ind = _percentilesList.Count / 2;
-            return Average(_percentilesList[ind - 1], _percentilesList[ind]);
+            int left = index / 2;
+            int right = left + (index % 2);
+
+            return Average(_percentilesList[left], _percentilesList[right]);
         }
 
-        /// <summary>
-        /// Get Q1 for the list of values, use average for odd index
-        /// </summary>
         /// <returns>Q1 from the percentiles list</returns>
         private T CountQ1()
         {
-            int middle = (_percentilesList.Count + 1) / 2;
+            int left = _percentilesList.Count / 4;
+            int right = left + (_percentilesList.Count % 2);
 
-            if (middle % 2 == 0)
-            {
-                int quart = middle / 2;
-                return Average(_percentilesList[quart], _percentilesList[quart - 1]);
-            }
-
-            return _percentilesList[(middle - 1) / 2];
+            return Average(_percentilesList[left], _percentilesList[right]);
         }
 
-        /// <summary>
-        /// Get Q3 for the list of values, use average for odd index
-        /// </summary>
         /// <returns>Q3 from the percentiles list</returns>
         private T CountQ3()
         {
-            int middle = (_percentilesList.Count + 1) / 2;
+            int left = (3 * _percentilesList.Count - 2) / 4;
+            int right = left + (_percentilesList.Count % 2);
 
-            if (middle % 2 == 0)
-            {
-                int index = (middle + _percentilesList.Count + 1) / 2;
-
-                return Average(_percentilesList[index], _percentilesList[index + 1]);
-            }
-
-            return _percentilesList[(middle + _percentilesList.Count + 1) / 2];
+            return Average(_percentilesList[left], _percentilesList[right]);
         }
     }
 }

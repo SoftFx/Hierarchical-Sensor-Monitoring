@@ -6,7 +6,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 {
     public class SensorModelTests
     {
-        private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.ProductName);
+        private readonly ApiSensorValuesFactory _sensorValuesFactory = new(TestProductsManager.ProductName);
 
 
         //[Fact]

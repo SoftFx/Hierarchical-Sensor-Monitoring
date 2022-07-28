@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         //private const int TooLongUnitedSensorValueDataSize = 1025;
         //private const int MaxUnitedSensorValueDataSize = 1024;
 
-
+        //private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
         //private readonly SensorValuesFactory _sensorValuesFactory = new(TestProductsManager.TestProduct.Id);
 
 
