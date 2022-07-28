@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using System;
@@ -142,9 +143,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.Unit, actual.Unit);
 
-            if (expected.ExpectedUpdateIntervalTicks != 0)
-                Assert.Equal(expected.ExpectedUpdateIntervalTicks, actual.ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval);
-
             TestSensorModelWithoutUpdatedMetadata(expected, actual);
         }
 
@@ -154,7 +152,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.ProductId, actual.ProductId);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
-            //Assert.Equal(expected.CreationDate, actual.CreationDate.Ticks);
             Assert.Equal(expected.State, (byte)actual.State);
         }
 
@@ -178,38 +175,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
 
-        public static void TestSensorValue(BaseValue expected, BaseValue actual, SensorType type)
-        {
-            switch (type)
-            {
-                case SensorType.Boolean:
-                    AssertSensorValues<BooleanValue>(expected, actual);
-                    break;
-                case SensorType.Integer:
-                    AssertSensorValues<IntegerValue>(expected, actual);
-                    break;
-                case SensorType.Double:
-                    AssertSensorValues<DoubleValue>(expected, actual);
-                    break;
-                case SensorType.String:
-                    AssertSensorValues<StringValue>(expected, actual);
-                    break;
-                case SensorType.File:
-                    AssertSensorValues<FileValue>(expected, actual);
-                    break;
-                case SensorType.IntegerBar:
-                    AssertSensorValues<IntegerBarValue>(expected, actual);
-                    break;
-                case SensorType.DoubleBar:
-                    AssertSensorValues<DoubleBarValue>(expected, actual);
-                    break;
-            }
-        }
-
-        private static void AssertSensorValues<T>(BaseValue actual, BaseValue expected) =>
-            AssertModels((T)Convert.ChangeType(actual, typeof(T)), (T)Convert.ChangeType(expected, typeof(T)));
-
-        public static void AssertModels<T>(T actual, T expected)
+        internal static void AssertModels<T>(T actual, T expected)
         {
             var type = typeof(T);
 
@@ -218,26 +184,17 @@ namespace HSMServer.Core.Tests.Infrastructure
                 var actualValue = pi.GetValue(actual);
                 var expectedValue = pi.GetValue(expected);
 
-                // TODO: ?????????
-                if (actualValue?.GetType() == typeof(ValidationResult))
-                    AssertModels((ValidationResult)actualValue, (ValidationResult)expectedValue);
+                if (pi.PropertyType.Assembly.FullName == type.Assembly.FullName)
+                {
+                    if (pi.PropertyType.IsClass)
+                        AssertModels(actualValue, expectedValue);
+                    else if (pi.PropertyType.IsEnum)
+                        Assert.Equal(actualValue, expectedValue);
+                }
                 else
                     Assert.Equal(actualValue, expectedValue);
             }
         }
-
-        private static BaseValue GetValue(byte[] valueBytes, SensorType type) =>
-            type switch
-            {
-                SensorType.Boolean => valueBytes.ConvertToSensorValue<BooleanValue>(),
-                SensorType.Integer => valueBytes.ConvertToSensorValue<IntegerValue>(),
-                SensorType.Double => valueBytes.ConvertToSensorValue<DoubleValue>(),
-                SensorType.String => valueBytes.ConvertToSensorValue<StringValue>(),
-                SensorType.File => valueBytes.ConvertToSensorValue<FileValue>(),
-                SensorType.IntegerBar => valueBytes.ConvertToSensorValue<IntegerBarValue>(),
-                SensorType.DoubleBar => valueBytes.ConvertToSensorValue<DoubleBarValue>(),
-                _ => null,
-            };
 
         internal static void TestSensorModel(BaseSensorModel expected, BaseSensorModel actual)
         {
@@ -296,12 +253,60 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Unit, actual.Unit);
         }
 
-        internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, BaseSensorModel actual) =>
-            Assert.Equal(expected.ExpectedUpdateInterval.Ticks, actual.ExpectedUpdateIntervalPolicy.ExpectedUpdateInterval);
-
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual) =>
             Assert.Equal(expected.ExpectedUpdateInterval.Ticks, (actual as ExpectedUpdateIntervalPolicy).ExpectedUpdateInterval);
 
+
+        private static void TestSensorValue(BaseValue expected, BaseValue actual, SensorType type)
+        {
+            switch (type)
+            {
+                case SensorType.Boolean:
+                    AssertSensorValues<BooleanValue>(expected, actual);
+                    break;
+                case SensorType.Integer:
+                    AssertSensorValues<IntegerValue>(expected, actual);
+                    break;
+                case SensorType.Double:
+                    AssertSensorValues<DoubleValue>(expected, actual);
+                    break;
+                case SensorType.String:
+                    AssertSensorValues<StringValue>(expected, actual);
+                    break;
+                case SensorType.File:
+                    AssertSensorValues<FileValue>(expected, actual);
+                    break;
+                case SensorType.IntegerBar:
+                    AssertSensorValues<IntegerBarValue>(expected, actual);
+                    break;
+                case SensorType.DoubleBar:
+                    AssertSensorValues<DoubleBarValue>(expected, actual);
+                    break;
+            }
+        }
+
+        private static void AssertSensorValues<T>(BaseValue actual, BaseValue expected) =>
+            AssertModels((T)Convert.ChangeType(actual, typeof(T)), (T)Convert.ChangeType(expected, typeof(T)));
+
+        private static BaseValue GetValue(byte[] valueBytes, SensorType type)
+        {
+            var value = type switch
+            {
+                SensorType.Boolean => valueBytes.ConvertToSensorValue<BooleanValue>(),
+                SensorType.Integer => valueBytes.ConvertToSensorValue<IntegerValue>(),
+                SensorType.Double => valueBytes.ConvertToSensorValue<DoubleValue>(),
+                SensorType.String => valueBytes.ConvertToSensorValue<StringValue>(),
+                SensorType.File => valueBytes.ConvertToSensorValue<FileValue>(),
+                SensorType.IntegerBar => valueBytes.ConvertToSensorValue<IntegerBarValue>(),
+                SensorType.DoubleBar => valueBytes.ConvertToSensorValue<DoubleBarValue>(),
+                _ => null,
+            };
+
+            if (value is FileValue fileValue)
+                value = fileValue.DecompressContent();
+
+            return value;
+        }
 
         private static void TestImmutableSensorData(BaseSensorModel expected, BaseSensorModel actual)
         {

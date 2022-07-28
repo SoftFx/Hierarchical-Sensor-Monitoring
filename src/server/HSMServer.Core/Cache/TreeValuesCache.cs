@@ -369,7 +369,7 @@ namespace HSMServer.Core.Cache
                 AddNewSensorValue(store);
         }
 
-        public void AddNewSensorValue(StoreInfo storeInfo)
+        internal void AddNewSensorValue(StoreInfo storeInfo)
         {
             (string key, string path, BaseValue value) = storeInfo;
 
