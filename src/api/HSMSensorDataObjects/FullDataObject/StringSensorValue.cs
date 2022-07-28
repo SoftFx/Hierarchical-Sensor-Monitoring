@@ -1,4 +1,6 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -7,12 +9,14 @@ namespace HSMSensorDataObjects.FullDataObject
     public class StringSensorValue : ValueBase<string>
     {
         [DataMember]
+        [DefaultValue((int)SensorType.StringSensor)]
         public override SensorType Type => SensorType.StringSensor;
 
         [Obsolete]
-        public string StringValue 
+        [SwaggerExclude]
+        public string StringValue
         {
-            get => Value; 
+            get => Value;
             set => Value = value;
         }
     }

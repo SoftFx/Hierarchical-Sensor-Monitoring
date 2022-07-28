@@ -6,7 +6,7 @@
     <UserSecretsId>a4cdf004-6f82-4fe4-b26d-ecc4e174bb5d</UserSecretsId>
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>2.8.3</Version>
+    <Version>2.8.5</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,8 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="10.3.0" />
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.33" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="2.1.39" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.34" />
     <PackageReference Include="LightningDB" Version="0.13.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" Version="6.0.0" />
@@ -36,10 +37,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="NLog" Version="4.7.10" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="4.13.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.4" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="6.1.4" />
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.1.4" />
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.1.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="System.Collections" Version="4.3.0" />
   </ItemGroup>
 

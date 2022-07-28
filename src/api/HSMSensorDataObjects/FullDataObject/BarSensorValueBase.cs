@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -7,15 +8,17 @@ namespace HSMSensorDataObjects.FullDataObject
     public abstract class BarSensorValueBase : SensorValueBase
     {
         [Obsolete]
-        public DateTime StartTime 
-        { 
+        [SwaggerExclude]
+        public DateTime StartTime
+        {
             get => OpenTime;
             set => OpenTime = value;
         }
 
         [Obsolete]
-        public DateTime EndTime 
-        { 
+        [SwaggerExclude]
+        public DateTime EndTime
+        {
             get => CloseTime;
             set => CloseTime = value;
         }

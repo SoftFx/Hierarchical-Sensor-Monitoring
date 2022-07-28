@@ -1,8 +1,10 @@
-﻿using System.Runtime.Serialization;
+﻿using System.ComponentModel;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects
 {
     [DataContract]
+    [DefaultValue(Ok)]
     public enum SensorStatus
     {
         /// <summary>

@@ -1,8 +1,5 @@
-﻿using HSMCommon.Attributes;
-
-namespace HSMServer.Core.Model.Authentication
+﻿namespace HSMServer.Core.Model.Authentication
 {
-    [SwaggerIgnore]
     public enum ProductRoleEnum
     {
         ProductManager = 0,

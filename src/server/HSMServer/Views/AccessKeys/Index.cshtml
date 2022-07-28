@@ -19,12 +19,13 @@
         <table class="table">
             <tr>
                 <th>
-                    Product<br />
+                    Product
+                   @* <br />
                     (
                     <input class="form-check-input" type="checkbox" value="" onchange="allProductsChanged()" id="allProducts">
                     <label class="form-check-label" for="allProducts">
                         node)
-                    </label>
+                    </label>*@
                 </th>
                 <th>Display name</th>
                 <th>Key</th>
@@ -61,7 +62,8 @@
         });
     }
 
-    $('#accessKeys_modal').on('hidden.bs.modal', function (e) {
-        allProductsChanged();
-    });
+    // there is code, that need to call allProductsChanged after closing accessKeys_modal (if there is exist checkbox with id=allProducts)
+    //$('#accessKeys_modal').on('hidden.bs.modal', function (e) {
+    //    allProductsChanged();
+    //});
 </script>

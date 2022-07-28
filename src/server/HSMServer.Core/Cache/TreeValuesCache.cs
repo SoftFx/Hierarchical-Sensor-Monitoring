@@ -340,7 +340,7 @@ namespace HSMServer.Core.Cache
                 case TransactionType.Add:
                     _databaseCore.AddPolicy(policy.ToEntity());
                     return;
-                case TransactionType.Update: 
+                case TransactionType.Update:
                     _databaseCore.UpdatePolicy(policy.ToEntity());
                     return;
                 case TransactionType.Delete:
@@ -376,8 +376,7 @@ namespace HSMServer.Core.Cache
             if (!TryGetProductByKey(key, out var product, out _))
                 return;
 
-            var productName = product.DisplayName;
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(productName, path);
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, path);
 
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
@@ -413,7 +412,7 @@ namespace HSMServer.Core.Cache
                 sensor.ExpectedUpdateIntervalPolicy = newPolicy;
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
-            else
+            else if (oldPolicy != null)
             {
                 if (newInterval == TimeSpan.Zero)
                 {
@@ -593,12 +592,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(string productName, string sensorPath)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
-            var parentProduct = _tree.FirstOrDefault(p => p.Value.DisplayName == productName).Value;
-            if (parentProduct == null)
-                parentProduct = AddProduct(productName);
-
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -649,10 +644,21 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.ProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
 
+            if (sensor is StringSensorModel)
+                AddStringValueLengthPolicy(sensor);
+
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
             OnChangeSensorEvent(sensor, TransactionType.Add);
+        }
+
+        private void AddStringValueLengthPolicy(BaseSensorModel sensor)
+        {
+            var policy = new StringValueLengthPolicy();
+
+            sensor.AddPolicy(policy);
+            _databaseCore.AddPolicy(policy.ToEntity());
         }
 
         private void UpdateProduct(ProductModel product)
