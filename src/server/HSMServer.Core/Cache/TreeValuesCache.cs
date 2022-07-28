@@ -386,16 +386,16 @@ namespace HSMServer.Core.Cache
                 {
                     ProductId = parentProduct.Id,
                     DisplayName = sensorName,
+                    Type = (byte)value.Type,
                 };
 
-                sensor = SensorModelFactory.Build(value, entity);
+                sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
 
-            // TODO : add validation for sensor values - SensorValueBase.Validate() + MonitoringCore.CheckValidationResult
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 

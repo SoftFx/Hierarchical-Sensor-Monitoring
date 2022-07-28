@@ -36,6 +36,9 @@ namespace HSMServer.Core.Model
 
 
         [JsonIgnore]
+        public abstract SensorType Type { get; }
+
+        [JsonIgnore]
         public abstract string ShortInfo { get; }
 
 

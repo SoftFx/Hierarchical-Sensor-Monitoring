@@ -22,23 +22,5 @@ namespace HSMServer.Core.Model
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
-
-        internal static BaseSensorModel Build(BaseValue value, SensorEntity entity)
-        {
-            BaseSensorModel BuildSensor<T>() where T : BaseSensorModel, new() =>
-                new T().ApplyEntity(entity);
-
-            return value switch
-            {
-                BooleanValue => BuildSensor<BooleanSensorModel>(),
-                IntegerValue => BuildSensor<IntegerSensorModel>(),
-                DoubleValue => BuildSensor<DoubleSensorModel>(),
-                StringValue => BuildSensor<StringSensorModel>(),
-                IntegerBarValue => BuildSensor<IntegerBarSensorModel>(),
-                DoubleBarValue => BuildSensor<DoubleBarSensorModel>(),
-                FileValue => BuildSensor<FileSensorModel>(),
-                _ => throw new ArgumentException($"Unexpected sensor value type {value.GetType()}"),
-            };
-        }
     }
 }

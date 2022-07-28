@@ -2,16 +2,28 @@
 
 namespace HSMServer.Core.Model
 {
-    public record BooleanValue : BaseValue<bool> { }
+    public record BooleanValue : BaseValue<bool>
+    {
+        public override SensorType Type => SensorType.Boolean;
+    }
 
 
-    public record IntegerValue : BaseValue<int> { }
+    public record IntegerValue : BaseValue<int>
+    {
+        public override SensorType Type => SensorType.Integer;
+    }
 
 
-    public record DoubleValue : BaseValue<double> { }
+    public record DoubleValue : BaseValue<double>
+    {
+        public override SensorType Type => SensorType.Double;
+    }
 
 
-    public record StringValue : BaseValue<string> { }
+    public record StringValue : BaseValue<string>
+    {
+        public override SensorType Type => SensorType.String;
+    }
 
 
     public record FileValue : BaseValue<byte[]>
@@ -24,6 +36,8 @@ namespace HSMServer.Core.Model
         public string Extension { get; init; }
 
         public long OriginalSize { get; init; }
+
+        public override SensorType Type => SensorType.File;
 
         public override string ShortInfo => GetShortDescription();
 
@@ -73,8 +87,14 @@ namespace HSMServer.Core.Model
     }
 
 
-    public record IntegerBarValue : BarBaseValue<int> { }
+    public record IntegerBarValue : BarBaseValue<int>
+    {
+        public override SensorType Type => SensorType.IntegerBar;
+    }
 
 
-    public record DoubleBarValue : BarBaseValue<double> { }
+    public record DoubleBarValue : BarBaseValue<double>
+    {
+        public override SensorType Type => SensorType.DoubleBar;
+    }
 }
