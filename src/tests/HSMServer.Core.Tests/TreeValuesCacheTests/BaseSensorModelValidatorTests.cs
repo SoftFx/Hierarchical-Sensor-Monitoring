@@ -1,6 +1,4 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -20,21 +18,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const string UnexpectedBehaviorMessage = "Unexpected behavior or error";
         private const int DefaultMaxStringLength = 150;
 
-        private readonly ITreeValuesCache _valuesCache;
-        private ProductModel _testProduct;
+        //private readonly ITreeValuesCache _valuesCache;
         //private const int TooLongSensorValuesPathPartsCount = 11;
         //private const int MaxSensorValuesPathPartsCount = 10;
-
-        //private const int TooLongStringSensorValueSize = 151;
-        //private const int MaxStringSensorValueSize = 150;
 
 
         public BaseSensorModelValidatorTests(ValidationFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
-
-            _testProduct = _valuesCache.AddProduct(TestProductsManager.ProductName);
+            //_valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
 
 
@@ -49,7 +41,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "NullBase")]
         public void NullSensorValueValidationTest(SensorType type)
         {
-            var sensor = SensorModelFactory.Build(BuildEntity(type));
+            var sensor = BuildSensorModel(type);
 
             Assert.False(sensor.TryAddValue(null, out _));
         }
@@ -58,7 +50,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "StringSensorModelWarning")]
         public void StringSensorModelWarningValidationTest()
         {
-            var stringModel = SensorModelFactory.Build(BuildEntity(SensorType.String));
+            var stringModel = BuildSensorModel(SensorType.String);
             stringModel.AddPolicy(new StringValueLengthPolicy());
 
             var stringBase = new StringValue 
@@ -68,6 +60,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(stringModel.TryAddValue(stringBase, out _));
             Assert.True(stringModel.ValidationResult.IsWarning);
+            Assert.Equal(SensorStatus.Warning, stringModel.ValidationResult.Result);
             Assert.Equal(stringModel.ValidationResult.Message, SensorValueIsTooLong);
         }
 
@@ -82,7 +75,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidType")]
         public void SensorModelInvalidTypeValidationTest(SensorType sensorType)
         {
-            var sensor = SensorModelFactory.Build(BuildEntity(sensorType));
+            var sensor = BuildSensorModel(sensorType);
             var errorMessage = GetBadValueTypeMessage(sensorType);
 
             foreach (var invalidType in Enum.GetValues<SensorType>())
@@ -91,6 +84,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     break;
 
                 Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType), out _));
+                Assert.True(sensor.ValidationResult.IsError);
                 Assert.Equal(SensorStatus.Error, sensor.ValidationResult.Result);
                 Assert.Equal(errorMessage, sensor.ValidationResult.Message);
             }
@@ -105,7 +99,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
-                var sensor = SensorModelFactory.Build(BuildEntity(sensorType));
+                var sensor = BuildSensorModel(sensorType);
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
 
                 var errorMessage = status == SensorStatus.Unknown ?
@@ -115,10 +109,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.True(sensor.TryAddValue(baseValue, out _));
                 Assert.Equal(baseValue.Status, sensor.ValidationResult.Result);
                 Assert.Equal(errorMessage, sensor.ValidationResult.Message);
+
+                if (status == SensorStatus.Error)
+                    Assert.True(sensor.ValidationResult.IsError);
+                else if (status == SensorStatus.Warning)
+                    Assert.True(sensor.ValidationResult.IsWarning);
             }
         }
 
         //updateInterval
+        //combinated policy + status
 
         //[Fact]
         //[Trait("Category", "StringSensorValue")]
@@ -135,100 +135,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         //    Assert.Equal(ValidationConstants.PathTooLong, result.Error);
         //}
 
-        #region United
 
-        //[Theory]
-        //[InlineData(SensorType.BooleanSensor)]
-        //[InlineData(SensorType.IntSensor)]
-        //[InlineData(SensorType.DoubleSensor)]
-        //[InlineData(SensorType.StringSensor)]
-        //[InlineData(SensorType.IntegerBarSensor)]
-        //[InlineData(SensorType.DoubleBarSensor)]
-        //[Trait("Category", "UnitedSensorValue")]
-        //public void UnitedSensorValueWarningValidationTest(SensorType type)
-        //{
-        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
-
-        //    var result = unitedSensorValue.Validate();
-
-        //    Assert.Equal(ResultType.Warning, result.ResultType);
-        //    Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
-        //    Assert.True(string.IsNullOrEmpty(result.Error));
-        //}
-
-        //[Theory]
-        //[InlineData(SensorType.FileSensor)]
-        //[InlineData(SensorType.FileSensorBytes)]
-        //[Trait("Category", "UnitedSensorValue")]
-        //public void UnitedSensorValueErrorValidationTest(SensorType type)
-        //{
-        //    var unitedSensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
-        //    unitedSensorValue.Type = type;
-
-        //    var result = unitedSensorValue.Validate();
-
-        //    Assert.Equal(ResultType.Error, result.ResultType);
-        //    Assert.Equal(ValidationConstants.FailedToParseType, result.Error);
-        //    Assert.True(string.IsNullOrEmpty(result.Warning));
-        //}
-
-        //[Fact]
-        //[Trait("Category", "UnitedSensorValue")]
-        //public void UnitedSensorValueAllErrorsValidationTest()
-        //{
-        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(SensorType.FileSensorBytes);
-        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(TooLongUnitedSensorValueDataSize);
-        //    unitedSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
-
-        //    var result = unitedSensorValue.Validate();
-
-        //    var errors = new List<string>(2)
-        //    {
-        //        ValidationConstants.FailedToParseType,
-        //        ValidationConstants.PathTooLong
-        //    };
-
-        //    Assert.Equal(ResultType.Error, result.ResultType);
-        //    Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
-        //    Assert.Equal(string.Join(Environment.NewLine, errors), result.Error);
-        //}
-
-        //[Theory]
-        //[InlineData(SensorType.BooleanSensor)]
-        //[InlineData(SensorType.IntSensor)]
-        //[InlineData(SensorType.DoubleSensor)]
-        //[InlineData(SensorType.StringSensor)]
-        //[InlineData(SensorType.IntegerBarSensor)]
-        //[InlineData(SensorType.DoubleBarSensor)]
-        //[Trait("Category", "UnitedSensorValue")]
-        //public void UnitedSensorValueValidationTest(SensorType type)
-        //{
-        //    var unitedSensorValue = _sensorValuesFactory.BuildUnitedSensorValue(type);
-        //    unitedSensorValue.Data = RandomGenerator.GetRandomString(MaxUnitedSensorValueDataSize);
-
-        //    TestCorrectData(unitedSensorValue.Validate());
-        //}
-
-
-        //private UnitedSensorValue BuildUnitedSensorValue(int pathParts)
-        //{
-        //    var sensorValue = _sensorValuesFactory.BuildRandomUnitedSensorValue();
-        //    sensorValue.Path = GetSensorPath(pathParts);
-
-        //    return sensorValue;
-        //}
-
-        #endregion
-
-
-        private SensorEntity BuildEntity(SensorType type) => new()
+        private static BaseSensorModel BuildSensorModel(SensorType type)
         {
-            Id = Guid.NewGuid().ToString(),
-            ProductId = _testProduct.Id,
-            DisplayName = RandomGenerator.GetRandomString(),
-            Type = (byte)type
-        };
+            var entity = new SensorEntity()
+            {
+                Id = Guid.NewGuid().ToString(),
+                ProductId = Guid.NewGuid().ToString(),
+                DisplayName = RandomGenerator.GetRandomString(),
+                Type = (byte)type
+            };
+
+            return SensorModelFactory.Build(entity);
+        }
 
         private static string GetBadValueTypeMessage(SensorType sensorType)
         {
