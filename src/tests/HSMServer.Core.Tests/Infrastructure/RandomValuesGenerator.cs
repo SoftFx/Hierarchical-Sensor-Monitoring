@@ -16,7 +16,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static int GetRandomInt(int min = -100, int max = 100, bool positive = false) =>
             _random.Value.Next(positive ? 0 : min, max);
 
-        internal static byte GetRandomByte(byte min = 0, byte max = 8) =>
+        internal static byte GetRandomByte(byte min = 0, byte max = 7) =>
             (byte)_random.Value.Next(min, max);
 
         internal static double GetRandomDouble() =>

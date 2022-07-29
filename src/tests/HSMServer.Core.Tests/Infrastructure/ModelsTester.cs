@@ -196,15 +196,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             }
         }
 
-        internal static void TestSensorModel(BaseSensorModel expected, BaseSensorModel actual)
-        {
-            Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ExpectedUpdateIntervalPolicy, actual.ExpectedUpdateIntervalPolicy);
-            Assert.Equal(expected.Unit, actual.Unit);
-
-            TestSensorModelWithoutUpdatedMetadata(expected, actual);
-        }
-
         internal static void TestSensorModelWithoutUpdatedMetadata(BaseSensorModel expected, BaseSensorModel actual)
         {
             TestImmutableSensorData(expected, actual);
