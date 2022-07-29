@@ -95,7 +95,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Status = SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomBytes(),
                 Extension = RandomGenerator.GetRandomString(3),
-                Name = nameof(FileValue)
+                Name = nameof(FileValue),
+                OriginalSize = RandomGenerator.GetRandomInt(positive: true),
             };
 
 
