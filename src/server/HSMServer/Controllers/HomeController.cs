@@ -193,14 +193,27 @@ namespace HSMServer.Controllers
         }
 
 
-        private List<BaseValue> GetSensorValues(string encodedId, int count) =>
-            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
+        private List<BaseValue> GetSensorValues(string encodedId, int count)
+        {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
 
-        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to) =>
-            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
+        }
+
+        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to)
+        {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
+
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+        }
 
         private List<BaseValue> GetAllSensorValues(string encodedId)
         {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
+
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
