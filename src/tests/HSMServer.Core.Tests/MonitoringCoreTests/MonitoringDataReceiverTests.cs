@@ -3,7 +3,6 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -21,8 +20,8 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         private readonly ITreeValuesCache _valuesCache;
 
         //private delegate List<SensorModel> GetSensorsFromCache();
-        private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
-        private delegate List<SensorHistoryData> GetAllSensorHistoryData(string productName, string path);
+        //private delegate SensorHistoryData GetSensorHistoryData(string productName, string path);
+        //private delegate List<SensorHistoryData> GetAllSensorHistoryData(string productName, string path);
         private delegate List<SensorEntity> GetAllSensorsFromDb();
 
 
@@ -184,17 +183,17 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
 
 
         private async Task FullSensorValueTestAsync(SensorValueBase sensorValue, /*GetSensorsFromCache getSensorsFromCache,*/
-            GetSensorHistoryData getSensorHistoryData, GetAllSensorsFromDb getAllSensorsFromDb)
+            /*GetSensorHistoryData getSensorHistoryData,*/ GetAllSensorsFromDb getAllSensorsFromDb)
         {
             await Task.Delay(100);
 
             //TestSensorFromCache(sensorValue, getSensorsFromCache);
-            TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
+            //TestSensorHistoryDataFromDB(sensorValue, getSensorHistoryData);
             //TestSensorFromDB(sensorValue, getAllSensorsFromDb);
         }
 
         private async Task FullSeveralSensorValuesTestAsync(List<SensorValueBase> sensorValues,
-           /*GetSensorsFromCache getSensorsFromCache,*/ GetAllSensorHistoryData getAllSensorHistoryData, GetAllSensorsFromDb getAllSensorsFromDb, int? time = null)
+           /*GetSensorsFromCache getSensorsFromCache,*/ /*GetAllSensorHistoryData getAllSensorHistoryData,*/ GetAllSensorsFromDb getAllSensorsFromDb, int? time = null)
         {
             await Task.Delay(sensorValues.Count);
 
@@ -202,7 +201,7 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
                                           .ToDictionary(s => s.Key, s => s.ToList());
 
             //TestSeveralSensorsFromCache(sensorsDict, getSensorsFromCache);
-            TestSeveralSensorHistoryDataFromDB(sensorsDict, getAllSensorHistoryData);
+            //TestSeveralSensorHistoryDataFromDB(sensorsDict, getAllSensorHistoryData);
             //TestSeveralSensorsFromDB(sensorsDict, getAllSensorsFromDb);
         }
 
@@ -213,12 +212,12 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         //    TestSensorFromCache(sensorValue, sensorModel);
         //}
 
-        private void TestSensorHistoryDataFromDB(SensorValueBase sensorValue, GetSensorHistoryData getSensorHistoryData)
-        {
-            var sensorHistoryDataFromDB = getSensorHistoryData?.Invoke(_testProductName, sensorValue.Path);
+        //private void TestSensorHistoryDataFromDB(SensorValueBase sensorValue, GetSensorHistoryData getSensorHistoryData)
+        //{
+        //    var sensorHistoryDataFromDB = getSensorHistoryData?.Invoke(_testProductName, sensorValue.Path);
 
-            SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue, sensorHistoryDataFromDB);
-        }
+        //    SensorValuesTester.TestSensorHistoryDataFromDB(sensorValue, sensorHistoryDataFromDB);
+        //}
 
         //private void TestSensorFromDB(SensorValueBase sensorValue, GetAllSensorsFromDb getAllSensors)
         //{
@@ -245,16 +244,16 @@ namespace HSMServer.Core.Tests.MonitoringDataReceiverTests
         //    ModelsTester.TestSensorModelData(sensorValue, sensorModel);
         //}
 
-        private void TestSeveralSensorHistoryDataFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
-            GetAllSensorHistoryData getAllSensorHistoryData)
-        {
-            foreach (var sensors in sensorValues)
-            {
-                var datas = getAllSensorHistoryData?.Invoke(_testProductName, sensors.Key);
-                for (int i = 0; i < sensors.Value.Count; ++i)
-                    SensorValuesTester.TestSensorHistoryDataFromDB(sensors.Value[i], datas[i]);
-            }
-        }
+        //private void TestSeveralSensorHistoryDataFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
+        //    GetAllSensorHistoryData getAllSensorHistoryData)
+        //{
+        //    foreach (var sensors in sensorValues)
+        //    {
+        //        var datas = getAllSensorHistoryData?.Invoke(_testProductName, sensors.Key);
+        //        for (int i = 0; i < sensors.Value.Count; ++i)
+        //            SensorValuesTester.TestSensorHistoryDataFromDB(sensors.Value[i], datas[i]);
+        //    }
+        //}
 
         //private void TestSeveralSensorsFromDB(Dictionary<string, List<SensorValueBase>> sensorValues,
         //    GetAllSensorsFromDb getAllSensorsFromDb)

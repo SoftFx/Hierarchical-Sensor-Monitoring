@@ -3,7 +3,6 @@ using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,21 +14,14 @@ namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class SensorValuesTester
     {
-        internal static void TestSensorHistoryDataFromExtendedBarSensorData(ExtendedBarSensorData expected, SensorHistoryData actual)
-        {
-            Assert.Equal(expected.ValueType, actual.SensorType);
-
-            TestSensorHistoryDataFromDB(expected.Value, actual);
-        }
-
-        internal static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorHistoryData actual)
-        {
-            Assert.NotNull(actual);
-            Assert.Equal(GetSensorValueType(expected), actual.SensorType);
-            Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
-            Assert.Contains(expected.Comment, actual.TypedData);
-            Assert.Equal(GetSensorValueTypedDataString(expected), actual.TypedData);
-        }
+        //internal static void TestSensorHistoryDataFromDB(SensorValueBase expected, SensorHistoryData actual)
+        //{
+        //    Assert.NotNull(actual);
+        //    Assert.Equal(GetSensorValueType(expected), actual.SensorType);
+        //    Assert.Equal(expected.Time.ToUniversalTime(), actual.Time);
+        //    Assert.Contains(expected.Comment, actual.TypedData);
+        //    Assert.Equal(GetSensorValueTypedDataString(expected), actual.TypedData);
+        //}
 
         internal static void TestSensorEntity(SensorValueBase expected, SensorEntity actual)
         {

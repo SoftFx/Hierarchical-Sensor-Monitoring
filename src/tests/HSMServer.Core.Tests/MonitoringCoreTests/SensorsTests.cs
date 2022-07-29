@@ -3,7 +3,6 @@ using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.TypedDataObject;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.Model.Sensor;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
@@ -189,14 +188,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         //}
 
 
-        private static void TestBarSensorsHistoryData(List<SensorValueBase> expected, List<SensorHistoryData> actual, int sensorValuesCount)
-        {
-            Assert.Equal(expected.Count, actual.Count);
-            Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), actual[sensorValuesCount].TypedData);
+        //private static void TestBarSensorsHistoryData(List<SensorValueBase> expected, List<SensorHistoryData> actual, int sensorValuesCount)
+        //{
+        //    Assert.Equal(expected.Count, actual.Count);
+        //    Assert.DoesNotContain(JsonSerializer.Serialize(DateTime.MinValue), actual[sensorValuesCount].TypedData);
 
-            for (int i = 0; i < sensorValuesCount; ++i)
-                SensorValuesTester.TestSensorHistoryDataFromDB(expected[i], actual[i]);
-        }
+        //    for (int i = 0; i < sensorValuesCount; ++i)
+        //        SensorValuesTester.TestSensorHistoryDataFromDB(expected[i], actual[i]);
+        //}
 
         //private (byte[], string, string) AddFileSensorAndGetItsContentExtensionAndPath(SensorType type)
         //{
