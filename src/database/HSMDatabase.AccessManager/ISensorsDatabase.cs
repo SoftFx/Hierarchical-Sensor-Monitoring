@@ -1,5 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager
@@ -11,7 +10,6 @@ namespace HSMDatabase.AccessManager
         DateTime DatabaseMaxDateTime { get; }
         DateTime DatabaseMinDateTime { get; }
         long GetSensorSize(string productName, string path);
-        void PutSensorData(SensorDataEntity sensorData, string productName);
         void DeleteAllSensorValues(string productName, string path);
         List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count);
         List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to);

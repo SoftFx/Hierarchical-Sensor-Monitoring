@@ -202,7 +202,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var dataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(type);
 
-            _databaseCoreManager.DatabaseCore.PutSensorData(dataEntity, TestProductsManager.ProductName);
+            //_databaseCoreManager.DatabaseCore.PutSensorData(dataEntity, TestProductsManager.ProductName);
 
             switch (dataEntity.DataType)
             {

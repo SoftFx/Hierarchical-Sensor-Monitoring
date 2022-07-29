@@ -41,33 +41,33 @@ namespace HSMServer.Core.Tests.ConverterTests
         //    SensorValuesTester.TestSensorDataEntity(sensorValue, dataEntity, _timeCollected);
         //}
 
-        [Fact]
-        [Trait("Category", "BarSensorValue without EndTime")]
-        public void IntBarSensorValueToSensorDataEntity_WithoutEndTime_ConverterTest()
-        {
-            DateTime sensorValueEndTime = DateTime.MinValue;
+        //[Fact]
+        //[Trait("Category", "BarSensorValue without EndTime")]
+        //public void IntBarSensorValueToSensorDataEntity_WithoutEndTime_ConverterTest()
+        //{
+        //    DateTime sensorValueEndTime = DateTime.MinValue;
 
-            var intBarSensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
-            intBarSensorValue.EndTime = sensorValueEndTime;
+        //    var intBarSensorValue = _sensorValuesFactory.BuildIntBarSensorValue();
+        //    intBarSensorValue.EndTime = sensorValueEndTime;
 
-            var dataEntity = intBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
+        //    var dataEntity = intBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
 
-            Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), dataEntity.TypedData);
-        }
+        //    Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), dataEntity.TypedData);
+        //}
 
-        [Fact]
-        [Trait("Category", "BarSensorValue without EndTime")]
-        public void DoubleBarSensorValueToSensorDataEntityConverter_WithoutEndTime_Test()
-        {
-            DateTime sensorValueEndTime = DateTime.MinValue;
+        //[Fact]
+        //[Trait("Category", "BarSensorValue without EndTime")]
+        //public void DoubleBarSensorValueToSensorDataEntityConverter_WithoutEndTime_Test()
+        //{
+        //    DateTime sensorValueEndTime = DateTime.MinValue;
 
-            var doubleBarSensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
-            doubleBarSensorValue.EndTime = sensorValueEndTime;
+        //    var doubleBarSensorValue = _sensorValuesFactory.BuildDoubleBarSensorValue();
+        //    doubleBarSensorValue.EndTime = sensorValueEndTime;
 
-            var dataEntity = doubleBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
+        //    var dataEntity = doubleBarSensorValue.Convert(_timeCollected, SensorStatus.Ok);
 
-            Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), dataEntity.TypedData);
-        }
+        //    Assert.DoesNotContain(JsonSerializer.Serialize(sensorValueEndTime), dataEntity.TypedData);
+        //}
 
         //[Fact]
         //[Trait("Category", "Validation result")]
