@@ -15,7 +15,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
         private const string SensorValueTypeInvalid = "Sensor value type is not {0}";
         private const string SensorValueStatusInvalid = "User data has {0} status";
-        private const string UnexpectedBehaviorMessage = "Unexpected behavior or error";
         private const int DefaultMaxStringLength = 150;
 
         //private readonly ITreeValuesCache _valuesCache;
@@ -102,13 +101,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
 
-                var errorMessage = status == SensorStatus.Unknown ?
-                    UnexpectedBehaviorMessage
-                    : string.Format(SensorValueStatusInvalid, status);
-
                 Assert.True(sensor.TryAddValue(baseValue, out _));
                 Assert.Equal(baseValue.Status, sensor.ValidationResult.Result);
-                Assert.Equal(errorMessage, sensor.ValidationResult.Message);
+                Assert.Equal(string.Format(SensorValueStatusInvalid, status), sensor.ValidationResult.Message);
 
                 if (status == SensorStatus.Error)
                     Assert.True(sensor.ValidationResult.IsError);
