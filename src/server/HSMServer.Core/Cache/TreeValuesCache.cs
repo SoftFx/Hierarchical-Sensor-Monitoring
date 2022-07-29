@@ -169,7 +169,7 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            var parts = path.Split(CommonConstants.SensorPathSeparator);
+            var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
             if (parts.Contains(string.Empty))
             {
                 message = ErrorInvalidPath;

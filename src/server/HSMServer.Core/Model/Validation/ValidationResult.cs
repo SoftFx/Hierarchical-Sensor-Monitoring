@@ -37,9 +37,9 @@ namespace HSMServer.Core.Model
 
         public bool IsSuccess => Result == SensorStatus.Ok;
 
-        public bool IsWarning => Result == SensorStatus.Warning;
+        public bool IsWarning => Warnings.Count > 0;
 
-        public bool IsError => Result == SensorStatus.Error;
+        public bool IsError => Errors.Count > 0;
 
 
         public ValidationResult()

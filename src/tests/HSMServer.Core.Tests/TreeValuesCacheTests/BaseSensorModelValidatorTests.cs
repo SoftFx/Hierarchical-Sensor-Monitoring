@@ -1,5 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -13,19 +15,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     public class BaseSensorModelValidatorTests : MonitoringCoreTestsBase<ValidationFixture>
     {
         private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
+        private const string SensorValueOutdated = "Sensor value is older than ExpectedUpdateInterval!";
         private const string SensorValueTypeInvalid = "Sensor value type is not {0}";
         private const string SensorValueStatusInvalid = "User data has {0} status";
+
+        private const string ErrorPathKey = "Path or key is empty.";
+        private const string ErrorTooLongPath = "Path for the sensor is too long.";
+        private const string ErrorInvalidPath = "Path has an invalid format.";
+
+        private const string InvalidTooLongPath = "a/a/a/a/a/a/a/a/a/a/a";
+
         private const int DefaultMaxStringLength = 150;
 
-        //private readonly ITreeValuesCache _valuesCache;
-        //private const int TooLongSensorValuesPathPartsCount = 11;
-        //private const int MaxSensorValuesPathPartsCount = 10;
+        private readonly ITreeValuesCache _valuesCache;
 
 
         public BaseSensorModelValidatorTests(ValidationFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
         {
-            //_valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
 
 
@@ -46,21 +54,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
-        [Trait("Category", "StringSensorModelWarning")]
-        public void StringSensorModelWarningValidationTest()
+        [Trait("Category", "StringSensorValueTooLong")]
+        public void StringSensorValueTooLongValidationTest()
         {
-            var stringModel = BuildSensorModel(SensorType.String);
-            stringModel.AddPolicy(new StringValueLengthPolicy());
+            var sensor = BuildSensorModel(SensorType.String);
+            sensor.AddPolicy(new StringValueLengthPolicy());
 
             var stringBase = new StringValue 
             { 
                 Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1) 
             };
 
-            Assert.True(stringModel.TryAddValue(stringBase, out _));
-            Assert.True(stringModel.ValidationResult.IsWarning);
-            Assert.Equal(SensorStatus.Warning, stringModel.ValidationResult.Result);
-            Assert.Equal(stringModel.ValidationResult.Message, SensorValueIsTooLong);
+            Assert.True(sensor.TryAddValue(stringBase, out _));
+            Assert.True(sensor.ValidationResult.IsWarning);
+            Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+            Assert.Equal(sensor.ValidationResult.Message, SensorValueIsTooLong);
         }
 
         [Theory]
@@ -112,23 +120,113 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
         }
 
-        //updateInterval
-        //combinated policy + status
+        [Theory]
+        [InlineData(1000)]
+        [InlineData(2000)]
+        [InlineData(5000)]
+        [InlineData(10000)]
+        [InlineData(50000)]
+        [InlineData(100000)]
+        [Trait("Catgeory", "UpdateIntervalPolicy")]
+        public void SensorModelUpdateIntervalValidationTest(long ticks)
+        {
+            foreach (var sensorType in Enum.GetValues<SensorType>())
+            {
+                var sensor = BuildSensorModel(sensorType);
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
-        //[Fact]
-        //[Trait("Category", "StringSensorValue")]
-        //public void StringSensorValueErrorValidationTest()
+                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) 
+                    with { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
+
+                Assert.True(sensor.TryAddValue(baseValue, out _));
+                Assert.True(sensor.CheckExpectedUpdateInterval());
+                Assert.True(sensor.ValidationResult.IsWarning);
+                Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+                Assert.Equal(SensorValueOutdated, sensor.ValidationResult.Message);
+            }
+        }
+
+        //length + status
+        //[Theory]
+        //[InlineData(SensorStatus.Unknown)]
+        ////[InlineData(SensorStatus.Error)]
+        ////[InlineData(SensorStatus.Warning)]
+        //[Trait("Category", "CombinatedStatusWithTooLongLength")]
+        //public void CombinatedStatusWithTooLongLenghtValidationTest(SensorStatus status)
         //{
-        //    var stringSensorValue = _sensorValuesFactory.BuildStringSensorValue();
-        //    stringSensorValue.StringValue = RandomGenerator.GetRandomString(TooLongStringSensorValueSize);
-        //    stringSensorValue.Path = GetSensorPath(TooLongSensorValuesPathPartsCount);
+        //    var sensor = BuildSensorModel(SensorType.String);
+        //    sensor.AddPolicy(new StringValueLengthPolicy());
 
-        //    var result = stringSensorValue.Validate();
+        //    var stringBase = new StringValue
+        //    {
+        //        Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1),
+        //        Status = status
+        //    };
+        //    Assert.True(sensor.TryAddValue(stringBase, out _));
 
-        //    Assert.Equal(ResultType.Error, result.Result);
-        //    Assert.Equal(ValidationConstants.SensorValueIsTooLong, result.Warning);
-        //    Assert.Equal(ValidationConstants.PathTooLong, result.Error);
+        //    Assert.True(sensor.ValidationResult.IsError);
+        //    //Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+
+        //    //if (status == SensorStatus.Error)
+        //        //Assert.True(sensor.ValidationResult.IsError);
+
+                
         //}
+
+        //interval + status
+
+        [Fact]
+        [Trait("Category", "EmptyPathOrKey")]
+        public void EmptyPathOrKeyValidationTest()
+        {
+            var info = new StoreInfo();
+
+            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.Equal(ErrorPathKey, message);
+        }
+
+        [Fact]
+        [Trait("Category", "TooLongPath")]
+        public void TooLongPathValidationTest()
+        {
+            var info = new StoreInfo
+            {
+                Key = Guid.NewGuid().ToString(),
+                Path = InvalidTooLongPath
+            };
+
+            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.Equal(ErrorTooLongPath, message);
+        }
+
+        [Theory]
+        [InlineData("/")]
+        [InlineData("///")]
+        [InlineData("a//")]
+        [InlineData("/a/")]
+        [InlineData("//a")]
+        [InlineData("  /  ")]
+        [InlineData("a/  ")]
+        [InlineData("a a a/ ")]
+        [InlineData("a/ /  ")]
+        [InlineData("a / a / ")]
+        [Trait("Category", "InvalidPath")]
+        public void InvalidPathValidationTest(string path)
+        {
+            var info = new StoreInfo
+            {
+                Key = Guid.NewGuid().ToString(),
+                Path = path
+            };
+
+            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.Equal(ErrorInvalidPath, message);
+        }
+
+        //check key
+        //doesnt exist AK
+        //doesnt exist Product
+        //small rules
 
 
         private static BaseSensorModel BuildSensorModel(SensorType type)
