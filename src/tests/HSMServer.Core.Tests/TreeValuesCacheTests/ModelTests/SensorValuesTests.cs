@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 
@@ -20,6 +21,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var value = SensorValuesFactory.BuildSensorValue(type);
 
             TestSensorValueShortInfo(value);
+        }
+
+        [Fact]
+        [Trait("Category", "Compressing content")]
+        public void FileSensorValue_CompressingContent_Test()
+        {
+            var fileValue = SensorValuesFactory.BuildFileValue();
+            var compressedValue = CompressionHelper.GetCompressedValue(fileValue);
+
+            var actualValue = fileValue.CompressContent();
+
+            Assert.Equal(fileValue.Value.Length, actualValue.OriginalSize);
+            Assert.Equal(compressedValue.Value.Length, actualValue.Value.Length);
+            Assert.Equal(compressedValue.Value, actualValue.Value);
+            Assert.NotEqual(fileValue.Value, actualValue.Value);
         }
 
 

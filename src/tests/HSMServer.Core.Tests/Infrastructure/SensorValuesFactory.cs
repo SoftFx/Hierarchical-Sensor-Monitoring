@@ -87,17 +87,21 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Percentiles = GetPercentileValues(() => RandomGenerator.GetRandomDouble()),
             };
 
-        internal static FileValue BuildFileValue() =>
-            new()
+        internal static FileValue BuildFileValue()
+        {
+            var fileContent = RandomGenerator.GetRandomBytes();
+
+            return new()
             {
                 Comment = RandomGenerator.GetRandomString(),
                 Time = DateTime.UtcNow,
                 Status = SensorStatus.Ok,
-                Value = RandomGenerator.GetRandomBytes(),
+                Value = fileContent,
                 Extension = RandomGenerator.GetRandomString(3),
                 Name = nameof(FileValue),
-                OriginalSize = RandomGenerator.GetRandomInt(positive: true),
+                OriginalSize = fileContent.LongLength,
             };
+        }
 
 
         private static Dictionary<double, T> GetPercentileValues<T>(Func<T> getValue, int size = 2)

@@ -61,19 +61,5 @@ namespace HSMServer.Core.Tests.Infrastructure
                 ExpectedUpdateIntervalTicks = RandomGenerator.GetRandomInt(),
                 Unit = RandomGenerator.GetRandomString(),
             };
-
-
-        internal static SensorDataEntity BuildSensorDataEntity(byte type) =>
-            new()
-            {
-                Status = RandomGenerator.GetRandomByte(),
-                Path = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow.AddDays(-1),
-                TimeCollected = DateTime.UtcNow,
-                Timestamp = DateTime.UtcNow.AddDays(-1).GetTimestamp(),
-                TypedData = RandomGenerator.GetRandomString(),
-                DataType = type,
-                OriginalFileSensorContentSize = RandomGenerator.GetRandomInt(),
-            };
     }
 }

@@ -13,41 +13,10 @@ namespace HSMServer.Core.Tests.ConverterTests
 
         public UnitedValuesConverterTests(EntitiesConverterFixture fixture)
         {
-            _sensorValuesFactory = fixture.SensorValuesFactory;
+            _sensorValuesFactory = fixture.ApiSensorValuesFactory;
 
             _timeCollected = DateTime.UtcNow;
         }
-
-
-        //[Theory]
-        //[InlineData(SensorType.BooleanSensor)]
-        //[InlineData(SensorType.IntSensor)]
-        //[InlineData(SensorType.DoubleSensor)]
-        //[InlineData(SensorType.StringSensor)]
-        //[InlineData(SensorType.IntegerBarSensor)]
-        //[InlineData(SensorType.DoubleBarSensor)]
-        //[Trait("Category", "to SensorDataEntity")]
-        //public void UnitedValueToSensorDataEntityTest(SensorType sensorType)
-        //{
-        //    var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
-
-        //    var sensorDataEntity = unitedValue.Convert(_timeCollected, SensorStatus.Ok);
-
-        //    SensorValuesTester.TestSensorDataEntity(unitedValue, sensorDataEntity, _timeCollected);
-        //}
-
-        //[Theory]
-        //[InlineData(SensorType.FileSensor)]
-        //[InlineData(SensorType.FileSensorBytes)]
-        //[Trait("Category", "to SensorDataEntity")]
-        //public void UnitedValueToSensorDataEntity_WithoutSpecificFields_Test(SensorType sensorType)
-        //{
-        //    var unitedValue = _sensorValuesFactory.BuildUnitedSensorValue(sensorType);
-
-        //    var sensorDataEntity = unitedValue.Convert(_timeCollected, SensorStatus.Ok);
-
-        //    Assert.Equal(string.Empty, sensorDataEntity.TypedData);
-        //}
 
 
         [Theory]

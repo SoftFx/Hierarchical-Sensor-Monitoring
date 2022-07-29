@@ -198,24 +198,24 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 SensorValuesTester.TestSensorHistoryDataFromDB(expected[i], actual[i]);
         }
 
-        private (byte[], string, string) AddFileSensorAndGetItsContentExtensionAndPath(SensorType type)
-        {
-            var dataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(type);
+        //private (byte[], string, string) AddFileSensorAndGetItsContentExtensionAndPath(SensorType type)
+        //{
+        //    var dataEntity = SensorDataEntitiesFactory.BuildSensorDataEntity(type);
 
-            //_databaseCoreManager.DatabaseCore.PutSensorData(dataEntity, TestProductsManager.ProductName);
+        //    _databaseCoreManager.DatabaseCore.PutSensorData(dataEntity, TestProductsManager.ProductName);
 
-            switch (dataEntity.DataType)
-            {
-                case (byte)SensorType.FileSensor:
-                    var fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
-                    return (Encoding.UTF8.GetBytes(fileSensorData.FileContent), fileSensorData.Extension, dataEntity.Path);
-                case (byte)SensorType.FileSensorBytes:
-                    var fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
-                    return (fileSensorBytesData.FileContent, fileSensorBytesData.Extension, dataEntity.Path);
-                default:
-                    return (Array.Empty<byte>(), string.Empty, null);
-            }
-        }
+        //    switch (dataEntity.DataType)
+        //    {
+        //        case (byte)SensorType.FileSensor:
+        //            var fileSensorData = JsonSerializer.Deserialize<FileSensorData>(dataEntity.TypedData);
+        //            return (Encoding.UTF8.GetBytes(fileSensorData.FileContent), fileSensorData.Extension, dataEntity.Path);
+        //        case (byte)SensorType.FileSensorBytes:
+        //            var fileSensorBytesData = JsonSerializer.Deserialize<FileSensorBytesData>(dataEntity.TypedData);
+        //            return (fileSensorBytesData.FileContent, fileSensorBytesData.Extension, dataEntity.Path);
+        //        default:
+        //            return (Array.Empty<byte>(), string.Empty, null);
+        //    }
+        //}
 
         //private SensorValueBase AddAndGetRandomSensorValue(string specificPathPart = null)
         //{
