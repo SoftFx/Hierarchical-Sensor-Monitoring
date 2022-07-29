@@ -1,8 +1,10 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.Swagger;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Converters;
+using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -13,14 +15,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
 using System.Text;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
 {
     /// <summary>
-    /// Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods. Default product key is
-    ///
-    ///     2201cd7959dc87a1dc82b8abf29f48
-    /// 
+    /// Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -54,7 +54,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -82,7 +83,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -110,7 +112,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -138,7 +141,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -166,10 +170,11 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
-                return StatusCode(406, sensorValue);
+                return StatusCode(406, message);
             }
             catch (Exception e)
             {
@@ -194,7 +199,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -222,7 +228,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue.ConvertToFileSensorBytes(), out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.ConvertToFileSensorBytes().Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -251,7 +258,8 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReportSensorsCount(1);
 
-                if (CanAddToQueue(sensorValue, out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -262,12 +270,14 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
+
         /// <summary>
         /// Endpoint used by HSMDataCollector services, which sends data in portions
         /// </summary>
         /// <param name="values"></param>
         /// <returns></returns>
         [HttpPost("list")]
+        [SwaggerIgnore]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -286,10 +296,10 @@ namespace HSMServer.Controllers
                 var result = new Dictionary<string, string>(values.Count());
                 foreach (var value in valuesList)
                 {
-                    var convertedValue = value.Convert();
+                    var sensorValue = value.Convert();
 
-                    if (!CanAddToQueue(convertedValue, out var message))
-                        result[convertedValue.Key] = message;
+                    if (!CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
+                        result[sensorValue.Key] = message;
                 }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -317,8 +327,27 @@ namespace HSMServer.Controllers
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
-                    if (!CanAddToQueue(value, out var message))
-                        result[value.Key] = message;
+                {
+                    BaseValue convertedValue = value.Type switch
+                    {
+                        SensorType.BooleanSensor => value.ConvertToBool(),
+                        SensorType.DoubleSensor => value.ConvertToDouble(),
+                        SensorType.IntSensor => value.ConvertToInt(),
+                        SensorType.StringSensor => value.ConvertToString(),
+                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
+                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
+                        _ => null
+                    };
+                    var storeInfo = new StoreInfo
+                    {
+                        Key = value.Key,
+                        Path = value.Path,
+                        BaseValue = convertedValue
+                    };
+
+                    if (!CanAddToQueue(storeInfo, out var message))
+                        result[storeInfo.Key] = message;
+                }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
@@ -330,15 +359,25 @@ namespace HSMServer.Controllers
         }
 
 
-        private bool CanAddToQueue(SensorValueBase value, out string message)
+        private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
-            if (_cache.TryCheckKeyPermissions(value.Key, value.Path, out message))
+            if (_cache.TryCheckKeyPermissions(storeInfo, out message))
             {
-                _updatesQueue.AddItem(value);
+                _updatesQueue.AddItem(storeInfo);
                 return true;
             }
 
             return false;
+        }
+
+        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        {
+            return new StoreInfo
+            {
+                Key = valueBase.Key,
+                Path = valueBase.Path,
+                BaseValue = baseValue
+            };
         }
     }
 }

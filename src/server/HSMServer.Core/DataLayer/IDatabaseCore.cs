@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Model.Sensor;
 using System;
 using System.Collections.Generic;
 
@@ -39,19 +38,31 @@ namespace HSMServer.Core.DataLayer
 
         #region Sensors
 
-        void RemoveSensor(string productName, string path);
-        void RemoveSensorWithMetadata(string productName, string path);
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
+        void RemoveSensorWithMetadata(string sensorId, string productName, string path);
+
+        void AddSensorValue(SensorValueEntity valueEntity);
+        void ClearSensorValues(string sensorId, string productName, string path);
+
         void PutSensorData(SensorDataEntity data, string productName);
-        SensorDataEntity GetLatestSensorValue(string productName, string path);
-        List<SensorHistoryData> GetAllSensorHistory(string productName, string path);
-        List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from);
-        List<SensorHistoryData> GetSensorHistory(string productName, string path, DateTime from, DateTime to);
-        List<SensorHistoryData> GetSensorHistory(string productName, string path, int n);
-        SensorHistoryData GetOneValueSensorValue(string productName, string path);
+
+        Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
+        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
+        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to);
 
         List<SensorEntity> GetAllSensors();
+        void RemoveAllOldSensors();
+
+        #endregion
+
+        #region Policies
+
+        void AddPolicy(PolicyEntity policy);
+        void UpdatePolicy(PolicyEntity policy);
+        void RemovePolicy(Guid id);
+        List<byte[]> GetAllPolicies();
+
         #endregion
 
         #region User

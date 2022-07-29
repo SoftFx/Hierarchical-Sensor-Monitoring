@@ -1,6 +1,6 @@
-﻿using System;
-using HSMDatabase.AccessManager;
+﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.DatabaseImplementations;
+using System;
 
 namespace HSMDatabase.LevelDB
 {
@@ -11,5 +11,8 @@ namespace HSMDatabase.LevelDB
 
         public static ISensorsDatabase GetSensorDatabaseInstance(string name, DateTime minTime, DateTime maxTime) =>
             new SensorsDatabaseWorker(name, minTime, maxTime);
+
+        public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(long from, long to) =>
+            new SensorValuesDatabaseWorker(from, to);
     }
 }

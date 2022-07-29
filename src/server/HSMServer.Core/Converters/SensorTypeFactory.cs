@@ -15,7 +15,7 @@ namespace HSMServer.Core.Converters
                 IntBarSensorValue => SensorType.IntegerBarSensor,
                 DoubleBarSensorValue => SensorType.DoubleBarSensor,
                 FileSensorBytesValue => SensorType.FileSensorBytes,
-                UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
+                //UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
                 _ => (SensorType)0,
             };
     }

@@ -1,11 +1,9 @@
-﻿using HSMCommon.Attributes;
-using HSMCommon.Constants;
+﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 
 namespace HSMServer.Core.Cache.Entities
 {
-    [SwaggerIgnore]
     [Flags]
     public enum KeyPermissions : long
     {
@@ -14,7 +12,6 @@ namespace HSMServer.Core.Cache.Entities
         CanAddSensors = 4
     }
 
-    [SwaggerIgnore]
     public enum KeyState : byte
     {
         Active = 0,
@@ -40,6 +37,9 @@ namespace HSMServer.Core.Cache.Entities
         public KeyPermissions Permissions { get; private set; }
 
         public string DisplayName { get; private set; }
+
+
+        public bool HasExpired => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
 
 
         public AccessKeyModel(AccessKeyEntity entity)

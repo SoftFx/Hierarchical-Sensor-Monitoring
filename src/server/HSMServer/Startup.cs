@@ -6,9 +6,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.MonitoringCoreInterface;
-using HSMServer.Core.MonitoringHistoryProcessor.Factory;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
@@ -46,33 +43,33 @@ namespace HSMServer
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
-            services.AddTransient<IHistoryProcessorFactory, HistoryProcessorFactory>();
-
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-            services.AddSingleton<IBarSensorsStorage, BarSensorsStorage>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<TreeViewModel>();
-            services.AddSingleton<MonitoringCore>();
-            services.AddSingleton<ISensorsInterface>(x => x.GetRequiredService<MonitoringCore>());
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();
+            services.AddHostedService<MonitoringBackgroundService>();
 
             services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
-            services.AddSwaggerGen();
+            services.AddSwaggerGen(o =>
+            {
+                o.UseInlineDefinitionsForEnums();
+            });
 
             services.ConfigureSwaggerGen(options =>
             {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
                 options.IncludeXmlComments(xmlPath, true);
-                options.DocumentFilter<SwaggerIgnoreFilter>();
+                options.DocumentFilter<SwaggerIgnoreClassFilter>();
+                options.SchemaFilter<SwaggerExcludePropertiesFilter>();
             });
         }
 
@@ -86,9 +83,6 @@ namespace HSMServer
             {
                 app.UseExceptionHandler("/Error");
             }
-
-            var lifeTimeService = (IHostApplicationLifetime)app.ApplicationServices.GetService(typeof(IHostApplicationLifetime));
-            lifeTimeService?.ApplicationStopping.Register(OnShutdown, app.ApplicationServices.GetService<MonitoringCore>());
 
             app.UseAuthentication();
             app.CountRequestStatistics();
@@ -128,15 +122,6 @@ namespace HSMServer
             });
 
             app.UseHttpsRedirection();
-        }
-
-        private void OnShutdown(object service)
-        {
-            if (service is MonitoringCore monitoringCore)
-                monitoringCore.Dispose();
-
-            // TODO!!! Remove this process Kill
-            System.Diagnostics.Process.GetCurrentProcess().Kill();
         }
     }
 }

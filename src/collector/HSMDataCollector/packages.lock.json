@@ -4,9 +4,9 @@
     ".NETStandard,Version=v2.0": {
       "HSMDataCollector.HSMSensorDataObjects": {
         "type": "Direct",
-        "requested": "[2.1.31, )",
-        "resolved": "2.1.31",
-        "contentHash": "ORFedMcCcTvFNWQladtmZL+bKwa97em9oXwk0te6R+LBNMkxPXfLJ5JhVDQIbP2UmcV1wmVenrw8l5Yrsr9OjQ=="
+        "requested": "[2.1.34, )",
+        "resolved": "2.1.34",
+        "contentHash": "Vr6cNvN4nOxWbnBMzPSNtcmRMInoULsTLPsZetCW2Wom/+6nwWRyvJMhJburlUemswXqSTyNSyiKg7NAcm96dQ=="
       },
       "Microsoft.CSharp": {
         "type": "Direct",

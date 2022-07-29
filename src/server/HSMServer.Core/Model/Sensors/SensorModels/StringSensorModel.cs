@@ -2,6 +2,11 @@
 {
     public sealed class StringSensorModel : BaseSensorModel<StringValue>
     {
-        public override StringValuesStorage Storage { get; } = new();
+        internal const int DefaultMaxStringLength = 150;
+
+
+        protected override StringValuesStorage Storage { get; } = new StringValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.String;
     }
 }

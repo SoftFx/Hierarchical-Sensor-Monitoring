@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.MonitoringServerCore;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -13,12 +12,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
         private protected readonly DatabaseCoreManager _databaseCoreManager;
-        private protected readonly SensorValuesFactory _sensorValuesFactory;
+        private protected readonly ApiSensorValuesFactory _sensorValuesFactory;
 
         protected readonly IUserManager _userManager;
         protected readonly IUpdatesQueue _updatesQueue;
-
-        protected MonitoringCore _monitoringCore;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
@@ -28,7 +25,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _databaseCoreManager.AddTestProduct();
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
-            _sensorValuesFactory = new SensorValuesFactory(addTestProduct ? TestProductsManager.TestProduct.Id : CommonConstants.SelfMonitoringProductKey);
+            _sensorValuesFactory = new ApiSensorValuesFactory(addTestProduct ? TestProductsManager.TestProduct.Id : CommonConstants.SelfMonitoringProductKey);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);

@@ -1,6 +1,6 @@
-﻿using System;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {

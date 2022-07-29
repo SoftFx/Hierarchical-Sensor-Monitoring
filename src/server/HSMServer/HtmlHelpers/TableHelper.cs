@@ -1,15 +1,12 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.TypedDataObject;
-using HSMServer.Core.Helpers;
+﻿using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Model.Sensor;
+using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
-using HSMServer.Helpers;
 using System.Text.RegularExpressions;
 
 namespace HSMServer.HtmlHelpers
@@ -67,7 +64,7 @@ namespace HSMServer.HtmlHelpers
                 if (userItem.IsAdmin)
                     result.Append($"checked");
 
-                result.Append("/></td>");    
+                result.Append("/></td>");
 
                 result.Append($"<td>{CreateUserProductsList(userItem.ProductsRoles, products)}</td>");
 
@@ -136,12 +133,12 @@ namespace HSMServer.HtmlHelpers
                 "<th scope='col'>Creation Date</th>" +
                 "<th scope='col'>Manager</th>");
 
-            if (UserRoleHelper.IsProductCRUDAllowed(user) 
+            if (UserRoleHelper.IsProductCRUDAllowed(user)
                 || ProductRoleHelper.IsProductActionAllowed(user.ProductsRoles))
                 result.Append("<th scope='col'>Action</th>");
 
             result.Append("</tr></thead><tbody>");
-           
+
             //create 
             if (UserRoleHelper.IsProductCRUDAllowed(user))
                 result.Append("<tr><th>0</th>" +
@@ -172,7 +169,7 @@ namespace HSMServer.HtmlHelpers
                     $"<td>{product.CreationDate}</td>" +
                     $"<td>{product.ManagerName}</td>");
 
-                if (UserRoleHelper.IsProductCRUDAllowed(user) || 
+                if (UserRoleHelper.IsProductCRUDAllowed(user) ||
                     ProductRoleHelper.IsManager(product.Id, user.ProductsRoles))
                     result.Append($"<td><button style='margin-left: 5px' id='change_{product.Id}' " +
                     "type='button' class='btn btn-secondary' title='edit'>" +
@@ -269,7 +266,7 @@ namespace HSMServer.HtmlHelpers
             RemovedUsedUsers(notAdminUsers, usedUsers);
 
             StringBuilder result = new StringBuilder();
-            
+
             if (notAdminUsers != null && notAdminUsers.Count != 0)
             {
                 result.Append("<select class='form-select' id='createUser'>");
@@ -332,187 +329,152 @@ namespace HSMServer.HtmlHelpers
 
         #region Sensor history tables
 
-        public static string CreateHistoryTable(List<SensorHistoryData> sensorHistory, string encodedPath)
+        public static string CreateHistoryTable(List<BaseValue> values, int type, string encodedPath)
         {
-            if (sensorHistory.Count == 0)
+            if (values.Count == 0)
                 return string.Empty;
 
-            sensorHistory.Reverse();
+            values.Reverse();
 
-            var type = sensorHistory[0].SensorType;
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder(1 << 3);
             sb.Append("<div>");
-            switch (type)
+
+            switch ((SensorType)type)
             {
-                case SensorType.BooleanSensor:
-                    sb.Append(CreateBooleanTable(sensorHistory.Select(h =>
-                    JsonSerializer.Deserialize<BoolSensorData>(h.TypedData)).ToList(), 
-                    sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.Boolean:
+                    sb.Append(CreateTable(values.Select(v => (BooleanValue)v).ToList()));
                     break;
-                case SensorType.IntSensor:
-                    sb.Append(CreateIntegerTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<IntSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.Integer:
+                    sb.Append(CreateTable(values.Select(v => (IntegerValue)v).ToList()));
                     break;
-                case SensorType.DoubleSensor:
-                    sb.Append(CreateDoubleTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<DoubleSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.Double:
+                    sb.Append(CreateTable(values.Select(v => (DoubleValue)v).ToList()));
                     break;
-                case SensorType.StringSensor:
-                    sb.Append(CreateStringTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<StringSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.String:
+                    sb.Append(CreateTable(values.Select(v => (StringValue)v).ToList()));
                     break;
-                case SensorType.IntegerBarSensor:
-                    sb.Append(CreateIntBarTable(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<IntBarSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.IntegerBar:
+                    sb.Append(CreateTable(values.Select(v => (IntegerBarValue)v).ToList()));
                     break;
-                case SensorType.DoubleBarSensor:
-                    sb.Append(CreateDoubleBarData(sensorHistory.Select(h =>
-                        JsonSerializer.Deserialize<DoubleBarSensorData>(h.TypedData)).ToList(),
-                        sensorHistory.Select(h => h.Time).ToList()));
+                case SensorType.DoubleBar:
+                    sb.Append(CreateTable(values.Select(v => (DoubleBarValue)v).ToList()));
                     break;
                 default:
                     break;
             }
 
             sb.Append($"<input id='oldest_date_{encodedPath}' type='text' style='display: none'" +
-                      $" value='{sensorHistory.LastOrDefault()?.Time.ToUniversalTime().ToString("O") ?? ""}' /></div>");
+                      $" value='{values.LastOrDefault()?.Time.ToUniversalTime().ToString("O") ?? ""}' /></div>");
+
             return sb.ToString();
         }
 
-        private static string CreateBooleanTable(List<BoolSensorData> boolHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<BooleanValue> booleanValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th scope='col'>Date</th>" +
-                      "<th scope='col'>Value</th>" +
-                      "<th scope='col'>Comment</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for(int i = 0; i < boolHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                    $"<td>{boolHistory[i].BoolValue}</td>" +
-                    $"<td>{GetHistoryRawComment(boolHistory[i].Comment)}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th scope='col'>Date</th>");
+            sb.Append("<th scope='col'>Value</th>");
+            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
+
+            foreach (var value in booleanValues)
+                sb.Append($"<tr><td>{value.Time}</td><td>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
-        private static string CreateIntegerTable(List<IntSensorData> intHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<IntegerValue> integerValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th>Date</th>" +
-                      "<th scope='col'>Number</th>" +
-                      "<th scope='col'>Comment</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for(int i=0; i < intHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                    $"<td scope='row'>{intHistory[i].IntValue}</td>" +
-                    $"<td>{GetHistoryRawComment(intHistory[i].Comment)}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th>Date</th>");
+            sb.Append("<th scope='col'>Number</th>");
+            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
+
+            foreach (var value in integerValues)
+                sb.Append($"<tr><td>{value.Time}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
-        private static string CreateDoubleTable(List<DoubleSensorData> doubleHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<DoubleValue> doubleValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th>Date</th>" +
-                      "<th scope='col'>Number</th>" +
-                      "<th scope='col'>Comment</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for (int i=0; i < doubleHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                    $"<td scope='row'>{doubleHistory[i].DoubleValue}</td>" +
-                    $"<td>{GetHistoryRawComment(doubleHistory[i].Comment)}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th>Date</th>");
+            sb.Append("<th scope='col'>Number</th>");
+            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
+
+            foreach (var value in doubleValues)
+                sb.Append($"<tr><td>{value.Time}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
-        private static string CreateStringTable(List<StringSensorData> stringHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<StringValue> stringValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th>Date</th>" +
-                      "<th scope='col'>String value</th>" +
-                      "<th scope='col'>Comment</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for (int i = 0; i< stringHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                    $"<td scope='row'>{stringHistory[i].StringValue}</td>" +
-                    $"<td>{GetHistoryRawComment(stringHistory[i].Comment)}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th>Date</th>");
+            sb.Append("<th scope='col'>String value</th>");
+            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
+
+            foreach (var value in stringValues)
+                sb.Append($"<tr><td>{value.Time}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
-        private static string CreateIntBarTable(List<IntBarSensorData> intBarHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<IntegerBarValue> intBarValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th>Date</th>" +
-                      "<th scope='col'>Min</th>" +
-                      "<th scope='col'>Mean</th>" +
-                      "<th scope='col'>Median</th>" +
-                      "<th scope='col'>Max</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for (int i=0; i < intBarHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                    $"<td scope='row'>{intBarHistory[i].Min}</td>" +
-                    $"<td>{intBarHistory[i].Mean}</td>" +
-                    $"<td>{intBarHistory[i].Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
-                    $"</td><td>{intBarHistory[i].Max}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th>Date</th>");
+            sb.Append("<th scope='col'>Min</th>");
+            sb.Append("<th scope='col'>Mean</th>");
+            sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
+
+            foreach (var value in intBarValues)
+                sb.Append($"<tr><td>{value.Time}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
-        private static string CreateDoubleBarData(List<DoubleBarSensorData> doubleBarHistory,
-            List<DateTime> dates)
+        private static string CreateTable(List<DoubleBarValue> doubleBarValues)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                      "<th>Date</th>" +
-                      "<th scope='col'>Min</th>" +
-                      "<th scope='col'>Mean</th>" +
-                      "<th scope='col'>Median</th>" +
-                      "<th scope='col'>Max</th></tr></thead><tbody>");
+            var sb = new StringBuilder(1 << 5);
 
-            for (int i = 0; i < doubleBarHistory.Count; i++)
-            {
-                sb.Append($"<tr><td>{dates[i]}</td>" +
-                          $"<td scope='row'>{doubleBarHistory[i].Min}</td>" +
-                          $"<td>{doubleBarHistory[i].Mean}</td><td>" +
-                          $"{doubleBarHistory[i].Percentiles.FirstOrDefault(p => Math.Abs(p.Percentile - 0.5) < double.Epsilon)?.Value}" +
-                          $"</td><td>{doubleBarHistory[i].Max}</td></tr>");
-            }
+            sb.Append("<table class='table table-striped'><thead><tr>");
+            sb.Append("<th>Date</th>");
+            sb.Append("<th scope='col'>Min</th>");
+            sb.Append("<th scope='col'>Mean</th>");
+            sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
+
+            foreach (var value in doubleBarValues)
+                sb.Append($"<tr><td>{value.Time}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
 
             sb.Append("</tbody>");
+
             return sb.ToString();
         }
 
         private static string GetHistoryRawComment(string comment) =>
-            _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
+            !string.IsNullOrEmpty(comment) && _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
 
         #endregion
 
@@ -589,7 +551,7 @@ namespace HSMServer.HtmlHelpers
             result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
             result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
             result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
-                          "title='Time format: dd.hh:mm:ss min value 00:05:00'></i></td><td><input disabled type='text' " +
+                          "title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td><td><input disabled type='text' " +
                           $"class='form-control' style='max-width:300px' id='interval_{encodedId}' " +
                           $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
             result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +

@@ -1,11 +1,23 @@
-﻿using System.Runtime.Serialization;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class DoubleSensorValue : SensorValueBase
+    public class DoubleSensorValue : ValueBase<double>
     {
         [DataMember]
-        public double DoubleValue { get; set; }
+        [DefaultValue((int)SensorType.DoubleSensor)]
+        public override SensorType Type => SensorType.DoubleSensor;
+
+        [Obsolete]
+        [SwaggerExclude]
+        public double DoubleValue
+        {
+            get => Value;
+            set => Value = value;
+        }
     }
 }

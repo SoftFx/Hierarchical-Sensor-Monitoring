@@ -1,4 +1,4 @@
-﻿@using HSMSensorDataObjects
+﻿@using HSMServer.Core.Model
 @using HSMServer.HtmlHelpers
 
 @model HSMServer.Model.TreeViewModels.SensorNodeViewModel
@@ -29,7 +29,7 @@
 
 <div class='accordion' id='sensorData_@sensorId'>
     <div class='accordion-item'>
-        @if (Model.SensorType == SensorType.FileSensorBytes)
+        @if (Model.SensorType == SensorType.File)
         {
             <div id='collapse_@sensorId' class='accordion-collapse' data-bs-parent='#sensorData_@sensorId'>
                 <div class='accordion-body'>

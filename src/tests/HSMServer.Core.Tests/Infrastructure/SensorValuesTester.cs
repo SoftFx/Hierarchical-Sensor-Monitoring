@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Xunit;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -41,18 +42,15 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal((byte)GetSensorValueType(expected), actual.DataType);
         }
 
-        internal static void TestSensorEntity(SensorValueBase expected, string productName, SensorEntity actual)
+        internal static void TestSensorEntity(SensorValueBase expected, SensorEntity actual)
         {
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id));
             Assert.False(string.IsNullOrEmpty(actual.ProductId));
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Path, actual.Path);
-            Assert.Equal(productName, actual.ProductName);
-            Assert.Equal(expected.Path, actual.SensorName);
-            Assert.Equal((int)GetSensorValueType(expected), actual.SensorType);
+            Assert.Equal(expected.Path, actual.DisplayName);
+            Assert.Equal((int)GetSensorValueType(expected), actual.Type);
             Assert.Equal(default, actual.ExpectedUpdateIntervalTicks);
-            Assert.Null(actual.ValidationParameters);
             Assert.Null(actual.Unit);
         }
 
@@ -128,7 +126,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                IntBarSensorValue => SensorType.IntegerBarSensor,
                DoubleBarSensorValue => SensorType.DoubleBarSensor,
                FileSensorBytesValue => SensorType.FileSensorBytes,
-               UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
+               //UnitedSensorValue unitedSensorValue => unitedSensorValue.Type,
                _ => (SensorType)0,
            };
 
@@ -146,7 +144,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 IntBarSensorValue intBarSensorValue => GetSensorValueTypedData(intBarSensorValue),
                 DoubleBarSensorValue doubleBarSensorValue => GetSensorValueTypedData(doubleBarSensorValue),
                 FileSensorBytesValue fileSensorBytesValue => GetSensorValueTypedData(fileSensorBytesValue),
-                UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
+                //UnitedSensorValue unitedSensorValue => GetSensorValueTypedData(unitedSensorValue),
                 _ => null,
             };
 

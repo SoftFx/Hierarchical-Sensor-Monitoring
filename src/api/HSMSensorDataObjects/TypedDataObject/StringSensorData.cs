@@ -1,7 +1,9 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.TypedDataObject
 {
+    [Obsolete("Use StringSensorValue")]
     [DataContract]
     public class StringSensorData
     {

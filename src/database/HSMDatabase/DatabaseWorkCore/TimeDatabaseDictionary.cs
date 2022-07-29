@@ -1,13 +1,13 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMDatabase.AccessManager;
-using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal class TimeDatabaseDictionary : ITimeDatabaseDictionary
+    internal sealed class TimeDatabaseDictionary : ITimeDatabaseDictionary
     {
         private readonly object _accessLock = new object();
         private readonly SortedSet<ISensorsDatabase> _sensorsDatabases;
@@ -81,6 +81,14 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 return _sensorsDatabases.ToList();
             }
+        }
+
+        public List<ISensorsDatabase> GetSortedDatabases()
+        {
+            var databases = GetAllDatabases();
+            databases.Reverse();
+
+            return databases;
         }
 
         private string CreateSensorsDatabaseName(DateTime from, DateTime to)

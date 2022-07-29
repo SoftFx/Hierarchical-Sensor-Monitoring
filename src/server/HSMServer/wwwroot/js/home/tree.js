@@ -123,7 +123,7 @@ function customMenu(node) {
         }
     }
 
-    if (node.children.length === 0) {
+    if (node.parents.length != 1) {
         delete items.AccessKeys;
     }
 

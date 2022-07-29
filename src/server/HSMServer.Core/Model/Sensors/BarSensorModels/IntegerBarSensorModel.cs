@@ -1,7 +1,11 @@
 ﻿namespace HSMServer.Core.Model
 {
-    public sealed class IntegerBarSensorModel : BaseSensorModel<IntegerBarValue>
+    public sealed class IntegerBarSensorModel : BaseSensorModel<IntegerBarValue>, IBarSensor
     {
-        public override IntegerBarValuesStorage Storage { get; } = new();
+        protected override IntegerBarValuesStorage Storage { get; } = new IntegerBarValuesStorage();
+
+        public override SensorType Type { get; } = SensorType.IntegerBar;
+
+        BarBaseValue IBarSensor.LocalLastValue => Storage.LocalLastValue;
     }
 }

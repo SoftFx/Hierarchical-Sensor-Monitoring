@@ -16,7 +16,7 @@ namespace HSMServer.Core.Converters
             new()
             {
                 Path = sensorValue.Path,
-                Status = (byte)sensorValue.Status.GetWorst(validationStatus),
+                //Status = (byte)sensorValue.Status.GetWorst(validationStatus), // TODO this method won't be exist? bexause SensorValueBase = BaseValue = SensorDataEntity
                 Time = sensorValue.Time.ToUniversalTime(),
                 TimeCollected = timeCollected.ToUniversalTime(),
                 Timestamp = GetTimestamp(sensorValue.Time),
@@ -24,16 +24,16 @@ namespace HSMServer.Core.Converters
                 DataType = (byte)SensorTypeFactory.GetSensorType(sensorValue),
             };
 
-        public static SensorDataEntity ConvertWithContentCompression(this FileSensorBytesValue sensorValue, DateTime timeCollected,
-            SensorStatus validationStatus)
-        {
-            int originalSize = sensorValue.FileContent.Length;
+        //public static SensorDataEntity ConvertWithContentCompression(this FileSensorBytesValue sensorValue, DateTime timeCollected,
+        //    SensorStatus validationStatus)
+        //{
+        //    int originalSize = sensorValue.FileContent.Length;
 
-            var dataEntity = sensorValue.CompressContent().Convert(timeCollected, validationStatus);
-            dataEntity.OriginalFileSensorContentSize = originalSize;
+        //    var dataEntity = sensorValue.CompressContent().Convert(timeCollected, validationStatus);
+        //    dataEntity.OriginalFileSensorContentSize = originalSize;
 
-            return dataEntity;
-        }
+        //    return dataEntity;
+        //}
 
         public static BarSensorValueBase Convert(this UnitedSensorValue value) =>
             BuildBarSensorValue(value)?.FillBarSensorValueCommonSettings(value);

@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="2.1.37" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="2.1.38" />
   </ItemGroup>
 
   <ItemGroup>

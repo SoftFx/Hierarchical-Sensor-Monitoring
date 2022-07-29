@@ -1,11 +1,12 @@
-﻿using HSMServer.Core.Model.Sensor;
+﻿using HSMServer.Core.Model;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     public interface IHistoryProcessor
     {
-        List<SensorHistoryData> ProcessHistory(List<SensorHistoryData> uncompressedData);
-        string GetCsvHistory(List<SensorHistoryData> originalData);
+        List<BaseValue> ProcessHistory(List<BaseValue> values);
+
+        string GetCsvHistory(List<BaseValue> originalData);
     }
 }

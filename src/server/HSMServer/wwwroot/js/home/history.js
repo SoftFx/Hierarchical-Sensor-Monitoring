@@ -13,8 +13,8 @@ Date.prototype.AddHours = function(hours) {
     return newDate;
 }
 
-function Data(to, from, type, path) {
-    return { "To": to, "From": from, "Type": type, "Path": path };
+function Data(to, from, type, encodedId) {
+    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId };
 }
 
 //Initialization
@@ -42,29 +42,29 @@ function Data(to, from, type, path) {
     }
 
     function downloadFile() {
-        let path = this.id.substring("button_download_".length);
+        let encodedId = this.id.substring("button_download_".length);
 
-        window.location.href = getFileAction + "?Selected=" + path;
+        window.location.href = getFileAction + "?Selected=" + encodedId;
     }
 
     function viewFile() {
-        let path = this.id.substring("button_view_".length);
-        let fileType = document.getElementById('fileType_' + path).value;
+        let encodedId = this.id.substring("button_view_".length);
+        let fileType = document.getElementById('fileType_' + encodedId).value;
 
-        openFileInBrowser(path, fileType, viewFileAction);
+        openFileInBrowser(encodedId, fileType, viewFileAction);
     }
 
     function accordionClicked() {
-        let path = this.id.substring("collapse_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("collapse_".length);
+        let type = getTypeForSensor(encodedId);
         let from = new Date();
         if (isFileSensor(type)) {
             return;
         }
         if (isGraphAvailable(type)) {
-            initializeGraph(path, rawHistoryLatestAction, type, Data(from, from, type, path), true);
+            initializeGraph(encodedId, rawHistoryLatestAction, type, Data(from, from, type, encodedId), true);
         } else {
-            initializeTable(path, historyLatestAction, type, Data(from, from, type, path), true);
+            initializeTable(encodedId, historyLatestAction, type, Data(from, from, type, encodedId), true);
         }
     }
 
@@ -74,21 +74,21 @@ function Data(to, from, type, path) {
     }
 
     function requestGraph() {
-        let path = this.id.substring("link_graph_".length);
-        let type = getTypeForSensor(path);
-        const { from, to } = getFromAndTo(path);
-        let body = Data(to, from, type, path);
-        let action = isAllHistorySelected(path) ? rawHistoryAllAction : rawHistoryAction;
-        initializeGraph(path, action, type, body, false);
+        let encodedId = this.id.substring("link_graph_".length);
+        let type = getTypeForSensor(encodedId);
+        const { from, to } = getFromAndTo(encodedId);
+        let body = Data(to, from, type, encodedId);
+        let action = isAllHistorySelected(encodedId) ? rawHistoryAllAction : rawHistoryAction;
+        initializeGraph(encodedId, action, type, body, false);
     }
 
     function requestTable() {
-        let path = this.id.substring("link_table_".length);
-        let type = getTypeForSensor(path);
-        const { from, to } = getFromAndTo(path);
-        let body = Data(to, from, type, path);
-        let action = isAllHistorySelected(path) ? historyAllAction : historyAction;
-        initializeTable(path, action, type, body, false);
+        let encodedId = this.id.substring("link_table_".length);
+        let type = getTypeForSensor(encodedId);
+        const { from, to } = getFromAndTo(encodedId);
+        let body = Data(to, from, type, encodedId);
+        let action = isAllHistorySelected(encodedId) ? historyAllAction : historyAction;
+        initializeTable(encodedId, action, type, body, false);
     }
 
     function InitializePeriodRequests() {
@@ -103,130 +103,130 @@ function Data(to, from, type, path) {
     }
 
     function requestHistoryHour() {
-        let path = this.id.substring("radio_hour_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("radio_hour_".length);
+        let type = getTypeForSensor(encodedId);
         const to = new Date();
         const from = to.AddHours(-1);
-        requestHistory(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 
     function requestHistoryDay() {
-        let path = this.id.substring("radio_day_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("radio_day_".length);
+        let type = getTypeForSensor(encodedId);
         const to = new Date();
         const from = to.AddDays(-1);
-        requestHistory(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 
     function requestHistoryThreeDays() {
-        let path = this.id.substring("radio_three_days_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("radio_three_days_".length);
+        let type = getTypeForSensor(encodedId);
         const to = new Date();
         const from = to.AddDays(-3);
-        requestHistory(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 
     function requestHistoryWeek() {
-        let path = this.id.substring("radio_week_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("radio_week_".length);
+        let type = getTypeForSensor(encodedId);
         const to = new Date();
         const from = to.AddDays(-7);
-        requestHistory(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 
     function requestHistoryMonth() {
-        let path = this.id.substring("radio_month_".length);
-        let type = getTypeForSensor(path);
+        let encodedId = this.id.substring("radio_month_".length);
+        let type = getTypeForSensor(encodedId);
         const to = new Date();
         const from = to.AddDays(-30);
-        requestHistory(path, historyAction, rawHistoryAction, type, Data(to, from, type, path));
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 
     function requestHistoryAll() {
-        let path = this.id.substring("radio_all_".length);
-        let type = getTypeForSensor(path);
-        requestHistory(path, historyAllAction, rawHistoryAllAction, type, {});
+        let encodedId = this.id.substring("radio_all_".length);
+        let type = getTypeForSensor(encodedId);
+        requestHistory(encodedId, historyAllAction, rawHistoryAllAction, type, {});
     }
 }
 
 //Request methods
 {
-    function requestHistory(path, action, rawAction, type, reqData) {
+    function requestHistory(encodedId, action, rawAction, type, reqData) {
         if (!isGraphAvailable(type)) {
-            initializeTable(path, action, type, reqData, false);
+            initializeTable(encodedId, action, type, reqData, false);
             return;
         }
 
-        if (isTableHistorySelected(path)) {
-            initializeTable(path, action, type, reqData, false);    
+        if (isTableHistorySelected(encodedId)) {
+            initializeTable(encodedId, action, type, reqData, false);    
         } else {
-            initializeGraph(path, rawAction, type, reqData, false);
+            initializeGraph(encodedId, rawAction, type, reqData, false);
         }
     }
 
     function exportCsv() {
-        let path = this.id.substring("button_export_csv_".length);
-        let type = getTypeForSensor(path);
-        if (isAllHistorySelected(path)) {
-            window.location.href = exportHistoryAllAction + "?Path=" + path + "&Type=" + type;
+        let encodedId = this.id.substring("button_export_csv_".length);
+        let type = getTypeForSensor(encodedId);
+        if (isAllHistorySelected(encodedId)) {
+            window.location.href = exportHistoryAllAction + "?EncodedId=" + encodedId + "&Type=" + type;
             return;
         }
 
-        const { from, to } = getFromAndTo(path);
-        window.location.href = exportHistoryAction + "?Path=" + path + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
+        const { from, to } = getFromAndTo(encodedId);
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
     }
 
-    function initializeTable(path, tableAction, type, body, needSetRadio) {
+    function initializeTable(encodedId, tableAction, type, body, needSetRadio) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
-            url: tableAction + "?Path=" + path + "&Type=" + type,
+            url: tableAction + "?EncodedId=" + encodedId + "&Type=" + type,
             contentType: 'application/json',
             dataType: 'html',
             cache: false,
             async: true
         }).done(function (data) {
-            $(`#values_${path}`).empty();
+            $(`#values_${encodedId}`).empty();
             let values = JSON.parse(data).value;
             
             if (values === "") {
-                $('#history_' + path).hide();
-                $('#no_data_' + path).show();
+                $('#history_' + encodedId).hide();
+                $('#no_data_' + encodedId).show();
                 return;
             }
 
-            $('#history_' + path).show();
-            $('#no_data_' + path).hide();
-            $(`#values_${path}`).append(values);
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
+            $(`#values_${encodedId}`).append(values);
             if (needSetRadio) {
-                selectRadioForTable(path);
+                selectRadioForTable(encodedId);
             }
         });
     }
 
-    function initializeGraph(path, rawHistoryAction, type, body, needSetRadio) {
+    function initializeGraph(encodedId, rawHistoryAction, type, body, needSetRadio) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
-            url: rawHistoryAction + "?Path=" + path + "&Type=" + type,
+            url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type,
             contentType: 'application/json',
             dataType: 'html',
             cache: false,
             async: true
         }).done(function (data) {
             if (JSON.parse(data).length === 0) {
-                $('#history_' + path).hide();
-                $('#no_data_' + path).show();
+                $('#history_' + encodedId).hide();
+                $('#no_data_' + encodedId).show();
                 return;
             }
 
-            $('#history_' + path).show();
-            $('#no_data_' + path).hide();
-            let graphDivId = "graph_" + path;
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
+            let graphDivId = "graph_" + encodedId;
             if (needSetRadio) {
-                selectAppropriateRadio(data, path);    
+                selectAppropriateRadio(data, encodedId);    
             }
-            displayGraph(data, type, graphDivId, path);
+            displayGraph(data, type, graphDivId, encodedId);
         });
     }
 }
@@ -234,53 +234,53 @@ function Data(to, from, type, path) {
 
 // Sub-methods
 {
-    function selectRadioForTable(path) {
+    function selectRadioForTable(encodedId) {
         let currentDate = new Date(Date.parse(new Date().toUTCString()));
-        let oldestDate = getOldestDateFromTable(path);
+        let oldestDate = getOldestDateFromTable(encodedId);
         let difference = currentDate - oldestDate;
-        selectRadioViaDifference(difference, path);
+        selectRadioViaDifference(difference, encodedId);
     }
 
-    function getOldestDateFromTable(path) {
-        let val = $('#oldest_date_' + path).val();
+    function getOldestDateFromTable(encodedId) {
+        let val = $('#oldest_date_' + encodedId).val();
         return new Date(Date.parse(val));
     }
 
-    function selectAppropriateRadio(data, path) {
+    function selectAppropriateRadio(data, encodedId) {
         let parsedData = JSON.parse(data);
         let currentDate = new Date(Date.parse(new Date().toUTCString()));
         let firstDate = new Date(Date.parse(parsedData[0].time));
         let difference = currentDate - firstDate;
-        selectRadioViaDifference(difference, path);
+        selectRadioViaDifference(difference, encodedId);
     }
 
-    function selectRadioViaDifference(difference, path) {
+    function selectRadioViaDifference(difference, encodedId) {
         if (difference <= millisecondsInHour) {
-            $('#radio_hour_' + path).prop("checked", true);
+            $('#radio_hour_' + encodedId).prop("checked", true);
             return;
         }
 
         if (difference <= millisecondsInDay) {
-            $('#radio_day_' + path).prop("checked", true);
+            $('#radio_day_' + encodedId).prop("checked", true);
             return;
         }
 
         if (difference <= 3 * millisecondsInDay) {
-            $('#radio_three_days_' + path).prop("checked", true);
+            $('#radio_three_days_' + encodedId).prop("checked", true);
             return;
         }
 
         if (difference <= 7 * millisecondsInDay) {
-            $('#radio_week_' + path).prop("checked", true);
+            $('#radio_week_' + encodedId).prop("checked", true);
             return;
         }
 
         if (difference <= 30 * millisecondsInDay) {
-            $('#radio_month_' + path).prop("checked", true);
+            $('#radio_month_' + encodedId).prop("checked", true);
             return;
         }
 
-        $('#radio_all_' + path).prop("checked", true);
+        $('#radio_all_' + encodedId).prop("checked", true);
     }
 
     function isFileSensor(type) {
@@ -291,39 +291,39 @@ function Data(to, from, type, path) {
         return !(type === "3" || type === "6" || type === "7");
     }
 
-    function isTableHistorySelected(path) {
-        let el = $('#values_parent_' + path);
+    function isTableHistorySelected(encodedId) {
+        let el = $('#values_parent_' + encodedId);
         return el.hasClass("show");
     }
 
-    function isAllHistorySelected(path) {
-        return $('#radio_all_' + path).is(":checked");
+    function isAllHistorySelected(encodedId) {
+        return $('#radio_all_' + encodedId).is(":checked");
     }
 
-    function getFromAndTo(path) {
+    function getFromAndTo(encodedId) {
         let from = null;
         let to = null;
-        if ($('#radio_hour_' + path).is(":checked")) {
+        if ($('#radio_hour_' + encodedId).is(":checked")) {
             to = new Date();
             from = to.AddHours(-1);
         }
 
-        if ($('#radio_day_' + path).is(":checked")) {
+        if ($('#radio_day_' + encodedId).is(":checked")) {
             to = new Date();
             from = to.AddDays(-1);
         }
 
-        if ($('#radio_three_days_' + path).is(":checked")) {
+        if ($('#radio_three_days_' + encodedId).is(":checked")) {
             to = new Date();
             from = to.AddDays(-3);
         }
 
-        if ($('#radio_week_' + path).is(":checked")) {
+        if ($('#radio_week_' + encodedId).is(":checked")) {
             to = new Date();
             from = to.AddDays(-7);
         }
 
-        if ($('#radio_month_' + path).is(":checked")) {
+        if ($('#radio_month_' + encodedId).is(":checked")) {
             to = new Date();
             from = to.AddDays(-30);
         }
@@ -340,7 +340,7 @@ function Data(to, from, type, path) {
         return inputCount;
     }
 
-    function getTypeForSensor(name) {
-        return $('#sensor_type_' + name).val();
+    function getTypeForSensor(encodedId) {
+        return $('#sensor_type_' + encodedId).val();
     }    
 }

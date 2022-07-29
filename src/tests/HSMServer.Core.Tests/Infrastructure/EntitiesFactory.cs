@@ -50,26 +50,24 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
         
 
-        internal static SensorEntity BuildSensorEntity(string name = null, string parent = "") =>
+        internal static SensorEntity BuildSensorEntity(string name = null, string parent = "", byte? type = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
                 ProductId = parent?.Length == 0 ? Guid.NewGuid().ToString() : parent,
-                SensorName = name ?? RandomGenerator.GetRandomString(),
-                ProductName = RandomGenerator.GetRandomString(),
-                Path = RandomGenerator.GetRandomString(),
+                DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
-                SensorType = RandomGenerator.GetRandomByte(),
+                Type = type ?? RandomGenerator.GetRandomByte(),
                 ExpectedUpdateIntervalTicks = RandomGenerator.GetRandomInt(),
                 Unit = RandomGenerator.GetRandomString(),
             };
 
 
-        internal static SensorDataEntity BuildSensorDataEntity(string path, byte type) =>
+        internal static SensorDataEntity BuildSensorDataEntity(byte type) =>
             new()
             {
                 Status = RandomGenerator.GetRandomByte(),
-                Path = path ?? RandomGenerator.GetRandomString(),
+                Path = RandomGenerator.GetRandomString(),
                 Time = DateTime.UtcNow.AddDays(-1),
                 TimeCollected = DateTime.UtcNow,
                 Timestamp = DateTime.UtcNow.AddDays(-1).GetTimestamp(),

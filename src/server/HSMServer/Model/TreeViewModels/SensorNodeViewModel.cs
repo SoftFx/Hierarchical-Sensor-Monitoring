@@ -1,8 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMSensorDataObjects;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Converters;
-using HSMServer.Core.Extensions;
+﻿using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 
@@ -12,12 +8,6 @@ namespace HSMServer.Model.TreeViewModels
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
-
-        private readonly TimeSpan _minimumUpdateInterval = new(0, 0, 5, 0);
-
-        private bool _isSensorValueOutdated;
-
-        private string _validationError;
 
 
         public Guid Id { get; }
@@ -44,39 +34,14 @@ namespace HSMServer.Model.TreeViewModels
 
         internal string Unit { get; private set; }
 
-        public override SensorStatus Status
-        {
-            get
-            {
-                var lastUpdateInterval = DateTime.UtcNow - UpdateTime;
+        internal BaseValue LastValue { get; private set; }
 
-                if (lastUpdateInterval < _minimumUpdateInterval || ExpectedUpdateInterval == TimeSpan.Zero ||
-                    lastUpdateInterval < ExpectedUpdateInterval)
-                {
-                    _isSensorValueOutdated = false;
-                    return base.Status;
-                }
+        public string ValidationError { get; private set; }
 
-                _isSensorValueOutdated = true;
-                return base.Status.GetWorst(SensorStatus.Warning);
-            }
-            protected set => base.Status = value;
-        }
-
-        public string ValidationError
-        {
-            get
-            {
-                if (_isSensorValueOutdated)
-                    return $"{_validationError}{Environment.NewLine}{ValidationConstants.SensorValueOutdated}";
-
-                return _validationError;
-            }
-            private set => _validationError = value;
-        }
+        public override SensorStatus Status { get; protected set; }
 
 
-        public SensorNodeViewModel(SensorModel model)
+        public SensorNodeViewModel(BaseSensorModel model)
         {
             Id = model.Id;
             EncodedId = SensorPathHelper.EncodeGuid(Id);
@@ -105,25 +70,26 @@ namespace HSMServer.Model.TreeViewModels
             return "no info";
         }
 
-        internal void Update(SensorModel model)
+        internal void Update(BaseSensorModel model)
         {
-            ExpectedUpdateInterval = model.ExpectedUpdateInterval;
+            ExpectedUpdateInterval = new TimeSpan(model.ExpectedUpdateIntervalPolicy?.ExpectedUpdateInterval ?? 0L);
 
-            Name = model.SensorName;
-            SensorType = model.SensorType;
-            Status = model.Status;
+            Name = model.DisplayName;
+            SensorType = model.Type;
             Description = model.Description;
             UpdateTime = model.LastUpdateTime;
-            ValidationError = model.ValidationError;
+            Status = model.ValidationResult.Result;
+            ValidationError = model.ValidationResult.Message;
             Product = model.ProductName;
             Path = model.Path;
             Unit = model.Unit;
 
-            HasData = !string.IsNullOrEmpty(model.TypedData);
-            ShortStringValue = SensorStringPropertyBuilder.GetShortStringValue(model.SensorType, model.TypedData, model.OriginalFileSensorContentSize);
+            LastValue = model.LastValue;
+            HasData = model.HasData;
+            ShortStringValue = model.LastValue?.ShortInfo;
 
-            IsPlottingSupported = IsSensorPlottingAvailable(model.SensorType);
-            FileNameString = GetFileNameString(model.SensorType, ShortStringValue);
+            IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
+            FileNameString = GetFileNameString(model.Type, ShortStringValue);
         }
 
         private static string UnitsToString(double value, string unit)
@@ -132,11 +98,11 @@ namespace HSMServer.Model.TreeViewModels
             return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
-        private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.StringSensor;
+        private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.String;
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {
-            if (sensorType != SensorType.FileSensorBytes || string.IsNullOrEmpty(value))
+            if (sensorType != SensorType.File || string.IsNullOrEmpty(value))
                 return string.Empty;
 
             var ind = value.IndexOf(FileNamePattern);

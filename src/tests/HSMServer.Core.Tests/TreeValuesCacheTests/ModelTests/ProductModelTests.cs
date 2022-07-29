@@ -4,7 +4,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using System;
 using Xunit;
 
-namespace HSMServer.Core.Tests.TreeValuesCacheTests
+namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 {
     public class ProductModelTests
     {
@@ -56,8 +56,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = new ProductModel(entity);
             product.AddSubProduct(new ProductModel(subProductId, RandomGenerator.GetRandomString()));
-            product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor1Id }, null));
-            product.AddSensor(new SensorModel(new SensorEntity() { Id = sensor2Id }, null));
+            product.AddSensor(SensorModelFactory.Build(new SensorEntity() { Id = sensor1Id }));
+            product.AddSensor(SensorModelFactory.Build(new SensorEntity() { Id = sensor2Id }));
 
             var productEntity = product.ToProductEntity();
 

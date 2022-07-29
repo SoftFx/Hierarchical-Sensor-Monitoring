@@ -1,14 +1,29 @@
-﻿using System.Runtime.Serialization;
+﻿using HSMSensorDataObjects.Swagger;
+using System;
+using System.ComponentModel;
+using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class FileSensorBytesValue : SensorValueBase
+    public class FileSensorBytesValue : ValueBase<byte[]>
     {
         [DataMember]
-        public string Extension { get; set; }
+        [DefaultValue((int)SensorType.FileSensorBytes)]
+        public override SensorType Type => SensorType.FileSensorBytes;
+
+        [Obsolete]
+        [SwaggerExclude]
+        public byte[] FileContent
+        {
+            get => Value;
+            set => Value = value;
+        }
+
         [DataMember]
-        public byte[] FileContent { get; set; }
+        [DefaultValue("txt")]
+        public string Extension { get; set; }
+
         [DataMember]
         public string FileName { get; set; }
     }
