@@ -1,5 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -24,8 +25,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
+        private const string ErrorKeyNotFound = "Key doesn't exist.";
+        private const string ErrorHaventRule = "AccessKey doesn't have CanSendSensorData.";
 
         private const string InvalidTooLongPath = "a/a/a/a/a/a/a/a/a/a/a";
+        private const string ValidPath = "a/a/a/a/a";
 
         private const int DefaultMaxStringLength = 150;
         private const int TestTicks = 50000;
@@ -186,8 +190,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType)
-                    with
+                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 {
                     ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
                     Status = status
@@ -251,10 +254,40 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(ErrorInvalidPath, message);
         }
 
-        //check key
-        //doesnt exist AK
-        //doesnt exist Product
-        //small rules
+        [Fact]
+        [Trait("Category", "InvalidKey")]
+        public void InvalidKeyValidationTest()
+        {
+            var info = new StoreInfo
+            {
+                Key = Guid.NewGuid().ToString(),
+                Path = ValidPath
+            };
+
+            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.Equal(ErrorKeyNotFound, message);
+        }
+
+        [Theory]
+        [InlineData(KeyPermissions.CanAddNodes)]
+        [InlineData(KeyPermissions.CanAddSensors)]
+        [Trait("Category", "SmallRules")]
+        public void SmallRulesValidationTest(KeyPermissions permission)
+        {
+            var product = _valuesCache.AddProduct(TestProductsManager.ProductName);
+            var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id,
+                permissions: permission));
+            _valuesCache.AddAccessKey(accessKey);
+
+            var info = new StoreInfo
+            {
+                Key = accessKey.Id.ToString(),
+                Path = ValidPath
+            };
+
+            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.Equal(ErrorHaventRule, message);
+        }
 
 
         private static BaseSensorModel BuildSensorModel(SensorType type)
