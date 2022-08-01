@@ -7,6 +7,8 @@ using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -26,6 +28,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const string InvalidTooLongPath = "a/a/a/a/a/a/a/a/a/a/a";
 
         private const int DefaultMaxStringLength = 150;
+        private const int TestTicks = 50000;
 
         private readonly ITreeValuesCache _valuesCache;
 
@@ -60,9 +63,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensor = BuildSensorModel(SensorType.String);
             sensor.AddPolicy(new StringValueLengthPolicy());
 
-            var stringBase = new StringValue 
-            { 
-                Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1) 
+            var stringBase = new StringValue
+            {
+                Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1)
             };
 
             Assert.True(sensor.TryAddValue(stringBase, out _));
@@ -135,8 +138,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) 
-                    with { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
+                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType)
+                    with
+                { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue, out _));
                 Assert.True(sensor.CheckExpectedUpdateInterval());
@@ -146,34 +150,58 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
         }
 
-        //length + status
-        //[Theory]
-        //[InlineData(SensorStatus.Unknown)]
-        ////[InlineData(SensorStatus.Error)]
-        ////[InlineData(SensorStatus.Warning)]
-        //[Trait("Category", "CombinatedStatusWithTooLongLength")]
-        //public void CombinatedStatusWithTooLongLenghtValidationTest(SensorStatus status)
-        //{
-        //    var sensor = BuildSensorModel(SensorType.String);
-        //    sensor.AddPolicy(new StringValueLengthPolicy());
+        [Theory]
+        [InlineData(SensorStatus.Unknown)]
+        [InlineData(SensorStatus.Error)]
+        [InlineData(SensorStatus.Warning)]
+        [Trait("Category", "CombinatedStatusWithTooLongLength")]
+        public void CombinatedStatusWithTooLongLenghtValidationTest(SensorStatus status)
+        {
+            var sensor = BuildSensorModel(SensorType.String);
+            sensor.AddPolicy(new StringValueLengthPolicy());
 
-        //    var stringBase = new StringValue
-        //    {
-        //        Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1),
-        //        Status = status
-        //    };
-        //    Assert.True(sensor.TryAddValue(stringBase, out _));
+            var stringBase = new StringValue
+            {
+                Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1),
+                Status = status
+            };
 
-        //    Assert.True(sensor.ValidationResult.IsError);
-        //    //Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+            Assert.True(sensor.TryAddValue(stringBase, out _));
+            Assert.True(sensor.ValidationResult.IsWarning);
+            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
 
-        //    //if (status == SensorStatus.Error)
-        //        //Assert.True(sensor.ValidationResult.IsError);
+            if (status == SensorStatus.Error)
+                Assert.True(sensor.ValidationResult.IsError);
+        }
 
-                
-        //}
+        [Theory]
+        [InlineData(SensorStatus.Unknown)]
+        [InlineData(SensorStatus.Error)]
+        [InlineData(SensorStatus.Warning)]
+        [Trait("Cetagory", "CombinatedStatusWithInterval")]
+        public void CombinatedStatusWithIntervalValidationTest(SensorStatus status)
+        {
+            foreach (var sensorType in Enum.GetValues<SensorType>())
+            {
+                var sensor = BuildSensorModel(sensorType);
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
 
-        //interval + status
+                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType)
+                    with
+                {
+                    ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
+                    Status = status
+                };
+
+                Assert.True(sensor.TryAddValue(baseValue, out _));
+                Assert.True(sensor.CheckExpectedUpdateInterval());
+                Assert.True(sensor.ValidationResult.IsWarning);
+                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
+
+                if (status == SensorStatus.Error)
+                    Assert.True(sensor.ValidationResult.IsError);
+            }
+        }
 
         [Fact]
         [Trait("Category", "EmptyPathOrKey")]
@@ -258,5 +286,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             return string.Format(SensorValueTypeInvalid, type.Name);
         }
+
+        private static SensorStatus GetFinalStatus(SensorStatus first, SensorStatus second) =>
+            new List<SensorStatus> { first, second }.Max();
     }
 }
