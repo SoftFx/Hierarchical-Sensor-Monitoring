@@ -128,8 +128,10 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var key = sensorId.ToString();
 
-                foreach (var database in databases)
+                for (int i = databases.Count - 1; i >= 0; --i)
                 {
+                    var database = databases[i];
+
                     if (database.IsDatabaseExists(key))
                     {
                         result[sensorId] = database.GetLatestValue(key);
@@ -234,9 +236,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private void RemoveSensorValues(string sensorId)
         {
-            var databases = _sensorValuesDatabases.ToList();
-
-            foreach (var db in databases)
+            foreach (var db in _sensorValuesDatabases)
                 if (db.IsDatabaseExists(sensorId))
                 {
                     db.DisposeDatabase(sensorId);
@@ -259,8 +259,10 @@ namespace HSMDatabase.DatabaseWorkCore
             var result = new List<byte[]>(count);
 
             var databases = _sensorValuesDatabases.ToList();
-            foreach (var database in databases)
+            for (int i = databases.Count - 1; i >= 0; --i)
             {
+                var database = databases[i];
+
                 if (database.IsDatabaseExists(sensorId))
                     result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
 
@@ -295,8 +297,10 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
 
             var databases = _sensorValuesDatabases.ToList();
-            foreach (var database in databases)
+            for (int i = databases.Count - 1; i >= 0; --i)
             {
+                var database = databases[i];
+
                 if (database.To < from.Ticks || database.From > to.Ticks)
                     continue;
 

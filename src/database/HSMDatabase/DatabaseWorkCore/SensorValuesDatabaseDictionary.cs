@@ -4,13 +4,12 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
-        private readonly ConcurrentBag<ISensorValuesDatabase> _sensorDbs = new();
+        private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
         private readonly object _locker = new();
 
         private ISensorValuesDatabase _lastDb;
@@ -18,8 +17,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
-            var localDbs = new List<ISensorValuesDatabase>(1 << 4);
-
             var sensorValuesDirectories =
                Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
@@ -27,11 +24,10 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
 
+                var databses = AddNewDb(from, to);
                 foreach (var dbPath in Directory.GetDirectories(directory))
-                    AddNewDb(from, to).OpenDatabase(dbPath);
+                    databses.OpenDatabase(dbPath);
             }
-
-            _sensorDbs = new ConcurrentBag<ISensorValuesDatabase>(localDbs.OrderByDescending(db => db.From));
         }
 
 
@@ -55,7 +51,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(from, to);
 
-            _sensorDbs.Add(_lastDb);
+            _sensorDbs.Enqueue(_lastDb);
 
             return _lastDb;
         }
