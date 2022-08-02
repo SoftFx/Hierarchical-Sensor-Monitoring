@@ -25,14 +25,21 @@ namespace HSMDatabase.LevelDB
             };
 
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
+            var attempts = 0;
 
-            try
+            while (++attempts <= 5) //sometimes Leveldb throws unexpected error when it tries to open db on Windows
             {
-                _database = new DB(name, databaseOptions);
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException("Failed to open database", e);
+                try
+                {
+                    _database = new DB(name, databaseOptions);
+
+                    return;
+                }
+                catch (Exception)
+                {
+                    if (attempts == 5)
+                        throw;
+                }
             }
         }
 

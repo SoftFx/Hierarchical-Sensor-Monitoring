@@ -1,19 +1,25 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal sealed class SensorValuesDatabaseDictionary
+    internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
-        private readonly List<ISensorValuesDatabase> _sensorDbs = new();
+        private readonly ConcurrentBag<ISensorValuesDatabase> _sensorDbs = new();
         private readonly object _locker = new();
+
+        private ISensorValuesDatabase _lastDb;
 
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
+            var localDbs = new List<ISensorValuesDatabase>(1 << 4);
+
             var sensorValuesDirectories =
                Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
@@ -21,12 +27,11 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
 
-                var databases = InitializeAndGetDatabases(from, to);
                 foreach (var dbPath in Directory.GetDirectories(directory))
-                    databases.OpenDatabase(dbPath);
+                    AddNewDb(from, to).OpenDatabase(dbPath);
             }
 
-            _sensorDbs = _sensorDbs.OrderByDescending(db => db.From).ToList();
+            _sensorDbs = new ConcurrentBag<ISensorValuesDatabase>(localDbs.OrderByDescending(db => db.From));
         }
 
 
@@ -34,37 +39,27 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             lock (_locker)
             {
-                var newestDbs = _sensorDbs.FirstOrDefault();
-                if (newestDbs != null && newestDbs.From <= time && newestDbs.To >= time)
-                    return newestDbs;
+                if (_lastDb == null || _lastDb.To < time)
+                {
+                    var from = DateTimeMethods.GetMinDateTimeTicks(time);
+                    var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-                var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+                    return AddNewDb(from, to);
+                }
 
-                return InsertAndGetNewDatabases(from, to);
+                return _lastDb;
             }
         }
 
-        internal List<ISensorValuesDatabase> GetAllDatabases() => _sensorDbs.ToList();
-
-
-        private ISensorValuesDatabase InitializeAndGetDatabases(long from, long to)
+        private ISensorValuesDatabase AddNewDb(long from, long to)
         {
-            var databases = LevelDBManager.GetSensorValuesDatabaseInstance(from, to);
+            _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(from, to);
 
-            _sensorDbs.Add(databases);
+            _sensorDbs.Add(_lastDb);
 
-            return databases;
+            return _lastDb;
         }
 
-        private ISensorValuesDatabase InsertAndGetNewDatabases(long from, long to)
-        {
-            var databases = LevelDBManager.GetSensorValuesDatabaseInstance(from, to);
-
-            _sensorDbs.Insert(0, databases);
-
-            return databases;
-        }
 
         private static (long from, long to) GetDatesFromFolderName(string folder)
         {
@@ -81,5 +76,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return (from, to);
         }
+
+        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

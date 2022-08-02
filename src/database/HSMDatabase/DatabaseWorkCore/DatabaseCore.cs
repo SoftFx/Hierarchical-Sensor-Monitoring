@@ -25,6 +25,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
         private readonly IDatabaseSettings _databaseSettings;
 
+
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
             _logger.Info($"{nameof(DatabaseCore)} is initializing");
@@ -121,7 +122,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var sensor in sensors)
                 result.Add(sensor.Id, null);
 
-            var databases = _sensorValuesDatabases.GetAllDatabases();
+            var databases = _sensorValuesDatabases.ToList();
 
             foreach (var (sensorId, _) in result)
             {
@@ -233,7 +234,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private void RemoveSensorValues(string sensorId)
         {
-            var databases = _sensorValuesDatabases.GetAllDatabases();
+            var databases = _sensorValuesDatabases.ToList();
 
             foreach (var db in databases)
                 if (db.IsDatabaseExists(sensorId))
@@ -257,7 +258,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
             var result = new List<byte[]>(count);
 
-            var databases = _sensorValuesDatabases.GetAllDatabases();
+            var databases = _sensorValuesDatabases.ToList();
             foreach (var database in databases)
             {
                 if (database.IsDatabaseExists(sensorId))
@@ -293,7 +294,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = Encoding.UTF8.GetBytes(from.Ticks.ToString());
             var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
 
-            var databases = _sensorValuesDatabases.GetAllDatabases();
+            var databases = _sensorValuesDatabases.ToList();
             foreach (var database in databases)
             {
                 if (database.To < from.Ticks || database.From > to.Ticks)
@@ -363,7 +364,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public void UpdatePolicy(PolicyEntity entity) => _environmentDatabase.AddPolicy(entity);
-        
+
         public void RemovePolicy(Guid id)
         {
             var strId = id.ToString();
@@ -555,7 +556,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
-            _sensorValuesDatabases.GetAllDatabases().ForEach(d => d.Dispose());
+            _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
         }
     }
 }
