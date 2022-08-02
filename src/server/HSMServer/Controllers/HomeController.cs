@@ -28,7 +28,7 @@ namespace HSMServer.Controllers
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
-        private static JsonResult _emptyResult = new JsonResult(new EmptyResult());
+        private static readonly JsonResult _emptyResult = new(new EmptyResult());
 
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
