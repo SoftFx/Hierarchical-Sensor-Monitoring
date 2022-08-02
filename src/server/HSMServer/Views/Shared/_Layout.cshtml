@@ -41,12 +41,15 @@
     <div id="navbar">
         @if (Context.User is HSMServer.Core.Model.Authentication.User)
         {
-            <nav class="navbar navbar-expand-lg navbar-light" style=" background-color: #edf0f5; height: 50px;">
+            <nav class="navbar navbar-expand-sm navbar-toggleable-lg navbar-light border-bottom box-shadow mb-3" style=" background-color: #edf0f5;">
                 <div class="container-fluid">
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
 
-
-                    <div class="collapse navbar-collapse" id="nabarNav">
-                        <ul class="navbar-nav">
+                    <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between" id="nabarNav">
+                        <ul class="navbar-nav flex-grow-1">
                             <li class="nav-item">
                                 <a class="nav-link"
                                href="@Url.Action(ViewConstants.IndexAction,ViewConstants.HomeController)">
@@ -91,7 +94,7 @@
                                 </a>
                             </li>
 
-                            <li class="nav-item" style="position: absolute; right: 110px; bottom: 5px">
+                            @*<li class="nav-item" style="position: absolute; right: 110px; bottom: 5px">
                                 <a class="nav-link"
                                href="#">
                                     Hello, @(((User)Context.User).UserName)
@@ -103,7 +106,7 @@
                                     Logout
                                     <i class="fas fa-sign-out-alt" style="margin: 10px"></i>
                                 </a>
-                            </li>
+                            </li>*@
                         </ul>
                     </div>
 
