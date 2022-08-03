@@ -41,7 +41,7 @@
     <div id="navbar">
         @if (Context.User is HSMServer.Core.Model.Authentication.User)
         {
-            <nav class="navbar navbar-expand-sm navbar-toggleable-lg navbar-light border-bottom box-shadow mb-3" style=" background-color: #edf0f5;">
+            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3" style=" background-color: #edf0f5;">
                 <div class="container-fluid">
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
@@ -117,7 +117,7 @@
         }
         else
         {
-            <nav class="navbar navbar-expand-sm navbar-toggleable-lg navbar-light border-bottom box-shadow mb-3" style="background-color: #edf0f5;">
+            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3" style="background-color: #edf0f5;">
                 <div class="container-fluid">
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
@@ -167,7 +167,6 @@
         <div class="container">
             &copy; 2022 - Soft-FX @LayoutStaticController.Version
         </div>
-
     </footer>
 
     @RenderSection("Scripts", required: false)
