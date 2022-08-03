@@ -219,7 +219,9 @@ namespace HSMServer.Controllers
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
-            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+            var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+
+            return values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
         }
 
         private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
