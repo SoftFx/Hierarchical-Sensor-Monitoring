@@ -64,6 +64,8 @@ namespace HSMDatabase.LevelDB
                 $"{SENSOR_VALUE_PREFIX}_{productName}_{path}_{putTime.Ticks}";
         }
 
+        internal static string GetSensorValueKey(string sensorId, long time) => $"{sensorId}_{time}";
+
         internal static string GetMonitoringDatabasesListKey()
         {
             return MONITORING_DATABASE_LIST_PREFIX;

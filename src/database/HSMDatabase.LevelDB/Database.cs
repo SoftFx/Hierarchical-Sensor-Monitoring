@@ -211,6 +211,29 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public Dictionary<string, byte[]> GetAllValues()
+        {
+            Iterator iterator = null;
+            var values = new Dictionary<string, byte[]>(1 << 5);
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+                for (iterator.SeekToLast(); iterator.IsValid; iterator.Prev())
+                    values.Add(iterator.StringKey(), iterator.Value());
+
+                return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
             Iterator iterator = null;

@@ -18,5 +18,8 @@ namespace HSMDatabase.AccessManager
 
         public string GetPathToSensorValueDatabase(long from, long to, string sensorId) =>
             Path.Combine(DatabaseFolder, $"{SensorValuesDatabaseName}_{from}_{to}", sensorId);
+
+        public string GetPathToSensorValueDatabase(long from, long to) =>
+            Path.Combine(DatabaseFolder, $"{SensorValuesDatabaseName}_{from}_{to}");
     }
 }

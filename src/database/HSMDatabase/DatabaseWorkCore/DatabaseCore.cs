@@ -110,33 +110,37 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors)
         {
-            var result = FillLatestValues(sensors);
-
-            return FillRemainingLatestValues(sensors, result);
-        }
-
-        private Dictionary<Guid, byte[]> FillLatestValues(List<BaseSensorModel> sensors)
-        {
             var result = new Dictionary<Guid, byte[]>(sensors.Count);
 
             foreach (var sensor in sensors)
                 result.Add(sensor.Id, null);
 
-            var databases = _sensorValuesDatabases.ToList();
+            FillLatestValues(sensors, result);
 
-            foreach (var (sensorId, _) in result)
+            return FillRemainingLatestValues(sensors, result);
+        }
+
+        private Dictionary<Guid, byte[]> FillLatestValues(List<BaseSensorModel> sensors, Dictionary<Guid, byte[]> result)
+        {
+            var tempResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+
+            foreach (var sensor in sensors)
             {
-                var key = sensorId.ToString();
+                if (result[sensor.Id] != null)
+                    continue;
 
-                foreach (var database in databases)
-                {
-                    if (database.IsDatabaseExists(key))
-                    {
-                        result[sensorId] = database.GetLatestValue(key);
-                        break;
-                    }
-                }
+                byte[] key = Encoding.UTF8.GetBytes(sensor.Id.ToString());
+                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+
+                tempResult.Add(key, value);
             }
+
+            foreach (var database in _sensorValuesDatabases)
+                database.FillLatestValues(tempResult);
+
+            foreach (var (_, (sensorId, value)) in tempResult)
+                if (value != null)
+                    result[sensorId] = value;
 
             return result;
         }
@@ -201,8 +205,8 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
 
-            var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To, valueEntity.SensorId);
-            dbs.OpenDatabase(dbName);
+            //var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To);
+            //dbs.OpenDatabase(dbName);
 
             dbs.PutSensorValue(valueEntity);
         }
@@ -235,12 +239,13 @@ namespace HSMDatabase.DatabaseWorkCore
         private void RemoveSensorValues(string sensorId)
         {
             foreach (var db in _sensorValuesDatabases)
-                if (db.IsDatabaseExists(sensorId))
-                {
-                    db.DisposeDatabase(sensorId);
-                    db.RemoveDatabase(sensorId);
-                    Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
-                }
+                db.RemoveSensorValues(sensorId);
+                //if (db.IsDatabaseExists(sensorId))
+                //{
+                //    db.DisposeDatabase(sensorId);
+                //    db.RemoveDatabase(sensorId);
+                //    Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
+                //}
         }
 
         private void RemoveSensorData(string productName, string path)
@@ -258,8 +263,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var database in _sensorValuesDatabases)
             {
-                if (database.IsDatabaseExists(sensorId))
-                    result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
+                result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
 
                 if (count == result.Count)
                     break;
@@ -288,16 +292,15 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(1 << 5);
 
-            var fromBytes = Encoding.UTF8.GetBytes(from.Ticks.ToString());
-            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
+            var fromBytes = Encoding.UTF8.GetBytes($"{sensorId}_{from.Ticks}");
+            var toBytes = Encoding.UTF8.GetBytes($"{sensorId}_{to.Ticks}");
 
             foreach (var database in _sensorValuesDatabases)
             {
                 if (database.To < from.Ticks || database.From > to.Ticks)
                     continue;
 
-                if (database.IsDatabaseExists(sensorId))
-                    result.AddRange(database.GetValues(sensorId, fromBytes, toBytes));
+                result.AddRange(database.GetValues(sensorId, fromBytes, toBytes));
             }
 
             return result;

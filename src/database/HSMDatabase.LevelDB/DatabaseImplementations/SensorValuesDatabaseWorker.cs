@@ -12,7 +12,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly Dictionary<string, LevelDBDatabaseAdapter> _openedDbs = new();
+        private readonly LevelDBDatabaseAdapter _openedDb;
 
 
         public long From { get; }
@@ -20,48 +20,58 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public long To { get; }
 
 
-        public SensorValuesDatabaseWorker(long from, long to)
+        public SensorValuesDatabaseWorker(string name, long from, long to)
         {
+            _openedDb = new LevelDBDatabaseAdapter(name);
+
             From = from;
             To = to;
         }
 
 
-        public void OpenDatabase(string dbPath)
-        {
-            var sensorId = Path.GetFileName(dbPath);
-            if (!IsDatabaseExists(sensorId))
-                _openedDbs.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
-        }
+        //public void OpenDatabase(string dbPath)
+        //{
+        //    var sensorId = Path.GetFileName(dbPath);
+        //    if (!IsDatabaseExists(sensorId))
+        //        _openedDb.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
+        //}
 
-        public void Dispose()
-        {
-            foreach (var (_, db) in _openedDbs)
-                db.Dispose();
-        }
+        public void Dispose() => _openedDb.Dispose();
 
-        public void DisposeDatabase(string sensorId)
+        //public void DisposeDatabase(string sensorId)
+        //{
+        //    try
+        //    {
+        //        _openedDb[sensorId].Dispose();
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
+        //    }
+        //}
+
+        //public void RemoveDatabase(string sensorId) => _openedDb.Remove(sensorId);
+
+        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
         {
             try
             {
-                _openedDbs[sensorId].Dispose();
+                _openedDb.FillLatestValues(keyValuePairs);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
+                _logger.Error(e, "Failed to fill sensors latest values");
             }
         }
 
-        public void RemoveDatabase(string sensorId) => _openedDbs.Remove(sensorId);
-
         public void PutSensorValue(SensorValueEntity entity)
         {
-            var key = Encoding.UTF8.GetBytes(entity.ReceivingTime.ToString());
+            var key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(entity.SensorId, entity.ReceivingTime));
 
             try
             {
                 var value = JsonSerializer.SerializeToUtf8Bytes(entity.Value);
-                _openedDbs[entity.SensorId].Put(key, value);
+                _openedDb.Put(key, value);
             }
             catch (Exception e)
             {
@@ -69,14 +79,47 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public bool IsDatabaseExists(string sensorId) => _openedDbs.ContainsKey(sensorId);
+        public void PutSensorValue(string sensorId, string time, byte[] value)
+        {
+            var key = Encoding.UTF8.GetBytes($"{sensorId}_{time}");
 
-        public byte[] GetLatestValue(string sensorId) => _openedDbs[sensorId].GetLatestValue();
+            try
+            {
+                _openedDb.Put(key, value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write data for {sensorId}");
+            }
+        }
+
+        public void RemoveSensorValues(string sensorId)
+        {
+            var key = Encoding.UTF8.GetBytes(sensorId);
+
+            try
+            {
+                _openedDb.DeleteAllStartingWith(key);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
+            }
+        }
+
+        //public bool IsDatabaseExists(string sensorId) => _openedDb.ContainsKey(sensorId);
+
+        //public byte[] GetLatestValue(string sensorId) => _openedDb.GetLatestValue();
 
         public List<byte[]> GetValues(string sensorId, byte[] to, int count) =>
-            _openedDbs[sensorId].GetValues(to, count);
+            _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
 
-        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to) =>
-            _openedDbs[sensorId].GetValues(from, to);
+        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to)
+        {
+            var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
+            result.Reverse();
+
+            return result;
+        }
     }
 }

@@ -12,7 +12,7 @@ namespace HSMDatabase.LevelDB
         public static ISensorsDatabase GetSensorDatabaseInstance(string name, DateTime minTime, DateTime maxTime) =>
             new SensorsDatabaseWorker(name, minTime, maxTime);
 
-        public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(long from, long to) =>
-            new SensorValuesDatabaseWorker(from, to);
+        public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(string name, long from, long to) =>
+            new SensorValuesDatabaseWorker(name, from, to);
     }
 }
