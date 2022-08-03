@@ -128,10 +128,8 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 var key = sensorId.ToString();
 
-                for (int i = databases.Count - 1; i >= 0; --i)
+                foreach (var database in databases)
                 {
-                    var database = databases[i];
-
                     if (database.IsDatabaseExists(key))
                     {
                         result[sensorId] = database.GetLatestValue(key);
@@ -258,11 +256,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
             var result = new List<byte[]>(count);
 
-            var databases = _sensorValuesDatabases.ToList();
-            for (int i = databases.Count - 1; i >= 0; --i)
+            foreach (var database in _sensorValuesDatabases)
             {
-                var database = databases[i];
-
                 if (database.IsDatabaseExists(sensorId))
                     result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
 
@@ -296,11 +291,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = Encoding.UTF8.GetBytes(from.Ticks.ToString());
             var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
 
-            var databases = _sensorValuesDatabases.ToList();
-            for (int i = databases.Count - 1; i >= 0; --i)
+            foreach (var database in _sensorValuesDatabases)
             {
-                var database = databases[i];
-
                 if (database.To < from.Ticks || database.From > to.Ticks)
                     continue;
 

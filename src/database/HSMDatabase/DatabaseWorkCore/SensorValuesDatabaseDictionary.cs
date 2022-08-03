@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -73,7 +74,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return (from, to);
         }
 
-        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
+        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.Reverse().GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
