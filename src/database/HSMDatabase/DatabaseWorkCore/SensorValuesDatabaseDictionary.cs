@@ -25,9 +25,9 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
 
-                var databses = AddNewDb(from, to);
+                var databases = AddNewDb(from, to);
                 foreach (var dbPath in Directory.GetDirectories(directory))
-                    databses.OpenDatabase(dbPath);
+                    databases.OpenDatabase(dbPath);
             }
         }
 
