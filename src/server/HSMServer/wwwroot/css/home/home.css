@@ -43,7 +43,7 @@
 .scrollableBlock {
     display: block;
     width: 400px;
-    height: 85%;
+    max-height: 75vh;
     overflow: auto;
 }
 
