@@ -50,7 +50,6 @@ namespace HSMServer.Core.DataLayer
         List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to);
 
         List<SensorEntity> GetAllSensors();
-        void RemoveAllOldSensors();
 
         #endregion
 

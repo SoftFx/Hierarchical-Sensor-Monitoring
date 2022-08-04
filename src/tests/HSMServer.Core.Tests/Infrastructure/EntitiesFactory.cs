@@ -63,7 +63,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Type = type ?? RandomGenerator.GetRandomByte(),
-                ExpectedUpdateIntervalTicks = RandomGenerator.GetRandomInt(),
                 Unit = RandomGenerator.GetRandomString(),
             };
 
