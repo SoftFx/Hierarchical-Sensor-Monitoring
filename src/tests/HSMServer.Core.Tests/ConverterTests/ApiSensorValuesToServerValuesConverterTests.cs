@@ -30,7 +30,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var baseValue = apiSensorValue.Convert();
 
-            SensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
+            ApiSensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
         }
 
         [Fact]
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
             var baseValue = apiSensorValue.Convert();
 
-            SensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
+            ApiSensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
         }
 
 
@@ -68,7 +68,7 @@ namespace HSMServer.Core.Tests.ConverterTests
                 _ => null,
             };
 
-            SensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
+            ApiSensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
         }
     }
 }

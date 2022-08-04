@@ -19,8 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             AuthorId = Guid.NewGuid().ToString(),
             ProductId = Guid.NewGuid().ToString(),
             State = (byte)KeyState.Active,
-            Permissions = (long)(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors
-            | KeyPermissions.CanSendSensorData),
+            Permissions = (long)(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData),
             DisplayName = RandomGenerator.GetRandomString(),
             CreationTime = DateTime.Now.Ticks,
             ExpirationTime = DateTime.MaxValue.Ticks
