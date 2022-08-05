@@ -478,63 +478,6 @@ namespace HSMServer.HtmlHelpers
 
         #endregion
 
-        #region Configuration object
-
-        public static string CreateConfigurationObjectsTable(List<ConfigurationObjectViewModel> configurationObjects)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            sb.Append("<div style='margin: 10px'>" +
-                          "<div class='row justify-content-start'><div class='col-auto'>" +
-                          "<h5 style='margin: 10px 20px 10px;'>Configuration parameters</h5></div></div></div>");
-
-            sb.Append("<div class='col-xxl'>");
-            //table template
-            sb.Append("<table class='table table-striped'><thead><tr>" +
-                          "<th scope='col'>#</th>" +
-                          "<th scope='col'>Parameter name</th>" +
-                          "<th scope='col'>Parameter value</th>" +
-                          "<th scope='col'>Action</th></tr></thead>");
-
-            sb.Append("<tbody>");
-
-            for (int i = 0; i < configurationObjects.Count; ++i)
-            {
-                sb.Append($"<tr><th scope='row'>{i}</th><td><label class='config-name'>{configurationObjects[i].Name}</label>" +
-                          "<a tabindex='0' data-bs-toggle='popover' data-bs-trigger='focus' title='Description' " +
-                          $" data-bs-content='{configurationObjects[i].Description}'><i class='fas fa-question-circle'></i></a></td>" +
-                          "<td><div style='display: flex'><input type='text' class='form-control' style='max-width:300px' " +
-                          $"value='{configurationObjects[i].Value}' id='value_{configurationObjects[i].Name}'>");
-
-                if (configurationObjects[i].IsDefault)
-                {
-                    sb.Append("<label class='default-text-field'>default</label>");
-                }
-
-                sb.Append("</div></td><td>");
-
-                if (!configurationObjects[i].IsDefault)
-                {
-                    sb.Append($"<button id='reset_{configurationObjects[i].Name}' style='margin-left: 5px' " +
-                              "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                              " title='reset value to default'><i class='fas fa-undo-alt'></i></button>");
-                }
-
-                sb.Append($"<button disabled style='margin-left: 5px' id='ok_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                          " title='ok'><i class='fas fa-check'></i></button>" +
-
-                          $"<button disabled style='margin-left: 5px' id='cancel_{configurationObjects[i].Name}' " +
-                          "type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                          " title='revert changes'><i class='fas fa-times'></i></button></td></tr>");
-            }
-
-            sb.Append("</tbody></table></div>");
-            return sb.ToString();
-        }
-
-        #endregion
-
         #region Sensor info
 
         public static string CreateSensorInfoTable(SensorInfoViewModel sensorInfo)
