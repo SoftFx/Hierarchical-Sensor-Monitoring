@@ -205,9 +205,6 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
 
-            //var dbName = _databaseSettings.GetPathToSensorValueDatabase(dbs.From, dbs.To);
-            //dbs.OpenDatabase(dbName);
-
             dbs.PutSensorValue(valueEntity);
         }
 
@@ -234,12 +231,6 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             foreach (var db in _sensorValuesDatabases)
                 db.RemoveSensorValues(sensorId);
-                //if (db.IsDatabaseExists(sensorId))
-                //{
-                //    db.DisposeDatabase(sensorId);
-                //    db.RemoveDatabase(sensorId);
-                //    Directory.Delete(_databaseSettings.GetPathToSensorValueDatabase(db.From, db.To, sensorId), true);
-                //}
         }
 
         private void RemoveSensorData(string productName, string path)
@@ -252,7 +243,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
         {
-            var toBytes = Encoding.UTF8.GetBytes(to.Ticks.ToString());
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
             var result = new List<byte[]>(count);
 
             foreach (var database in _sensorValuesDatabases)
@@ -286,8 +277,8 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(1 << 5);
 
-            var fromBytes = Encoding.UTF8.GetBytes($"{sensorId}_{from.Ticks}");
-            var toBytes = Encoding.UTF8.GetBytes($"{sensorId}_{to.Ticks}");
+            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
 
             foreach (var database in _sensorValuesDatabases)
             {

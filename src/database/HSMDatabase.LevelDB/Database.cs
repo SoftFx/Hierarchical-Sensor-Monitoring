@@ -4,6 +4,7 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -268,7 +269,7 @@ namespace HSMDatabase.LevelDB
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) && values.Count != count; iterator.Next())
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
                 {
                     if (iterator.Key().IsSmallerOrEquals(to))
                         values.Add(iterator.Value());
@@ -276,7 +277,7 @@ namespace HSMDatabase.LevelDB
 
                 values.Reverse(); // from newest to oldest
 
-                return values;
+                return values.Take(count).ToList();
             }
             catch (Exception e)
             {
