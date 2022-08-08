@@ -1,19 +1,20 @@
-﻿using System.IO;
+﻿using HSMServer.Core.Model;
+using System.IO;
 using System.IO.Compression;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class CompressionHelper
     {
-        internal static byte[] GetCompressedData(byte[] data)
+        internal static FileValue GetCompressedValue(FileValue value)
         {
             using var output = new MemoryStream();
             using (var dstream = new DeflateStream(output, CompressionLevel.Optimal))
             {
-                dstream.Write(data, 0, data.Length);
+                dstream.Write(value.Value, 0, value.Value.Length);
             }
 
-            return output.ToArray();
+            return value with { Value = output.ToArray() };
         }
     }
 }

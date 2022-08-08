@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProduct")]
         public void AddProductTest()
         {
-            var product = DatabaseCoreFactory.CreateProduct();
+            var product = EntitiesFactory.BuildProduct();
             _databaseCore.AddProduct(product);
 
             FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = DatabaseCoreFactory.CreateProduct();
+                var product = EntitiesFactory.BuildProduct();
                 _databaseCore.AddProduct(product);
 
                 FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRemove")]
         public void RemoveProductTest()
         {
-            var product = DatabaseCoreFactory.CreateProduct();
+            var product = EntitiesFactory.BuildProduct();
 
             _databaseCore.AddProduct(product);
             Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -81,7 +81,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = DatabaseCoreFactory.CreateProduct();
+                var product = EntitiesFactory.BuildProduct();
 
                 _databaseCore.AddProduct(product);
                 Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -152,7 +152,7 @@ namespace HSMServer.Core.Tests
             {
                 var key = AddKey(_databaseCore.AddAccessKey);
 
-                var updated = DatabaseCoreFactory.CreateAccessKey(key.Id);
+                var updated = EntitiesFactory.BuildAccessKeyEntity(id: key.Id);
                 _databaseCore.UpdateAccessKey(updated);
 
                 FullKeyTest(updated, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
@@ -178,7 +178,7 @@ namespace HSMServer.Core.Tests
 
             Assert.NotNull(actualList);
             Assert.Equal(expectedList.Count, actualList.Count);
-            
+
             for (int i = 0; i < actualList.Count; i++)
                 FullKeyTest(expectedList[i], actualList[i]);
         }
@@ -191,7 +191,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneUser")]
         public void AddUserTest()
         {
-            var user = DatabaseCoreFactory.CreateUser();
+            var user = EntitiesFactory.BuildUser();
             _databaseCore.AddUser(user);
 
             var actualUser = GetUser(user.UserName);
@@ -211,7 +211,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var user = DatabaseCoreFactory.CreateUser();
+                var user = EntitiesFactory.BuildUser();
                 _databaseCore.AddUser(user);
 
                 var actualUser = GetUser(user.UserName);
@@ -224,7 +224,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneUserRemove")]
         public void RemoveUserTest()
         {
-            var user = DatabaseCoreFactory.CreateUser();
+            var user = EntitiesFactory.BuildUser();
 
             _databaseCore.AddUser(user);
             _databaseCore.RemoveUser(user);
@@ -244,7 +244,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var user = DatabaseCoreFactory.CreateUser();
+                var user = EntitiesFactory.BuildUser();
 
                 _databaseCore.AddUser(user);
                 _databaseCore.RemoveUser(user);
@@ -257,8 +257,8 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRole")]
         public void AddProductRoleTest()
         {
-            var user = DatabaseCoreFactory.CreateUser();
-            var product = DatabaseCoreFactory.CreateProduct();
+            var user = EntitiesFactory.BuildUser();
+            var product = EntitiesFactory.BuildProduct();
 
             _databaseCore.AddUser(user);
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
@@ -278,12 +278,12 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "SeveralProductRoles")]
         public void SeveralProductRolesTest(int count)
         {
-            var user = DatabaseCoreFactory.CreateUser();
+            var user = EntitiesFactory.BuildUser();
             _databaseCore.AddUser(user);
 
             for (int i = 0; i < count; i++)
             {
-                var product = DatabaseCoreFactory.CreateProduct();
+                var product = EntitiesFactory.BuildProduct();
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
                 user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
@@ -306,7 +306,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var user = DatabaseCoreFactory.CreateUser();
+                var user = EntitiesFactory.BuildUser();
 
                 _databaseCore.AddUser(user);
             }
@@ -325,7 +325,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneRegistrationTicket")]
         public void AddRegistrationTicketTest()
         {
-            var ticket = DatabaseCoreFactory.CreateTicket();
+            var ticket = EntitiesFactory.BuildTicket();
 
             _databaseCore.WriteRegistrationTicket(ticket);
 
@@ -344,7 +344,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var ticket = DatabaseCoreFactory.CreateTicket();
+                var ticket = EntitiesFactory.BuildTicket();
 
                 _databaseCore.WriteRegistrationTicket(ticket);
 
@@ -356,7 +356,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneRemoveRegistrationTicket")]
         public void RemoveRegistrationTicket()
         {
-            var ticket = DatabaseCoreFactory.CreateTicket();
+            var ticket = EntitiesFactory.BuildTicket();
 
             _databaseCore.WriteRegistrationTicket(ticket);
             _databaseCore.RemoveRegistrationTicket(ticket.Id);
@@ -376,7 +376,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var ticket = DatabaseCoreFactory.CreateTicket();
+                var ticket = EntitiesFactory.BuildTicket();
 
                 _databaseCore.WriteRegistrationTicket(ticket);
                 _databaseCore.RemoveRegistrationTicket(ticket.Id);
@@ -394,7 +394,7 @@ namespace HSMServer.Core.Tests
         public void AddConfigurationObjectTest()
         {
             var name = RandomGenerator.GetRandomString();
-            var config = DatabaseCoreFactory.CreateConfiguration(name);
+            var config = EntitiesFactory.BuildConfiguration(name);
 
             _databaseCore.WriteConfigurationObject(config);
 
@@ -414,7 +414,7 @@ namespace HSMServer.Core.Tests
             for (int i = 0; i < count; i++)
             {
                 var name = RandomGenerator.GetRandomString();
-                var config = DatabaseCoreFactory.CreateConfiguration(name);
+                var config = EntitiesFactory.BuildConfiguration(name);
 
                 _databaseCore.WriteConfigurationObject(config);
 
@@ -427,7 +427,7 @@ namespace HSMServer.Core.Tests
         public void UpdateConfigurationObjectTest()
         {
             var name = RandomGenerator.GetRandomString();
-            var config = DatabaseCoreFactory.CreateConfiguration(name);
+            var config = EntitiesFactory.BuildConfiguration(name);
 
             _databaseCore.WriteConfigurationObject(config);
             config.Value = RandomGenerator.GetRandomString();
@@ -441,7 +441,7 @@ namespace HSMServer.Core.Tests
         public void RemoveConfigurationObject()
         {
             var name = RandomGenerator.GetRandomString();
-            var config = DatabaseCoreFactory.CreateConfiguration(name);
+            var config = EntitiesFactory.BuildConfiguration(name);
 
             _databaseCore.WriteConfigurationObject(config);
             _databaseCore.RemoveConfigurationObject(name);
@@ -462,7 +462,7 @@ namespace HSMServer.Core.Tests
             for (int i = 0; i < count; i++)
             {
                 var name = RandomGenerator.GetRandomString();
-                var config = DatabaseCoreFactory.CreateConfiguration(name);
+                var config = EntitiesFactory.BuildConfiguration(name);
 
                 _databaseCore.WriteConfigurationObject(config);
                 _databaseCore.RemoveConfigurationObject(name);
@@ -566,7 +566,7 @@ namespace HSMServer.Core.Tests
 
         private static AccessKeyEntity AddKey(AddAccessKey addKey)
         {
-            var key = DatabaseCoreFactory.CreateAccessKey();
+            var key = EntitiesFactory.BuildAccessKeyEntity();
             addKey?.Invoke(key);
 
             return key;
