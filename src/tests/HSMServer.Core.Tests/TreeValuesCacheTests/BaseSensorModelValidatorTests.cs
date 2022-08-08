@@ -8,8 +8,6 @@ using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -320,6 +318,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private static SensorStatus GetFinalStatus(SensorStatus first, SensorStatus second) =>
-            new List<SensorStatus> { first, second }.Max();
+            first > second ? first : second;
     }
 }
