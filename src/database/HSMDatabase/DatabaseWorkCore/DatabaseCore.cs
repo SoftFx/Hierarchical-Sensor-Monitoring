@@ -318,21 +318,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<SensorEntity> GetAllSensors()
         {
-            var oldEntities = _environmentDatabase.GetSensorsStrOld();
-            var entities = oldEntities.Select(e => e.ConvertToEntity()).ToDictionary(e => e.Id);
-            var newEntities = GetNewSensors();
-
-            foreach (var newEntity in newEntities)
-                entities[newEntity.Id] = newEntity;
-
-            return entities.Values.ToList();
-        }
-
-        public void RemoveAllOldSensors() =>
-            _environmentDatabase.RemoveAllOldSensors();
-
-        private List<SensorEntity> GetNewSensors()
-        {
             var sensorsIds = _environmentDatabase.GetAllSensorsIds();
 
             var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
