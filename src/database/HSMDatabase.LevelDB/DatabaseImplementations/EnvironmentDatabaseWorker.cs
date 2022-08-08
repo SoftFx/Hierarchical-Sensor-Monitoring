@@ -3,7 +3,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -293,38 +292,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
-
-        public List<byte[]> GetSensorsStrOld()
-        {
-            var key = PrefixConstants.GetSensorsInfoReadKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                return _database.GetAllStartingWith(bytesKey).ToList();
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read all sensor entities with prefix {key}");
-            }
-
-            return new();
-        }
-
-        public void RemoveAllOldSensors()
-        {
-            var key = PrefixConstants.GetSensorsInfoReadKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                _database.DeleteAllStartingWith(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to removing all sensor entities with prefix {key}");
-            }
-        }
 
         private void UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
         {
@@ -637,27 +604,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return result;
-        }
-
-        public void AddMonitoringDatabaseToList(string folderName)
-        {
-            var key = PrefixConstants.GetMonitoringDatabasesListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                var currentList = _database.TryRead(bytesKey, out var value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                if (!currentList.Contains(folderName))
-                    currentList.Add(folderName);
-
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add monitoring database to list");
-            }
         }
 
         public void RemoveMonitoringDatabaseFromList(string folderName)

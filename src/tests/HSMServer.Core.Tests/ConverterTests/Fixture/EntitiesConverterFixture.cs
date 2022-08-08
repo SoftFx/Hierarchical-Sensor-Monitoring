@@ -6,12 +6,12 @@ namespace HSMServer.Core.Tests.ConverterTests
     {
         internal const string ProductName = TestProductsManager.ProductName;
 
-        internal ApiSensorValuesFactory SensorValuesFactory { get; }
+        internal ApiSensorValuesFactory ApiSensorValuesFactory { get; }
 
 
         public EntitiesConverterFixture()
         {
-            SensorValuesFactory = new ApiSensorValuesFactory(ProductName);
+            ApiSensorValuesFactory = new ApiSensorValuesFactory(ProductName);
         }
     }
 }

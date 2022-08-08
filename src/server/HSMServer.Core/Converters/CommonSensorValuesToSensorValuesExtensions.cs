@@ -1,6 +1,5 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Model;
 using System.Text.Json;
 using SensorType = HSMSensorDataObjects.SensorType;
 
