@@ -639,27 +639,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return result;
         }
 
-        public void AddMonitoringDatabaseToList(string folderName)
-        {
-            var key = PrefixConstants.GetMonitoringDatabasesListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                var currentList = _database.TryRead(bytesKey, out var value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                if (!currentList.Contains(folderName))
-                    currentList.Add(folderName);
-
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add monitoring database to list");
-            }
-        }
-
         public void RemoveMonitoringDatabaseFromList(string folderName)
         {
             var key = PrefixConstants.GetMonitoringDatabasesListKey();

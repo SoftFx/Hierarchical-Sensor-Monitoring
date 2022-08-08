@@ -31,7 +31,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             _databaseSettings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
-            _sensorsDatabases = new TimeDatabaseDictionary(_environmentDatabase, dbSettings ?? new DatabaseSettings());
+            _sensorsDatabases = new TimeDatabaseDictionary();
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
 
             OpenAllExistingSensorDatabases();
@@ -225,12 +225,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public void PutSensorData(SensorDataEntity entity, string productName)
-        {
-            var database = _sensorsDatabases.GetDatabase(entity.TimeCollected);
-            database.PutSensorData(entity, productName);
-        }
-
         private void RemoveSensorValues(string sensorId)
         {
             var databases = _sensorValuesDatabases.GetAllDatabases();
@@ -363,7 +357,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public void UpdatePolicy(PolicyEntity entity) => _environmentDatabase.AddPolicy(entity);
-        
+
         public void RemovePolicy(Guid id)
         {
             var strId = id.ToString();

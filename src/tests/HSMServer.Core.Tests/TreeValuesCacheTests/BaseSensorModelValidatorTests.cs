@@ -142,8 +142,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType)
-                    with
+                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue, out _));
@@ -275,8 +274,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void SmallRulesValidationTest(KeyPermissions permission)
         {
             var product = _valuesCache.AddProduct(TestProductsManager.ProductName);
-            var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id,
-                permissions: permission));
+            var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id, permissions: permission));
+
             _valuesCache.AddAccessKey(accessKey);
 
             var info = new StoreInfo
@@ -305,19 +304,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private static string GetBadValueTypeMessage(SensorType sensorType)
         {
-            var type = sensorType switch
+            var name = sensorType switch
             {
-                SensorType.Boolean => typeof(BooleanValue),
-                SensorType.Integer => typeof(IntegerValue),
-                SensorType.Double => typeof(DoubleValue),
-                SensorType.String => typeof(StringValue),
-                SensorType.IntegerBar => typeof(IntegerBarValue),
-                SensorType.DoubleBar => typeof(DoubleBarValue),
-                SensorType.File => typeof(FileValue),
+                SensorType.Boolean => nameof(BooleanValue),
+                SensorType.Integer => nameof(IntegerValue),
+                SensorType.Double => nameof(DoubleValue),
+                SensorType.String => nameof(StringValue),
+                SensorType.IntegerBar => nameof(IntegerBarValue),
+                SensorType.DoubleBar => nameof(DoubleBarValue),
+                SensorType.File => nameof(FileValue),
                 _ => null
             };
 
-            return string.Format(SensorValueTypeInvalid, type.Name);
+            return string.Format(SensorValueTypeInvalid, name);
         }
 
         private static SensorStatus GetFinalStatus(SensorStatus first, SensorStatus second) =>

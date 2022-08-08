@@ -1,10 +1,8 @@
 ﻿using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Text.Json;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
@@ -43,22 +41,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return 0;
-        }
-
-        public void PutSensorData(SensorDataEntity sensorData, string productName)
-        {
-            var writeKey = PrefixConstants.GetSensorWriteValueKey(productName, sensorData.Path, sensorData.TimeCollected);
-            var bytesKey = Encoding.UTF8.GetBytes(writeKey);
-            try
-            {
-                var serializedValue = JsonSerializer.Serialize(sensorData);
-                var bytesValue = Encoding.UTF8.GetBytes(serializedValue);
-                _database.Put(bytesKey, bytesValue);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write data for {productName}/{sensorData.Path}");
-            }
         }
 
         public void DeleteAllSensorValues(string productName, string path)

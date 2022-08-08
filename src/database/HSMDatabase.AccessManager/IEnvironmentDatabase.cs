@@ -78,7 +78,6 @@ namespace HSMDatabase.AccessManager
         #endregion
 
         List<string> GetMonitoringDatabases();
-        void AddMonitoringDatabaseToList(string folderName);
         void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }
