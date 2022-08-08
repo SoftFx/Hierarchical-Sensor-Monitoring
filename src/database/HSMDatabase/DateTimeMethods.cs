@@ -9,10 +9,13 @@ namespace HSMDatabase
 
         public static DateTime GetMinDateTime(DateTime dateTime)
         {
-            int daysDiff = (7 + ((int)dateTime.DayOfWeek - 1)) % 7;
-            var result = dateTime.AddDays(-1 * daysDiff).AddMinutes(-1 * dateTime.Minute)
-                .AddSeconds(-1 * dateTime.Second).AddMilliseconds(-1 * dateTime.Millisecond)
-                .AddHours(-1 * dateTime.Hour);
+            int daysDiff = (7 + ((int)dateTime.DayOfWeek - (int)DayOfWeek.Monday)) % 7;
+            var result = dateTime.AddDays(-daysDiff)
+                                 .AddHours(-dateTime.Hour)
+                                 .AddMinutes(-dateTime.Minute)
+                                 .AddSeconds(-dateTime.Second)
+                                 .AddMilliseconds(-dateTime.Millisecond);
+
             return result;
         }
 
