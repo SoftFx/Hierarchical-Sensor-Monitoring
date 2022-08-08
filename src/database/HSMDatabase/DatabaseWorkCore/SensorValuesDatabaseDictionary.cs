@@ -12,7 +12,6 @@ namespace HSMDatabase.DatabaseWorkCore
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
         private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
-        private readonly object _locker = new();
 
         private readonly IDatabaseSettings _dbSettings;
 
@@ -23,7 +22,8 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _dbSettings = dbSettings;
 
-            //Migration();
+            if (CheckoutAndMigration())
+                return;
 
             var sensorValuesDirectories =
                Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
@@ -35,13 +35,21 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        private void Migration()
+        private bool CheckoutAndMigration()
         {
             var sensorValuesDirectories =
               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
+            bool wereMigrated = false;
+
             foreach (var directory in sensorValuesDirectories)
             {
+                var sensorDirectories = Directory.GetDirectories(directory);
+                if (sensorDirectories.Length == 0)
+                    continue;
+
+                wereMigrated = true;
+
                 (var from, var to) = GetDatesFromFolderName(directory);
 
                 from -= 1;
@@ -60,37 +68,44 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (shouldAddDb)
                     AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
 
-                foreach (var dbPath in Directory.GetDirectories(directory))
+                try
                 {
-                    var sensorDb = new LevelDBDatabaseAdapter(dbPath);
-                    var sensorId = Path.GetFileName(dbPath);
+                    foreach (var dbPath in sensorDirectories)
+                    {
+                        try
+                        {
+                            var sensorDb = new LevelDBDatabaseAdapter(dbPath);
+                            var sensorId = Path.GetFileName(dbPath);
 
-                    var allValues = sensorDb.GetAllValues();
-                    foreach (var (sensorReceivingTime, value) in allValues)
-                        _lastDb.PutSensorValue(sensorId, sensorReceivingTime, value);
+                            var allValues = sensorDb.GetAllValues();
+                            foreach (var (sensorReceivingTime, value) in allValues)
+                                _lastDb.PutSensorValue(sensorId, sensorReceivingTime, value);
 
-                    sensorDb.Dispose();
+                            sensorDb.Dispose();
+                        }
+                        catch { }
+                    }
+
+                    Directory.Delete(directory, true);
                 }
-
-                Directory.Delete(directory, true);
+                catch { }
             }
+
+            return wereMigrated;
         }
 
 
         internal ISensorValuesDatabase GetNewestDatabases(long time)
         {
-            lock (_locker)
+            if (_lastDb == null || _lastDb.To < time)
             {
-                if (_lastDb == null || _lastDb.To < time)
-                {
-                    var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                    var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+                var from = DateTimeMethods.GetMinDateTimeTicks(time);
+                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-                    return AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
-                }
-
-                return _lastDb;
+                return AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
             }
+
+            return _lastDb;
         }
 
         internal ISensorValuesDatabase AddNewDb(string name, long from, long to)
