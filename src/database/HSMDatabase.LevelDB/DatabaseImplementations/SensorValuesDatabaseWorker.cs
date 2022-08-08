@@ -3,7 +3,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using System.Text.Json;
 
@@ -29,28 +28,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
 
-        //public void OpenDatabase(string dbPath)
-        //{
-        //    var sensorId = Path.GetFileName(dbPath);
-        //    if (!IsDatabaseExists(sensorId))
-        //        _openedDb.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
-        //}
-
         public void Dispose() => _openedDb.Dispose();
-
-        //public void DisposeDatabase(string sensorId)
-        //{
-        //    try
-        //    {
-        //        _openedDb[sensorId].Dispose();
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        _logger.Error(e, $"Failed to dispose databases for {sensorId} ({From}_{To} db)");
-        //    }
-        //}
-
-        //public void RemoveDatabase(string sensorId) => _openedDb.Remove(sensorId);
 
         public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
         {
@@ -106,10 +84,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
             }
         }
-
-        //public bool IsDatabaseExists(string sensorId) => _openedDb.ContainsKey(sensorId);
-
-        //public byte[] GetLatestValue(string sensorId) => _openedDb.GetLatestValue();
 
         public List<byte[]> GetValues(string sensorId, byte[] to, int count) =>
             _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
