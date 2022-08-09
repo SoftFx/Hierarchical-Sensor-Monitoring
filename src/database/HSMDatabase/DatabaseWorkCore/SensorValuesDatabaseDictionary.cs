@@ -25,11 +25,7 @@ namespace HSMDatabase.DatabaseWorkCore
             if (CheckoutAndMigration())
                 return;
 
-            var sensorValuesDirectories =
-               Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly).ToList();
-
-            sensorValuesDirectories = sensorValuesDirectories.OrderBy(d => d).ToList();
-
+            var sensorValuesDirectories = GetSensorValuesDirectories();
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
@@ -39,11 +35,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private bool CheckoutAndMigration()
         {
-            var sensorValuesDirectories =
-              Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
-
             bool wereMigrated = false;
 
+            var sensorValuesDirectories = GetSensorValuesDirectories();
             foreach (var directory in sensorValuesDirectories)
             {
                 var sensorDirectories = Directory.GetDirectories(directory);
@@ -94,6 +88,14 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return wereMigrated;
+        }
+
+        private List<string> GetSensorValuesDirectories()
+        {
+            var sensorValuesDirectories =
+               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+
+            return sensorValuesDirectories.OrderBy(d => d).ToList();
         }
 
 
