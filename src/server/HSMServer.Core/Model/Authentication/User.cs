@@ -9,21 +9,33 @@ namespace HSMServer.Core.Model.Authentication
     public class User : ClaimsPrincipal
     {
         public Guid Id { get; set; }
+
         public bool IsAdmin { get; set; }
+
         public string UserName { get; set; }
+
         public string Password { get; set; }
+
         public string CertificateThumbprint { get; set; }
+
         public string CertificateFileName { get; set; }
+
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
+
+        public Guid Token { get; set; } = Guid.Empty;
+
+
         public User(string userName) : this()
         {
             UserName = userName;
         }
+
         public User()
         {
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
         }
+
 
         public User(User user)
         {
