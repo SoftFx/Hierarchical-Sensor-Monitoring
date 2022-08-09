@@ -31,7 +31,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             var sensorId = Path.GetFileName(dbPath);
             if (!IsDatabaseExists(sensorId))
-                _openedDbs.Add(sensorId, new LevelDBDatabaseAdapter(dbPath));
+                _openedDbs.Add(sensorId, new LevelDBDatabaseAdapter(dbPath, bufferSize: 100 * 1024));
         }
 
         public void Dispose()
