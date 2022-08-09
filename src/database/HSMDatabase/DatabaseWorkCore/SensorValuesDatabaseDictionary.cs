@@ -26,7 +26,9 @@ namespace HSMDatabase.DatabaseWorkCore
                 return;
 
             var sensorValuesDirectories =
-               Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+               Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly).ToList();
+
+            sensorValuesDirectories = sensorValuesDirectories.OrderBy(d => d).ToList();
 
             foreach (var directory in sensorValuesDirectories)
             {
