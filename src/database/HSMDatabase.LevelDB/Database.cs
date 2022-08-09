@@ -18,7 +18,7 @@ namespace HSMDatabase.LevelDB
         private readonly ReadOptions _iteratorOptions = new();
 
 
-        public LevelDBDatabaseAdapter(string name)
+        public LevelDBDatabaseAdapter(string name, long bufferSize = 8388608)
         {
             Options databaseOptions = new()
             {
@@ -26,7 +26,7 @@ namespace HSMDatabase.LevelDB
                 MaxOpenFiles = 100000,
                 CompressionLevel = CompressionLevel.SnappyCompression,
                 BlockSize = 204800,
-                WriteBufferSize = 8388608
+                WriteBufferSize = bufferSize,
             };
 
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
