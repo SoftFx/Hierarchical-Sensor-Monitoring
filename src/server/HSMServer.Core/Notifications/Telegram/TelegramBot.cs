@@ -29,7 +29,7 @@ namespace HSMServer.Core.Notifications
         private ITelegramBotClient _bot;
 
 
-        public string GetInviteLink(User user)
+        public string GetInvitationLink(User user)
         {
             if (user.Token != Guid.Empty)
                 _addressBook.Remove(user.Token);

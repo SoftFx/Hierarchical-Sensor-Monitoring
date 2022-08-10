@@ -6,8 +6,10 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Encryption;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Notifications;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
+using HSMServer.Model;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -30,14 +32,16 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
+        private readonly INotificationsCenter _notificationsCenter;
         private readonly TreeViewModel _treeViewModel;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
+            IRegistrationTicketManager ticketManager, INotificationsCenter notificationsCenter, TreeViewModel treeViewModel)
         {
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
+            _notificationsCenter = notificationsCenter;
             _treeViewModel = treeViewModel;
         }
 
@@ -198,6 +202,25 @@ namespace HSMServer.Controllers
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Index", "Home");
         }
+
+
+        [HttpGet]
+        public IActionResult Settings()
+        {
+            return View(new TelegramSettingsViewModel(HttpContext.User as User));
+        }
+
+        [HttpPost]
+        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
+        {
+            _userManager.UpdateUser(telegramSettings.GetUpdatedUser(HttpContext.User as User));
+
+            return RedirectToAction(nameof(Settings));
+        }
+
+        public RedirectResult OpenInvitationLink() =>
+            Redirect(_notificationsCenter.TelegramBot.GetInvitationLink(HttpContext.User as User));
+
 
         private async Task Authenticate(string login, bool keepLoggedIn)
         {

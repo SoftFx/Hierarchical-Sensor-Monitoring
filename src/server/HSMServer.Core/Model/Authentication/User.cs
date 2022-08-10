@@ -22,7 +22,14 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
+
         public Guid Token { get; set; } = Guid.Empty;
+
+        public SensorStatus TelegramMessagesMinStatus { get; set; }
+
+        public bool EnableTelegramMessages { get; set; }
+
+        public int TelegramMessagesDelay { get; set; }
 
 
         public User(string userName) : this()
@@ -47,9 +54,14 @@ namespace HSMServer.Core.Model.Authentication
             CertificateThumbprint = user.CertificateThumbprint;
             CertificateFileName = user.CertificateFileName;
             IsAdmin = user.IsAdmin;
+
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
                 ProductsRoles.AddRange(user.ProductsRoles);
+
+            TelegramMessagesMinStatus = user.TelegramMessagesMinStatus;
+            EnableTelegramMessages = user.EnableTelegramMessages;
+            TelegramMessagesDelay = user.TelegramMessagesDelay;
         }
 
         public User(UserEntity entity)
@@ -62,12 +74,17 @@ namespace HSMServer.Core.Model.Authentication
             CertificateThumbprint = entity.CertificateThumbprint;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
+
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
             {
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(
                     r => new KeyValuePair<string, ProductRoleEnum>(r.Key, (ProductRoleEnum)r.Value)));
             }
+
+            TelegramMessagesMinStatus = (SensorStatus)entity.TelegramMessagesMinStatus;
+            EnableTelegramMessages = entity.EnableTelegramMessages;
+            TelegramMessagesDelay = entity.TelegramMessagesDelay;
         }
 
         /// <summary>
@@ -80,11 +97,16 @@ namespace HSMServer.Core.Model.Authentication
             //CertificateThumbprint = user.CertificateThumbprint;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
+
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
             {
                 ProductsRoles.AddRange(user.ProductsRoles);
             }
+
+            TelegramMessagesMinStatus = user.TelegramMessagesMinStatus;
+            EnableTelegramMessages = user.EnableTelegramMessages;
+            TelegramMessagesDelay = user.TelegramMessagesDelay;
         }
 
         public User Copy()
