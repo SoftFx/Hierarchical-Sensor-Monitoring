@@ -92,18 +92,18 @@
                                     API
                                 </a>
                             </li>
+                            
+                            <li class="nav-item">
+                                <a class="nav-link"
+                                   href="@Url.Action(nameof(AccountController.Settings), ViewConstants.AccountController)">
+                                    Telegram
+                                </a>
+                            </li>
 
-                            <li class="nav-item dropdown" style="position: absolute; right: 110px; bottom: 5px">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <li class="nav-item" style="position: absolute; right: 110px; bottom: 5px">
+                                <a class="nav-link" href="#">
                                     Hello, @(((User)Context.User).UserName)
                                 </a>
-
-                                <div class="dropdown-menu">
-                                    <a class="dropdown-item"
-                                       href="@Url.Action(nameof(AccountController.Settings), ViewConstants.AccountController)">
-                                        Telegram
-                                    </a>
-                                </div>
                             </li>
                             <li class="nav-item" style="position: absolute; right: 10px; bottom: 0px">
                                 <a class="nav-link"
