@@ -56,7 +56,7 @@ namespace HSMServer.Core.Model.Authentication
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
                 ProductsRoles.AddRange(user.ProductsRoles);
 
-            NotificationSettings = new(user.NotificationSettings);
+            NotificationSettings = new(user.NotificationSettings.ToEntity());
         }
 
         public User(UserEntity entity)
@@ -97,14 +97,14 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
             }
 
-            NotificationSettings = new(user.NotificationSettings);
+            NotificationSettings = new(user.NotificationSettings.ToEntity());
         }
 
         public User Copy()
         {
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
-            copy.NotificationSettings = new(NotificationSettings);
+            copy.NotificationSettings = new(NotificationSettings.ToEntity());
             return copy;
         }
     }

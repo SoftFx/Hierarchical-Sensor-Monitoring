@@ -1,28 +1,21 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model
 {
     public sealed class TelegramSettings
     {
+        private const int DefaultMinDelay = 10;
+        private const bool DefaultEnableState = true;
+
+
         public SensorStatus TelegramMessagesMinStatus { get; init; }
 
-        public bool EnableTelegramMessages { get; init; } = CommonConstants.DefaultTelegramMessagesEnableState;
+        public bool EnableTelegramMessages { get; init; } = DefaultEnableState;
 
-        public int TelegramMessagesDelay { get; init; } = CommonConstants.DefaultTelegramMessagesMinDelay;
+        public int TelegramMessagesDelay { get; init; } = DefaultMinDelay;
 
 
         public TelegramSettings() { }
-
-        internal TelegramSettings(TelegramSettings settings)
-        {
-            if (settings == null)
-                return;
-
-            TelegramMessagesMinStatus = settings.TelegramMessagesMinStatus;
-            EnableTelegramMessages = settings.EnableTelegramMessages;
-            TelegramMessagesDelay = settings.TelegramMessagesDelay;
-        }
 
         internal TelegramSettings(TelegramSettingsEntity entity)
         {

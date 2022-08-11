@@ -12,11 +12,6 @@ namespace HSMServer.Core.Model
             TelegramSettings = new();
         }
 
-        internal NotificationSettings(NotificationSettings settings)
-        {
-            TelegramSettings = new(settings.TelegramSettings);
-        }
-
         internal NotificationSettings(NotificationSettingsEntity entity)
         {
             TelegramSettings = new(entity?.TelegramSettings);

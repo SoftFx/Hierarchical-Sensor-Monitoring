@@ -10,6 +10,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.Authentication
 {
@@ -76,12 +77,12 @@ namespace HSMServer.Core.Authentication
                 AddUser(user);
         }
 
-        public async void UpdateTelegramSettings(Guid userId, TelegramSettings settings)
+        public Task UpdateTelegramSettings(Guid userId, TelegramSettings settings)
         {
             var user = GetUser(userId);
             user.NotificationSettings.TelegramSettings = settings;
 
-            await _updateUserActionHandler.Apply(user);
+            return _updateUserActionHandler.Apply(user);
         }
 
         // TODO: wait for async Task

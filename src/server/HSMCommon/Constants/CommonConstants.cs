@@ -23,8 +23,5 @@
         public const char SensorPathSeparator = '/';
 
         public const string InfrastructureLoggerName = "InfrastructureLogger";
-
-        public const int DefaultTelegramMessagesMinDelay = 10;
-        public const bool DefaultTelegramMessagesEnableState = true;
     }
 }
