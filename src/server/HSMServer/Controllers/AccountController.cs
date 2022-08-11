@@ -211,9 +211,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
+        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
         {
-            await _userManager.UpdateTelegramSettings((HttpContext.User as User).Id, telegramSettings.ToModel());
+            var user = _userManager.GetUser((HttpContext.User as User).Id);
+            user.NotificationSettings.TelegramSettings = telegramSettings.ToModel();
+
+            _userManager.UpdateUser(user);
 
             return RedirectToAction(nameof(Settings));
         }

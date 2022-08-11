@@ -1,8 +1,6 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace HSMServer.Core.Authentication
 {
@@ -26,8 +24,6 @@ namespace HSMServer.Core.Authentication
         /// </summary>
         /// <param name="user">User object (password field must be password hash).</param>
         void UpdateUser(User user);
-
-        Task UpdateTelegramSettings(Guid userId, TelegramSettings settings);
 
         /// <summary>
         /// Remove user with the specified userName

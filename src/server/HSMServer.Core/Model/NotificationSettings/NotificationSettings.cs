@@ -4,7 +4,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class NotificationSettings
     {
-        public TelegramSettings TelegramSettings { get; internal set; }
+        public TelegramSettings TelegramSettings { get; set; }
 
 
         internal NotificationSettings()

@@ -3,14 +3,12 @@ using HSMCommon.Constants;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace HSMServer.Core.Authentication
 {
@@ -75,14 +73,6 @@ namespace HSMServer.Core.Authentication
                 await _updateUserActionHandler.Apply(user);
             else
                 AddUser(user);
-        }
-
-        public Task UpdateTelegramSettings(Guid userId, TelegramSettings settings)
-        {
-            var user = GetUser(userId);
-            user.NotificationSettings.TelegramSettings = settings;
-
-            return _updateUserActionHandler.Apply(user);
         }
 
         // TODO: wait for async Task
