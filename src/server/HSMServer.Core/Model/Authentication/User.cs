@@ -23,13 +23,9 @@ namespace HSMServer.Core.Model.Authentication
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
 
-        public Guid Token { get; set; } = Guid.Empty;
+        public NotificationSettings NotificationSettings { get; internal set; }
 
-        public SensorStatus TelegramMessagesMinStatus { get; set; }
-
-        public bool EnableTelegramMessages { get; set; }
-
-        public int TelegramMessagesDelay { get; set; }
+        internal Guid Token { get; set; } = Guid.Empty;
 
 
         public User(string userName) : this()
@@ -41,6 +37,7 @@ namespace HSMServer.Core.Model.Authentication
         {
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
+            NotificationSettings = new();
         }
 
 
@@ -59,9 +56,7 @@ namespace HSMServer.Core.Model.Authentication
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
                 ProductsRoles.AddRange(user.ProductsRoles);
 
-            TelegramMessagesMinStatus = user.TelegramMessagesMinStatus;
-            EnableTelegramMessages = user.EnableTelegramMessages;
-            TelegramMessagesDelay = user.TelegramMessagesDelay;
+            NotificationSettings = new(user.NotificationSettings);
         }
 
         public User(UserEntity entity)
@@ -82,9 +77,7 @@ namespace HSMServer.Core.Model.Authentication
                     r => new KeyValuePair<string, ProductRoleEnum>(r.Key, (ProductRoleEnum)r.Value)));
             }
 
-            TelegramMessagesMinStatus = (SensorStatus)entity.TelegramMessagesMinStatus;
-            EnableTelegramMessages = entity.EnableTelegramMessages;
-            TelegramMessagesDelay = entity.TelegramMessagesDelay;
+            NotificationSettings = new(entity.NotificationSettings);
         }
 
         /// <summary>
@@ -104,15 +97,14 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
             }
 
-            TelegramMessagesMinStatus = user.TelegramMessagesMinStatus;
-            EnableTelegramMessages = user.EnableTelegramMessages;
-            TelegramMessagesDelay = user.TelegramMessagesDelay;
+            NotificationSettings = new(user.NotificationSettings);
         }
 
         public User Copy()
         {
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
+            copy.NotificationSettings = new(NotificationSettings);
             return copy;
         }
     }

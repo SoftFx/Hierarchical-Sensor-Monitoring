@@ -13,8 +13,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string CertificateFileName { get; set; }
         public List<KeyValuePair<string, byte>> ProductsRoles { get; set; }
 
-        public byte TelegramMessagesMinStatus { get; set; }
-        public bool EnableTelegramMessages { get; set; } = true;
-        public int TelegramMessagesDelay { get; set; } = 10;
+        public NotificationSettingsEntity NotificationSettings { get; set; }
     }
 }

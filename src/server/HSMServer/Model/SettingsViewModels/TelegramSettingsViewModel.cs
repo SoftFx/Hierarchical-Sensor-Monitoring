@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model
@@ -19,21 +18,20 @@ namespace HSMServer.Model
         // public constructor without parameters for action Account/UpdateTelegramSettings
         public TelegramSettingsViewModel() { }
 
-        public TelegramSettingsViewModel(User user)
+        public TelegramSettingsViewModel(TelegramSettings settings)
         {
-            EnableMessages = user.EnableTelegramMessages;
-            MinStatusLevel = user.TelegramMessagesMinStatus;
-            MessagesDelay = user.TelegramMessagesDelay;
+            EnableMessages = settings.EnableTelegramMessages;
+            MinStatusLevel = settings.TelegramMessagesMinStatus;
+            MessagesDelay = settings.TelegramMessagesDelay;
         }
 
 
-        internal User GetUpdatedUser(User user)
-        {
-            user.TelegramMessagesMinStatus = MinStatusLevel;
-            user.EnableTelegramMessages = EnableMessages;
-            user.TelegramMessagesDelay = MessagesDelay;
-
-            return user;
-        }
+        internal TelegramSettings ToModel() =>
+            new()
+            {
+                TelegramMessagesMinStatus = MinStatusLevel,
+                EnableTelegramMessages = EnableMessages,
+                TelegramMessagesDelay = MessagesDelay,
+            };
     }
 }

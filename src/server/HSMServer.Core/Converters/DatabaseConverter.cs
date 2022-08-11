@@ -18,9 +18,7 @@ namespace HSMServer.Core.Converters
                 Id = user.Id,
                 IsAdmin = user.IsAdmin,
                 ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
-                TelegramMessagesMinStatus = (byte)user.TelegramMessagesMinStatus,
-                EnableTelegramMessages = user.EnableTelegramMessages,
-                TelegramMessagesDelay = user.TelegramMessagesDelay,
+                NotificationSettings = user.NotificationSettings.ToEntity(),
             };
 
         public static ConfigurationEntity ConvertToEntity(this ConfigurationObject obj) =>

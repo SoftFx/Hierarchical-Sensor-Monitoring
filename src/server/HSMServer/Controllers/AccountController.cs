@@ -207,13 +207,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult Settings()
         {
-            return View(new TelegramSettingsViewModel(HttpContext.User as User));
+            return View(new TelegramSettingsViewModel((HttpContext.User as User).NotificationSettings.TelegramSettings));
         }
 
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
         {
-            _userManager.UpdateUser(telegramSettings.GetUpdatedUser(HttpContext.User as User));
+            _userManager.UpdateTelegramSettings((HttpContext.User as User).Id, telegramSettings.ToModel());
 
             return RedirectToAction(nameof(Settings));
         }
