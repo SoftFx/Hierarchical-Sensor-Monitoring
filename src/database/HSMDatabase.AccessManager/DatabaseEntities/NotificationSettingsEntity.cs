@@ -13,5 +13,7 @@
         public bool EnableTelegramMessages { get; init; }
 
         public int TelegramMessagesDelay { get; init; }
+
+        public long? ChatIdentifier { get; init; }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using Telegram.Bot.Types;
 
 namespace HSMServer.Core.Model
 {
@@ -14,6 +15,8 @@ namespace HSMServer.Core.Model
 
         public int TelegramMessagesDelay { get; init; } = DefaultMinDelay;
 
+        public ChatId Chat { get; internal set; }
+
 
         public TelegramSettings() { }
 
@@ -25,6 +28,9 @@ namespace HSMServer.Core.Model
             TelegramMessagesMinStatus = (SensorStatus)entity.TelegramMessagesMinStatus;
             EnableTelegramMessages = entity.EnableTelegramMessages;
             TelegramMessagesDelay = entity.TelegramMessagesDelay;
+
+            if (entity.ChatIdentifier.HasValue)
+                Chat = new(entity.ChatIdentifier.Value);
         }
 
 
@@ -34,6 +40,7 @@ namespace HSMServer.Core.Model
                 TelegramMessagesMinStatus = (byte)TelegramMessagesMinStatus,
                 EnableTelegramMessages = EnableTelegramMessages,
                 TelegramMessagesDelay = TelegramMessagesDelay,
+                ChatIdentifier = Chat?.Identifier,
             };
     }
 }

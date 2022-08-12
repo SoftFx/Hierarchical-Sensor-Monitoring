@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Configuration;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
 using System;
 using System.Threading.Tasks;
 
@@ -9,9 +10,9 @@ namespace HSMServer.Core.Notifications
         public TelegramBot TelegramBot { get; }
 
 
-        public NotificationsCenter(IConfigurationProvider config)
+        public NotificationsCenter(IConfigurationProvider config, IUserManager userManager)
         {
-            TelegramBot = new();
+            TelegramBot = new(userManager);
 
             TelegramBot.StartBot(); // TODO: start bot on button click
         }

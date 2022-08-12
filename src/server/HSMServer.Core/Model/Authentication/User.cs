@@ -25,8 +25,6 @@ namespace HSMServer.Core.Model.Authentication
 
         public NotificationSettings NotificationSettings { get; internal set; }
 
-        internal Guid Token { get; set; } = Guid.Empty;
-
 
         public User(string userName) : this()
         {

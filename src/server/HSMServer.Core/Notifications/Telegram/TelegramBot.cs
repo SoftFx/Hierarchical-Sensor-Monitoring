@@ -1,12 +1,14 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Authentication;
 using NLog;
 using System;
-using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using User = HSMServer.Core.Model.Authentication.User;
 
 namespace HSMServer.Core.Notifications
 {
@@ -19,28 +21,28 @@ namespace HSMServer.Core.Notifications
         private const string BotName = "TestTestTestBoooooooootBot";
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly Dictionary<Guid, User> _addressBook = new();
+        private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
         {
             AllowedUpdates = { }, // receive all update types
         };
 
+        private readonly IUserManager _userManager;
+
         private CancellationToken _token = CancellationToken.None;
         private ITelegramBotClient _bot;
 
 
-        public string GetInvitationLink(User user)
+        internal TelegramBot(IUserManager userManager)
         {
-            if (user.Token != Guid.Empty)
-                _addressBook.Remove(user.Token);
+            _userManager = userManager;
 
-            user.Token = Guid.NewGuid();
-
-            _addressBook[user.Token] = user;
-
-            return $"https://t.me/{BotName}?start={user.Token}";
+            FillAuthorizedUsers();
         }
 
+
+        public string GetInvitationLink(User user) =>
+            _addressBook.GetInvitationToken(user).ToLink(BotName);
 
         public async Task StartBot()
         {
@@ -65,8 +67,15 @@ namespace HSMServer.Core.Notifications
 
         public async ValueTask DisposeAsync() => await StopBot();
 
+        internal void FillAuthorizedUsers()
+        {
+            var users = _userManager.GetUsers(u => u.NotificationSettings.TelegramSettings.Chat is not null);
 
-        private async Task HandleUpdateAsync(ITelegramBotClient botClient, Telegram.Bot.Types.Update update, CancellationToken cancellationToken)
+            foreach (var user in users)
+                _addressBook.AddAuthorizedUser(user.NotificationSettings.TelegramSettings.Chat, new InvitationToken(user));
+        }
+
+        private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
             if (update.Type == UpdateType.Message)
             {
@@ -76,26 +85,33 @@ namespace HSMServer.Core.Notifications
                 if (command.StartsWith(StartBotCommand))
                 {
                     var parts = command.Split(' ');
-
                     if (parts.Length != 2)
                         return;
 
-                    var token = Guid.Parse(parts[1]);
+                    var response = new StringBuilder(1 << 2);
 
-                    if (_addressBook.TryGetValue(token, out var user))
+                    if (Guid.TryParse(parts[1], out var tokenId) && _addressBook.TryGetToken(tokenId, out var token))
                     {
-                        await botClient.SendTextMessageAsync(message.Chat, $"Hi, {user.UserName}", cancellationToken: cancellationToken);
+                        response.Append($"Hi, {token.User.UserName}. ");
 
-                        var x = 0;
-                        while (++x < 5)
+                        if (token.ExpirationTime < DateTime.UtcNow)
                         {
-                            await botClient.SendTextMessageAsync(message.Chat, $"Test message #{x}", cancellationToken: cancellationToken);
+                            _addressBook.RemoveToken(token);
 
-                            await Task.Delay(200, cancellationToken);
+                            response.Append("Sorry, your invitation token is expired.");
                         }
+                        else
+                        {
+                            _addressBook.AddAuthorizedUser(message.Chat, token);
+                            _userManager.UpdateUser(token.User);
 
-                        return;
+                            response.Append("You are succesfully authorized.");
+                        }
                     }
+                    else
+                        response.Append("Your token is invalid.");
+
+                    await botClient.SendTextMessageAsync(message.Chat, response.ToString(), cancellationToken: cancellationToken);
                 }
             }
         }
