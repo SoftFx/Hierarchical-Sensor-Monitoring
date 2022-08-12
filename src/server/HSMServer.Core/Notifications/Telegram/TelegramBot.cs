@@ -46,11 +46,10 @@ namespace HSMServer.Core.Notifications
 
         public Task SendTestMessage(User user)
         {
+            var chat = user.Notifications.Telegram.Chat;
             var testMessage = $"Test message for {user.UserName}";
 
-            return _bot is not null
-                ? _bot.SendTextMessageAsync(user.NotificationSettings.TelegramSettings.Chat, testMessage, cancellationToken: _token)
-                : Task.CompletedTask;
+            return _bot?.SendTextMessageAsync(chat, testMessage, cancellationToken: _token) ?? Task.CompletedTask;
         }
 
         public void RemoveAuthorizedUser(User user)
@@ -59,12 +58,10 @@ namespace HSMServer.Core.Notifications
             _userManager.UpdateUser(user);
         }
 
-        public async Task StartBot()
+        public void StartBot()
         {
             if (_bot is not null)
                 return;
-
-            await StopBot();
 
             _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
@@ -77,17 +74,20 @@ namespace HSMServer.Core.Notifications
             if (_token != CancellationToken.None)
                 _token.ThrowIfCancellationRequested();
 
-            return _bot is not null ? _bot.CloseAsync(_token) : Task.CompletedTask;
+            var bot = _bot;
+            _bot = null;
+
+            return bot?.CloseAsync(_token) ?? Task.CompletedTask;
         }
 
         public async ValueTask DisposeAsync() => await StopBot();
 
         internal void FillAuthorizedUsers()
         {
-            var users = _userManager.GetUsers(u => u.NotificationSettings.TelegramSettings.Chat is not null);
+            var users = _userManager.GetUsers(u => u.Notifications.Telegram.Chat is not null);
 
             foreach (var user in users)
-                _addressBook.AddAuthorizedUser(user.NotificationSettings.TelegramSettings.Chat, new InvitationToken(user));
+                _addressBook.AddAuthorizedUser(user);
         }
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -105,19 +105,19 @@ namespace HSMServer.Core.Notifications
 
                     var response = new StringBuilder(1 << 2);
 
-                    if (Guid.TryParse(parts[1], out var tokenId) && _addressBook.TryGetToken(tokenId, out var token))
+                    if (_addressBook.TryGetToken(parts[1], out var token))
                     {
                         response.Append($"Hi, {token.User.UserName}. ");
 
                         if (token.ExpirationTime < DateTime.UtcNow)
                         {
-                            _addressBook.RemoveToken(token);
+                            _addressBook.RemoveToken(token.Token);
 
                             response.Append("Sorry, your invitation token is expired.");
                         }
                         else
                         {
-                            _addressBook.AddAuthorizedUser(message.Chat, token);
+                            _addressBook.UserAuthorization(message.Chat, token);
                             _userManager.UpdateUser(token.User);
 
                             response.Append("You are succesfully authorized.");
@@ -131,9 +131,11 @@ namespace HSMServer.Core.Notifications
             }
         }
 
-        private async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
             _logger.Error($"There is some error in telegram bot: {exception}");
+
+            return Task.CompletedTask;
         }
     }
 }

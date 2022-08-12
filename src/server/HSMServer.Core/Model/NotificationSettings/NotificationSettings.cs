@@ -4,24 +4,24 @@ namespace HSMServer.Core.Model
 {
     public sealed class NotificationSettings
     {
-        public TelegramSettings TelegramSettings { get; set; }
+        public TelegramSettings Telegram { get; set; }
 
 
         internal NotificationSettings()
         {
-            TelegramSettings = new();
+            Telegram = new();
         }
 
         internal NotificationSettings(NotificationSettingsEntity entity)
         {
-            TelegramSettings = new(entity?.TelegramSettings);
+            Telegram = new(entity?.TelegramSettings);
         }
 
 
         internal NotificationSettingsEntity ToEntity() =>
             new()
             {
-                TelegramSettings = TelegramSettings.ToEntity(),
+                TelegramSettings = Telegram.ToEntity(),
             };
     }
 }

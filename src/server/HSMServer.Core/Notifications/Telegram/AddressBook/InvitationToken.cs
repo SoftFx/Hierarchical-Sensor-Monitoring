@@ -3,18 +3,18 @@ using System;
 
 namespace HSMServer.Core.Notifications
 {
-    internal sealed record InvitationToken
+    internal readonly struct InvitationToken
     {
         private const int TokenExpirationMinutes = 2;
+
+        internal static InvitationToken Empty { get; } = new();
 
 
         internal User User { get; }
 
-        internal Guid Token { get; private set; }
+        internal Guid Token { get; }
 
-        internal DateTime ExpirationTime { get; private set; }
-
-        internal bool WasSuccessfullyUsed { get; private set; }
+        internal DateTime ExpirationTime { get; }
 
 
         internal InvitationToken(User user)
@@ -25,15 +25,11 @@ namespace HSMServer.Core.Notifications
         }
 
 
-        internal void TagTokenAsSuccessfullyUsed()
+        internal string ToLink(string botName)
         {
-            WasSuccessfullyUsed = true;
+            var telegramLink = $"https://t.me/{botName}";
 
-            Token = Guid.Empty;
-            ExpirationTime = DateTime.MinValue;
+            return Token == Guid.Empty ? telegramLink : $"{telegramLink}?start={Token}";
         }
-
-        internal string ToLink(string botName) =>
-             WasSuccessfullyUsed ? $"https://t.me/{botName}" : $"https://t.me/{botName}?start={Token}";
     }
 }

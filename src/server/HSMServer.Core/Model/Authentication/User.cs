@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Authentication
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
 
-        public NotificationSettings NotificationSettings { get; internal set; }
+        public NotificationSettings Notifications { get; internal set; }
 
 
         public User(string userName) : this()
@@ -35,7 +35,7 @@ namespace HSMServer.Core.Model.Authentication
         {
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            NotificationSettings = new();
+            Notifications = new();
         }
 
 
@@ -54,7 +54,7 @@ namespace HSMServer.Core.Model.Authentication
             if (user.ProductsRoles != null && user.ProductsRoles.Any())
                 ProductsRoles.AddRange(user.ProductsRoles);
 
-            NotificationSettings = new(user.NotificationSettings.ToEntity());
+            Notifications = new(user.Notifications.ToEntity());
         }
 
         public User(UserEntity entity)
@@ -75,7 +75,7 @@ namespace HSMServer.Core.Model.Authentication
                     r => new KeyValuePair<string, ProductRoleEnum>(r.Key, (ProductRoleEnum)r.Value)));
             }
 
-            NotificationSettings = new(entity.NotificationSettings);
+            Notifications = new(entity.NotificationSettings);
         }
 
         /// <summary>
@@ -95,14 +95,14 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
             }
 
-            NotificationSettings = new(user.NotificationSettings.ToEntity());
+            Notifications = new(user.Notifications.ToEntity());
         }
 
         public User Copy()
         {
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
-            copy.NotificationSettings = new(NotificationSettings.ToEntity());
+            copy.Notifications = new(Notifications.ToEntity());
             return copy;
         }
     }

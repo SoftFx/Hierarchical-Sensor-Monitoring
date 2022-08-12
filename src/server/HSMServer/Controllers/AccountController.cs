@@ -32,8 +32,9 @@ namespace HSMServer.Controllers
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
-        private readonly INotificationsCenter _notificationsCenter;
         private readonly TreeViewModel _treeViewModel;
+
+        private readonly TelegramBot _telegramBot;
 
         public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
             IRegistrationTicketManager ticketManager, INotificationsCenter notificationsCenter, TreeViewModel treeViewModel)
@@ -41,8 +42,9 @@ namespace HSMServer.Controllers
             _userManager = userManager;
             _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
-            _notificationsCenter = notificationsCenter;
             _treeViewModel = treeViewModel;
+
+            _telegramBot = notificationsCenter.TelegramBot;
         }
 
         #region Login
@@ -207,14 +209,14 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult Settings()
         {
-            return View(new TelegramSettingsViewModel((HttpContext.User as User).NotificationSettings.TelegramSettings));
+            return View(new TelegramSettingsViewModel((HttpContext.User as User).Notifications.Telegram));
         }
 
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
         {
             var user = _userManager.GetUser((HttpContext.User as User).Id);
-            user.NotificationSettings.TelegramSettings.Update(telegramSettings.GetUpdateModel());
+            user.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
 
             _userManager.UpdateUser(user);
 
@@ -222,18 +224,18 @@ namespace HSMServer.Controllers
         }
 
         public RedirectResult OpenInvitationLink() =>
-            Redirect(_notificationsCenter.TelegramBot.GetInvitationLink(HttpContext.User as User));
+            Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
 
         public IActionResult SendTestTelegramMessage()
         {
-            _notificationsCenter.TelegramBot.SendTestMessage(HttpContext.User as User);
+            _telegramBot.SendTestMessage(HttpContext.User as User);
 
             return RedirectToAction(nameof(Settings));
         }
 
         public IActionResult RemoveTelegramAuthorization()
         {
-            _notificationsCenter.TelegramBot.RemoveAuthorizedUser(HttpContext.User as User);
+            _telegramBot.RemoveAuthorizedUser(HttpContext.User as User);
 
             return RedirectToAction(nameof(Settings));
         }

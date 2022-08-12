@@ -30,12 +30,12 @@ namespace HSMServer.Model
         }
 
 
-        internal TelegramSettingsUpdate GetUpdateModel() =>
+        internal TelegramMessagesSettingsUpdate GetUpdateModel() =>
             new()
             {
-                MessagesMinStatus = MinStatusLevel,
-                MessagesAreEnabled = EnableMessages,
-                MessagesDelay = MessagesDelay,
+                MinStatus = MinStatusLevel,
+                Enabled = EnableMessages,
+                Delay = MessagesDelay,
             };
     }
 }

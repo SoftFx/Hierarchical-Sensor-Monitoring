@@ -29,16 +29,16 @@ namespace HSMServer.Core.Model
             MessagesAreEnabled = entity.MessagesAreEnabled;
             MessagesDelay = entity.MessagesDelay;
 
-            if (entity.ChatIdentifier.HasValue)
-                Chat = new(entity.ChatIdentifier.Value);
+            if (entity.ChatIdentifier != 0)
+                Chat = new(entity.ChatIdentifier);
         }
 
 
-        public void Update(TelegramSettingsUpdate settingsUpdate)
+        public void Update(TelegramMessagesSettingsUpdate settingsUpdate)
         {
-            MessagesMinStatus = settingsUpdate.MessagesMinStatus;
-            MessagesAreEnabled = settingsUpdate.MessagesAreEnabled;
-            MessagesDelay = settingsUpdate.MessagesDelay;
+            MessagesMinStatus = settingsUpdate.MinStatus;
+            MessagesAreEnabled = settingsUpdate.Enabled;
+            MessagesDelay = settingsUpdate.Delay;
         }
 
         internal TelegramSettingsEntity ToEntity() =>
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelay,
-                ChatIdentifier = Chat?.Identifier,
+                ChatIdentifier = Chat?.Identifier ?? 0,
             };
     }
 }

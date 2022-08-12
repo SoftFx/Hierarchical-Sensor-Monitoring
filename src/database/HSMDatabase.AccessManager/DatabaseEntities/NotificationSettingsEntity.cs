@@ -14,6 +14,6 @@
 
         public int MessagesDelay { get; init; }
 
-        public long? ChatIdentifier { get; init; }
+        public long ChatIdentifier { get; init; }
     }
 }

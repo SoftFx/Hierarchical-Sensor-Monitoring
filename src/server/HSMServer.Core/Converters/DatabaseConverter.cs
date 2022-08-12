@@ -18,7 +18,7 @@ namespace HSMServer.Core.Converters
                 Id = user.Id,
                 IsAdmin = user.IsAdmin,
                 ProductsRoles = user.ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
-                NotificationSettings = user.NotificationSettings.ToEntity(),
+                NotificationSettings = user.Notifications.ToEntity(),
             };
 
         public static ConfigurationEntity ConvertToEntity(this ConfigurationObject obj) =>
