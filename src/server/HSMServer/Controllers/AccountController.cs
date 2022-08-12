@@ -214,7 +214,7 @@ namespace HSMServer.Controllers
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
         {
             var user = _userManager.GetUser((HttpContext.User as User).Id);
-            user.NotificationSettings.TelegramSettings = telegramSettings.ToModel();
+            user.NotificationSettings.TelegramSettings.Update(telegramSettings.GetUpdateModel());
 
             _userManager.UpdateUser(user);
 

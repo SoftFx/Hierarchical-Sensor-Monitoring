@@ -14,6 +14,8 @@ namespace HSMServer.Model
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }
 
+        public bool IsUserAuthorized { get; }
+
 
         // public constructor without parameters for action Account/UpdateTelegramSettings
         public TelegramSettingsViewModel() { }
@@ -23,10 +25,12 @@ namespace HSMServer.Model
             EnableMessages = settings.MessagesAreEnabled;
             MinStatusLevel = settings.MessagesMinStatus;
             MessagesDelay = settings.MessagesDelay;
+
+            IsUserAuthorized = settings.Chat is not null;
         }
 
 
-        internal TelegramSettings ToModel() =>
+        internal TelegramSettingsUpdate GetUpdateModel() =>
             new()
             {
                 MessagesMinStatus = MinStatusLevel,

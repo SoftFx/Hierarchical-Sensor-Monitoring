@@ -45,22 +45,28 @@
 
         <h5>Authorization settings</h5>
 
-        <div class="row mx-4" id="userIsNotAuth">
-            <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
-            <div class="col-auto">
-                <a asp-action="@nameof(AccountController.OpenInvitationLink)">invitation link</a>
+        @if (Model.IsUserAuthorized)
+        {
+            <div class="row mx-4" id="userIsAuth">
+                <label class="col-auto p-0">You're authorized in telegram now. You can</label>
+                <div class="col-auto">
+                    <a asp-action="@nameof(AccountController.SendTestTelegramMessage)">send test message</a>
+                </div>
+                <label class="col-auto p-0">or</label>
+                <div class="col-auto">
+                    <a asp-action="@nameof(AccountController.RemoveTelegramAuthorization)">remove your authorization</a>
+                </div>
             </div>
-        </div>
+        }
+        else
+        {
+            <div class="row mx-4" id="userIsNotAuth">
+                <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
+                <div class="col-auto">
+                    <a asp-action="@nameof(AccountController.OpenInvitationLink)">invitation link</a>
+                </div>
+            </div>
+        }
 
-        <div class="row mx-4" id="userIsAuth">
-            <label class="col-auto p-0">You're authorized in telegram now. You can</label>
-            <div class="col-auto">
-                <a asp-action="@nameof(AccountController.SendTestTelegramMessage)">send test message</a>
-            </div>
-            <label class="col-auto p-0">or</label>
-            <div class="col-auto">
-                <a asp-action="@nameof(AccountController.RemoveTelegramAuthorization)">remove your authorization</a>
-            </div>
-        </div>
     </div>
 </div>

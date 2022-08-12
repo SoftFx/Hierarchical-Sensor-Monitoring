@@ -9,11 +9,11 @@ namespace HSMServer.Core.Model
         private const bool DefaultEnableState = true;
 
 
-        public SensorStatus MessagesMinStatus { get; init; }
+        public SensorStatus MessagesMinStatus { get; private set; }
 
-        public bool MessagesAreEnabled { get; init; } = DefaultEnableState;
+        public bool MessagesAreEnabled { get; private set; } = DefaultEnableState;
 
-        public int MessagesDelay { get; init; } = DefaultMinDelay;
+        public int MessagesDelay { get; private set; } = DefaultMinDelay;
 
         public ChatId Chat { get; internal set; }
 
@@ -33,6 +33,13 @@ namespace HSMServer.Core.Model
                 Chat = new(entity.ChatIdentifier.Value);
         }
 
+
+        public void Update(TelegramSettingsUpdate settingsUpdate)
+        {
+            MessagesMinStatus = settingsUpdate.MessagesMinStatus;
+            MessagesAreEnabled = settingsUpdate.MessagesAreEnabled;
+            MessagesDelay = settingsUpdate.MessagesDelay;
+        }
 
         internal TelegramSettingsEntity ToEntity() =>
             new()
