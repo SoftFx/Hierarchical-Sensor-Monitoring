@@ -9,11 +9,11 @@ namespace HSMServer.Core.Model
         private const bool DefaultEnableState = true;
 
 
-        public SensorStatus TelegramMessagesMinStatus { get; init; }
+        public SensorStatus MessagesMinStatus { get; init; }
 
-        public bool EnableTelegramMessages { get; init; } = DefaultEnableState;
+        public bool MessagesAreEnabled { get; init; } = DefaultEnableState;
 
-        public int TelegramMessagesDelay { get; init; } = DefaultMinDelay;
+        public int MessagesDelay { get; init; } = DefaultMinDelay;
 
         public ChatId Chat { get; internal set; }
 
@@ -25,9 +25,9 @@ namespace HSMServer.Core.Model
             if (entity == null)
                 return;
 
-            TelegramMessagesMinStatus = (SensorStatus)entity.TelegramMessagesMinStatus;
-            EnableTelegramMessages = entity.EnableTelegramMessages;
-            TelegramMessagesDelay = entity.TelegramMessagesDelay;
+            MessagesMinStatus = (SensorStatus)entity.MessagesMinStatus;
+            MessagesAreEnabled = entity.MessagesAreEnabled;
+            MessagesDelay = entity.MessagesDelay;
 
             if (entity.ChatIdentifier.HasValue)
                 Chat = new(entity.ChatIdentifier.Value);
@@ -37,9 +37,9 @@ namespace HSMServer.Core.Model
         internal TelegramSettingsEntity ToEntity() =>
             new()
             {
-                TelegramMessagesMinStatus = (byte)TelegramMessagesMinStatus,
-                EnableTelegramMessages = EnableTelegramMessages,
-                TelegramMessagesDelay = TelegramMessagesDelay,
+                MessagesMinStatus = (byte)MessagesMinStatus,
+                MessagesAreEnabled = MessagesAreEnabled,
+                MessagesDelay = MessagesDelay,
                 ChatIdentifier = Chat?.Identifier,
             };
     }

@@ -224,6 +224,20 @@ namespace HSMServer.Controllers
         public RedirectResult OpenInvitationLink() =>
             Redirect(_notificationsCenter.TelegramBot.GetInvitationLink(HttpContext.User as User));
 
+        public IActionResult SendTestTelegramMessage()
+        {
+            _notificationsCenter.TelegramBot.SendTestMessage(HttpContext.User as User);
+
+            return RedirectToAction(nameof(Settings));
+        }
+
+        public IActionResult RemoveTelegramAuthorization()
+        {
+            _notificationsCenter.TelegramBot.RemoveAuthorizedUser(HttpContext.User as User);
+
+            return RedirectToAction(nameof(Settings));
+        }
+
 
         private async Task Authenticate(string login, bool keepLoggedIn)
         {

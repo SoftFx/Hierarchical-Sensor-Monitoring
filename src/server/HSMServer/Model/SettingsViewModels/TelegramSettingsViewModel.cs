@@ -20,18 +20,18 @@ namespace HSMServer.Model
 
         public TelegramSettingsViewModel(TelegramSettings settings)
         {
-            EnableMessages = settings.EnableTelegramMessages;
-            MinStatusLevel = settings.TelegramMessagesMinStatus;
-            MessagesDelay = settings.TelegramMessagesDelay;
+            EnableMessages = settings.MessagesAreEnabled;
+            MinStatusLevel = settings.MessagesMinStatus;
+            MessagesDelay = settings.MessagesDelay;
         }
 
 
         internal TelegramSettings ToModel() =>
             new()
             {
-                TelegramMessagesMinStatus = MinStatusLevel,
-                EnableTelegramMessages = EnableMessages,
-                TelegramMessagesDelay = MessagesDelay,
+                MessagesMinStatus = MinStatusLevel,
+                MessagesAreEnabled = EnableMessages,
+                MessagesDelay = MessagesDelay,
             };
     }
 }

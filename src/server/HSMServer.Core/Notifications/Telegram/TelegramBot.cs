@@ -44,6 +44,21 @@ namespace HSMServer.Core.Notifications
         public string GetInvitationLink(User user) =>
             _addressBook.GetInvitationToken(user).ToLink(BotName);
 
+        public Task SendTestMessage(User user)
+        {
+            var testMessage = $"Test message for {user.UserName}";
+
+            return _bot is not null
+                ? _bot.SendTextMessageAsync(user.NotificationSettings.TelegramSettings.Chat, testMessage, cancellationToken: _token)
+                : Task.CompletedTask;
+        }
+
+        public void RemoveAuthorizedUser(User user)
+        {
+            _addressBook.RemoveAuthorizedUser(user);
+            _userManager.UpdateUser(user);
+        }
+
         public async Task StartBot()
         {
             if (_bot is not null)

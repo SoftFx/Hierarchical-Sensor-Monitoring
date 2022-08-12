@@ -8,11 +8,11 @@
 
     public sealed class TelegramSettingsEntity
     {
-        public byte TelegramMessagesMinStatus { get; init; }
+        public byte MessagesMinStatus { get; init; }
 
-        public bool EnableTelegramMessages { get; init; }
+        public bool MessagesAreEnabled { get; init; }
 
-        public int TelegramMessagesDelay { get; init; }
+        public int MessagesDelay { get; init; }
 
         public long? ChatIdentifier { get; init; }
     }

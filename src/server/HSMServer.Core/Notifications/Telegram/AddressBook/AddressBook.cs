@@ -52,5 +52,13 @@ namespace HSMServer.Core.Notifications
             _book[token.User.Id].Chat = chat;
             _chats[chat] = token.User.Id;
         }
+
+        internal void RemoveAuthorizedUser(User user)
+        {
+            _book.Remove(user.Id);
+            _chats.Remove(user.NotificationSettings.TelegramSettings.Chat);
+
+            user.NotificationSettings.TelegramSettings.Chat = null;
+        }
     }
 }
