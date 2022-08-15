@@ -54,14 +54,6 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(user, users, productsDict));
         }
 
-        public static HtmlString CreateConfigurationObjectsTable(List<ConfigurationObjectViewModel> configurationObjects)
-        {
-            StringBuilder result = new StringBuilder();
-            result.Append(TableHelper.CreateConfigurationObjectsTable(configurationObjects));
-
-            return new HtmlString(result.ToString());
-        }
-
         public static HtmlString CreateSensorInfoTable(SensorInfoViewModel viewModel)
         {
             return new HtmlString(TableHelper.CreateSensorInfoTable(viewModel));
