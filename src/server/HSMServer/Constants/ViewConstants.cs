@@ -43,9 +43,6 @@
         public const string RemoveUserRoleAction = "RemoveUserRole";
         public const string InviteAction = "Invite";
 
-        public const string SaveConfigObjectAction = "SaveConfigObject";
-        public const string SetConfigObjectToDefaultAction = "SetToDefault";
-
         public const string NodeUpdateTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         #region Sensors history
