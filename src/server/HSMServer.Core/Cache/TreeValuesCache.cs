@@ -169,7 +169,7 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            var parts = path.Split(CommonConstants.SensorPathSeparator);
+            var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
             if (parts.Contains(string.Empty))
             {
                 message = ErrorInvalidPath;
@@ -534,9 +534,6 @@ namespace HSMServer.Core.Cache
 
         private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
         {
-            var entitiesToResave = new List<SensorEntity>();
-            var policiesToAdd = new Dictionary<string, List<Policy>>();
-
             foreach (var entity in entities)
             {
                 try
@@ -544,38 +541,15 @@ namespace HSMServer.Core.Cache
                     var sensor = GetSensorModel(entity);
                     _sensors.TryAdd(sensor.Id, sensor);
 
-                    if (entity.Policies != null) // TODO: remove this check after sensor entities migration
-                        foreach (var policyId in entity.Policies)
-                            if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                                sensor.AddPolicy(policy);
-
-                    if (entity.IsConverted)
-                    {
-                        void AddPolicy(Policy policy)
-                        {
+                    foreach (var policyId in entity.Policies)
+                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
                             sensor.AddPolicy(policy);
-
-                            if (!policiesToAdd.ContainsKey(entity.Id))
-                                policiesToAdd.Add(entity.Id, new List<Policy>());
-                            policiesToAdd[entity.Id].Add(policy);
-                        }
-
-                        if (entity.ExpectedUpdateIntervalTicks != 0)
-                            AddPolicy(new ExpectedUpdateIntervalPolicy(entity.ExpectedUpdateIntervalTicks));
-
-                        if (sensor is StringSensorModel)
-                            AddPolicy(new StringValueLengthPolicy());
-
-                        entitiesToResave.Add(sensor.ToEntity());
-                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.Error($"Applying sensor {entity.Id} error: {ex.Message}");
                 }
             }
-
-            ResaveSensors(entitiesToResave, policiesToAdd);
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)
@@ -730,29 +704,6 @@ namespace HSMServer.Core.Cache
 
                 GetAllProductSubProducts(subProduct, allSubProducts);
             }
-        }
-
-        private void ResaveSensors(List<SensorEntity> entitiesToResave, Dictionary<string, List<Policy>> policiesToAdd)
-        {
-            if (entitiesToResave.Count == 0)
-                return;
-
-            _logger.Info($"{nameof(entitiesToResave)} are resaving ({entitiesToResave.Count} sensors)");
-
-            foreach (var sensor in entitiesToResave)
-            {
-                if (policiesToAdd.TryGetValue(sensor.Id, out List<Policy> policies))
-                    foreach (var policy in policies)
-                        _databaseCore.AddPolicy(policy.ToEntity());
-
-                _databaseCore.AddSensor(sensor);
-            }
-
-            _logger.Info($"All old sensors are removing");
-            _databaseCore.RemoveAllOldSensors();
-            _logger.Info($"All old sensors removed");
-
-            _logger.Info($"{nameof(entitiesToResave)} resaved ({entitiesToResave.Count} sensors)");
         }
 
         private BaseSensorModel GetSensorModel(SensorEntity entity)

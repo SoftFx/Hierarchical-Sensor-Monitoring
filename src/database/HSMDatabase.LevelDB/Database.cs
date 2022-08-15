@@ -1,5 +1,6 @@
 using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,6 +10,10 @@ namespace HSMDatabase.LevelDB
 {
     public class LevelDBDatabaseAdapter : IDisposable
     {
+        private const int OpenDbMaxAttempts = 10;
+
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         private readonly DB _database;
         private readonly ReadOptions _iteratorOptions = new();
 
@@ -25,14 +30,23 @@ namespace HSMDatabase.LevelDB
             };
 
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
+            var attempts = 0;
 
-            try
+            while (++attempts <= OpenDbMaxAttempts) //sometimes Leveldb throws unexpected error when it tries to open db on Windows
             {
-                _database = new DB(name, databaseOptions);
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException("Failed to open database", e);
+                try
+                {
+                    _database = new DB(name, databaseOptions);
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error opening database {name} (attempt: {attempts}). {ex.Message}");
+
+                    if (attempts == OpenDbMaxAttempts)
+                        throw;
+                }
             }
         }
 

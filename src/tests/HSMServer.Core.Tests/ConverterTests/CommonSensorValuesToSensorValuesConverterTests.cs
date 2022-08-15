@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.ConverterTests
 
 
         public CommonSensorValuesToSensorValuesConverterTests(EntitiesConverterFixture fixture) =>
-            _sensorValuesFactory = fixture.SensorValuesFactory;
+            _sensorValuesFactory = fixture.ApiSensorValuesFactory;
 
 
         [Fact]

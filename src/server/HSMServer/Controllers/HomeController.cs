@@ -28,6 +28,8 @@ namespace HSMServer.Controllers
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
+        private static readonly JsonResult _emptyResult = new(new EmptyResult());
+
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
 
@@ -138,7 +140,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
-                return null;
+                return _emptyResult;
 
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
@@ -149,7 +151,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
-                return null;
+                return _emptyResult;
 
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
@@ -193,18 +195,33 @@ namespace HSMServer.Controllers
         }
 
 
-        private List<BaseValue> GetSensorValues(string encodedId, int count) =>
-            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
+        private List<BaseValue> GetSensorValues(string encodedId, int count)
+        {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
 
-        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to) =>
-            _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
+        }
+
+        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to)
+        {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
+
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+        }
 
         private List<BaseValue> GetAllSensorValues(string encodedId)
         {
+            if (string.IsNullOrEmpty(encodedId))
+                return new();
+
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
-            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+            var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+
+            return values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
         }
 
         private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>

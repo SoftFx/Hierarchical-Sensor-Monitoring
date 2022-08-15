@@ -1,7 +1,5 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.BarData;
+﻿using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -118,30 +116,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return fileSensorBytesValue.FillCommonSensorValueProperties(_productKey);
         }
-
-        internal ExtendedBarSensorData BuildExtendedBarSensorData(SensorType type) =>
-            type switch
-            {
-                SensorType.IntegerBarSensor => BuildExtendedIntBarSensorData(),
-                SensorType.DoubleBarSensor => BuildExtendedDoubleBarSensorData(),
-                _ => null,
-            };
-
-        internal ExtendedBarSensorData BuildExtendedIntBarSensorData() =>
-            new()
-            {
-                Value = BuildIntBarSensorValue(),
-                ValueType = SensorType.IntegerBarSensor,
-                ProductName = _productKey,
-            };
-
-        internal ExtendedBarSensorData BuildExtendedDoubleBarSensorData() =>
-            new()
-            {
-                Value = BuildDoubleBarSensorValue(),
-                ValueType = SensorType.DoubleBarSensor,
-                ProductName = _productKey,
-            };
 
         internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType, bool isMinEndTime = false)
         {

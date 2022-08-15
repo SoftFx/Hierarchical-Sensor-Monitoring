@@ -45,14 +45,11 @@ namespace HSMServer.Core.DataLayer
         void AddSensorValue(SensorValueEntity valueEntity);
         void ClearSensorValues(string sensorId, string productName, string path);
 
-        void PutSensorData(SensorDataEntity data, string productName);
-
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
         List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
         List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to);
 
         List<SensorEntity> GetAllSensors();
-        void RemoveAllOldSensors();
 
         #endregion
 
