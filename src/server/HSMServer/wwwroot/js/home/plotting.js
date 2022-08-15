@@ -25,7 +25,8 @@ function createLayoutFromZoomData(zoomData) {
         },
         yaxis : {
             range: [processedData[2], processedData[3]]
-        }
+        },
+        autosize: true
     };
     return layout;
 }
