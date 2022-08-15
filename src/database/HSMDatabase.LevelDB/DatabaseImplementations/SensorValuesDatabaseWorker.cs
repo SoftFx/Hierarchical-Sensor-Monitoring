@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -88,15 +89,35 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] to, int count) =>
-            _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
-
-        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to)
+        public List<byte[]> GetValues(string sensorId, byte[] to, int count)
         {
-            var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
-            result.Reverse();
+            try
+            {
+                return _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed getting values for sensor {sensorId} (to: {to}, count: {count})");
 
-            return result;
+                return new();
+            }
+        }
+
+        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
+        {
+            try
+            {
+                var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
+                result.Reverse();
+
+                return result.Take(count).ToList();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed getting values for sensor {sensorId} (from: {from}, to: {to}, count: {count})");
+
+                return new();
+            }
         }
     }
 }
