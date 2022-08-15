@@ -14,6 +14,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly LevelDBDatabaseAdapter _openedDb;
 
 
+        public string Name { get; }
+
         public long From { get; }
 
         public long To { get; }
@@ -23,6 +25,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             _openedDb = new LevelDBDatabaseAdapter(name);
 
+            Name = name;
             From = from;
             To = to;
         }

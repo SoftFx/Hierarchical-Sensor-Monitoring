@@ -6,6 +6,8 @@ namespace HSMDatabase.AccessManager
 {
     public interface ISensorValuesDatabase : IDisposable
     {
+        string Name { get; }
+
         long From { get; }
 
         long To { get; }
