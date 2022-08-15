@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Model;
 using NLog;
 using System;
 using System.Text;
@@ -20,8 +21,8 @@ namespace HSMServer.Core.Notifications
         private const string BotToken = "5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
         private const string BotName = "TestTestTestBoooooooootBot";
 
+        private readonly AddressBook _addressBook;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
         {
             AllowedUpdates = { }, // receive all update types
@@ -36,13 +37,19 @@ namespace HSMServer.Core.Notifications
         internal TelegramBot(IUserManager userManager)
         {
             _userManager = userManager;
+            _addressBook = new(userManager);
 
             FillAuthorizedUsers();
         }
 
-
         public string GetInvitationLink(User user) =>
             _addressBook.GetInvitationToken(user).ToLink(BotName);
+
+        public void RemoveAuthorizedUser(User user)
+        {
+            _addressBook.RemoveAuthorizedUser(user);
+            _userManager.UpdateUser(user);
+        }
 
         public Task SendTestMessage(User user)
         {
@@ -52,10 +59,22 @@ namespace HSMServer.Core.Notifications
             return _bot?.SendTextMessageAsync(chat, testMessage, cancellationToken: _token) ?? Task.CompletedTask;
         }
 
-        public void RemoveAuthorizedUser(User user)
+        internal void SendMessage(BaseSensorModel sensor)
         {
-            _addressBook.RemoveAuthorizedUser(user);
-            _userManager.UpdateUser(user);
+            if (_bot is not null)
+            {
+                foreach (var chat in _addressBook.GetUsersChats(sensor))
+                {
+                    var message = new StringBuilder(1 << 2);
+                    message.Append($"Sensor (product name: {sensor.ProductName}, path {sensor.Path}) ");
+                    message.Append($"has status {sensor.ValidationResult.Result}");
+
+                    if (!sensor.ValidationResult.IsSuccess)
+                        message.Append($" ({sensor.ValidationResult.Message})");
+
+                    _bot?.SendTextMessageAsync(chat, message.ToString(), cancellationToken: _token);
+                }
+            }
         }
 
         public void StartBot()

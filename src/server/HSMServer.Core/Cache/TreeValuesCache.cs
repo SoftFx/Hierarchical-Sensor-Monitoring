@@ -7,6 +7,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Notifications;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
@@ -30,6 +31,7 @@ namespace HSMServer.Core.Cache
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
+        private readonly TelegramBot _telegramBot;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
@@ -42,10 +44,12 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager,
+            IUpdatesQueue updatesQueue, INotificationsCenter notificationsCenter)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
+            _telegramBot = notificationsCenter.TelegramBot;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -399,6 +403,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
+            _telegramBot.SendMessage(sensor);
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 

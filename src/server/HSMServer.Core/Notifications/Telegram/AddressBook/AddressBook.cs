@@ -1,5 +1,8 @@
-﻿using System;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Model;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
@@ -10,6 +13,14 @@ namespace HSMServer.Core.Notifications
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
         private readonly ConcurrentDictionary<Guid, ChatSettings> _book = new();
         private readonly ConcurrentDictionary<ChatId, Guid> _chats = new();
+
+        private readonly IUserManager _userManager;
+
+
+        internal AddressBook(IUserManager userManager)
+        {
+            _userManager = userManager;
+        }
 
 
         internal InvitationToken GetInvitationToken(User user)
@@ -63,6 +74,25 @@ namespace HSMServer.Core.Notifications
             _chats.TryRemove(user.Notifications.Telegram.Chat, out _);
 
             user.Notifications.Telegram.Chat = null;
+        }
+
+        internal List<ChatId> GetUsersChats(BaseSensorModel sensor)
+        {
+            var result = new List<ChatId>();
+
+            foreach (var (userId, chatSettings) in _book)
+            {
+                var user = _userManager.GetUser(userId);
+
+                if (chatSettings.Chat is not null &&
+                    user.Notifications.Telegram.MessagesAreEnabled &&
+                    sensor.ValidationResult.Result >= user.Notifications.Telegram.MessagesMinStatus)
+                {
+                    result.Add(chatSettings.Chat);
+                }
+            }
+
+            return result;
         }
     }
 }
