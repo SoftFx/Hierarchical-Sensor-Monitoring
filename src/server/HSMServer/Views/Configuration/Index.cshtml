@@ -18,21 +18,21 @@
         font-weight: normal;
         color: grey;
         font-size: inherit;
-        margin-left: 5px;
+        margin-left: 1vh;
     }
 
     .config-name {
-        margin-right: 10px;
+        margin-right: 1vh;
     }
 </style>
 
 <div class="container">
     <div class="row justify-content-center">
 
-        <div style="margin: 10px">
+        <div class="m-10">
             <div class="row justify-content-start">
                 <div class="col-auto">
-                    <h5 style="margin: 10px 20px 10px;">Configuration parameters</h5>
+                    <h5 class="my-3 ms-5">Configuration parameters</h5>
                 </div>
             </div>
         </div>
@@ -44,6 +44,7 @@
                         <th scope="col">#</th>
                         <th scope="col">Parameter name</th>
                         <th scope="col">Parameter value</th>
+                        <th scope="col">Is Default</th>
                         <th scope="col">Action</th>
                     </tr>
                 </thead>
@@ -62,31 +63,30 @@
 
                             <td>
                                 <div style="display: flex">
-                                    <input type="text" class="form-control" style="max-width: 300px"
-                                       value="@Model[i].Value" id="value_@Model[i].Name">
-                                    @if (Model[i].IsDefault)
-                                    {
-                                        <label class="default-text-field">default</label>
-                                    }
+                                    <input type="text" class="form-control mw-25" value="@Model[i].Value"
+                                       id="value_@Model[i].Name">
                                 </div>
+                            </td>
+                            <td>
+                                <label class="default-text-field">@Model[i].IsDefault</label>
                             </td>
 
                             <td>
                                 @if (!Model[i].IsDefault)
                                 {
-                                    <button id="reset_@Model[i].Name" style="margin-left: 5px" type="button"
-                                    class="btn btn-secondary" data-bs-toggle="tooltip" title="reset value to default">
+                                    <button id="reset_@Model[i].Name" type="button" class="btn btn-secondary ms-1"
+                                    data-bs-toggle="tooltip" title="reset value to default">
                                         <i class="fas fa-undo-alt"></i>
                                     </button>
                                 }
 
-                                <button disabled style="margin-left: 5px" id="ok_@Model[i].Name" type="button"
-                                    class="btn btn-secondary" data-bs-toggle="tooltip" title="ok">
+                                <button disabled id="ok_@Model[i].Name" type="button" class="btn btn-secondary ms-1"
+                                    data-bs-toggle="tooltip" title="ok">
                                     <i class="fas fa-check"></i>
                                 </button>
 
-                                <button disabled style="margin-left: 5px" id="cancel_@Model[i].Name" type="button"
-                                    class="btn btn-secondary" data-bs-toggle="tooltip" title="revert changes">
+                                <button disabled id="cancel_@Model[i].Name" type="button"
+                                    class="btn btn-secondary ms-1" data-bs-toggle="tooltip" title="revert changes">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </td>
