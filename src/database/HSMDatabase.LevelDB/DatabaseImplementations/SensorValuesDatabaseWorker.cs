@@ -59,7 +59,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void PutSensorValue(string sensorId, string time, byte[] value)
         {
-            var key = Encoding.UTF8.GetBytes($"{sensorId}_{time}");
+            var key = Encoding.UTF8.GetBytes($"{sensorId}_{time.PadLeft(19, '0')}");
 
             try
             {
