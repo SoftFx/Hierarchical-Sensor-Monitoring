@@ -4,7 +4,6 @@ namespace HSMDatabase.LevelDB
 {
     public static class PrefixConstants
     {
-        private const string SENSOR_KEY_PREFIX = "SensorKey";
         private const string SENSORIDS_PREFIX = "SensorIds";
         private const string POLICYIDS_PREFIX = "PolicyIds";
         private const string SENSOR_VALUE_PREFIX = "SensorValue";
@@ -51,8 +50,6 @@ namespace HSMDatabase.LevelDB
         {
             return $"{REGISTRATION_TICKET_PREFIX}_{id}";
         }
-
-        internal static string GetSensorsInfoReadKey() => SENSOR_KEY_PREFIX;
 
         internal static string GetSensorIdsKey() => SENSORIDS_PREFIX;
 

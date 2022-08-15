@@ -36,8 +36,6 @@ namespace HSMDatabase.AccessManager
         void RemoveSensor(string sensorId);
         SensorEntity GetSensorEntity(string sensorId);
         List<string> GetAllSensorsIds();
-        List<byte[]> GetSensorsStrOld();
-        void RemoveAllOldSensors();
 
         #endregion
 
@@ -78,7 +76,6 @@ namespace HSMDatabase.AccessManager
         #endregion
 
         List<string> GetMonitoringDatabases();
-        void AddMonitoringDatabaseToList(string folderName);
         void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }
