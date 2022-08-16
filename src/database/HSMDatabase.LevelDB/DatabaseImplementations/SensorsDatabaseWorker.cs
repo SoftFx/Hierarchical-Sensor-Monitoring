@@ -2,6 +2,7 @@
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
@@ -69,7 +70,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to)
+        public List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to, int count)
         {
             var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, from));
             var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
@@ -80,7 +81,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 var result = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
                 result.Reverse();
 
-                return result;
+                return result.Take(count).ToList();
             }
             catch (Exception)
             { }
