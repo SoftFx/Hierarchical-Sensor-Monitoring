@@ -9,6 +9,8 @@ namespace HSMServer.Core.Notifications
 
         internal ChatId Chat { get; }
 
+        internal MessageBuilder MessageBuilder { get; } = new();
+
 
         internal ChatSettings(Guid token)
         {

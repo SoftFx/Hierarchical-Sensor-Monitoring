@@ -59,22 +59,11 @@ namespace HSMServer.Core.Notifications
             return _bot?.SendTextMessageAsync(chat, testMessage, cancellationToken: _token) ?? Task.CompletedTask;
         }
 
-        internal void SendMessage(BaseSensorModel sensor)
+        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             if (_bot is not null)
-            {
-                foreach (var chat in _addressBook.GetUsersChats(sensor))
-                {
-                    var message = new StringBuilder(1 << 2);
-                    message.Append($"Sensor (product name: {sensor.ProductName}, path {sensor.Path}) ");
-                    message.Append($"has status {sensor.ValidationResult.Result}");
-
-                    if (!sensor.ValidationResult.IsSuccess)
-                        message.Append($" ({sensor.ValidationResult.Message})");
-
-                    _bot?.SendTextMessageAsync(chat, message.ToString(), cancellationToken: _token);
-                }
-            }
+                foreach (var chat in _addressBook.GetUsersChats(sensor, oldStatus))
+                    _bot?.SendTextMessageAsync(chat.Chat, chat.MessageBuilder.Message, cancellationToken: _token);
         }
 
         public void StartBot()

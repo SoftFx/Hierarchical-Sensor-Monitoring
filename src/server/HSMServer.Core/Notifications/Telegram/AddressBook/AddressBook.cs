@@ -76,23 +76,35 @@ namespace HSMServer.Core.Notifications
             user.Notifications.Telegram.Chat = null;
         }
 
-        internal List<ChatId> GetUsersChats(BaseSensorModel sensor)
+        internal List<ChatSettings> GetUsersChats(BaseSensorModel sensor, ValidationResult oldStatus)
         {
-            var result = new List<ChatId>();
+            var result = new List<ChatSettings>();
 
             foreach (var (userId, chatSettings) in _book)
             {
-                var user = _userManager.GetUser(userId);
+                if (chatSettings.Chat is null)
+                    continue;
 
-                if (chatSettings.Chat is not null &&
-                    user.Notifications.Telegram.MessagesAreEnabled &&
-                    sensor.ValidationResult.Result >= user.Notifications.Telegram.MessagesMinStatus)
+                if (WhetherSendMessage(userId, sensor, oldStatus))
                 {
-                    result.Add(chatSettings.Chat);
+                    chatSettings.MessageBuilder.BuildMessage(sensor, oldStatus);
+                    result.Add(chatSettings);
                 }
             }
 
             return result;
+        }
+
+        private bool WhetherSendMessage(Guid userId, BaseSensorModel sensor, ValidationResult oldStatus)
+        {
+            var user = _userManager.GetUser(userId);
+
+            var newStatus = sensor.ValidationResult;
+            var minStatus = user.Notifications.Telegram.MessagesMinStatus;
+
+            return user.Notifications.Telegram.MessagesAreEnabled &&
+                   newStatus != oldStatus &&
+                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }
     }
 }

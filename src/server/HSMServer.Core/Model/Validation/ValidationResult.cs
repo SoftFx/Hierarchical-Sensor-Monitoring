@@ -92,5 +92,11 @@ namespace HSMServer.Core.Model
                 Errors = GetUnionErrors(result1.Errors, result2.Errors),
             };
         }
+
+        public static bool operator ==(ValidationResult result1, ValidationResult result2) =>
+            result1.Message == result2.Message && result1.Result == result2.Result;
+
+        public static bool operator !=(ValidationResult result1, ValidationResult result2)
+            => !(result1 == result2);
     }
 }
