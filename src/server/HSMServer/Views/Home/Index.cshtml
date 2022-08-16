@@ -71,32 +71,34 @@
 
 <div id="mainContainer">
     <div>
-        <div class="row justify-content-start mw-100">
-            <div class="col-auto ms-2">
-                <div class='btn-group'>
-                    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
-                        Views
-                    </button>
-                    <ul class='dropdown-menu'>
-                        <li>
-                            <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
-                        </li>
+        <div class="d-flex">
+            <div class="me-auto">
+                <div class="col-auto ms-2 mb-1">
+                    <div class='btn-group'>
+                        <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
+                            Views
+                        </button>
+                        <ul class='dropdown-menu'>
+                            <li>
+                                <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
+                            </li>
 
-                        <li>
-                            <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
-                        </li>
-                    </ul>
+                            <li>
+                                <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
-            <div class="col-auto">
+            <div class="col-auto me-1">
                 <div id="state"></div>
             </div>
-            <div class="col-auto">
+
+            <div class="col-auto me-3">
                 <div id="updateTime"></div>
             </div>
         </div>
-        <hr />
     </div>
 
 

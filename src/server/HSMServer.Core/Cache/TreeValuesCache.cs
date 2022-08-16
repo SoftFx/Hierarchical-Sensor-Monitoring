@@ -400,10 +400,12 @@ namespace HSMServer.Core.Cache
                 UpdateProduct(parentProduct);
             }
 
+            var oldStatus = sensor.ValidationResult;
+
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
-            _telegramBot.SendMessage(sensor);
+            _telegramBot.SendMessage(sensor, oldStatus);
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 
