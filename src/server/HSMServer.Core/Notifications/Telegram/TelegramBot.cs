@@ -19,9 +19,9 @@ namespace HSMServer.Core.Notifications
     {
         private const string StartBotCommand = "/start";
 
-        private string BotToken; //"5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
-        private string BotName; //"TestTestTestBoooooooootBot";
-        private bool AreBotMessagesEnabled;
+        private string _botToken; //"5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
+        private string _botName; //"TestTestTestBoooooooootBot";
+        private bool _areBotMessagesEnabled;
 
         private readonly AddressBook _addressBook;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -41,16 +41,16 @@ namespace HSMServer.Core.Notifications
             _userManager = userManager;
             _addressBook = new(userManager);
 
-            BotToken = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotToken).Value;
-            BotName = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotName).Value;
-            AreBotMessagesEnabled = bool.TryParse(configurationProvider.ReadOrDefaultConfigurationObject(
+            _botToken = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotToken).Value;
+            _botName = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotName).Value;
+            _areBotMessagesEnabled = bool.TryParse(configurationProvider.ReadOrDefaultConfigurationObject(
                 ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
             FillAuthorizedUsers();
         }
 
         public string GetInvitationLink(User user) =>
-            _addressBook.GetInvitationToken(user).ToLink(BotName);
+            _addressBook.GetInvitationToken(user).ToLink(_botName);
 
         public void RemoveAuthorizedUser(User user)
         {
@@ -78,10 +78,10 @@ namespace HSMServer.Core.Notifications
             if (_bot is not null)
                 return;
 
-            if (string.IsNullOrEmpty(BotName) || string.IsNullOrEmpty(BotToken))
+            if (string.IsNullOrEmpty(_botName) || string.IsNullOrEmpty(_botToken))
                 return;
 
-            _bot = new TelegramBotClient(BotToken);
+            _bot = new TelegramBotClient(_botToken);
             _token = new CancellationToken();
 
             _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
