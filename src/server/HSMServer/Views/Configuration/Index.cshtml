@@ -11,6 +11,7 @@
 <script>
     var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
     var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfigObject), ViewConstants.ConfigurationController))";
+    var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
 </script>
 
 <style>
@@ -28,6 +29,27 @@
 
 <div class="container">
     <div class="row justify-content-center">
+
+        <div class="m-10">
+            <div class="row justify-content-start">
+                <div class="col-auto">
+                    <h5 class="my-3 ms-5">Telegram</h5>
+                </div>
+
+                <div>
+                    You can configure a Telegram bot. Please install it via Telegram and put configuration
+                    parameters (BotName, BotToken, AreBotMessagesEnabled) in the table below.
+                    <b>Warning!</b> It will stop current bot.
+                    Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
+                </div>
+
+                <div class="ms-5 mt-1">
+                    <button id="restartButton" type="submit" class="btn btn-secondary" style="background-color: #e35478">
+                        <i class="fab fa-telegram"></i> Restart Telegram Bot
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <div class="m-10">
             <div class="row justify-content-start">
@@ -164,4 +186,14 @@
             }
         });
     });
+
+    $('[id^=restartButton]').on('click', function() {
+        $.ajax({
+            type: 'GET',
+            url: restartBotAction,
+            cache: false,
+            async: true
+        });
+    });
+
 </script>

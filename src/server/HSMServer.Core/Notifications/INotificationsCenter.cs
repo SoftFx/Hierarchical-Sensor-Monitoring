@@ -3,5 +3,8 @@
     public interface INotificationsCenter
     {
         TelegramBot TelegramBot { get; }
+
+
+        void StartBot();
     }
 }

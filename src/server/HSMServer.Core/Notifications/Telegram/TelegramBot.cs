@@ -89,6 +89,9 @@ namespace HSMServer.Core.Notifications
             if (_bot is not null)
                 return;
 
+            if (string.IsNullOrEmpty(BotName) || string.IsNullOrEmpty(BotToken))
+                return;
+
             _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
 

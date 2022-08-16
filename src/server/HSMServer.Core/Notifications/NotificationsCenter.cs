@@ -7,16 +7,28 @@ namespace HSMServer.Core.Notifications
 {
     public sealed class NotificationsCenter : INotificationsCenter, IAsyncDisposable
     {
-        public TelegramBot TelegramBot { get; }
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly IUserManager _userManager;
+
+        public TelegramBot TelegramBot { get; private set; }
 
 
         public NotificationsCenter(IConfigurationProvider config, IUserManager userManager)
         {
-            TelegramBot = new(userManager, config);
+            _configurationProvider = config;
+            _userManager = userManager;
 
-            TelegramBot.StartBot(); // TODO: start bot on button click
+            StartBot();
         }
 
+        public async void StartBot()
+        {
+            if (TelegramBot is not null)
+                await TelegramBot.StopBot();
+
+            TelegramBot = new(_userManager, _configurationProvider);
+            TelegramBot.StartBot();
+        }
 
         public async ValueTask DisposeAsync()
         {

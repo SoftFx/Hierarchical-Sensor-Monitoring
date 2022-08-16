@@ -1,6 +1,7 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
+using HSMServer.Core.Notifications;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,16 @@ namespace HSMServer.Controllers
     public class ConfigurationController : Controller
     {
         private readonly IConfigurationProvider _configurationProvider;
-        public ConfigurationController(IConfigurationProvider configurationProvider)
+        private readonly INotificationsCenter _notificationsCenter;
+
+
+        public ConfigurationController(IConfigurationProvider configurationProvider, INotificationsCenter notificationsCenter)
         {
             _configurationProvider = configurationProvider;
+            _notificationsCenter = notificationsCenter;
         }
+
+
         public IActionResult Index()
         {
             List<ConfigurationObjectViewModel> viewModels = new List<ConfigurationObjectViewModel>();
@@ -35,7 +42,6 @@ namespace HSMServer.Controllers
                 viewModels.Add(new ConfigurationObjectViewModel(value, true));
             }
             viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
-            ViewData["Version"] = LayoutStaticController.LayoutStaticController.Version;
 
             return View(viewModels);
         }
@@ -51,6 +57,12 @@ namespace HSMServer.Controllers
         {
             _configurationProvider.SetConfigurationObjectToDefault(configObjName);
         }
+
+        public void RestartTelegramBot()
+        {
+            _notificationsCenter.StartBot();
+        }
+
 
         private ConfigurationObject GetModelFromViewModel(ConfigurationObjectViewModel viewModel)
         {
