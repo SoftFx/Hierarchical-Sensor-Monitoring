@@ -6,25 +6,23 @@ namespace HSMDatabase.AccessManager
 {
     public interface ISensorValuesDatabase : IDisposable
     {
+        string Name { get; }
+
         long From { get; }
 
         long To { get; }
 
 
-        void OpenDatabase(string dbPath);
-
-        void DisposeDatabase(string sensorId);
-
-        void RemoveDatabase(string sensorId);
+        void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
 
         void PutSensorValue(SensorValueEntity entity);
 
-        bool IsDatabaseExists(string sensorId);
+        void PutSensorValue(string sensorId, string time, byte[] value);
 
-        byte[] GetLatestValue(string sensorId);
+        void RemoveSensorValues(string sensorId);
 
         List<byte[]> GetValues(string sensorId, byte[] to, int count);
 
-        List<byte[]> GetValues(string sensorId, byte[] from, byte[] to);
+        List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count);
     }
 }

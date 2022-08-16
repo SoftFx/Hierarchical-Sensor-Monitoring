@@ -4,6 +4,7 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -25,8 +26,8 @@ namespace HSMDatabase.LevelDB
                 CreateIfMissing = true,
                 MaxOpenFiles = 100000,
                 CompressionLevel = CompressionLevel.SnappyCompression,
-                BlockSize = 204800,
-                WriteBufferSize = 8388608
+                BlockSize = 200 * 1024,
+                WriteBufferSize = 8 * 1024 * 1024,
             };
 
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
@@ -135,69 +136,16 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        internal byte[] GetLatestValue()
+        public Dictionary<string, byte[]> GetAllValues()
         {
             Iterator iterator = null;
+            var values = new Dictionary<string, byte[]>(1 << 5);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
-                iterator.SeekToLast();
-
-                if (iterator.IsValid)
-                    return iterator.Value();
-            }
-            catch (Exception ex)
-            {
-                throw new ServerDatabaseException(ex.Message, ex);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-
-            return null;
-        }
-
-        internal List<byte[]> GetValues(byte[] to, int count)
-        {
-            Iterator iterator = null;
-            var values = new List<byte[]>(count);
-
-            try
-            {
-                iterator = _database.CreateIterator(_iteratorOptions);
-
-                for (iterator.SeekToLast(); iterator.IsValid && values.Count != count; iterator.Prev())
-                {
-                    if (iterator.Key().IsSmallerOrEquals(to))
-                        values.Add(iterator.Value());
-                }
-
-                return values;
-            }
-            catch (Exception ex)
-            {
-                throw new ServerDatabaseException(ex.Message, ex);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-        }
-
-        public List<byte[]> GetValues(byte[] from, byte[] to)
-        {
-            Iterator iterator = null;
-            var values = new List<byte[]>(1 << 5);
-
-            try
-            {
-                iterator = _database.CreateIterator(_iteratorOptions);
-                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    values.Add(iterator.Value());
-
-                values.Reverse();
+                for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
+                    values.Add(iterator.StringKey(), iterator.Value());
 
                 return values;
             }
@@ -214,7 +162,7 @@ namespace HSMDatabase.LevelDB
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
             Iterator iterator = null;
-            List<byte[]> values = new();
+            List<byte[]> values = new(1 << 4);
 
             try
             {
@@ -245,7 +193,7 @@ namespace HSMDatabase.LevelDB
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey) && values.Count != count; iterator.Next())
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
                 {
                     if (iterator.Key().IsSmallerOrEquals(to))
                         values.Add(iterator.Value());
@@ -253,7 +201,7 @@ namespace HSMDatabase.LevelDB
 
                 values.Reverse(); // from newest to oldest
 
-                return values;
+                return values.Take(count).ToList();
             }
             catch (Exception e)
             {
@@ -268,7 +216,7 @@ namespace HSMDatabase.LevelDB
         public List<byte[]> GetAllStartingWith(byte[] startWithKey)
         {
             Iterator iterator = null;
-            List<byte[]> values = new();
+            List<byte[]> values = new(1 << 4);
 
             try
             {

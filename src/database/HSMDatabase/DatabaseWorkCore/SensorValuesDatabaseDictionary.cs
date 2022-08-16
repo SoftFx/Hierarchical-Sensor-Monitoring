@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
+using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,46 +12,109 @@ namespace HSMDatabase.DatabaseWorkCore
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
         private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
-        private readonly object _locker = new();
+
+        private readonly IDatabaseSettings _dbSettings;
 
         private ISensorValuesDatabase _lastDb;
 
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
-            var sensorValuesDirectories =
-               Directory.GetDirectories(dbSettings.DatabaseFolder, $"{dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+            _dbSettings = dbSettings;
 
+            if (CheckoutAndMigration())
+                return;
+
+            var sensorValuesDirectories = GetSensorValuesDirectories();
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
-
-                var databases = AddNewDb(from, to);
-                foreach (var dbPath in Directory.GetDirectories(directory))
-                    databases.OpenDatabase(dbPath);
+                AddNewDb(directory, from, to);
             }
+        }
+
+        private bool CheckoutAndMigration()
+        {
+            bool wereMigrated = false;
+
+            var sensorValuesDirectories = GetSensorValuesDirectories();
+            foreach (var directory in sensorValuesDirectories)
+            {
+                var sensorDirectories = Directory.GetDirectories(directory);
+                if (sensorDirectories.Length == 0)
+                    continue;
+
+                wereMigrated = true;
+
+                (var from, var to) = GetDatesFromFolderName(directory);
+
+                from -= 1;
+                to -= 1;
+
+                bool shouldAddDb = true;
+
+                if (_lastDb != null)
+                {
+                    var fromDate = new DateTime(from);
+                    var lastDbFromDate = new DateTime(_lastDb.From);
+
+                    shouldAddDb = fromDate.Year != lastDbFromDate.Year || fromDate.Month != lastDbFromDate.Month || fromDate.Day != lastDbFromDate.Day;
+                }
+
+                if (shouldAddDb)
+                    AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
+
+                try
+                {
+                    foreach (var dbPath in sensorDirectories)
+                    {
+                        try
+                        {
+                            var sensorDb = new LevelDBDatabaseAdapter(dbPath);
+                            var sensorId = Path.GetFileName(dbPath);
+
+                            var allValues = sensorDb.GetAllValues();
+                            foreach (var (sensorReceivingTime, value) in allValues)
+                                _lastDb.PutSensorValue(sensorId, sensorReceivingTime, value);
+
+                            sensorDb.Dispose();
+                        }
+                        catch { }
+                    }
+
+                    Directory.Delete(directory, true);
+                }
+                catch { }
+            }
+
+            return wereMigrated;
+        }
+
+        private List<string> GetSensorValuesDirectories()
+        {
+            var sensorValuesDirectories =
+               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+
+            return sensorValuesDirectories.OrderBy(d => d).ToList();
         }
 
 
         internal ISensorValuesDatabase GetNewestDatabases(long time)
         {
-            lock (_locker)
+            if (_lastDb == null || _lastDb.To < time)
             {
-                if (_lastDb == null || _lastDb.To < time)
-                {
-                    var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                    var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+                var from = DateTimeMethods.GetMinDateTimeTicks(time);
+                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-                    return AddNewDb(from, to);
-                }
-
-                return _lastDb;
+                return AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
             }
+
+            return _lastDb;
         }
 
-        private ISensorValuesDatabase AddNewDb(long from, long to)
+        internal ISensorValuesDatabase AddNewDb(string name, long from, long to)
         {
-            _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(from, to);
+            _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(name, from, to);
 
             _sensorDbs.Enqueue(_lastDb);
 
@@ -58,7 +122,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
 
-        private static (long from, long to) GetDatesFromFolderName(string folder)
+        internal static (long from, long to) GetDatesFromFolderName(string folder)
         {
             var from = 0L;
             var to = 0L;
