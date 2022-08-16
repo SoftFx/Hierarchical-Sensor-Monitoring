@@ -78,7 +78,8 @@ namespace HSMServer.Core.Notifications
             if (_bot is not null)
                 return;
 
-            if (string.IsNullOrEmpty(_botName) || string.IsNullOrEmpty(_botToken))
+            if (string.IsNullOrEmpty(_botName) || string.IsNullOrEmpty(_botToken)
+                || !_areBotMessagesEnabled)
                 return;
 
             _bot = new TelegramBotClient(_botToken);
