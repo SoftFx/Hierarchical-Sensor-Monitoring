@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using NLog;
 using System;
@@ -17,9 +19,9 @@ namespace HSMServer.Core.Notifications
     {
         private const string StartBotCommand = "/start";
 
-        // TODO: there are parameters from configuration provider
-        private const string BotToken = "5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
-        private const string BotName = "TestTestTestBoooooooootBot";
+        private string BotToken; //"5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
+        private string BotName; //"TestTestTestBoooooooootBot";
+        private bool AreBotMessagesEnabled;
 
         private readonly AddressBook _addressBook;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -34,10 +36,15 @@ namespace HSMServer.Core.Notifications
         private ITelegramBotClient _bot;
 
 
-        internal TelegramBot(IUserManager userManager)
+        internal TelegramBot(IUserManager userManager, IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _addressBook = new(userManager);
+
+            BotToken = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotToken).Value;
+            BotName = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotName).Value;
+            AreBotMessagesEnabled = bool.TryParse(configurationProvider.ReadOrDefaultConfigurationObject(
+                ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
             FillAuthorizedUsers();
         }

@@ -12,7 +12,7 @@ namespace HSMServer.Core.Notifications
 
         public NotificationsCenter(IConfigurationProvider config, IUserManager userManager)
         {
-            TelegramBot = new(userManager);
+            TelegramBot = new(userManager, config);
 
             TelegramBot.StartBot(); // TODO: start bot on button click
         }

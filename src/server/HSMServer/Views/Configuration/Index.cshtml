@@ -55,8 +55,8 @@
                             <th scope="row">@i</th>
                             <td>
                                 <label class="config-name">@Model[i].Name</label>
-                                <a tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus"
-                               title="Description" data-bs-content="@Model[i].Description">
+                                <a data-bs-toggle="popover" title="Description"
+                               data-bs-content="@Model[i].Description" data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
                             </td>
