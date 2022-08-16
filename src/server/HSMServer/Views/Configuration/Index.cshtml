@@ -122,13 +122,10 @@
 
 
 <script>
+    var currentDesc = null;
+
     //Description popovers
     $(document).ready(function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
         var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl);
@@ -142,6 +139,21 @@
             "IsDefault": isDefault
         }
     }
+
+    $('[data-bs-toggle="popover"]').on("click", function() {
+        var thisDesc = bootstrap.Popover.getInstance(this);
+
+        if (currentDesc != null) {
+            currentDesc.hide();
+
+            if (currentDesc === thisDesc)
+                currentDesc = null;
+            else
+                currentDesc = thisDesc;
+        }
+        else
+            currentDesc = thisDesc;
+    });
 
     $('[id^=cancel_]').on("click", function() {
         document.location.reload();
