@@ -27,10 +27,10 @@ namespace HSMServer.Core.Notifications
         };
 
         private readonly IUserManager _userManager;
+        private readonly IConfigurationProvider _configurationProvider;
 
         private CancellationToken _token = CancellationToken.None;
         private ITelegramBotClient _bot;
-        private IConfigurationProvider _configurationProvider;
 
         private string BotName => _configurationProvider.ReadOrDefaultConfigurationObject(
             ConfigurationConstants.BotName).Value;
@@ -78,8 +78,7 @@ namespace HSMServer.Core.Notifications
             if (_bot is not null)
                 return;
 
-            if (string.IsNullOrEmpty(BotName) || string.IsNullOrEmpty(BotToken)
-                || !AreBotMessagesEnabled)
+            if (!IsValidBotConfigurations())
                 return;
 
             _bot = new TelegramBotClient(BotToken);
@@ -156,5 +155,8 @@ namespace HSMServer.Core.Notifications
 
             return Task.CompletedTask;
         }
+
+        private bool IsValidBotConfigurations() => !string.IsNullOrEmpty(BotName) 
+            || !string.IsNullOrEmpty(BotToken) || AreBotMessagesEnabled;
     }
 }

@@ -7,7 +7,7 @@ namespace HSMServer.Core.Notifications
 {
     public sealed class NotificationsCenter : INotificationsCenter, IAsyncDisposable
     {
-        public TelegramBot TelegramBot { get; private set; }
+        public TelegramBot TelegramBot { get; }
 
 
         public NotificationsCenter(IConfigurationProvider config, IUserManager userManager)
