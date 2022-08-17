@@ -19,10 +19,6 @@ namespace HSMServer.Core.Notifications
     {
         private const string StartBotCommand = "/start";
 
-        private string _botToken; //"5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
-        private string _botName; //"TestTestTestBoooooooootBot";
-        private bool _areBotMessagesEnabled;
-
         private readonly AddressBook _addressBook;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ReceiverOptions _options = new()
@@ -34,23 +30,27 @@ namespace HSMServer.Core.Notifications
 
         private CancellationToken _token = CancellationToken.None;
         private ITelegramBotClient _bot;
+        private IConfigurationProvider _configurationProvider;
+
+        private string BotName => _configurationProvider.ReadOrDefaultConfigurationObject(
+            ConfigurationConstants.BotName).Value;
+        private string BotToken => _configurationProvider.ReadOrDefaultConfigurationObject(
+            ConfigurationConstants.BotToken).Value;
+        private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefaultConfigurationObject(
+                ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
 
         internal TelegramBot(IUserManager userManager, IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _addressBook = new(userManager);
-
-            _botToken = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotToken).Value;
-            _botName = configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotName).Value;
-            _areBotMessagesEnabled = bool.TryParse(configurationProvider.ReadOrDefaultConfigurationObject(
-                ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
+            _configurationProvider = configurationProvider;
 
             FillAuthorizedUsers();
         }
 
         public string GetInvitationLink(User user) =>
-            _addressBook.GetInvitationToken(user).ToLink(_botName);
+            _addressBook.GetInvitationToken(user).ToLink(BotName);
 
         public void RemoveAuthorizedUser(User user)
         {
@@ -78,11 +78,11 @@ namespace HSMServer.Core.Notifications
             if (_bot is not null)
                 return;
 
-            if (string.IsNullOrEmpty(_botName) || string.IsNullOrEmpty(_botToken)
-                || !_areBotMessagesEnabled)
+            if (string.IsNullOrEmpty(BotName) || string.IsNullOrEmpty(BotToken)
+                || !AreBotMessagesEnabled)
                 return;
 
-            _bot = new TelegramBotClient(_botToken);
+            _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
 
             _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);

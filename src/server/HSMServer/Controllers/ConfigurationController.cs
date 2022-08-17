@@ -15,13 +15,13 @@ namespace HSMServer.Controllers
     public class ConfigurationController : Controller
     {
         private readonly IConfigurationProvider _configurationProvider;
-        private readonly INotificationsCenter _notificationsCenter;
+        private readonly TelegramBot _telegramBot;
 
 
         public ConfigurationController(IConfigurationProvider configurationProvider, INotificationsCenter notificationsCenter)
         {
             _configurationProvider = configurationProvider;
-            _notificationsCenter = notificationsCenter;
+            _telegramBot = notificationsCenter.TelegramBot;
         }
 
 
@@ -60,7 +60,8 @@ namespace HSMServer.Controllers
 
         public void RestartTelegramBot()
         {
-            _notificationsCenter.StartBot();
+            _telegramBot.StopBot();
+            _telegramBot.StartBot();
         }
 
 
