@@ -59,10 +59,10 @@ namespace HSMServer.Core.Notifications
             return _bot?.SendTextMessageAsync(chat, testMessage, cancellationToken: _token) ?? Task.CompletedTask;
         }
 
-        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
+        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus, string productId)
         {
             if (_bot is not null)
-                foreach (var chat in _addressBook.GetUsersChats(sensor, oldStatus))
+                foreach (var chat in _addressBook.GetUsersChats(sensor, oldStatus, productId))
                     _bot?.SendTextMessageAsync(chat.Chat, chat.MessageBuilder.Message, cancellationToken: _token);
         }
 
@@ -75,6 +75,8 @@ namespace HSMServer.Core.Notifications
             _token = new CancellationToken();
 
             _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
+
+            ThreadPool.QueueUserWorkItem(_ => MessageReceiver());
         }
 
         public Task StopBot()
@@ -144,6 +146,17 @@ namespace HSMServer.Core.Notifications
             _logger.Error($"There is some error in telegram bot: {exception}");
 
             return Task.CompletedTask;
+        }
+
+        private async Task MessageReceiver()
+        {
+            while (true)
+            {
+                foreach (var (chat, message) in _addressBook.GetUsersChats(DateTime.UtcNow))
+                    _bot?.SendTextMessageAsync(chat, message, cancellationToken: _token);
+
+                await Task.Delay(1000, _token);
+            }
         }
     }
 }

@@ -405,7 +405,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
-            _telegramBot.SendMessage(sensor, oldStatus);
+            _telegramBot.SendMessage(sensor, oldStatus, product.Id);
             OnChangeSensorEvent(sensor, TransactionType.Update);
         }
 

@@ -76,29 +76,55 @@ namespace HSMServer.Core.Notifications
             user.Notifications.Telegram.Chat = null;
         }
 
-        internal List<ChatSettings> GetUsersChats(BaseSensorModel sensor, ValidationResult oldStatus)
+        internal List<(ChatId, string)> GetUsersChats(BaseSensorModel sensor, ValidationResult oldStatus, string productId)
         {
-            var result = new List<ChatSettings>();
+            var result = new List<(ChatId, string)>();
 
             foreach (var (userId, chatSettings) in _book)
             {
                 if (chatSettings.Chat is null)
                     continue;
 
-                if (WhetherSendMessage(userId, sensor, oldStatus))
+                var user = _userManager.GetUser(userId);
+
+                if (WhetherSendMessage(user, sensor, oldStatus))
                 {
-                    chatSettings.MessageBuilder.BuildMessage(sensor, oldStatus);
-                    result.Add(chatSettings);
+                    if (user.Notifications.Telegram.MessagesDelay > 0)
+                        chatSettings.MessageBuilder.AddMessage(sensor, productId);
+                    else
+                        result.Add((chatSettings.Chat, MessageBuilder.GetMessage(sensor)));
                 }
             }
 
             return result;
         }
 
-        private bool WhetherSendMessage(Guid userId, BaseSensorModel sensor, ValidationResult oldStatus)
+        internal List<(ChatId, string)> GetUsersChats(DateTime time)
         {
-            var user = _userManager.GetUser(userId);
+            var result = new List<(ChatId, string)>();
 
+            foreach (var (userId, chatSettings) in _book)
+            {
+                if (chatSettings.Chat is null)
+                    continue;
+
+                if (time >= chatSettings.MessageBuilder.NotificationSendingTime)
+                {
+                    var message = chatSettings.MessageBuilder.GetAggregateMessage();
+                    if (!string.IsNullOrEmpty(message))
+                        result.Add((chatSettings.Chat, message));
+
+                    var user = _userManager.GetUser(userId);
+
+                    chatSettings.MessageBuilder.Clean(user.Notifications.Telegram.MessagesDelay);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool WhetherSendMessage(User user, BaseSensorModel sensor, ValidationResult oldStatus)
+        {
             var newStatus = sensor.ValidationResult;
             var minStatus = user.Notifications.Telegram.MessagesMinStatus;
 
