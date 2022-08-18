@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
 
             var telegramMock = new Mock<INotificationsCenter>();
-            telegramMock.Setup(a => a.TelegramBot).Returns(new TelegramBot(_userManager));
+            telegramMock.Setup(a => a.TelegramBot).Returns(new TelegramBot(_userManager, null));
             _notificationCenter = telegramMock.Object;
         }
     }
