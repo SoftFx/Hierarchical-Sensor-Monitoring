@@ -12,7 +12,7 @@ namespace HSMServer.Core.Notifications
         private readonly ConcurrentDictionary<string, List<MessageInfo>> _messages = new();
 
 
-        internal DateTime NotificationSendingTime { get; private set; } = DateTime.UtcNow;
+        internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
 
         internal void AddMessage(BaseSensorModel sensor, string productId)
@@ -23,43 +23,43 @@ namespace HSMServer.Core.Notifications
             _messages[productId].Add(GenerateMessageInfo(sensor));
         }
 
-        internal void Clean(int userDelaySeconds)
-        {
-            _messages.Clear();
-
-            NotificationSendingTime = NotificationSendingTime.AddSeconds(userDelaySeconds);
-        }
-
         internal string GetAggregateMessage()
         {
-            var messageGroups = new List<string>(_messages.Count);
-            var builder = new StringBuilder(1 << 2);
+            var builder = new StringBuilder(1 << 6);
 
             foreach (var (_, messages) in _messages)
             {
-                var orderdMessaged = messages.OrderBy(m => m.Message).ThenBy(m => m.SensorValueTime);
+                var orderdMessaged = messages.OrderBy(m => m.SensorPath).ThenBy(m => m.SensorValueTime);
                 var productName = messages[0].ProductName;
 
                 builder.AppendLine(productName);
                 foreach (var message in orderdMessaged)
                     builder.AppendLine(message.Message);
 
-                messageGroups.Add(builder.ToString());
-                builder.Clear();
+                builder.AppendLine();
             }
 
-            return string.Join(Environment.NewLine, messageGroups);
+            Reset();
+
+            return builder.ToString();
         }
 
-        internal static string GetMessage(BaseSensorModel sensor)
+        internal static string GetSingleMessage(BaseSensorModel sensor)
         {
             var messageInfo = GenerateMessageInfo(sensor);
-            var builder = new StringBuilder(1 << 2);
+            var builder = new StringBuilder(1 << 5);
 
             builder.AppendLine(messageInfo.ProductName);
             builder.Append(messageInfo.Message);
 
             return builder.ToString();
+        }
+
+        private void Reset()
+        {
+            _messages.Clear();
+
+            LastSentTime = DateTime.UtcNow;
         }
 
         private static MessageInfo GenerateMessageInfo(BaseSensorModel sensor)
@@ -73,6 +73,7 @@ namespace HSMServer.Core.Notifications
             return new()
             {
                 SensorValueTime = sensor.LastValue.Time,
+                SensorPath = sensor.Path,
                 ProductName = sensor.ProductName,
                 Message = builder.ToString(),
             };
@@ -82,6 +83,8 @@ namespace HSMServer.Core.Notifications
         private readonly struct MessageInfo
         {
             internal DateTime SensorValueTime { get; init; }
+
+            internal string SensorPath { get; init; }
 
             internal string ProductName { get; init; }
 

@@ -1,8 +1,7 @@
-﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
@@ -14,13 +13,9 @@ namespace HSMServer.Core.Notifications
         private readonly ConcurrentDictionary<Guid, ChatSettings> _book = new();
         private readonly ConcurrentDictionary<ChatId, Guid> _chats = new();
 
-        private readonly IUserManager _userManager;
 
-
-        internal AddressBook(IUserManager userManager)
-        {
-            _userManager = userManager;
-        }
+        internal Dictionary<Guid, ChatSettings> GetAuthorizedUsers =>
+            _book.Where((u, _) => u.Value.Chat is not null).ToDictionary(u => u.Key, v => v.Value);
 
 
         internal InvitationToken GetInvitationToken(User user)
@@ -71,66 +66,14 @@ namespace HSMServer.Core.Notifications
         internal void RemoveAuthorizedUser(User user)
         {
             _book.TryRemove(user.Id, out _);
-            _chats.TryRemove(user.Notifications.Telegram.Chat, out _);
+
+            var userChat = user.Notifications.Telegram.Chat;
+            if (!_book.Any(u => u.Value.Chat == userChat))
+                _chats.TryRemove(userChat, out _);
 
             user.Notifications.Telegram.Chat = null;
         }
 
-        internal List<(ChatId, string)> GetUsersChats(BaseSensorModel sensor, ValidationResult oldStatus, string productId)
-        {
-            var result = new List<(ChatId, string)>();
-
-            foreach (var (userId, chatSettings) in _book)
-            {
-                if (chatSettings.Chat is null)
-                    continue;
-
-                var user = _userManager.GetUser(userId);
-
-                if (WhetherSendMessage(user, sensor, oldStatus))
-                {
-                    if (user.Notifications.Telegram.MessagesDelay > 0)
-                        chatSettings.MessageBuilder.AddMessage(sensor, productId);
-                    else
-                        result.Add((chatSettings.Chat, MessageBuilder.GetMessage(sensor)));
-                }
-            }
-
-            return result;
-        }
-
-        internal List<(ChatId, string)> GetUsersChats(DateTime time)
-        {
-            var result = new List<(ChatId, string)>();
-
-            foreach (var (userId, chatSettings) in _book)
-            {
-                if (chatSettings.Chat is null)
-                    continue;
-
-                if (time >= chatSettings.MessageBuilder.NotificationSendingTime)
-                {
-                    var message = chatSettings.MessageBuilder.GetAggregateMessage();
-                    if (!string.IsNullOrEmpty(message))
-                        result.Add((chatSettings.Chat, message));
-
-                    var user = _userManager.GetUser(userId);
-
-                    chatSettings.MessageBuilder.Clean(user.Notifications.Telegram.MessagesDelay);
-                }
-            }
-
-            return result;
-        }
-
-        private static bool WhetherSendMessage(User user, BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            var newStatus = sensor.ValidationResult;
-            var minStatus = user.Notifications.Telegram.MessagesMinStatus;
-
-            return user.Notifications.Telegram.MessagesAreEnabled &&
-                   newStatus != oldStatus &&
-                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
-        }
+        internal bool IsUserAuthorized(User user) => _book.ContainsKey(user.Id);
     }
 }
