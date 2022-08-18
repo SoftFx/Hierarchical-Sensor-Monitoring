@@ -20,9 +20,11 @@ namespace HSMServer.Core.Configuration
         private readonly List<string> _configurationObjectNamesList = new List<string>
         {
             ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey,
-            ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, ConfigurationConstants.SMTPPort,
-            ConfigurationConstants.SMTPLogin, ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
-            ConfigurationConstants.ServerCertificatePassword
+            ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, 
+            ConfigurationConstants.SMTPPort, ConfigurationConstants.SMTPLogin, 
+            ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
+            ConfigurationConstants.ServerCertificatePassword, ConfigurationConstants.BotName,
+            ConfigurationConstants.BotToken, ConfigurationConstants.AreBotMessagesEnabled
         };
 
         #endregion

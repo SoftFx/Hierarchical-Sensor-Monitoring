@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Authentication;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using NLog;
 using System;
@@ -6,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -16,10 +19,7 @@ namespace HSMServer.Core.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string StartBotCommand = "/start";
-
-        // TODO: there are parameters from configuration provider
-        private const string BotToken = "5424383384:AAHw56JEcaJa9wuxRgLp2UOjsknySLCRGfM";
-        private const string BotName = "TestTestTestBoooooooootBot";
+        private const string ConfigurationsError = "Invalid Bot configurations.";
 
         private readonly AddressBook _addressBook = new();
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -29,17 +29,25 @@ namespace HSMServer.Core.Notifications
         };
 
         private readonly IUserManager _userManager;
+        private readonly IConfigurationProvider _configurationProvider;
 
         private CancellationToken _token = CancellationToken.None;
         private ITelegramBotClient _bot;
 
         private bool IsBotRunning => _bot is not null;
+        private string BotName => _configurationProvider.ReadOrDefaultConfigurationObject(
+            ConfigurationConstants.BotName).Value;
+        private string BotToken => _configurationProvider.ReadOrDefaultConfigurationObject(
+            ConfigurationConstants.BotToken).Value;
+        private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefaultConfigurationObject(
+            ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
 
-        internal TelegramBot(IUserManager userManager)
+        internal TelegramBot(IUserManager userManager, IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _userManager.RemoveUserEvent += RemoveUserEventHandler;
+            _configurationProvider = configurationProvider;
 
             FillAuthorizedUsers();
         }
@@ -54,34 +62,62 @@ namespace HSMServer.Core.Notifications
             _userManager.UpdateUser(user);
         }
 
+
         public void SendTestMessage(User user)
         {
+
             if (IsBotRunning)
                 SendMessageAsync(user.Notifications.Telegram.Chat, $"Test message for {user.UserName}");
         }
 
-        public void StartBot()
+
+        public async Task<string> StartBot()
         {
             if (IsBotRunning)
-                return;
+            {
+                var message = await StopBot();
+                if (!string.IsNullOrEmpty(message))
+                    return message;
+            }
+
+            if (!IsValidBotConfigurations())
+                return ConfigurationsError;
 
             _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
 
-            _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
+            try
+            {
+                await _bot.GetMeAsync();
+            }
+            catch (ApiRequestException exc)
+            {
+                _bot = null;
+                return exc.Message;
+            }
 
-            ThreadPool.QueueUserWorkItem(_ => MessageReceiver());
+            _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
+            return string.Empty;
         }
 
-        public Task StopBot()
+        public async Task<string> StopBot()
         {
             if (_token != CancellationToken.None)
                 _token.ThrowIfCancellationRequested();
 
             var bot = _bot;
             _bot = null;
+            try
+            {
+                await bot?.CloseAsync(_token);
+            }
+            catch (Exception exc)
+            {
+                return exc.Message;
+            }
 
-            return bot?.CloseAsync(_token) ?? Task.CompletedTask;
+
+            return string.Empty;
         }
 
         public async ValueTask DisposeAsync()
@@ -203,5 +239,8 @@ namespace HSMServer.Core.Notifications
 
             return Task.CompletedTask;
         }
+
+        private bool IsValidBotConfigurations() => !string.IsNullOrEmpty(BotName)
+            && !string.IsNullOrEmpty(BotToken) && AreBotMessagesEnabled;
     }
 }
