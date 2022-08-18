@@ -75,7 +75,7 @@ namespace HSMServer.Core.Notifications
         {
             if (IsBotRunning)
             {
-                await StopBot(out var message);
+                var message = await StopBot();
                 if (!string.IsNullOrEmpty(message))
                     return message;
             }
@@ -100,10 +100,8 @@ namespace HSMServer.Core.Notifications
             return string.Empty;
         }
 
-        public Task StopBot(out string message)
+        public async Task<string> StopBot()
         {
-            message = string.Empty;
-
             if (_token != CancellationToken.None)
                 _token.ThrowIfCancellationRequested();
 
@@ -111,23 +109,22 @@ namespace HSMServer.Core.Notifications
             _bot = null;
             try
             {
-                bot?.CloseAsync(_token);
+                await bot?.CloseAsync(_token);
             }
             catch (Exception exc)
             {
-                message = exc.Message;
-                return Task.FromException(exc);
+                return exc.Message;
             }
 
 
-            return Task.CompletedTask;
+            return string.Empty;
         }
 
         public async ValueTask DisposeAsync()
         {
             _userManager.RemoveUserEvent -= RemoveUserEventHandler;
 
-            await StopBot(out _);
+            await StopBot();
         }
 
         internal void FillAuthorizedUsers()

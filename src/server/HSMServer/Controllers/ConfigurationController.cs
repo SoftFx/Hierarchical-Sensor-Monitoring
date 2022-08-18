@@ -60,7 +60,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public async Task<string> RestartTelegramBot() => await _telegramBot.StartBot();
+        public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
 
 
         private ConfigurationObject GetModelFromViewModel(ConfigurationObjectViewModel viewModel)
