@@ -1,4 +1,5 @@
-﻿@using HSMServer.Constants
+﻿@using HSMCommon.Constants
+@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.HtmlHelpers
 @using HSMServer.Model.ViewModel
@@ -38,7 +39,7 @@
 
                 <div>
                     You can configure a Telegram bot. Please install it via Telegram and put configuration
-                    parameters (BotName, BotToken, AreBotMessagesEnabled) in the table below.
+                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
                     <b>Warning!</b> It will stop current bot.
                     Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
                 </div>
@@ -80,7 +81,7 @@
                             <td>
                                 <label class="config-name">@Model[i].Name</label>
                                 <a data-bs-toggle="popover" title="Description"
-                               data-bs-content="@Model[i].Description>"
+                               data-bs-content="@Model[i].Description"
                                data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
@@ -125,8 +126,6 @@
 
 
 <script>
-    var currentDesc = null;
-
     //Description popovers
     $(document).ready(function() {
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
@@ -146,16 +145,14 @@
     $('[data-bs-toggle="popover"]').on("click", function() {
         var thisDesc = bootstrap.Popover.getInstance(this);
 
-        if (currentDesc != null) {
-            currentDesc.hide();
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('.show'));
+        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
 
-            if (currentDesc === thisDesc)
-                currentDesc = null;
-            else
-                currentDesc = thisDesc;
-        }
-        else
-            currentDesc = thisDesc;
+            var currDesc = bootstrap.Popover.getInstance(popoverTriggerEl);
+
+            if (currDesc != thisDesc)
+                currDesc.hide();
+        });
     });
 
     $('[id^=cancel_]').on("click", function() {
@@ -211,7 +208,7 @@
             cache: false,
             async: true,
             success: function(data) {
-               $("#message").css("display", "block");
+                $("#message").css("display", "block");
 
                 if (data == "") {
                     $("#message").empty();
