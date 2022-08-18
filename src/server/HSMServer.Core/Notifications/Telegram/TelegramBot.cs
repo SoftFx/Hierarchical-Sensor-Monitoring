@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -18,6 +19,7 @@ namespace HSMServer.Core.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string StartBotCommand = "/start";
+        private const string ConfigurationsError = "Invalid Bot configurations.";
 
         private readonly AddressBook _addressBook;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -73,32 +75,58 @@ namespace HSMServer.Core.Notifications
                     _bot?.SendTextMessageAsync(chat.Chat, chat.MessageBuilder.Message, cancellationToken: _token);
         }
 
-        public void StartBot()
+        public async Task<string> StartBot()
         {
             if (_bot is not null)
-                return;
+            {
+                await StopBot(out var message);
+                if (!string.IsNullOrEmpty(message))
+                    return message;
+            }
 
             if (!IsValidBotConfigurations())
-                return;
+                return ConfigurationsError;
 
             _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
 
+            try
+            {
+                await _bot.GetMeAsync();
+            }
+            catch(ApiRequestException exc)
+            {
+                _bot = null;
+                return exc.Message;
+            }
+
             _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
+            return string.Empty;
         }
 
-        public Task StopBot()
+        public Task StopBot(out string message)
         {
+            message = string.Empty;
+
             if (_token != CancellationToken.None)
                 _token.ThrowIfCancellationRequested();
 
             var bot = _bot;
             _bot = null;
+            try
+            {
+                bot?.CloseAsync(_token);
+            }
+            catch(Exception exc)
+            {
+                message = exc.Message;
+                return Task.FromException(exc);
+            }
 
-            return bot?.CloseAsync(_token) ?? Task.CompletedTask;
+            return Task.CompletedTask;
         }
 
-        public async ValueTask DisposeAsync() => await StopBot();
+        public async ValueTask DisposeAsync() => await StopBot(out _);
 
         internal void FillAuthorizedUsers()
         {
@@ -157,6 +185,6 @@ namespace HSMServer.Core.Notifications
         }
 
         private bool IsValidBotConfigurations() => !string.IsNullOrEmpty(BotName) 
-            || !string.IsNullOrEmpty(BotToken) || AreBotMessagesEnabled;
+            && !string.IsNullOrEmpty(BotToken) && AreBotMessagesEnabled;
     }
 }

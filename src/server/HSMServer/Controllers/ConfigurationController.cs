@@ -6,6 +6,7 @@ using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
@@ -58,11 +59,8 @@ namespace HSMServer.Controllers
             _configurationProvider.SetConfigurationObjectToDefault(configObjName);
         }
 
-        public void RestartTelegramBot()
-        {
-            _telegramBot.StopBot();
-            _telegramBot.StartBot();
-        }
+        [HttpGet]
+        public async Task<string> RestartTelegramBot() => await _telegramBot.StartBot();
 
 
         private ConfigurationObject GetModelFromViewModel(ConfigurationObjectViewModel viewModel)

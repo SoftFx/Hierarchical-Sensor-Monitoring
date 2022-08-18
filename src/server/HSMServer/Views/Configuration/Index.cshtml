@@ -43,10 +43,12 @@
                     Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
                 </div>
 
-                <div class="ms-5 mt-1">
-                    <button id="restartButton" type="button" class="btn btn-secondary" style="background-color: #e35478">
+                <div class="row ms-5 mt-1">
+                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
                         <i class="fab fa-telegram"></i> Restart Telegram Bot
                     </button>
+
+                    <div class="mt-1" id="errorMessage" style="color: red; display: none;"></div>
                 </div>
             </div>
         </div>
@@ -78,7 +80,7 @@
                             <td>
                                 <label class="config-name">@Model[i].Name</label>
                                 <a data-bs-toggle="popover" title="Description"
-                               data-bs-content="@Model[i].Description Installation by Telegram <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>" 
+                               data-bs-content="@Model[i].Description Installation by Telegram <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>"
                                data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
@@ -204,8 +206,19 @@
         $.ajax({
             type: 'GET',
             url: restartBotAction,
+            dataType: 'html',
+            contentType: 'text',
             cache: false,
-            async: true
+            async: true,
+            success: function(data) {
+                if (data != "")
+                    $("#errorMessage").css("display", "block");
+                else 
+                    $("#errorMessage").css("display", "none");
+
+                $("#errorMessage").empty();
+                $("#errorMessage").append("Something went wrong. Please check Bot configurations. Error message: " + data);
+            }
         });
     });
 
