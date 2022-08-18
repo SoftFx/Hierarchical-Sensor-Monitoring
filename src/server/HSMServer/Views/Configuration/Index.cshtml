@@ -1,4 +1,5 @@
-﻿@using HSMServer.Constants
+﻿@using HSMCommon.Constants
+@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.HtmlHelpers
 @using HSMServer.Model.ViewModel
@@ -11,6 +12,7 @@
 <script>
     var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
     var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfigObject), ViewConstants.ConfigurationController))";
+    var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
 </script>
 
 <style>
@@ -28,6 +30,29 @@
 
 <div class="container">
     <div class="row justify-content-center">
+
+        <div class="m-10">
+            <div class="row justify-content-start">
+                <div class="col-auto">
+                    <h5 class="my-3 ms-5">Telegram</h5>
+                </div>
+
+                <div>
+                    You can configure a Telegram bot. Please install it via Telegram and put configuration
+                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
+                    <b>Warning!</b> It will stop current bot.
+                    Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
+                </div>
+
+                <div class="row ms-5 mt-1">
+                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
+                        <i class="fab fa-telegram"></i> Restart Telegram Bot
+                    </button>
+
+                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
+                </div>
+            </div>
+        </div>
 
         <div class="m-10">
             <div class="row justify-content-start">
@@ -55,8 +80,9 @@
                             <th scope="row">@i</th>
                             <td>
                                 <label class="config-name">@Model[i].Name</label>
-                                <a tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus"
-                               title="Description" data-bs-content="@Model[i].Description">
+                                <a data-bs-toggle="popover" title="Description"
+                               data-bs-content="@Model[i].Description"
+                               data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
                             </td>
@@ -102,11 +128,6 @@
 <script>
     //Description popovers
     $(document).ready(function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
         var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl);
@@ -120,6 +141,19 @@
             "IsDefault": isDefault
         }
     }
+
+    $('[data-bs-toggle="popover"]').on("click", function() {
+        var thisDesc = bootstrap.Popover.getInstance(this);
+
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('.show'));
+        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+
+            var currDesc = bootstrap.Popover.getInstance(popoverTriggerEl);
+
+            if (currDesc != thisDesc)
+                currDesc.hide();
+        });
+    });
 
     $('[id^=cancel_]').on("click", function() {
         document.location.reload();
@@ -164,4 +198,30 @@
             }
         });
     });
+
+    $('[id^=restartButton]').on('click', function() {
+        $.ajax({
+            type: 'GET',
+            url: restartBotAction,
+            dataType: 'html',
+            contentType: 'text',
+            cache: false,
+            async: true,
+            success: function(data) {
+                $("#message").css("display", "block");
+
+                if (data == "") {
+                    $("#message").empty();
+                    $("#message").css("color", "green");
+                    $("#message").append("Success.");
+                }
+                else {
+                    $("#message").empty();
+                    $("#message").css("color", "red");
+                    $("#message").append("Something went wrong. Please check Bot configurations. Error message: " + data);
+                }
+            }
+        });
+    });
+
 </script>

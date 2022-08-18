@@ -13,6 +13,7 @@ namespace HSMServer.Core.Extensions
             copy.CertificateThumbprint = user.CertificateThumbprint;
             copy.IsAdmin = user.IsAdmin;
             copy.ProductsRoles = user.ProductsRoles;
+            copy.Notifications = new(user.Notifications.ToEntity());
 
             return copy;
         }

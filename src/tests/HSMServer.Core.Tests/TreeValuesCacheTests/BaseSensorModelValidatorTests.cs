@@ -38,7 +38,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public BaseSensorModelValidatorTests(ValidationFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
         }
 
 
@@ -113,10 +113,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 var sensor = BuildSensorModel(sensorType);
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
+                var expectedMessage = string.IsNullOrEmpty(baseValue.Comment)
+                    ? string.Format(SensorValueStatusInvalid, status)
+                    : baseValue.Comment;
 
                 Assert.True(sensor.TryAddValue(baseValue, out _));
                 Assert.Equal(baseValue.Status, sensor.ValidationResult.Result);
-                Assert.Equal(string.Format(SensorValueStatusInvalid, status), sensor.ValidationResult.Message);
+                Assert.Equal(expectedMessage, sensor.ValidationResult.Message);
 
                 if (status == SensorStatus.Error)
                     Assert.True(sensor.ValidationResult.IsError);
