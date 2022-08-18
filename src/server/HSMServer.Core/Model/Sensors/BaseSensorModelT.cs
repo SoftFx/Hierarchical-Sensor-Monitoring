@@ -76,7 +76,10 @@ namespace HSMServer.Core.Model
         private void Validate(T value)
         {
             if (value.Status != SensorStatus.Ok)
-                ValidationResult = new($"User data has {value.Status} status", value.Status);
+            {
+                var message = string.IsNullOrEmpty(value.Comment) ? $"User data has {value.Status} status" : value.Comment;
+                ValidationResult = new(message, value.Status);
+            }
 
             foreach (var policy in _policies)
                 ValidationResult += policy.Validate(value);

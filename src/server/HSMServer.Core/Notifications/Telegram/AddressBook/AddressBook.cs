@@ -1,8 +1,7 @@
-﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
@@ -14,13 +13,9 @@ namespace HSMServer.Core.Notifications
         private readonly ConcurrentDictionary<Guid, ChatSettings> _book = new();
         private readonly ConcurrentDictionary<ChatId, Guid> _chats = new();
 
-        private readonly IUserManager _userManager;
 
-
-        internal AddressBook(IUserManager userManager)
-        {
-            _userManager = userManager;
-        }
+        internal Dictionary<Guid, ChatSettings> GetAuthorizedUsers =>
+            _book.Where((u, _) => u.Value.Chat is not null).ToDictionary(u => u.Key, v => v.Value);
 
 
         internal InvitationToken GetInvitationToken(User user)
@@ -71,40 +66,14 @@ namespace HSMServer.Core.Notifications
         internal void RemoveAuthorizedUser(User user)
         {
             _book.TryRemove(user.Id, out _);
-            _chats.TryRemove(user.Notifications.Telegram.Chat, out _);
+
+            var userChat = user.Notifications.Telegram.Chat;
+            if (!_book.Any(u => u.Value.Chat == userChat))
+                _chats.TryRemove(userChat, out _);
 
             user.Notifications.Telegram.Chat = null;
         }
 
-        internal List<ChatSettings> GetUsersChats(BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            var result = new List<ChatSettings>();
-
-            foreach (var (userId, chatSettings) in _book)
-            {
-                if (chatSettings.Chat is null)
-                    continue;
-
-                if (WhetherSendMessage(userId, sensor, oldStatus))
-                {
-                    chatSettings.MessageBuilder.BuildMessage(sensor, oldStatus);
-                    result.Add(chatSettings);
-                }
-            }
-
-            return result;
-        }
-
-        private bool WhetherSendMessage(Guid userId, BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            var user = _userManager.GetUser(userId);
-
-            var newStatus = sensor.ValidationResult;
-            var minStatus = user.Notifications.Telegram.MessagesMinStatus;
-
-            return user.Notifications.Telegram.MessagesAreEnabled &&
-                   newStatus != oldStatus &&
-                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
-        }
+        internal bool IsUserAuthorized(User user) => _book.ContainsKey(user.Id);
     }
 }

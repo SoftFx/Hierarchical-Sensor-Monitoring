@@ -91,7 +91,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUpdatedUserAsync(new() { updatedUser },
                                            new() { defaultUserFromDB },
-                                           _userManager.GetUser,
+                                           _userManager.GetCopyUser,
                                            _userManager.GetUserByUserName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUpdatedUserAsync(updatedUsers,
                                            users,
-                                           _userManager.GetUser,
+                                           _userManager.GetCopyUser,
                                            _userManager.GetUserByUserName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
@@ -144,7 +144,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
                                            actualUpdatedUsers,
-                                           _userManager.GetUser,
+                                           _userManager.GetCopyUser,
                                            _userManager.GetUserByUserName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
@@ -169,7 +169,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _userManager.RemoveUser(defaultUserFromDB.UserName);
 
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
-                                                  _userManager.GetUser,
+                                                  _userManager.GetCopyUser,
                                                   _userManager.GetUserByUserName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
@@ -211,7 +211,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             users.ForEach(u => _userManager.RemoveUser(u.UserName));
 
             await FullTestRemovedDefaultUserAsync(users,
-                                                  _userManager.GetUser,
+                                                  _userManager.GetCopyUser,
                                                   _userManager.GetUserByUserName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }

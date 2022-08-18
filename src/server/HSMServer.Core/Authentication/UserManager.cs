@@ -25,6 +25,7 @@ namespace HSMServer.Core.Authentication
         private readonly UpdateUserActionHandler _updateUserActionHandler;
 
         public event Action<User> UpdateUserEvent;
+        public event Action<User> RemoveUserEvent;
 
 
         public UserManager(IDatabaseCore databaseCore, ILogger<UserManager> logger)
@@ -117,7 +118,9 @@ namespace HSMServer.Core.Authentication
         }
 
         // TODO remove copy object
-        public User GetUser(Guid id) => new(_users.GetValueOrDefault(id));
+        public User GetCopyUser(Guid id) => new(_users.GetValueOrDefault(id));
+
+        public User GetUser(Guid id) => _users.GetValueOrDefault(id);
 
         public User GetUserByUserName(string userName) =>
             !string.IsNullOrEmpty(userName) && _userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user)

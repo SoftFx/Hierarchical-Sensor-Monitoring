@@ -72,8 +72,11 @@ namespace HSMServer.Core.Authentication
             protected override bool TryUserAction(User user) =>
                 _userManager._users.TryRemove(user.Id, out var _);
 
-            protected override void PostUserAction(User user) =>
+            protected override void PostUserAction(User user)
+            {
                 _userManager._userNames.TryRemove(user.UserName, out var _);
+                _userManager.RemoveUserEvent?.Invoke(user);
+            }
 
             protected override void DatabaseAction(User user) =>
                 _userManager._databaseCore.RemoveUser(user);
