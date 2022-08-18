@@ -59,7 +59,7 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
-            _sendTimer.Dispose();
+            _sendTimer?.Dispose();
             Disposed = true;
         }
 
