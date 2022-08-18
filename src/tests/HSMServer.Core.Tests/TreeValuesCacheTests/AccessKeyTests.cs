@@ -29,7 +29,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
             : base(fixture, dbFixture, addTestProduct: true)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
 
             _productTransactionCount = (0, 0, 0);
             _keyTransactionCount = (0, 0, 0);
@@ -51,11 +51,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void AddAccessKeysTest(int count)
         {
             List<AccessKeyModel> keys = AddRandomKeys(count);
-            
-            AssertTransactionsCount((add: ProductAddTransactionCount, 
+
+            AssertTransactionsCount((add: ProductAddTransactionCount,
                 update: count + DefaultKeyCount, delete: 0), _productTransactionCount);
 
-            AssertTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0), 
+            AssertTransactionsCount((add: count + DefaultKeyCount, update: 0, delete: 0),
                 _keyTransactionCount);
 
             TestProductAndKeys(keys, _valuesCache.GetProduct, _valuesCache.GetAccessKey);
@@ -96,15 +96,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Update access key(s)")]
         public void UpdateAccessKeysTest(int count)
         {
-             static AccessKeyUpdate BuildKeyUpdate(Guid id) =>
-                new()
-                {
-                    Id = id,
-                    DisplayName = RandomGenerator.GetRandomString(),
-                    Comment = RandomGenerator.GetRandomString(),
-                    Permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddSensors,
-                    State = KeyState.Blocked
-                };
+            static AccessKeyUpdate BuildKeyUpdate(Guid id) =>
+               new()
+               {
+                   Id = id,
+                   DisplayName = RandomGenerator.GetRandomString(),
+                   Comment = RandomGenerator.GetRandomString(),
+                   Permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddSensors,
+                   State = KeyState.Blocked
+               };
 
             var updatedKeys = new List<AccessKeyModel>(count);
             for (int i = 0; i < count; i++)
@@ -186,7 +186,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private static void AssertTransactionsCount((int add, int update, int delete) expected,
             (int add, int update, int delete) actual) => Assert.True(expected == actual);
-        
+
         private void TestProductAndKeys(List<AccessKeyModel> keys, GetProduct getProduct,
             GetAccessKey getKey)
         {
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return keys;
         }
 
-        private AccessKeyModel BuildAccessKeyModel() => new (EntitiesFactory
+        private AccessKeyModel BuildAccessKeyModel() => new(EntitiesFactory
             .BuildAccessKeyEntity(productId: _product.Id));
     }
 }
