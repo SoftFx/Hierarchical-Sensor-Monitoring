@@ -131,7 +131,7 @@
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4251</DisableSpecificWarnings>
@@ -149,7 +149,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalIncludeDirectories>include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4251</DisableSpecificWarnings>
@@ -196,15 +196,17 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="HSMDataCollector">
-      <HintPath>..\collector\HSMDataCollector\bin\Release\net472\HSMDataCollector.dll</HintPath>
-    </Reference>
-    <Reference Include="HSMSensorDataObjects">
-      <HintPath>..\collector\HSMDataCollector\bin\Release\net472\HSMSensorDataObjects.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj">
+      <Project>{ee682d03-dbc2-4c58-9046-91902bdaa8cb}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\collector\HSMDataCollector\HSMDataCollector.csproj">
+      <Project>{4386d8d4-35f3-4002-a840-577ed418ebb1}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
