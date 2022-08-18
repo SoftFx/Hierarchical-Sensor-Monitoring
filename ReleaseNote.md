@@ -1,12 +1,9 @@
 # HSM Server
 
-## Bug fixing
+## New features:
+### Telegram
 
-### Database
-
-- Sometimes a database could be duplicated on a Monday at midnight
-- Sometimes a database could crash when creating a new sensor
-
-### Site
-- Empty history requests have been fixed
-- Sorting for All sensor values in table has been changed
+* Base logic for telegram notifications have been added
+* Telegram tab with notification user settings has been added
+* Configuration tab has been updated for telegram logic
+* Telegram authorization by link has been added
