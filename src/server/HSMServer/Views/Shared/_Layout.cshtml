@@ -89,16 +89,16 @@
                             }
 
                             <li class="nav-item">
+                                <a class="nav-link"
+                               href="@Url.Action(nameof(AccountController.Settings), ViewConstants.AccountController)">
+                                    Telegram
+                                </a>
+                            </li>
+
+                            <li class="nav-item">
                                 <a class="nav-link" target="_blank"
                                    href="https://@(Context.Request.Host.Value.Replace("44333","44330") + ViewConstants.ApiSwagger)">
                                     API
-                                </a>
-                            </li>
-                            
-                            <li class="nav-item">
-                                <a class="nav-link"
-                                   href="@Url.Action(nameof(AccountController.Settings), ViewConstants.AccountController)">
-                                    Telegram
                                 </a>
                             </li>
                         </ul>
