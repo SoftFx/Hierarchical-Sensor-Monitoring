@@ -48,7 +48,7 @@
                         <i class="fab fa-telegram"></i> Restart Telegram Bot
                     </button>
 
-                    <div class="mt-1" id="errorMessage" style="color: red; display: none;"></div>
+                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
                 </div>
             </div>
         </div>
@@ -80,7 +80,7 @@
                             <td>
                                 <label class="config-name">@Model[i].Name</label>
                                 <a data-bs-toggle="popover" title="Description"
-                               data-bs-content="@Model[i].Description"
+                               data-bs-content="@Model[i].Description>"
                                data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
@@ -211,13 +211,18 @@
             cache: false,
             async: true,
             success: function(data) {
-                if (data != "")
-                    $("#errorMessage").css("display", "block");
-                else 
-                    $("#errorMessage").css("display", "none");
+               $("#message").css("display", "block");
 
-                $("#errorMessage").empty();
-                $("#errorMessage").append("Something went wrong. Please check Bot configurations. Error message: " + data);
+                if (data == "") {
+                    $("#message").empty();
+                    $("#message").css("color", "green");
+                    $("#message").append("Success.");
+                }
+                else {
+                    $("#message").empty();
+                    $("#message").css("color", "red");
+                    $("#message").append("Something went wrong. Please check Bot configurations. Error message: " + data);
+                }
             }
         });
     });
