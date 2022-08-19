@@ -89,37 +89,36 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            var sensors = GetNodeSensors(selectedId);
-
             void EnableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Add(sensorId);
 
-            UpdateUserEnabledSensors(sensors, EnableSensors);
+            UpdateUserEnabledSensors(selectedId, EnableSensors);
         }
 
         [HttpPost]
         public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            var sensors = GetNodeSensors(selectedId);
-
             void DisableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Remove(sensorId);
 
-            UpdateUserEnabledSensors(sensors, DisableSensors);
+            UpdateUserEnabledSensors(selectedId, DisableSensors);
         }
 
-        private List<Guid> GetNodeSensors(string encodedId) =>
-            _treeViewModel.GetNodeSensors(SensorPathHelper.Decode(encodedId));
-
-        private void UpdateUserEnabledSensors(List<Guid> sensors, Action<HashSet<Guid>, Guid> updateAction)
+        private void UpdateUserEnabledSensors(string selectedNode, Action<HashSet<Guid>, Guid> updateAction)
         {
+            var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
             foreach (var sensorId in sensors)
                 updateAction(user.Notifications.EnabledSensors, sensorId);
 
             _userManager.UpdateUser(user);
+
+            _treeViewModel.UpdateNotificationsCharacteristics(user);
         }
+
+        private List<Guid> GetNodeSensors(string encodedId) =>
+            _treeViewModel.GetNodeSensors(SensorPathHelper.Decode(encodedId));
 
         #region Update
 

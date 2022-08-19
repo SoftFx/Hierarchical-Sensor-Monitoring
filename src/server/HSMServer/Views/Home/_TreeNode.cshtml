@@ -5,7 +5,14 @@
 
 <li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime'
     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
-    @Model.GetShortName(Model.Name) (@Model.Count sensors)
+    <span>@Model.GetShortName(Model.Name) (@Model.Count sensors)</span>
+    @if (Model.IsNotificationsEnabled)
+    {
+        <span>
+            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+            <input id='@(Model.EncodedId)_partialNotifications' value='@(Model.IsNotificationsPartiallyEnabled.ToString())' style='display: none' />
+        </span>
+    }
 
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
@@ -23,7 +30,13 @@
             {
                 <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime'
                     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime"}'>
-                    @Model.GetShortName(sensor.Name)
+                    <span>@Model.GetShortName(sensor.Name)</span>
+                    @if (sensor.IsNotificationsEnabled)
+                    {
+                        <span>
+                            <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs mb-1"></i>
+                        </span>
+                    }
                 </li>
             }
         </ul>

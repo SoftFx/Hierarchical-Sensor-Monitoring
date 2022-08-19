@@ -126,15 +126,7 @@ function customMenu(node) {
             "separator_after": false,
             "label": "Enable notifications",
             "action": function (obj) {
-                $.ajax({
-                    type: 'post',
-                    url: enableNotifications + '?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false
-                }).done(function () {
-                    updateTreeTimer();
-                });
+                updateSensorsNotifications(enableNotifications, node);
             }
         },
         "DisableNotifications": {
@@ -142,15 +134,7 @@ function customMenu(node) {
             "separator_after": false,
             "label": "Disable notifications",
             "action": function (obj) {
-                $.ajax({
-                    type: 'post',
-                    url: disableNotifications + '?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false
-                }).done(function () {
-                    updateTreeTimer();
-                });
+                updateSensorsNotifications(disableNotifications, node);
             }
         }
     }
@@ -159,5 +143,27 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
+    if (document.getElementById(`${node.id}_notifications`)) {
+        let partialNotifications = $(`#${node.id}_partialNotifications`).val();
+        if (partialNotifications !== "True") {
+            delete items.EnableNotifications;
+        }
+    }
+    else {
+        delete items.DisableNotifications;
+    }
+
     return items;
+}
+
+function updateSensorsNotifications(action, node) {
+    $.ajax({
+        type: 'post',
+        url: action + '?Selected=' + node.id,
+        datatype: 'html',
+        contenttype: 'application/json',
+        cache: false
+    }).done(function () {
+        updateTreeTimer();
+    });
 }

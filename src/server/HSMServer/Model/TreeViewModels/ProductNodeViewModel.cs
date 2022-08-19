@@ -27,6 +27,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsAddingAccessKeysAvailable { get; internal set; }
 
+        public bool IsNotificationsPartiallyEnabled { get; private set; }
+
         public int Count { get; private set; }
 
 
@@ -88,9 +90,18 @@ namespace HSMServer.Model.TreeViewModels
                 accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
         }
 
-        internal void UpdateNotificationsStatus() =>
-            IsNotificationsEnabled = Sensors.Any(s => s.Value.IsNotificationsEnabled) ||
-                                     Nodes.Any(n => n.Value.IsNotificationsEnabled);
+        internal void RecursivelyUpdateNotificationsStatus()
+        {
+            if (Nodes != null && !Nodes.IsEmpty)
+                foreach (var (_, node) in Nodes)
+                    node.RecursivelyUpdateNotificationsStatus();
+
+            IsNotificationsEnabled =
+                Sensors.Any(s => s.Value.IsNotificationsEnabled) || Nodes.Any(n => n.Value.IsNotificationsEnabled);
+            IsNotificationsPartiallyEnabled =
+                IsNotificationsEnabled &&
+                (Sensors.Any(s => !s.Value.IsNotificationsEnabled) || Nodes.Any(s => !s.Value.IsNotificationsEnabled));
+        }
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
