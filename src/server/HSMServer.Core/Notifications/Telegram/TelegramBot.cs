@@ -35,10 +35,8 @@ namespace HSMServer.Core.Notifications
         private ITelegramBotClient _bot;
 
         private bool IsBotRunning => _bot is not null;
-        private string BotName => _configurationProvider.ReadOrDefaultConfigurationObject(
-            ConfigurationConstants.BotName).Value;
-        private string BotToken => _configurationProvider.ReadOrDefaultConfigurationObject(
-            ConfigurationConstants.BotToken).Value;
+        private string BotName => _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotName).Value;
+        private string BotToken => _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.BotToken).Value;
         private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefaultConfigurationObject(
             ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
@@ -47,6 +45,7 @@ namespace HSMServer.Core.Notifications
         {
             _userManager = userManager;
             _userManager.RemoveUserEvent += RemoveUserEventHandler;
+
             _configurationProvider = configurationProvider;
 
             FillAuthorizedUsers();
@@ -62,14 +61,11 @@ namespace HSMServer.Core.Notifications
             _userManager.UpdateUser(user);
         }
 
-
         public void SendTestMessage(User user)
         {
-
             if (IsBotRunning)
                 SendMessageAsync(user.Notifications.Telegram.Chat, $"Test message for {user.UserName}");
         }
-
 
         public async Task<string> StartBot()
         {
@@ -88,7 +84,7 @@ namespace HSMServer.Core.Notifications
 
             try
             {
-                await _bot.GetMeAsync();
+                await _bot.GetMeAsync(_token);
             }
             catch (ApiRequestException exc)
             {
@@ -97,6 +93,8 @@ namespace HSMServer.Core.Notifications
             }
 
             _bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync, _options, _token);
+            ThreadPool.QueueUserWorkItem(_ => MessageReceiver());
+
             return string.Empty;
         }
 
@@ -107,6 +105,7 @@ namespace HSMServer.Core.Notifications
 
             var bot = _bot;
             _bot = null;
+
             try
             {
                 await bot?.CloseAsync(_token);
@@ -115,7 +114,6 @@ namespace HSMServer.Core.Notifications
             {
                 return exc.Message;
             }
-
 
             return string.Empty;
         }
@@ -240,7 +238,7 @@ namespace HSMServer.Core.Notifications
             return Task.CompletedTask;
         }
 
-        private bool IsValidBotConfigurations() => !string.IsNullOrEmpty(BotName)
-            && !string.IsNullOrEmpty(BotToken) && AreBotMessagesEnabled;
+        private bool IsValidBotConfigurations() =>
+            !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken) && AreBotMessagesEnabled;
     }
 }
