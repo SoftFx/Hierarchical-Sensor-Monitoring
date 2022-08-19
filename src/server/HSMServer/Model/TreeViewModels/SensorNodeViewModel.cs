@@ -77,7 +77,7 @@ namespace HSMServer.Model.TreeViewModels
             Name = model.DisplayName;
             SensorType = model.Type;
             Description = model.Description;
-            UpdateTime = model.LastUpdateTime.ToUniversalTime();
+            UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result;
             ValidationError = model.ValidationResult.Message;
             Product = model.ProductName;
