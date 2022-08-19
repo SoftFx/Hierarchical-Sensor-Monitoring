@@ -120,6 +120,38 @@ function customMenu(node) {
                     modal.hide();
                 });
             }
+        },
+        "EnableNotifications": {
+            "separator_before": true,
+            "separator_after": false,
+            "label": "Enable notifications",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'post',
+                    url: enableNotifications + '?Selected=' + node.id,
+                    datatype: 'html',
+                    contenttype: 'application/json',
+                    cache: false
+                }).done(function () {
+                    updateTreeTimer();
+                });
+            }
+        },
+        "DisableNotifications": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Disable notifications",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'post',
+                    url: disableNotifications + '?Selected=' + node.id,
+                    datatype: 'html',
+                    contenttype: 'application/json',
+                    cache: false
+                }).done(function () {
+                    updateTreeTimer();
+                });
+            }
         }
     }
 

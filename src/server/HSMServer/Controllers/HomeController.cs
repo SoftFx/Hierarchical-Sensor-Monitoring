@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
@@ -32,12 +33,14 @@ namespace HSMServer.Controllers
 
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
+        private readonly IUserManager _userManager;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
+        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel, IUserManager userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
+            _userManager = userManager;
         }
 
 
@@ -81,6 +84,41 @@ namespace HSMServer.Controllers
                 _treeValuesCache.RemoveSensorsData(node.Id);
             else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
                 _treeValuesCache.RemoveSensorData(sensor.Id);
+        }
+
+        [HttpPost]
+        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var sensors = GetNodeSensors(selectedId);
+
+            void EnableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
+                userEnabledSensors.Add(sensorId);
+
+            UpdateUserEnabledSensors(sensors, EnableSensors);
+        }
+
+        [HttpPost]
+        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var sensors = GetNodeSensors(selectedId);
+
+            void DisableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
+                userEnabledSensors.Remove(sensorId);
+
+            UpdateUserEnabledSensors(sensors, DisableSensors);
+        }
+
+        private List<Guid> GetNodeSensors(string encodedId) =>
+            _treeViewModel.GetNodeSensors(SensorPathHelper.Decode(encodedId));
+
+        private void UpdateUserEnabledSensors(List<Guid> sensors, Action<HashSet<Guid>, Guid> updateAction)
+        {
+            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
+
+            foreach (var sensorId in sensors)
+                updateAction(user.Notifications.EnabledSensors, sensorId);
+
+            _userManager.UpdateUser(user);
         }
 
         #region Update

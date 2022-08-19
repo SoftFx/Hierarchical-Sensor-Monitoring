@@ -7,6 +7,7 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -59,6 +60,45 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var (productId, role) in user.ProductsRoles)
                 if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
                     node.UpdateAccessKeysAvailableOperations(true);
+        }
+
+        internal void UpdateNotificationsCharacteristics(User user)
+        {
+            foreach (var (_, sensor) in Sensors)
+                sensor.IsNotificationsEnabled = false;
+
+            foreach (var enabledSensor in user.Notifications.EnabledSensors)
+                if (Sensors.TryGetValue(enabledSensor, out var sensor))
+                    sensor.IsNotificationsEnabled = true;
+
+            foreach (var (_, node) in Nodes)
+                node.UpdateNotificationsStatus();
+        }
+
+        internal List<Guid> GetNodeSensors(string selectedNode)
+        {
+            var sensors = new List<Guid>(1 << 3);
+
+            if (Guid.TryParse(selectedNode, out var sensorId) && Sensors.TryGetValue(sensorId, out var sensor))
+                sensors.Add(sensor.Id);
+            else if (Nodes.TryGetValue(selectedNode, out var node))
+            {
+                void GetCurrentNodeSensors(string nodeId)
+                {
+                    if (!Nodes.TryGetValue(nodeId, out var node))
+                        return;
+
+                    foreach (var (subNodeId, _) in node.Nodes)
+                        GetCurrentNodeSensors(subNodeId);
+
+                    foreach (var (sensorId, _) in node.Sensors)
+                        sensors.Add(sensorId);
+                }
+
+                GetCurrentNodeSensors(node.Id);
+            }
+
+            return sensors;
         }
 
         private void BuildTree()

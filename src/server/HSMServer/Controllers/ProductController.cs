@@ -136,6 +136,9 @@ namespace HSMServer.Controllers
             var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
+            foreach (var sensorId in _treeViewModel.GetNodeSensors(model.ProductKey))
+                user.Notifications.EnabledSensors.Remove(sensorId);
+
             _userManager.UpdateUser(user);
         }
 

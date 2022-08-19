@@ -88,6 +88,10 @@ namespace HSMServer.Model.TreeViewModels
                 accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
         }
 
+        internal void UpdateNotificationsStatus() =>
+            IsNotificationsEnabled = Sensors.Any(s => s.Value.IsNotificationsEnabled) ||
+                                     Nodes.Any(n => n.Value.IsNotificationsEnabled);
+
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
         private void ModifyUpdateTime()

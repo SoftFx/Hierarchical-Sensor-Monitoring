@@ -274,6 +274,7 @@ namespace HSMServer.Core.Cache
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
+            _userManager.RemoveSensorFromUsers(sensorId);
 
             OnChangeSensorEvent(sensor, TransactionType.Delete);
         }
@@ -312,6 +313,8 @@ namespace HSMServer.Core.Cache
             List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(count);
 
             (var sensor, var values) = GetCachedValues(sensorId, GetValues);
+            if (sensor == null)
+                return values;
 
             int remainingCount = count - values.Count;
             if (remainingCount > 0)
@@ -329,6 +332,8 @@ namespace HSMServer.Core.Cache
             List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
 
             (var sensor, var values) = GetCachedValues(sensorId, GetValues);
+            if (sensor == null)
+                return values;
 
             var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
             values.AddRange(sensor.ConvertValues(
