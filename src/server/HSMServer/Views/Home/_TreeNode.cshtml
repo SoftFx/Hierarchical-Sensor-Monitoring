@@ -3,7 +3,7 @@
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime'
+<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)'
     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
     <span>@Model.GetShortName(Model.Name) (@Model.Count sensors)</span>
     @if (Model.IsNotificationsEnabled)
@@ -28,8 +28,8 @@
         <ul>
             @foreach (var sensor in Model.VisibleSensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime'
-                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime"}'>
+                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)'
+                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
                     <span>@Model.GetShortName(sensor.Name)</span>
                     @if (sensor.IsNotificationsEnabled)
                     {
