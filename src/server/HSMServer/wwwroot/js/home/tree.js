@@ -125,6 +125,7 @@ function customMenu(node) {
             "separator_before": true,
             "separator_after": false,
             "label": "Enable notifications",
+            "icon": "fab fa-telegram",
             "action": function (obj) {
                 updateSensorsNotifications(enableNotifications, node);
             }
@@ -133,6 +134,7 @@ function customMenu(node) {
             "separator_before": false,
             "separator_after": false,
             "label": "Disable notifications",
+            "icon": "fab fa-telegram",
             "action": function (obj) {
                 updateSensorsNotifications(disableNotifications, node);
             }
