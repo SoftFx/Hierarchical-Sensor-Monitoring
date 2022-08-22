@@ -1,4 +1,5 @@
-﻿<div class='dropdown'>
+﻿
+<div class='dropdown'>
     <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
         Filters
     </button>
@@ -9,28 +10,28 @@
             <div class="d-flex">
                 <div class="form-check">
                     <input checked type="checkbox" class="form-check-input" id="ok">
-                    <label class="form-check-label" for="ok">
+                    <label class="form-check-label" for="ok" title="ok">
                         <i class="fas fa-circle tree-icon-ok"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
                     <input checked type="checkbox" class="form-check-input" id="warning">
-                    <label class="form-check-label" for="warning">
+                    <label class="form-check-label" for="warning" title="warning">
                         <i class="fas fa-circle tree-icon-warning"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
                     <input checked type="checkbox" class="form-check-input" id="error">
-                    <label class="form-check-label" for="error">
+                    <label class="form-check-label" for="error" title="error">
                         <i class="fas fa-circle tree-icon-error"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
                     <input checked type="checkbox" class="form-check-input" id="unknown">
-                    <label class="form-check-label" for="unknown">
+                    <label class="form-check-label" for="unknown" title="unknown">
                         <i class="fas fa-circle tree-icon-unknown"></i>
                     </label>
                 </div>
@@ -42,34 +43,30 @@
             <div class="form-check">
                 <input checked type="checkbox" class="form-check-input" id="history">
                 <label class="form-check-label" for="history">
-                    Must contain history
+                    With data
                 </label>
             </div>
             <div class="dropdown-divider"></div>
-
 
             <h6 class="dropdown-header">Notifications</h6>
             <div class="form-check">
                 <input checked type="checkbox" class="form-check-input" id="notifications">
                 <label class="form-check-label" for="notifications">
-                    With notifications
+                    Telegram <i class="fab fa-telegram"></i> 
                 </label>
             </div>
-            <div class="dropdown-divider"></div>
 
-
-            <h6 class="dropdown-header">Hidden sensors</h6>
             <div class="form-check">
                 <input type="checkbox" class="form-check-input" id="blocked">
                 <label class="form-check-label" for="blocked">
-                    Blocked
+                    Blocked sensors <i class="fa-solid fa-circle-minus"></i>
                 </label>
             </div>
 
             <div class="form-check">
                 <input type="checkbox" class="form-check-input" id="ignored">
                 <label class="form-check-label" for="ignored">
-                    Ignored
+                    Ignored sensors <i class="fa-solid fa-eye-slash"></i>
                 </label>
             </div>
         </form>
