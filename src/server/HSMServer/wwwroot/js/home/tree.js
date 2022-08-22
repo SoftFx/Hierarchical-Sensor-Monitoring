@@ -84,12 +84,11 @@ function customMenu(node) {
                 showAccessKeysList(node.id, true);
             }
         },
-        "Delete": {
+        "CleanHistory": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Delete",
+            "label": "Clean history",
             "action": function (obj) {
-
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove node');
