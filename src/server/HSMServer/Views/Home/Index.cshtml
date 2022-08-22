@@ -72,7 +72,7 @@
 <div id="mainContainer">
     <div>
         <div class="d-flex">
-            <div class="me-auto">
+            <div class="d-flex me-auto">
                 <div class="col-auto ms-2 mb-1">
                     <div class='btn-group'>
                         <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
@@ -89,6 +89,7 @@
                         </ul>
                     </div>
                 </div>
+                <div class="col-auto ms-2 mb-1"> @await Html.PartialAsync("_TreeFilters.cshtml") </div>
             </div>
 
             <div class="col-auto me-1">
