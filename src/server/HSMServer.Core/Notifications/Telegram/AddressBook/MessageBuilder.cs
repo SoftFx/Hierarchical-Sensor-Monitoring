@@ -11,7 +11,7 @@ namespace HSMServer.Core.Notifications
     {
         private const int MaxSensorMessages = 5;
 
-        private readonly ConcurrentDictionary<string, List<MessageInfo>> _messages = new();
+        private readonly ConcurrentDictionary<string, Dictionary<string, MessagesQueue>> _messages = new();
 
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
@@ -20,9 +20,14 @@ namespace HSMServer.Core.Notifications
         internal void AddMessage(BaseSensorModel sensor, string productId)
         {
             if (!_messages.ContainsKey(productId))
-                _messages[productId] = new List<MessageInfo>();
+                _messages[productId] = new Dictionary<string, MessagesQueue>();
 
-            _messages[productId].Add(GenerateMessageInfo(sensor));
+            var productMessages = _messages[productId];
+
+            if (!productMessages.ContainsKey(sensor.Path))
+                productMessages.Add(sensor.Path, new MessagesQueue());
+
+            productMessages[sensor.Path].AddMessage(GenerateMessageInfo(sensor));
         }
 
         internal string GetAggregateMessage()
@@ -31,15 +36,15 @@ namespace HSMServer.Core.Notifications
 
             foreach (var (_, messages) in _messages)
             {
-                builder.AppendLine(messages[0].ProductName);
+                var productName = messages?.FirstOrDefault().Value.Messages?.FirstOrDefault().ProductName;
+                builder.AppendLine(productName);
 
-                var sensorsMessages = messages.GroupBy(m => m.SensorPath);
-                foreach (var sensorMessages in sensorsMessages)
+                foreach (var (_, messagesQueue) in messages)
                 {
-                    if (sensorMessages.Count() > MaxSensorMessages)
-                        builder.AppendLine("    ...");
+                    if (messagesQueue.AllMessagesCount > MaxSensorMessages)
+                        builder.AppendLine($"    ... ({messagesQueue.AllMessagesCount - MaxSensorMessages} other message(s))");
 
-                    foreach (var message in sensorMessages.OrderBy(m => m.SensorValueTime).TakeLast(MaxSensorMessages))
+                    foreach (var message in messagesQueue.Messages.OrderBy(m => m.SensorValueTime))
                         builder.AppendLine(message.Message);
                 }
 
@@ -84,6 +89,25 @@ namespace HSMServer.Core.Notifications
                 ProductName = sensor.ProductName,
                 Message = builder.ToString(),
             };
+        }
+
+
+        private sealed record MessagesQueue
+        {
+            internal Queue<MessageInfo> Messages { get; } = new();
+
+            internal int AllMessagesCount { get; private set; }
+
+
+            internal void AddMessage(MessageInfo message)
+            {
+                AllMessagesCount++;
+
+                Messages.Enqueue(message);
+
+                if (Messages.Count > MaxSensorMessages)
+                    Messages.Dequeue();
+            }
         }
 
 

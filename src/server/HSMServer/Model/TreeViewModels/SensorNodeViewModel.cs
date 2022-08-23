@@ -98,17 +98,14 @@ namespace HSMServer.Model.TreeViewModels
         {
             IsNotificationsEnabled = isNotificationsEnabled;
 
+            var delta = isNotificationsEnabled ? 1 : -1;
             var parent = Parent;
+
             while (parent != null)
             {
-                var parentProduct = parent as ProductNodeViewModel;
+                (parent as ProductNodeViewModel).SensorsWithNotificationsCount += delta;
 
-                if (isNotificationsEnabled)
-                    parentProduct.SensorsWithNotificationsCount++;
-                else
-                    parentProduct.SensorsWithNotificationsCount--;
-
-                parent = parentProduct.Parent;
+                parent = parent.Parent;
             }
         }
 
