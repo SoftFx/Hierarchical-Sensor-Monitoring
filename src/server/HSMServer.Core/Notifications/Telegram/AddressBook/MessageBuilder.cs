@@ -9,6 +9,8 @@ namespace HSMServer.Core.Notifications
 {
     internal sealed class MessageBuilder
     {
+        private const int MaxSensorMessages = 5;
+
         private readonly ConcurrentDictionary<string, List<MessageInfo>> _messages = new();
 
 
@@ -29,12 +31,17 @@ namespace HSMServer.Core.Notifications
 
             foreach (var (_, messages) in _messages)
             {
-                var orderdMessaged = messages.OrderBy(m => m.SensorPath).ThenBy(m => m.SensorValueTime);
-                var productName = messages[0].ProductName;
+                builder.AppendLine(messages[0].ProductName);
 
-                builder.AppendLine(productName);
-                foreach (var message in orderdMessaged)
-                    builder.AppendLine(message.Message);
+                var sensorsMessages = messages.GroupBy(m => m.SensorPath);
+                foreach (var sensorMessages in sensorsMessages)
+                {
+                    if (sensorMessages.Count() > MaxSensorMessages)
+                        builder.AppendLine("    ...");
+
+                    foreach (var message in sensorMessages.OrderBy(m => m.SensorValueTime).TakeLast(MaxSensorMessages))
+                        builder.AppendLine(message.Message);
+                }
 
                 builder.AppendLine();
             }

@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         }
 
         private List<Guid> GetNodeSensors(string encodedId) =>
-            _treeViewModel.GetNodeSensors(SensorPathHelper.Decode(encodedId));
+            _treeViewModel.GetNodeAllSensors(SensorPathHelper.Decode(encodedId));
 
         #region Update
 

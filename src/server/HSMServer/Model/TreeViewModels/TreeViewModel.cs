@@ -77,7 +77,7 @@ namespace HSMServer.Model.TreeViewModels
                     node.RecursivelyUpdateNotificationsStatus();
         }
 
-        internal List<Guid> GetNodeSensors(string selectedNode)
+        internal List<Guid> GetNodeAllSensors(string selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 
@@ -85,19 +85,19 @@ namespace HSMServer.Model.TreeViewModels
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
             {
-                void GetCurrentNodeSensors(string nodeId)
+                void GetNodeSensors(string nodeId)
                 {
                     if (!Nodes.TryGetValue(nodeId, out var node))
                         return;
 
                     foreach (var (subNodeId, _) in node.Nodes)
-                        GetCurrentNodeSensors(subNodeId);
+                        GetNodeSensors(subNodeId);
 
                     foreach (var (sensorId, _) in node.Sensors)
                         sensors.Add(sensorId);
                 }
 
-                GetCurrentNodeSensors(node.Id);
+                GetNodeSensors(node.Id);
             }
 
             return sensors;
