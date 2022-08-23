@@ -313,12 +313,12 @@ namespace HSMServer.Controllers
         #region Sensor info
 
         [HttpGet]
-        public HtmlString GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
+        public IActionResult GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
-                return new HtmlString(string.Empty);
+                return new EmptyResult();
 
-            return ViewHelper.CreateSensorInfoTable(new SensorInfoViewModel(sensor));
+            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
         }
 
         [HttpPost]

@@ -1,0 +1,62 @@
+﻿@using HSMServer.Helpers;
+@using HSMServer.Model.ViewModel;
+
+@model SensorInfoViewModel;
+
+@{
+    string encodedId = SensorPathHelper.EncodeGuid(Model.Id);
+}
+
+
+<div style='margin: 10px'>
+    <div class='row justify-content-start'>
+        <div class='col-md-auto'>
+            <h5 style='margin: 10px 20px 10px;'>@(Model.ProductName)/@(Model.Path)</h5>
+            <div>
+                <button id='editInfo_@encodedId' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip' title='edit meta info'>
+                    <i class='fas fa-edit'></i>
+                </button>
+                <button disabled id='saveInfo_@encodedId' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip' title='save meta info'>
+                    <i class='fas fa-check'></i>
+                </button>
+                <button disabled style='margin-left: 5px' id='revertInfo_@encodedId' type='button' class='btn btn-secondary' data-bs-toggle='tooltip' title='revert changes'>
+                    <i class='fas fa-times'></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<table class='table table-bordered'>
+    <tbody>
+        <tr>
+            <td>Product</td>
+            <td>@Model.ProductName</td>
+        </tr>
+        <tr>
+            <td>Path</td>
+            <td>@Model.Path</td>
+        </tr>
+        <tr>
+            <td>Sensor type</td>
+            <td>@Model.SensorType</td>
+        </tr>
+        <tr>
+            <td>Expected update interval<i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
+            <td>
+                <input disabled type='text' class='form-control' style='max-width:300px' id='interval_@encodedId' value='@Model.ExpectedUpdateInterval'>
+            </td>
+        </tr>
+        <tr>
+            <td>Description</td>
+            <td>
+                <input disabled type='text' class='form-control' style='max-width:300px' id='description_@encodedId' value='@Model.Description'>
+            </td>
+        </tr>
+        <tr>
+            <td>Unit</td>
+            <td>
+                <input disabled type='text' class='form-control' style='max-width:300px' id='unit_@encodedId' value='@Model.Unit'>
+            </td>
+        </tr>
+    </tbody>
+</table>

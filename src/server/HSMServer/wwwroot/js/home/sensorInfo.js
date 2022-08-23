@@ -20,7 +20,7 @@ function showMetaInfo(id) {
         cache: false,
         async: true
     }).done(function (data) {
-        $('#sensor_info_' + id).empty().append(JSON.parse(data).value);
+        $('#sensor_info_' + id).empty().html(data);
         setLinkText(id, "Hide meta info");
         initializeEditInfoButtons(id);
     });
