@@ -1,106 +1,100 @@
 ﻿<style>
-.form-check-input:checked{
-   background-color: grey !important;
-   border: 0;
-}
-.form-check-input:focus, 
-.label::after, 
-label.form-check-label:focus, 
-.form-check-input::after, 
-.form-check-input:not(:disabled):not(.disabled):active:focus {
-   color: black;
-   outline: 0;
-   border: 0;
-   box-shadow: 0 0 0 0.1rem #bdb9af !important;
-}
+    .form-check-input:checked {
+        background-color: grey !important;
+        border: 0;
+    }
+
+    .form-check-input:focus,
+    .label::after,
+    label.form-check-label:focus,
+    .form-check-input::after,
+    .form-check-input:not(:disabled):not(.disabled):active:focus {
+        color: black;
+        outline: 0;
+        border: 0;
+        box-shadow: 0 0 0 0.1rem #bdb9af !important;
+    }
 </style>
 
 
-<div class='dropdown'>
-    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
-        Filters
-    </button>
-    <div class='dropdown-menu'>
-        <form class="px-2">
+<form class="px-2" id="filters" style="display: none; background-color: ">
 
-            <h6 class="dropdown-header">Status</h6>
-            <div class="d-flex">
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="ok">
-                    <label class="form-check-label" for="ok" title="Ok">
-                        <i class="fas fa-circle tree-icon-ok"></i>
-                    </label>
-                </div>
+    <h6 class="dropdown-header">Status</h6>
+    <div class="d-flex">
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="ok">
+            <label class="form-check-label" for="ok" title="Ok">
+                <i class="fas fa-circle tree-icon-ok"></i>
+            </label>
+        </div>
 
-                <div class="form-check ms-2">
-                    <input type="checkbox" class="form-check-input" id="warning">
-                    <label class="form-check-label" for="warning" title="Warning">
-                        <i class="fas fa-circle tree-icon-warning"></i>
-                    </label>
-                </div>
+        <div class="form-check ms-2">
+            <input type="checkbox" class="form-check-input" id="warning">
+            <label class="form-check-label" for="warning" title="Warning">
+                <i class="fas fa-circle tree-icon-warning"></i>
+            </label>
+        </div>
 
-                <div class="form-check ms-2">
-                    <input type="checkbox" class="form-check-input" id="error">
-                    <label class="form-check-label" for="error" title="Error">
-                        <i class="fas fa-circle tree-icon-error"></i>
-                    </label>
-                </div>
+        <div class="form-check ms-2">
+            <input type="checkbox" class="form-check-input" id="error">
+            <label class="form-check-label" for="error" title="Error">
+                <i class="fas fa-circle tree-icon-error"></i>
+            </label>
+        </div>
 
-                <div class="form-check ms-2">
-                    <input type="checkbox" class="form-check-input" id="unknown">
-                    <label class="form-check-label" for="unknown" title="Unknown">
-                        <i class="fas fa-circle tree-icon-unknown"></i>
-                    </label>
-                </div>
-            </div>
-            <div class="dropdown-divider"></div>
-
-
-            <h6 class="dropdown-header">History</h6>
-            <div class="form-check">
-                <input type="checkbox" class="form-check-input" id="history">
-                <label class="form-check-label" for="history">
-                    With data
-                </label>
-            </div>
-            <div class="dropdown-divider"></div>
-
-            <h6 class="dropdown-header">Notifications</h6>
-            <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="notifications">
-                    <label class="form-check-label" for="notifications" title="Telegram">
-                        Telegram <i class="fab fa-telegram"></i>
-                    </label>
-                </div>
-
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="ignored">
-                    <label class="form-check-label" for="ignored" title="Ignored sensors">
-                        Ignored sensors <i class="fa-solid fa-eye-slash"></i>
-                    </label>
-                </div>
-                <div class="dropdown-divider"></div>
-
-                <h6 class="dropdown-header">Blocked</h6>
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="blocked">
-                    <label class="form-check-label" for="blocked" title="Blocked sensors">
-                        Blocked sensors <i class="fa-solid fa-circle-minus"></i>
-                    </label>
-                </div>
-                <div class="dropdown-divider"></div>
-
-                <h6 class="dropdown-header">Sort By</h6>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="name" value="name">
-                    <label class="form-check-label" for="name">By Name</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="time" value="time">
-                    <label class="form-check-label" for="time">By Last Update</label>
-                </div>
-
-            <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
-        </form>
+        <div class="form-check ms-2">
+            <input type="checkbox" class="form-check-input" id="unknown">
+            <label class="form-check-label" for="unknown" title="Unknown">
+                <i class="fas fa-circle tree-icon-unknown"></i>
+            </label>
+        </div>
     </div>
-</div>
+    <div class="dropdown-divider"></div>
+
+
+    <h6 class="dropdown-header">History</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="history">
+        <label class="form-check-label" for="history">
+            With data
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Notifications</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="notifications">
+        <label class="form-check-label" for="notifications" title="Telegram">
+            Telegram <i class="fab fa-telegram"></i>
+        </label>
+    </div>
+
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="ignored">
+        <label class="form-check-label" for="ignored" title="Ignored sensors">
+            Ignored sensors <i class="fa-solid fa-eye-slash"></i>
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Blocked</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="blocked">
+        <label class="form-check-label" for="blocked" title="Blocked sensors">
+            Blocked sensors <i class="fa-solid fa-circle-minus"></i>
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Sort By</h6>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="name" value="name">
+        <label class="form-check-label" for="name">By Name</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="time" value="time">
+        <label class="form-check-label" for="time">By Last Update</label>
+    </div>
+
+    <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
+</form>
