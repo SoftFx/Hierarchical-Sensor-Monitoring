@@ -92,7 +92,7 @@ namespace HSMServer.Controllers
             void EnableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Add(sensorId);
 
-            UpdateUserEnabledSensors(selectedId, EnableSensors);
+            UpdateUserEnabledSensors(selectedId, true, EnableSensors);
         }
 
         [HttpPost]
@@ -101,20 +101,23 @@ namespace HSMServer.Controllers
             void DisableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Remove(sensorId);
 
-            UpdateUserEnabledSensors(selectedId, DisableSensors);
+            UpdateUserEnabledSensors(selectedId, false, DisableSensors);
         }
 
-        private void UpdateUserEnabledSensors(string selectedNode, Action<HashSet<Guid>, Guid> updateAction)
+        private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus, Action<HashSet<Guid>, Guid> updateAction)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
             foreach (var sensorId in sensors)
+            {
                 updateAction(user.Notifications.EnabledSensors, sensorId);
 
-            _userManager.UpdateUser(user);
+                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                    sensor.UpdateNotificationsStatus(notificationsUpdatedStatus);
+            }
 
-            _treeViewModel.UpdateNotificationsCharacteristics(user);
+            _userManager.UpdateUser(user);
         }
 
         private List<Guid> GetNodeSensors(string encodedId) =>

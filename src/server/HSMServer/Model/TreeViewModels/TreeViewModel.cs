@@ -49,7 +49,7 @@ namespace HSMServer.Model.TreeViewModels
                     node.Recursion();
 
             UpdateAccessKeysCharacteristics(user);
-            UpdateNotificationsCharacteristics(user);
+            ResetNotificationsCharacteristics(user);
         }
 
         internal void UpdateAccessKeysCharacteristics(User user)
@@ -63,18 +63,18 @@ namespace HSMServer.Model.TreeViewModels
                     node.UpdateAccessKeysAvailableOperations(true);
         }
 
-        internal void UpdateNotificationsCharacteristics(User user)
+        internal void ResetNotificationsCharacteristics(User user)
         {
+            foreach (var (_, node) in Nodes)
+                node.SensorsWithNotificationsCount = 0;
+
             foreach (var (_, sensor) in Sensors)
+            {
                 sensor.IsNotificationsEnabled = false;
 
-            foreach (var enabledSensor in user.Notifications.EnabledSensors)
-                if (Sensors.TryGetValue(enabledSensor, out var sensor))
-                    sensor.IsNotificationsEnabled = true;
-
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.RecursivelyUpdateNotificationsStatus();
+                if (user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    sensor.UpdateNotificationsStatus(true);
+            }
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)
