@@ -34,29 +34,6 @@
         <div class="m-10">
             <div class="row justify-content-start">
                 <div class="col-auto">
-                    <h5 class="my-3 ms-5">Telegram</h5>
-                </div>
-
-                <div>
-                    You can configure a Telegram bot. Please install it via Telegram and put configuration
-                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
-                    <b>Warning!</b> It will stop current bot.
-                    Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
-                </div>
-
-                <div class="row ms-5 mt-1">
-                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
-                        <i class="fab fa-telegram"></i> Restart Telegram Bot
-                    </button>
-
-                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="m-10">
-            <div class="row justify-content-start">
-                <div class="col-auto">
                     <h5 class="my-3 ms-5">Configuration parameters</h5>
                 </div>
             </div>
@@ -120,6 +97,29 @@
                     }
                 </tbody>
             </table>
+        </div>
+
+        <div class="m-10">
+            <div class="row justify-content-start">
+                <div class="col-auto">
+                    <h5 class="my-3 ms-5">Telegram</h5>
+                </div>
+
+                <div>
+                    You can configure a Telegram bot. Please install it via Telegram and put configuration
+                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
+                    <b>Warning!</b> It will stop current bot.
+                    Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
+                </div>
+
+                <div class="row ms-5 mt-1 mb-1">
+                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
+                        <i class="fab fa-telegram"></i> Restart Telegram Bot
+                    </button>
+
+                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
