@@ -33,6 +33,7 @@ namespace HSMServer.Core.Authentication
         void RemoveUser(string userName);
 
         void RemoveProductFromUsers(string productKey);
+        void RemoveSensorFromUsers(Guid sensorId);
 
         User Authenticate(string login, string password);
 

@@ -177,6 +177,7 @@ namespace HSMServer.Core.Notifications
             var minStatus = user.Notifications.Telegram.MessagesMinStatus;
 
             return user.Notifications.Telegram.MessagesAreEnabled &&
+                   user.Notifications.EnabledSensors.Contains(sensor.Id) &&
                    newStatus != oldStatus &&
                    (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }

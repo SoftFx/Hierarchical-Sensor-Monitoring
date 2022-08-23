@@ -27,7 +27,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsAddingAccessKeysAvailable { get; internal set; }
 
-        public int Count { get; private set; }
+        public int AllSensorsCount { get; private set; }
+
+        public int VisibleSensorsCount { get; private set; }
+
+        public int SensorsWithNotificationsCount { get; internal set; }
 
 
         public ProductNodeViewModel(ProductModel model)
@@ -60,17 +64,22 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Recursion()
         {
-            int count = 0;
+            int visibleSensorsCount = 0;
+            int allSensorsCount = 0;
+
             if (Nodes != null && !Nodes.IsEmpty)
             {
                 foreach (var (_, node) in Nodes)
                 {
                     node.Recursion();
-                    count += node.Count;
+
+                    visibleSensorsCount += node.VisibleSensorsCount;
+                    allSensorsCount += node.AllSensorsCount;
                 }
             }
 
-            Count = count + VisibleSensors.Count;
+            VisibleSensorsCount = visibleSensorsCount + VisibleSensors.Count;
+            AllSensorsCount = allSensorsCount + Sensors.Count;
 
             ModifyUpdateTime();
             ModifyStatus();

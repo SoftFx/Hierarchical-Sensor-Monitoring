@@ -102,6 +102,17 @@ namespace HSMServer.Core.Authentication
                 _databaseCore.UpdateUser(userToEdt);
         }
 
+        public void RemoveSensorFromUsers(Guid sensorId)
+        {
+            foreach (var (_, user) in _users)
+            {
+                if (!user.Notifications.EnabledSensors.Remove(sensorId))
+                    continue;
+
+                _databaseCore.UpdateUser(user);
+            }
+        }
+
         public User Authenticate(string login, string password)
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);

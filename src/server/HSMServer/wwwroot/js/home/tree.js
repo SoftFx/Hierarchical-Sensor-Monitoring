@@ -84,12 +84,11 @@ function customMenu(node) {
                 showAccessKeysList(node.id, true);
             }
         },
-        "Delete": {
+        "CleanHistory": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Delete",
+            "label": "Clean history",
             "action": function (obj) {
-
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove node');
@@ -120,6 +119,24 @@ function customMenu(node) {
                     modal.hide();
                 });
             }
+        },
+        "EnableNotifications": {
+            "separator_before": true,
+            "separator_after": false,
+            "label": "Enable notifications",
+            "icon": "fab fa-telegram",
+            "action": function (obj) {
+                updateSensorsNotifications(enableNotifications, node);
+            }
+        },
+        "DisableNotifications": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Disable notifications",
+            "icon": "fab fa-telegram",
+            "action": function (obj) {
+                updateSensorsNotifications(disableNotifications, node);
+            }
         }
     }
 
@@ -127,5 +144,27 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
+    if (document.getElementById(`${node.id}_notifications`)) {
+        let partialNotifications = $(`#${node.id}_partialNotifications`).val();
+        if (partialNotifications !== "True") {
+            delete items.EnableNotifications;
+        }
+    }
+    else {
+        delete items.DisableNotifications;
+    }
+
     return items;
+}
+
+function updateSensorsNotifications(action, node) {
+    $.ajax({
+        type: 'post',
+        url: action + '?Selected=' + node.id,
+        datatype: 'html',
+        contenttype: 'application/json',
+        cache: false
+    }).done(function () {
+        updateTreeTimer();
+    });
 }
