@@ -9,29 +9,29 @@
             <h6 class="dropdown-header">Status</h6>
             <div class="d-flex">
                 <div class="form-check">
-                    <input checked type="checkbox" class="form-check-input" id="ok">
-                    <label class="form-check-label" for="ok" title="ok">
+                    <input type="checkbox" class="form-check-input" id="ok">
+                    <label class="form-check-label" for="ok" title="Ok">
                         <i class="fas fa-circle tree-icon-ok"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
-                    <input checked type="checkbox" class="form-check-input" id="warning">
-                    <label class="form-check-label" for="warning" title="warning">
+                    <input type="checkbox" class="form-check-input" id="warning">
+                    <label class="form-check-label" for="warning" title="Warning">
                         <i class="fas fa-circle tree-icon-warning"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
-                    <input checked type="checkbox" class="form-check-input" id="error">
-                    <label class="form-check-label" for="error" title="error">
+                    <input type="checkbox" class="form-check-input" id="error">
+                    <label class="form-check-label" for="error" title="Error">
                         <i class="fas fa-circle tree-icon-error"></i>
                     </label>
                 </div>
 
                 <div class="form-check ms-2">
-                    <input checked type="checkbox" class="form-check-input" id="unknown">
-                    <label class="form-check-label" for="unknown" title="unknown">
+                    <input type="checkbox" class="form-check-input" id="unknown">
+                    <label class="form-check-label" for="unknown" title="Unknown">
                         <i class="fas fa-circle tree-icon-unknown"></i>
                     </label>
                 </div>
@@ -41,7 +41,7 @@
 
             <h6 class="dropdown-header">History</h6>
             <div class="form-check">
-                <input checked type="checkbox" class="form-check-input" id="history">
+                <input type="checkbox" class="form-check-input" id="history">
                 <label class="form-check-label" for="history">
                     With data
                 </label>
@@ -50,25 +50,27 @@
 
             <h6 class="dropdown-header">Notifications</h6>
             <div class="form-check">
-                <input checked type="checkbox" class="form-check-input" id="notifications">
-                <label class="form-check-label" for="notifications">
-                    Telegram <i class="fab fa-telegram"></i> 
-                </label>
-            </div>
+                    <input type="checkbox" class="form-check-input" id="notifications">
+                    <label class="form-check-label" for="notifications" title="Telegram">
+                        Telegram <i class="fab fa-telegram"></i>
+                    </label>
+                </div>
 
-            <div class="form-check">
-                <input type="checkbox" class="form-check-input" id="blocked">
-                <label class="form-check-label" for="blocked">
-                    Blocked sensors <i class="fa-solid fa-circle-minus"></i>
-                </label>
-            </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="blocked">
+                    <label class="form-check-label" for="blocked" title="Blocked sensors">
+                        Blocked sensors <i class="fa-solid fa-circle-minus"></i>
+                    </label>
+                </div>
 
-            <div class="form-check">
-                <input type="checkbox" class="form-check-input" id="ignored">
-                <label class="form-check-label" for="ignored">
-                    Ignored sensors <i class="fa-solid fa-eye-slash"></i>
-                </label>
-            </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="ignored">
+                    <label class="form-check-label" for="ignored" title="Ignored sensors">
+                        Ignored sensors <i class="fa-solid fa-eye-slash"></i>
+                    </label>
+                </div>
+
+            <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
         </form>
     </div>
 </div>
