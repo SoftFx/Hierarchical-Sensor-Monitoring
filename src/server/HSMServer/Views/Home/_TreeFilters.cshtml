@@ -74,17 +74,30 @@ label.form-check-label:focus,
                 </div>
 
                 <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="ignored">
+                    <label class="form-check-label" for="ignored" title="Ignored sensors">
+                        Ignored sensors <i class="fa-solid fa-eye-slash"></i>
+                    </label>
+                </div>
+                <div class="dropdown-divider"></div>
+
+                <h6 class="dropdown-header">Blocked</h6>
+                <div class="form-check">
                     <input type="checkbox" class="form-check-input" id="blocked">
                     <label class="form-check-label" for="blocked" title="Blocked sensors">
                         Blocked sensors <i class="fa-solid fa-circle-minus"></i>
                     </label>
                 </div>
+                <div class="dropdown-divider"></div>
 
+                <h6 class="dropdown-header">Sort By</h6>
                 <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="ignored">
-                    <label class="form-check-label" for="ignored" title="Ignored sensors">
-                        Ignored sensors <i class="fa-solid fa-eye-slash"></i>
-                    </label>
+                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="name" value="name">
+                    <label class="form-check-label" for="name">By Name</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="time" value="time">
+                    <label class="form-check-label" for="time">By Last Update</label>
                 </div>
 
             <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
