@@ -145,7 +145,7 @@ namespace HSMDataCollector.Core
                 InitializeWindowsUpdateMonitoring(new TimeSpan(24, 0, 0), new TimeSpan(30, 0, 0, 0), specificPath);
         }
 
-        public void MonitorServiceAlive(string specificPath)
+        public void MonitorServiceAlive(string specificPath = null)
         {
             var path = $"{specificPath ?? TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
 

@@ -17,8 +17,10 @@ namespace HSMServer.Core.Notifications
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
 
-        internal void AddMessage(BaseSensorModel sensor, string productId)
+        internal void AddMessage(BaseSensorModel sensor)
         {
+           var productId = sensor.ProductId;
+
             if (!_messages.ContainsKey(productId))
                 _messages[productId] = new Dictionary<string, MessagesQueue>();
 

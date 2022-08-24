@@ -148,7 +148,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModelWithoutUpdatedMetadata(SensorEntity expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.ProductId, actual.ParentProductId);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
             Assert.Equal(expected.State, (byte)actual.State);
@@ -222,11 +222,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             if (parentProduct == null)
             {
-                Assert.Null(actual.ProductId);
+                Assert.Null(actual.ParentProductId);
                 Assert.Null(actual.ProductName);
             }
             else
-                Assert.Equal(parentProduct.Id, actual.ProductId);
+                Assert.Equal(parentProduct.Id, actual.ParentProductId);
 
             AssertModels(expected.BaseValue, actual.LastValue);
         }
@@ -306,7 +306,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expected.Path);
 
             Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.ParentProductId, actual.ParentProductId);
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.CreationDate, actual.CreationDate);
             Assert.Equal(expected.DisplayName, actual.DisplayName);

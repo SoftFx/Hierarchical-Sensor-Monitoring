@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
 
         public DateTime CreationDate { get; private set; }
 
-        public string ProductId { get; private set; }
+        public string ParentProductId { get; private set; }
 
         public string DisplayName { get; private set; }
 
@@ -46,6 +46,8 @@ namespace HSMServer.Core.Model
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
 
         public string ProductName { get; private set; }
+
+        public string ProductId { get; private set; }
 
         public string Path { get; private set; }
 
@@ -71,11 +73,11 @@ namespace HSMServer.Core.Model
             if (ExpectedUpdateIntervalPolicy == null || !HasData)
                 return false;
 
-            var validationMessage = ValidationResult.Message;
+            var oldValidationResult = ValidationResult;
 
             ValidationResult += ExpectedUpdateIntervalPolicy.Validate(LastValue);
 
-            return ValidationResult.Message != validationMessage;
+            return ValidationResult != oldValidationResult;
         }
 
 
@@ -93,6 +95,7 @@ namespace HSMServer.Core.Model
 
             Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
             ProductName = parentProduct.DisplayName;
+            ProductId = parentProduct.Id;
         }
 
         internal void Update(SensorUpdate sensor)
@@ -110,7 +113,7 @@ namespace HSMServer.Core.Model
                 CreationDate = new DateTime(entity.CreationDate);
 
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ProductId = entity.ProductId;
+            ParentProductId = entity.ProductId;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
             State = (SensorState)entity.State;
@@ -126,7 +129,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ProductId,
+                ProductId = ParentProductId,
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,
