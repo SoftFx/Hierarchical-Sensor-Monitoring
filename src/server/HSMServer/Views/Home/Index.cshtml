@@ -90,7 +90,7 @@
                 </div>
                 </div>*@
 
-                <button id="show" type="button" class="btn btn-sm btn-secondary mt-1 ms-1">
+                <button id="show" type="button" class="btn btn-sm btn-secondary mt-1 ms-4">
                     <i class="fa-solid fa-filter"></i> Filters
                 </button>
             </div>
@@ -107,10 +107,10 @@
 
 
 
-    <div class="d-flex flex-wrap">
-        <div class="col-auto ms-2 mb-1"> @await Html.PartialAsync("_TreeFilters.cshtml") </div>
+    <div class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
+        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilters.cshtml") </div>
 
-        <div id="mainContainer" class="row justify-content-start mw-100">
+        <div id="mainContainer" class="justify-content-start mw-100 me-1">
             <div class="scrollableBlock col-auto ms-2">
                 <div id="treeContainer">
                     <div class="col-md-auto">
@@ -120,7 +120,7 @@
             </div>
 
         </div>
-        <div id="listSensors" class="col-lg-8">@await Html.PartialAsync("_TreeNodeSensors", (NodeViewModel)null)</div>
+        <div id="listSensors" class="flex-grow-1">@await Html.PartialAsync("_TreeNodeSensors", (NodeViewModel)null)</div>
     </div>
 </div>
 
