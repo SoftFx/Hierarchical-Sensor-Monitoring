@@ -133,7 +133,7 @@ namespace HSMServer.Core.Notifications
                 _addressBook.AddAuthorizedUser(user);
         }
 
-        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus, string productId)
+        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             if (IsBotRunning && AreBotMessagesEnabled)
                 foreach (var (userId, chatSettings) in _addressBook.GetAuthorizedUsers)
@@ -143,7 +143,7 @@ namespace HSMServer.Core.Notifications
                     if (WhetherSendMessage(user, sensor, oldStatus))
                     {
                         if (user.Notifications.Telegram.MessagesDelay > 0)
-                            chatSettings.MessageBuilder.AddMessage(sensor, productId);
+                            chatSettings.MessageBuilder.AddMessage(sensor);
                         else
                             SendMessageAsync(chatSettings.Chat, MessageBuilder.GetSingleMessage(sensor));
                     }

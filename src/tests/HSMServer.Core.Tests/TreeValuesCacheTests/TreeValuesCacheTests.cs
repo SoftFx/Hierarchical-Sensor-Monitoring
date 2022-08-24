@@ -618,7 +618,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
-            clonedSensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensor.ProductId));
+            clonedSensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensor.ParentProductId));
 
             clonedSensor.TryAddValue(sensor.LastValue, out _);
 

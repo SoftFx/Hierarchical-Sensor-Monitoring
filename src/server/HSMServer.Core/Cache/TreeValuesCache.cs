@@ -262,7 +262,7 @@ namespace HSMServer.Core.Cache
             UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
-            OnChangeSensorEvent(sensor, TransactionType.Update);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -270,13 +270,13 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            if (_tree.TryGetValue(sensor.ProductId, out var parent))
+            if (_tree.TryGetValue(sensor.ParentProductId, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
             _userManager.RemoveSensorFromUsers(sensorId);
 
-            OnChangeSensorEvent(sensor, TransactionType.Delete);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
         public void RemoveSensorsData(string productId)
@@ -299,13 +299,17 @@ namespace HSMServer.Core.Cache
             sensor.ClearValues();
             _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
 
-            OnChangeSensorEvent(sensor, TransactionType.Update);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public void OnChangeSensorEvent(BaseSensorModel model, TransactionType type) =>
-            ChangeSensorEvent?.Invoke(model, type);
+        public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
+        {
+            _telegramBot.SendMessage(sensor, oldStatus);
+
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+        }
 
 
         public List<BaseValue> GetSensorValues(Guid sensorId, int count)
@@ -410,8 +414,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
                 _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
 
-            _telegramBot.SendMessage(sensor, oldStatus, product.Id);
-            OnChangeSensorEvent(sensor, TransactionType.Update);
+            NotifyAboutChanges(sensor, oldStatus);
         }
 
         private void UpdateIntervalPolicy(TimeSpan newInterval, BaseSensorModel sensor)
@@ -627,7 +630,7 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor)
         {
-            if (_tree.TryGetValue(sensor.ProductId, out var product))
+            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
 
             if (sensor is StringSensorModel)
@@ -636,7 +639,7 @@ namespace HSMServer.Core.Cache
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
-            OnChangeSensorEvent(sensor, TransactionType.Add);
+            ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
         }
 
         private void AddStringValueLengthPolicy(BaseSensorModel sensor)
@@ -722,7 +725,7 @@ namespace HSMServer.Core.Cache
         {
             var sensor = SensorModelFactory.Build(entity);
 
-            if (_tree.TryGetValue(sensor.ProductId, out var product))
+            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
                 sensor.BuildProductNameAndPath(product);
 
             return sensor;
