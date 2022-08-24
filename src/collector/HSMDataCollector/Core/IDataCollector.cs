@@ -67,7 +67,7 @@ namespace HSMDataCollector.Core
         /// Creates a sensor, which sends boolean value true every 15 seconds to indicate whether the service is alive
         /// </summary>
         /// <param name="specificPath">Specifies where sensors are created</param>
-        void MonitorServiceAlive(string specificPath);
+        void MonitorServiceAlive(string specificPath = null);
         /// <summary>
         ///  Creates a sensor, which sends boolean value when since windows update date passed more time then <see cref="updateInterval"/>
         /// </summary>
