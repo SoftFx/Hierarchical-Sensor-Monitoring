@@ -49,7 +49,7 @@ namespace HSMServer.Model.TreeViewModels
                     node.Recursion();
 
             UpdateAccessKeysCharacteristics(user);
-            UpdateNotificationsCharacteristics(user);
+            ResetNotificationsCharacteristics(user);
         }
 
         internal void UpdateAccessKeysCharacteristics(User user)
@@ -63,21 +63,21 @@ namespace HSMServer.Model.TreeViewModels
                     node.UpdateAccessKeysAvailableOperations(true);
         }
 
-        internal void UpdateNotificationsCharacteristics(User user)
+        internal void ResetNotificationsCharacteristics(User user)
         {
+            foreach (var (_, node) in Nodes)
+                node.SensorsWithNotificationsCount = 0;
+
             foreach (var (_, sensor) in Sensors)
+            {
                 sensor.IsNotificationsEnabled = false;
 
-            foreach (var enabledSensor in user.Notifications.EnabledSensors)
-                if (Sensors.TryGetValue(enabledSensor, out var sensor))
-                    sensor.IsNotificationsEnabled = true;
-
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.RecursivelyUpdateNotificationsStatus();
+                if (user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    sensor.UpdateNotificationsStatus(true);
+            }
         }
 
-        internal List<Guid> GetNodeSensors(string selectedNode)
+        internal List<Guid> GetNodeAllSensors(string selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 
@@ -85,19 +85,19 @@ namespace HSMServer.Model.TreeViewModels
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
             {
-                void GetCurrentNodeSensors(string nodeId)
+                void GetNodeSensors(string nodeId)
                 {
                     if (!Nodes.TryGetValue(nodeId, out var node))
                         return;
 
                     foreach (var (subNodeId, _) in node.Nodes)
-                        GetCurrentNodeSensors(subNodeId);
+                        GetNodeSensors(subNodeId);
 
                     foreach (var (sensorId, _) in node.Sensors)
                         sensors.Add(sensorId);
                 }
 
-                GetCurrentNodeSensors(node.Id);
+                GetNodeSensors(node.Id);
             }
 
             return sensors;

@@ -5,19 +5,19 @@
 
 <li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)'
     data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
-    <span>@Model.GetShortName(Model.Name) (@Model.Count sensors)</span>
-    @if (Model.IsNotificationsEnabled)
+    <span>@Model.GetShortName(Model.Name) (@Model.VisibleSensorsCount sensors)</span>
+    @if (Model.SensorsWithNotificationsCount > 0)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@(Model.IsNotificationsPartiallyEnabled.ToString())' style='display: none' />
+            <input id='@(Model.EncodedId)_partialNotifications' value='@((Model.SensorsWithNotificationsCount < Model.AllSensorsCount).ToString())' style='display: none' />
         </span>
     }
 
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
         {
-            @if (child.Count != 0)
+            @if (child.VisibleSensorsCount != 0)
             {
                 <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
             }

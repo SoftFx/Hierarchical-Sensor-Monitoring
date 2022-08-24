@@ -22,7 +22,13 @@ namespace HSMServer.Core.Model
             Telegram = new(entity?.TelegramSettings);
 
             if (entity?.EnabledSensors is not null)
-                EnabledSensors = new(entity.EnabledSensors.Select(s => Guid.Parse(s)));
+            {
+                EnabledSensors.Clear();
+
+                foreach (var sensorIdStr in entity.EnabledSensors)
+                    if (Guid.TryParse(sensorIdStr, out var sensorId))
+                        EnabledSensors.Add(sensorId);
+            }
         }
 
 
