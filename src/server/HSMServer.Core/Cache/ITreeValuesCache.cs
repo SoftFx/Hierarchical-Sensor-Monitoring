@@ -46,7 +46,7 @@ namespace HSMServer.Core.Cache
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
         BaseSensorModel GetSensor(Guid sensorId);
-        void OnChangeSensorEvent(BaseSensorModel model, TransactionType type);
+        void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
