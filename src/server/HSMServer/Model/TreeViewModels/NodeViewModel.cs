@@ -16,8 +16,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public NodeViewModel Parent { get; internal set; }
 
-        public bool IsNotificationsEnabled { get; internal set; }
-
 
         public string GetShortName(string name) =>
             name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
