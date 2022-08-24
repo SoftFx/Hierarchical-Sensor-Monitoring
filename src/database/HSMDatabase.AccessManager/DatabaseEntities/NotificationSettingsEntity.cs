@@ -1,8 +1,12 @@
-﻿namespace HSMDatabase.AccessManager.DatabaseEntities
+﻿using System.Collections.Generic;
+
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public sealed class NotificationSettingsEntity
     {
         public TelegramSettingsEntity TelegramSettings { get; init; }
+
+        public List<string> EnabledSensors { get; init; }
     }
 
 

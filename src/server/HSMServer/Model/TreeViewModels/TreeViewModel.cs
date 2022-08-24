@@ -7,6 +7,7 @@ using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -48,6 +49,7 @@ namespace HSMServer.Model.TreeViewModels
                     node.Recursion();
 
             UpdateAccessKeysCharacteristics(user);
+            ResetNotificationsCharacteristics(user);
         }
 
         internal void UpdateAccessKeysCharacteristics(User user)
@@ -59,6 +61,46 @@ namespace HSMServer.Model.TreeViewModels
             foreach (var (productId, role) in user.ProductsRoles)
                 if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
                     node.UpdateAccessKeysAvailableOperations(true);
+        }
+
+        internal void ResetNotificationsCharacteristics(User user)
+        {
+            foreach (var (_, node) in Nodes)
+                node.SensorsWithNotificationsCount = 0;
+
+            foreach (var (_, sensor) in Sensors)
+            {
+                sensor.IsNotificationsEnabled = false;
+
+                if (user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    sensor.UpdateNotificationsStatus(true);
+            }
+        }
+
+        internal List<Guid> GetNodeAllSensors(string selectedNode)
+        {
+            var sensors = new List<Guid>(1 << 3);
+
+            if (Guid.TryParse(selectedNode, out var sensorId) && Sensors.TryGetValue(sensorId, out var sensor))
+                sensors.Add(sensor.Id);
+            else if (Nodes.TryGetValue(selectedNode, out var node))
+            {
+                void GetNodeSensors(string nodeId)
+                {
+                    if (!Nodes.TryGetValue(nodeId, out var node))
+                        return;
+
+                    foreach (var (subNodeId, _) in node.Nodes)
+                        GetNodeSensors(subNodeId);
+
+                    foreach (var (sensorId, _) in node.Sensors)
+                        sensors.Add(sensorId);
+                }
+
+                GetNodeSensors(node.Id);
+            }
+
+            return sensors;
         }
 
         private void BuildTree()
