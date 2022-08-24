@@ -135,7 +135,7 @@ namespace HSMServer.Core.Notifications
 
         internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus, string productId)
         {
-            if (IsBotRunning)
+            if (IsBotRunning && AreBotMessagesEnabled)
                 foreach (var (userId, chatSettings) in _addressBook.GetAuthorizedUsers)
                 {
                     var user = _userManager.GetUser(userId);
