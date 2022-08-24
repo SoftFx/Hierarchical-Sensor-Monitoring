@@ -22,7 +22,6 @@ function showMetaInfo(id) {
     }).done(function (data) {
         $('#sensor_info_' + id).html(data);
         setLinkText(id, "Hide meta info");
-        initializeEditInfoButtons(id);
     });
 }
 
@@ -36,14 +35,8 @@ function setLinkText(sensorId, text) {
     link.textContent = text;
 }
 
-function initializeEditInfoButtons(sensorId) {
-    $('#editInfo_' + sensorId).on("click", editInfoButtonClick);
-    $('#revertInfo_' + sensorId).on("click", revertInfoClick);
-    $('#saveInfo_' + sensorId).on("click", saveInfoClick);
-}
-
 function editInfoButtonClick() {
-    let sensorId = this.id.substring("editInfo_".length);
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
     $('#description_' + sensorId).removeAttr("disabled");
@@ -53,51 +46,7 @@ function editInfoButtonClick() {
 }
 
 function revertInfoClick() {
-    let sensorId = this.id.substring("revertInfo_".length);
-    reloadInfo(sensorId);
-}
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
 
-function saveInfoClick() {
-    let sensorId = this.id.substring('saveInfo_'.length);
-    let description = getDescription(sensorId);
-    let interval = getInterval(sensorId);
-    let unit = getUnit(sensorId);
-    let body = Info(description, interval, sensorId, unit);
-    saveSensorInfo(body);
-}
-
-function saveSensorInfo(body) {
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(body),
-        url: updateSensorInfoAction,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true
-    }).done(function () {
-        reloadInfo(body.EncodedId);
-    });
-}
-
-function Info(description, updatePeriod, encodedId, unit) {
-    return { "Description": description, "ExpectedUpdateInterval": updatePeriod, "EncodedId": encodedId , "Unit": unit };
-}
-
-function getDescription(sensorId) {
-    return $('#description_' + sensorId).val();
-}
-
-function getInterval(sensorId) {
-    return $('#interval_' + sensorId).val();
-}
-
-function getUnit(sensorId) {
-    return $('#unit_' + sensorId).val();
-}
-
-function reloadInfo(sensorId) {
-    let link = document.getElementById('sensorInfo_link_' + sensorId);
-    link.click();
-    link.click();
+    showMetaInfo(sensorId);
 }
