@@ -152,7 +152,7 @@ namespace HSMServer.Model.TreeViewModels
             switch (transaction)
             {
                 case TransactionType.Add:
-                    if (Nodes.TryGetValue(model.ProductId, out var parent))
+                    if (Nodes.TryGetValue(model.ParentProductId, out var parent))
                         AddNewSensorViewModel(model, parent);
 
                     break;
@@ -167,7 +167,7 @@ namespace HSMServer.Model.TreeViewModels
                 case TransactionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
 
-                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                    if (Nodes.TryGetValue(model.ParentProductId, out var parentProduct))
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                     break;
