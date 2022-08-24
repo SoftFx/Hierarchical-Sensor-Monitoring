@@ -240,6 +240,6 @@ namespace HSMServer.Core.Notifications
         }
 
         private bool IsValidBotConfigurations() =>
-            !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken) && AreBotMessagesEnabled;
+            !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken);
     }
 }
