@@ -20,7 +20,7 @@ function showMetaInfo(id) {
         cache: false,
         async: true
     }).done(function (data) {
-        $('#sensor_info_' + id).html(data);
+        displaySensorMetaInfo(id, data);
         setLinkText(id, "Hide meta info");
     });
 }
@@ -35,6 +35,14 @@ function setLinkText(sensorId, text) {
     link.textContent = text;
 }
 
+function disableExpectedUpdateIntervalControl() {
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
+
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.setAttribute('disabled', true);
+    });
+}
+
 function editInfoButtonClick() {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
@@ -43,10 +51,20 @@ function editInfoButtonClick() {
     $('#unit_' + sensorId).removeAttr("disabled");
     $('#saveInfo_' + sensorId).removeAttr("disabled");
     $('#revertInfo_' + sensorId).removeAttr("disabled");
+
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.removeAttribute('disabled');
+    });
 }
 
 function revertInfoClick() {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     showMetaInfo(sensorId);
+}
+
+function displaySensorMetaInfo(sensorId, viewData) {
+    $('#sensor_info_' + sensorId).html(viewData);
+
+    disableExpectedUpdateIntervalControl();
 }

@@ -49,7 +49,7 @@
             </tr>
             <tr>
                 <td>Expected update interval<i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
-                <td>
+                <td id="expectedUpdateInterval_@(Model.EncodedId)">
                     <partial name="_TimeRangeSelect" for="Interval" />
                 </td>
             </tr>
@@ -85,7 +85,7 @@
             cache: false,
             async: true,
             success: function (viewData) {
-                $('#sensor_info_' + $('#sensorMetaInfo_encodedId').val()).html(viewData);
+                displaySensorMetaInfo($('#sensorMetaInfo_encodedId').val(), viewData);
             }
         });
     });
