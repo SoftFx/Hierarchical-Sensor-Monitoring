@@ -87,12 +87,35 @@
     <h6 class="dropdown-header">Sort By</h6>
     <div class="form-check">
         <input checked class="form-check-input" type="radio" name="inlineRadioOptions" id="name" value="name">
-        <label class="form-check-label" for="name">By Name</label>
+        <label class="form-check-label" for="name">By Name <i class="fas fa-sort-alpha-down"></i></label>
     </div>
     <div class="form-check">
         <input class="form-check-input" type="radio" name="inlineRadioOptions" id="time" value="time">
-        <label class="form-check-label" for="time">By Last Update</label>
+        <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 
-    <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
+    <button id="applyBtn" type="button" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
+
+<script>
+    $('#applyBtn').off("click").on("click",
+        function () {
+
+            let selectedSort = $("#time").is(":checked");
+            if (selectedSort == isTimeSorting) return;
+
+            if ($("#name").is(":checked"))
+            {
+                isTimeSorting = false;
+                $("#currentSort").attr("class", "fas fa-sort-alpha-down");
+            }
+            else
+            {
+                isTimeSorting = true;
+                $("#currentSort").attr("class", "fas fa-sort-numeric-down-alt");
+            }
+
+            initializeTree();
+            $('#jstree').jstree(true).refresh(true);
+        });
+</script>
