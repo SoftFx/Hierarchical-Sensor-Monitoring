@@ -1,0 +1,30 @@
+﻿@using HSMServer.Model
+
+@model TimeRangeViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form>
+    <div class="d-grid">
+        <select id="timeRangeSelect" class="form-select" asp-for="TimeRange" asp-items="Html.GetEnumSelectList<TimeRange>()"></select>
+        <input class="customTimeRange form-control" placeholder="dd.HH:mm:ss" style="display:none;" asp-for="CustomTimeSpan" />
+    </div>
+</form>
+
+<input id="customTimeRangeText" style="display:none;" value="@TimeRange.Custom" />
+
+
+<script>
+    $('#timeRangeSelect').change(function () {
+        var selectedOptionText = $('option:selected', this).text();
+        var customOptionText = $('#customTimeRangeText').val();
+
+        if (selectedOptionText == customOptionText) {
+            $('.customTimeRange').show();
+        }
+        else {
+            $('.customTimeRange').hide();
+        }
+    });
+</script>

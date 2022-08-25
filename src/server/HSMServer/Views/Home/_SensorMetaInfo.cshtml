@@ -50,7 +50,7 @@
             <tr>
                 <td>Expected update interval<i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
                 <td>
-                    <input id='interval_@(Model.EncodedId)' type='text' class='form-control' asp-for="ExpectedUpdateInterval" value='@Model.ExpectedUpdateInterval' disabled>
+                    <partial name="_TimeRangeSelect" for="Interval" />
                 </td>
             </tr>
             <tr>

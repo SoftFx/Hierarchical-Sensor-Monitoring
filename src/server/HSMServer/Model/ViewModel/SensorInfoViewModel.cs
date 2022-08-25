@@ -19,6 +19,8 @@ namespace HSMServer.Model.ViewModel
 
         public string ExpectedUpdateInterval { get; set; }
 
+        public TimeRangeViewModel Interval {get;set;}
+
         public string Unit { get; set; }
 
 
@@ -35,6 +37,8 @@ namespace HSMServer.Model.ViewModel
             Description = sensor.Description;
             ExpectedUpdateInterval = sensor.ExpectedUpdateInterval.ToString();
             Unit = sensor.Unit;
+
+            Interval = new();
         }
 
 
