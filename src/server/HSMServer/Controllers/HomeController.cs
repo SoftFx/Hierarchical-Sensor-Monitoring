@@ -76,6 +76,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void ApplyFilter(FilterViewModel filter)
+        {
+
+        }
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
             var decodedId = SensorPathHelper.Decode(selectedId);

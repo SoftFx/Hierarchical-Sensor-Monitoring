@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Model.TreeViewModels
+@using HSMServer.Model.ViewModel
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
@@ -99,7 +100,7 @@
 
 
     <div class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
-        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilters.cshtml") </div>
+        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new FilterViewModel()) </div>
 
         <div id="mainContainer" class="justify-content-start mw-100 me-1">
             <div class="scrollableBlock col-auto ms-2">
@@ -140,10 +141,10 @@
 
     $("#show").click(function() {
 
-        if (!$("#filters").is(":visible"))
-            $("#filters").css("display", "block");
+        if (!$("#filter").is(":visible"))
+            $("#filter").css("display", "block");
         else
-            $("#filters").css("display", "none");
+            $("#filter").css("display", "none");
 
     });
 
