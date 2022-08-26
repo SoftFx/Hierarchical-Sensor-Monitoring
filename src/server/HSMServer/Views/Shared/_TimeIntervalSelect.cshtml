@@ -1,0 +1,30 @@
+﻿@using HSMServer.Model
+
+@model TimeIntervalViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form>
+    <div class="d-grid">
+        <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="Html.GetEnumSelectList<TimeInterval>()"></select>
+        <input class="customTimeInterval form-control" placeholder="dd.HH:mm:ss" style="display:none;" asp-for="CustomTimeInterval" />
+    </div>
+</form>
+
+<input id="customTimeIntervalText" style="display:none;" value="@TimeInterval.Custom" />
+
+
+<script>
+    $('#timeIntervalSelect').change(function () {
+        var selectedOptionText = $('option:selected', this).text();
+        var customOptionText = $('#customTimeIntervalText').val();
+
+        if (selectedOptionText == customOptionText) {
+            $('.customTimeInterval').show();
+        }
+        else {
+            $('.customTimeInterval').hide();
+        }
+    });
+</script>

@@ -19,7 +19,7 @@ namespace HSMServer.Model.ViewModel
 
         public string ExpectedUpdateInterval { get; set; }
 
-        public TimeRangeViewModel Interval {get;set;}
+        public TimeIntervalViewModel Interval { get; set; }
 
         public string Unit { get; set; }
 

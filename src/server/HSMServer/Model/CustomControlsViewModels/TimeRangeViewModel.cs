@@ -2,7 +2,7 @@
 
 namespace HSMServer.Model
 {
-    public enum TimeRange
+    public enum TimeInterval
     {
         [Display(Name = "10 minutes")]
         TenMinutes,
@@ -10,24 +10,22 @@ namespace HSMServer.Model
         Hour,
         [Display(Name = "1 day")]
         Day,
-        [Display(Name = "1 month")]
-        Month,
         [Display(Name = "1 week")]
         Week,
-        [Display(Name = "1 Year")]
-        Year,
+        [Display(Name = "1 month")]
+        Month,
         Custom,
     }
 
 
-    public class TimeRangeViewModel
+    public class TimeIntervalViewModel
     {
-        public TimeRange TimeRange { get; set; }
+        public TimeInterval TimeInterval { get; set; }
 
-        public string CustomTimeSpan { get; set; }
+        public string CustomTimeInterval { get; set; }
 
 
         // public constructor without parameters for post actions
-        public TimeRangeViewModel() { }
+        public TimeIntervalViewModel() { }
     }
 }
