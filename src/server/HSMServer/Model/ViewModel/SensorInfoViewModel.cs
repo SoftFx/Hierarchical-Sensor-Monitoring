@@ -15,11 +15,9 @@ namespace HSMServer.Model.ViewModel
 
         public string EncodedId { get; set; }
 
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+
         public string Description { get; set; }
-
-        public string ExpectedUpdateInterval { get; set; }
-
-        public TimeIntervalViewModel Interval { get; set; }
 
         public string Unit { get; set; }
 
@@ -34,18 +32,17 @@ namespace HSMServer.Model.ViewModel
             ProductName = sensor.Product;
             SensorType = sensor.SensorType;
 
+            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval;
             Description = sensor.Description;
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval.ToString();
             Unit = sensor.Unit;
-
-            Interval = new();
         }
 
 
         internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
+            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateIntervalOption,
+                                                               updatedModel.ExpectedUpdateIntervalTicks);
             Description = updatedModel.Description;
-            ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToString();
             Unit = updatedModel.Unit;
 
             return this;

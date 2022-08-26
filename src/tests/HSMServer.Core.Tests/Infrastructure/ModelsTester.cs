@@ -244,7 +244,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual) =>
-            Assert.Equal(expected.ExpectedUpdateInterval.Ticks, (actual as ExpectedUpdateIntervalPolicy).ExpectedUpdateInterval);
+            Assert.Equal(expected.ExpectedUpdateIntervalTicks, (actual as ExpectedUpdateIntervalPolicy).ExpectedUpdateInterval);
 
 
         private static void TestSensorValue(BaseValue expected, BaseValue actual, SensorType type)

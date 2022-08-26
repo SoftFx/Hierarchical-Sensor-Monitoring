@@ -93,6 +93,37 @@ namespace HSMServer.Core.Model
             };
         }
 
+        public static ValidationResult operator -(ValidationResult result1, ValidationResult result2)
+        {
+            static HashSet<string> GetExceptErrors(HashSet<string> errors1, HashSet<string> errors2)
+            {
+                var errors = new HashSet<string>(errors1);
+                errors.ExceptWith(errors2);
+
+                return errors;
+            }
+
+            var warnings = GetExceptErrors(result1.Warnings, result2.Warnings);
+            var errors = GetExceptErrors(result1.Errors, result2.Errors);
+            var messages = GetExceptErrors(result1.Messages, result2.Messages);
+
+            SensorStatus result = SensorStatus.Ok;
+            if (messages.Count != 0)
+                result = SensorStatus.Unknown;
+            else if (errors.Count != 0)
+                result = SensorStatus.Error;
+            else if (warnings.Count != 0)
+                result = SensorStatus.Warning;
+
+            return new()
+            {
+                Result = result,
+                Warnings = warnings,
+                Errors = errors,
+                Messages = messages,
+            };
+        }
+
         public static bool operator ==(ValidationResult result1, ValidationResult result2) =>
             result1.Message == result2.Message && result1.Result == result2.Result;
 

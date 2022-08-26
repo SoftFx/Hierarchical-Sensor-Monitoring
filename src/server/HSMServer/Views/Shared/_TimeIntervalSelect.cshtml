@@ -16,8 +16,14 @@
 
 
 <script>
+    displaySelectedOption();
+
     $('#timeIntervalSelect').change(function () {
-        var selectedOptionText = $('option:selected', this).text();
+        displaySelectedOption();
+    });
+
+    function displaySelectedOption() {
+        var selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
         var customOptionText = $('#customTimeIntervalText').val();
 
         if (selectedOptionText == customOptionText) {
@@ -26,5 +32,5 @@
         else {
             $('.customTimeInterval').hide();
         }
-    });
+    }
 </script>

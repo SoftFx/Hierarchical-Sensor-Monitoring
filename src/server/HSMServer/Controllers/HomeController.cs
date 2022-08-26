@@ -331,13 +331,12 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var sensor))
                 return _emptyResult;
 
-            TimeSpan.TryParse(updatedModel.ExpectedUpdateInterval, out var interval);
-
             var sensorUpdate = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = updatedModel.Description,
-                ExpectedUpdateInterval = interval,
+                ExpectedUpdateIntervalOption = updatedModel.ExpectedUpdateInterval.GetIntervalOption(),
+                ExpectedUpdateIntervalTicks = updatedModel.ExpectedUpdateInterval.GetCustomIntervalTicks(),
                 Unit = updatedModel.Unit
             };
 
