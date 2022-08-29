@@ -137,11 +137,34 @@ function customMenu(node) {
             "action": function (obj) {
                 updateSensorsNotifications(disableNotifications, node);
             }
+        },
+        "IgnoreNotifications": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Ignore notifications",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'get',
+                    url: ignoreNotifications + '?Selected=' + node.id,
+                    datatype: 'html',
+                    contenttype: 'application/json',
+                    cache: false,
+                    success: function (viewData) {
+                        $("#ignoreNotificatios_partial").html(viewData);
+                    }
+                }).done(function () {
+                    $('#ignoreNotifications_modal').modal('show');
+                });
+            }
         }
     }
 
     if (node.parents.length != 1) {
         delete items.AccessKeys;
+    }
+
+    if (node.children.length != 0) {
+        delete items.IgnoreNotifications;
     }
 
     if (document.getElementById(`${node.id}_notifications`)) {
@@ -152,6 +175,7 @@ function customMenu(node) {
     }
     else {
         delete items.DisableNotifications;
+        delete items.IgnoreNotifications;
     }
 
     return items;

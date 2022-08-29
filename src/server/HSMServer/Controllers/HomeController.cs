@@ -105,6 +105,23 @@ namespace HSMServer.Controllers
             UpdateUserEnabledSensors(selectedId, false, DisableSensors);
         }
 
+        [HttpGet]
+        public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
+            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                return PartialView("_IgnoreNotificationsModal", new IgnoreNotificationsViewModel(sensor));
+
+            return PartialView("_IgnoreNotificationsModal", null);
+        }
+
+        [HttpPost]
+        public void IgnoreNotifications(IgnoreNotificationsViewModel model)
+        {
+
+        }
+
         private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus, Action<HashSet<Guid>, Guid> updateAction)
         {
             var sensors = GetNodeSensors(selectedNode);

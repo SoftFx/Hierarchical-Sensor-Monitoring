@@ -1,0 +1,46 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Model
+
+@model IgnoreNotificationsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model != null)
+{
+    <form asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
+        <input style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+
+        <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">Ignore notifications for sensor</h5>
+                            <h6 class="modal-title">@Model.SensorPath</h6>
+                        </div>
+                    </div>
+
+                    <div class="modal-body" id="ignoreNotifications_body">
+                        <div class="row">
+                            <label class="col-3 col-form-label" asp-for="IgnorePeriod"></label>
+                            <div class="col-9"><partial name="_TimeIntervalSelect" for="IgnorePeriod" /></div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary col-2" type="submit" id="ignoreNotifications_okButton">OK</button>
+                        <button class="btn btn-secondary col-2" onclick="hideIgnoreNotificationsModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+}
+
+
+<script>
+    function hideIgnoreNotificationsModal() {
+        $('#ignoreNotifications_modal').modal('hide');
+    }
+</script>
