@@ -10,6 +10,14 @@
       asp-action="@nameof(HomeController.ApplyFilter)"
       method="post" class="px-2" id="filter" style="display: none;">
 
+    <h6 class="dropdown-header">Update tree interval</h6>
+    <div class="d-flex">
+        <input type="number" id="treeInterval" asp-for="TreeUpdateInterval" class="form-control" min="5" max="600"
+        value="@Model.TreeUpdateInterval"/>
+        <label for="treeInterval" title="Expected update tree interval" class="form-text ms-2">sec</label>
+    </div>
+    <div class="dropdown-divider"></div>
+
     <h6 class="dropdown-header">Status</h6>
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus">

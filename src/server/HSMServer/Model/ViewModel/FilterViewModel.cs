@@ -15,5 +15,7 @@ namespace HSMServer.Model.ViewModel
         public bool IsIgnoredSensors { get; set; }
 
         public bool IsBlockedSensors { get; set; }
+
+        public int TreeUpdateInterval { get; set; } = 5;
     }
 }
