@@ -30,9 +30,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Id = id ?? Guid.NewGuid(),
                 Description = RandomGenerator.GetRandomString(),
-                ExpectedUpdateIntervalOption = (byte)Interval.Custom,
-                ExpectedUpdateIntervalTicks = TimeSpan.FromMinutes(10).Ticks,
                 Unit = RandomGenerator.GetRandomString(),
+                Interval = new()
+                {
+                    ExpectedUpdatePeriod = TimeInterval.Custom,
+                    CustomPeriod = TimeSpan.FromMinutes(10).Ticks,
+                }
             };
     }
 }
