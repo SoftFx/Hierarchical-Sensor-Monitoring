@@ -432,7 +432,10 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    sensor.ExpectedUpdateIntervalPolicy = null;
+                    var oldStatus = sensor.ValidationResult;
+
+                    sensor.RemoveExpectedUpdateInterval();
+                    NotifyAboutChanges(sensor, oldStatus);
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }

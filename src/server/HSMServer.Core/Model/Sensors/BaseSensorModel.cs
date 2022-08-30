@@ -75,10 +75,15 @@ namespace HSMServer.Core.Model
 
             var oldValidationResult = ValidationResult;
 
-            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
             ValidationResult += ExpectedUpdateIntervalPolicy.Validate(LastValue);
 
             return ValidationResult != oldValidationResult;
+        }
+
+        internal void RemoveExpectedUpdateInterval()
+        {
+            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            ExpectedUpdateIntervalPolicy = null;
         }
 
 
