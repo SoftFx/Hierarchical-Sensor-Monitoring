@@ -28,7 +28,7 @@ namespace HSMServer.Model.ViewModel
         public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
             EncodedId = SensorPathHelper.EncodeGuid(sensor.Id);
-            Path = sensor.Path;
+            Path = $"/{sensor.Path}";
             ProductName = sensor.Product;
             SensorType = sensor.SensorType;
 
@@ -40,8 +40,8 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
-            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateIntervalOption,
-                                                               updatedModel.ExpectedUpdateIntervalTicks);
+            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.Interval.ExpectedUpdatePeriod,
+                                                               updatedModel.Interval.CustomPeriod);
             Description = updatedModel.Description;
             Unit = updatedModel.Unit;
 

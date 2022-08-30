@@ -259,7 +259,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-            UpdateIntervalPolicy(updatedSensor.ExpectedUpdateIntervalOption, updatedSensor.ExpectedUpdateIntervalTicks, sensor);
+            UpdateIntervalPolicy(updatedSensor.Interval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
@@ -417,33 +417,28 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor, oldStatus);
         }
 
-        private void UpdateIntervalPolicy(byte intervalOption, long customInterval, BaseSensorModel sensor)
+        private void UpdateIntervalPolicy(ExpectedUpdateIntervalUpdate newInterval, BaseSensorModel sensor)
         {
-            bool newPolicyIsEmpty = intervalOption == (byte)Interval.Custom && customInterval == 0;
             var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
 
-            if (oldPolicy == null && !newPolicyIsEmpty)
+            if (oldPolicy == null && !newInterval.IsEmpty)
             {
-                var newPolicy = new ExpectedUpdateIntervalPolicy(customInterval, intervalOption);
+                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.ExpectedUpdatePeriod);
                 sensor.ExpectedUpdateIntervalPolicy = newPolicy;
 
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
             else if (oldPolicy != null)
             {
-                if (newPolicyIsEmpty)
+                if (newInterval.IsEmpty)
                 {
-                    var oldStatus = sensor.ValidationResult;
-
-                    sensor.RemoveExpectedUpdateInterval();
-                    NotifyAboutChanges(sensor, oldStatus);
+                    sensor.ExpectedUpdateIntervalPolicy = null;
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
-                else if (intervalOption != oldPolicy.ExpectedTimeInterval ||
-                         customInterval != oldPolicy.ExpectedUpdateInterval)
+                else if (!newInterval.IsEqual(oldPolicy))
                 {
-                    oldPolicy.Update(customInterval, intervalOption);
+                    oldPolicy.Update(newInterval);
 
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }

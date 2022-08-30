@@ -1,18 +1,9 @@
-﻿using System;
+﻿using HSMServer.Core.Cache.Entities;
+using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
-    public enum Interval : byte
-    {
-        TenMinutes,
-        Hour,
-        Day,
-        Week,
-        Month,
-        Custom = byte.MaxValue,
-    }
-
-
     public sealed class ExpectedUpdateIntervalPolicy : Policy
     {
         private const string SensorValueOutdated = "Sensor value is older than ExpectedUpdateInterval!";
@@ -20,34 +11,36 @@ namespace HSMServer.Core.Model
         internal static ValidationResult OutdatedSensor { get; } = new(SensorValueOutdated, SensorStatus.Warning);
 
 
-        public byte ExpectedTimeInterval { get; set; }
+        public TimeInterval ExpectedUpdatePeriod { get; private set; }
 
-        public long ExpectedUpdateInterval { get; set; }
+        [JsonPropertyName("ExpectedUpdateInterval")]
+        public long CustomPeriod { get; private set; }
 
 
-        public ExpectedUpdateIntervalPolicy(long expectedUpdateInterval,
-                                            byte expectedTimeInterval = (byte)Interval.Custom) : base()
+        public ExpectedUpdateIntervalPolicy(long customPeriod,
+                                            TimeInterval expectedUpdatePeriod = TimeInterval.Custom) : base()
         {
-            Update(expectedUpdateInterval, expectedTimeInterval);
+            ExpectedUpdatePeriod = expectedUpdatePeriod;
+            CustomPeriod = customPeriod;
         }
 
 
-        internal void Update(long expectedUpdateInterval, byte expectedTimeInterval)
+        internal void Update(ExpectedUpdateIntervalUpdate updateModel)
         {
-            ExpectedTimeInterval = expectedTimeInterval;
-            ExpectedUpdateInterval = expectedUpdateInterval;
+            ExpectedUpdatePeriod = updateModel.ExpectedUpdatePeriod;
+            CustomPeriod = updateModel.CustomPeriod;
         }
 
         internal ValidationResult Validate(BaseValue value)
         {
-            var isSensorOutdated = (Interval)ExpectedTimeInterval switch
+            var isSensorOutdated = ExpectedUpdatePeriod switch
             {
-                Interval.TenMinutes => DateTime.UtcNow > value.ReceivingTime.AddMinutes(10),
-                Interval.Hour => DateTime.UtcNow > value.ReceivingTime.AddHours(1),
-                Interval.Day => DateTime.UtcNow > value.ReceivingTime.AddDays(1),
-                Interval.Week => DateTime.UtcNow > value.ReceivingTime.AddDays(7),
-                Interval.Month => DateTime.UtcNow > value.ReceivingTime.AddMonths(1),
-                Interval.Custom => (DateTime.UtcNow - value.ReceivingTime).Ticks > ExpectedUpdateInterval,
+                TimeInterval.TenMinutes => DateTime.UtcNow > value.ReceivingTime.AddMinutes(10),
+                TimeInterval.Hour => DateTime.UtcNow > value.ReceivingTime.AddHours(1),
+                TimeInterval.Day => DateTime.UtcNow > value.ReceivingTime.AddDays(1),
+                TimeInterval.Week => DateTime.UtcNow > value.ReceivingTime.AddDays(7),
+                TimeInterval.Month => DateTime.UtcNow > value.ReceivingTime.AddMonths(1),
+                TimeInterval.Custom => (DateTime.UtcNow - value.ReceivingTime).Ticks > CustomPeriod,
                 _ => throw new NotImplementedException(),
             };
 

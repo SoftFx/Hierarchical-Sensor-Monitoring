@@ -1,12 +1,12 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
+using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
 {
     public enum TimeInterval
     {
-        [Display(Name = "")]
+        [Display(Name = "Never")]
         None,
         [Display(Name = "10 minutes")]
         TenMinutes,
@@ -32,29 +32,29 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(byte? timeInterval, long? customIntervalTicks)
+        internal TimeIntervalViewModel(CoreTimeInterval? timeInterval, long? customIntervalTicks)
         {
             Update(timeInterval, customIntervalTicks);
         }
 
 
-        internal void Update(byte? timeInterval, long? customIntervalTicks)
+        internal void Update(CoreTimeInterval? timeInterval, long? customIntervalTicks)
         {
             TimeInterval = SetTimeInterval(timeInterval, customIntervalTicks);
             CustomTimeInterval = new TimeSpan(customIntervalTicks ?? 0).ToString();
         }
 
-        internal byte GetIntervalOption() =>
-            (byte)(TimeInterval switch
+        internal CoreTimeInterval GetIntervalOption() =>
+            TimeInterval switch
             {
-                TimeInterval.TenMinutes => Interval.TenMinutes,
-                TimeInterval.Hour => Interval.Hour,
-                TimeInterval.Day => Interval.Day,
-                TimeInterval.Week => Interval.Week,
-                TimeInterval.Month => Interval.Month,
-                TimeInterval.Custom => Interval.Custom,
-                _ => Interval.Custom,
-            });
+                TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
+                TimeInterval.Hour => CoreTimeInterval.Hour,
+                TimeInterval.Day => CoreTimeInterval.Day,
+                TimeInterval.Week => CoreTimeInterval.Week,
+                TimeInterval.Month => CoreTimeInterval.Month,
+                TimeInterval.Custom => CoreTimeInterval.Custom,
+                _ => CoreTimeInterval.Custom,
+            };
 
         internal long GetCustomIntervalTicks()
         {
@@ -64,19 +64,19 @@ namespace HSMServer.Model
             return 0;
         }
 
-        private static TimeInterval SetTimeInterval(byte? interval, long? customIntervalTicks)
+        private static TimeInterval SetTimeInterval(CoreTimeInterval? interval, long? customIntervalTicks)
         {
             if (interval is null)
                 return TimeInterval.None;
 
-            return (Interval)interval.Value switch
+            return interval.Value switch
             {
-                Interval.TenMinutes => TimeInterval.TenMinutes,
-                Interval.Hour => TimeInterval.Hour,
-                Interval.Day => TimeInterval.Day,
-                Interval.Week => TimeInterval.Week,
-                Interval.Month => TimeInterval.Month,
-                Interval.Custom => (customIntervalTicks ?? 0) == 0 ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
+                CoreTimeInterval.Hour => TimeInterval.Hour,
+                CoreTimeInterval.Day => TimeInterval.Day,
+                CoreTimeInterval.Week => TimeInterval.Week,
+                CoreTimeInterval.Month => TimeInterval.Month,
+                CoreTimeInterval.Custom => (customIntervalTicks ?? 0) == 0 ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
         }

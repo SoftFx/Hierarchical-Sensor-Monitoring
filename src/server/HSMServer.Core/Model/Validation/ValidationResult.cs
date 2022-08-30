@@ -16,7 +16,20 @@ namespace HSMServer.Core.Model
         private HashSet<string> Errors { get; init; } = new();
 
 
-        public SensorStatus Result { get; init; } = SensorStatus.Ok;
+        public SensorStatus Result
+        {
+            get
+            {
+                if (Messages.Count != 0)
+                    return SensorStatus.Unknown;
+                else if (Errors.Count != 0)
+                    return SensorStatus.Error;
+                else if (Warnings.Count != 0)
+                    return SensorStatus.Warning;
+
+                return SensorStatus.Ok;
+            }
+        }
 
 
         public string Message
@@ -63,8 +76,6 @@ namespace HSMServer.Core.Model
                     Messages.Add(message);
                     break;
             }
-
-            Result = result;
         }
 
 
@@ -85,8 +96,6 @@ namespace HSMServer.Core.Model
 
             return new()
             {
-                Result = result1.Result > result2.Result ? result1.Result : result2.Result,
-
                 Messages = GetUnionErrors(result1.Messages, result2.Messages),
                 Warnings = GetUnionErrors(result1.Warnings, result2.Warnings),
                 Errors = GetUnionErrors(result1.Errors, result2.Errors),
@@ -103,24 +112,11 @@ namespace HSMServer.Core.Model
                 return errors;
             }
 
-            var warnings = GetExceptErrors(result1.Warnings, result2.Warnings);
-            var errors = GetExceptErrors(result1.Errors, result2.Errors);
-            var messages = GetExceptErrors(result1.Messages, result2.Messages);
-
-            SensorStatus result = SensorStatus.Ok;
-            if (messages.Count != 0)
-                result = SensorStatus.Unknown;
-            else if (errors.Count != 0)
-                result = SensorStatus.Error;
-            else if (warnings.Count != 0)
-                result = SensorStatus.Warning;
-
             return new()
             {
-                Result = result,
-                Warnings = warnings,
-                Errors = errors,
-                Messages = messages,
+                Warnings = GetExceptErrors(result1.Warnings, result2.Warnings),
+                Errors = GetExceptErrors(result1.Errors, result2.Errors),
+                Messages = GetExceptErrors(result1.Messages, result2.Messages),
             };
         }
 

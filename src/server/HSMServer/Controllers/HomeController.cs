@@ -352,9 +352,12 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = updatedModel.Description,
-                ExpectedUpdateIntervalOption = updatedModel.ExpectedUpdateInterval.GetIntervalOption(),
-                ExpectedUpdateIntervalTicks = updatedModel.ExpectedUpdateInterval.GetCustomIntervalTicks(),
-                Unit = updatedModel.Unit
+                Unit = updatedModel.Unit,
+                Interval = new()
+                {
+                    ExpectedUpdatePeriod = updatedModel.ExpectedUpdateInterval.GetIntervalOption(),
+                    CustomPeriod = updatedModel.ExpectedUpdateInterval.GetCustomIntervalTicks(),
+                },
             };
 
             _treeValuesCache.UpdateSensor(sensorUpdate);
