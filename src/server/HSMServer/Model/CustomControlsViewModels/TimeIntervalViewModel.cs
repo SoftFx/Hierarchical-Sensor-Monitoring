@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 using System.ComponentModel.DataAnnotations;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
@@ -32,19 +33,28 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(CoreTimeInterval? timeInterval, long? customIntervalTicks)
+        internal TimeIntervalViewModel(TimeIntervalModel model)
         {
-            Update(timeInterval, customIntervalTicks);
+            Update(model);
         }
 
 
-        internal void Update(CoreTimeInterval? timeInterval, long? customIntervalTicks)
+        internal void Update(TimeIntervalModel model)
         {
-            TimeInterval = SetTimeInterval(timeInterval, customIntervalTicks);
+            var customIntervalTicks = model?.CustomPeriod;
+
+            TimeInterval = SetTimeInterval(model?.TimeInterval, customIntervalTicks);
             CustomTimeInterval = new TimeSpan(customIntervalTicks ?? 0).ToString();
         }
 
-        internal CoreTimeInterval GetIntervalOption() =>
+        internal TimeIntervalModel ToModel() =>
+            new()
+            {
+                TimeInterval = GetIntervalOption(),
+                CustomPeriod = GetCustomIntervalTicks(),
+            };
+
+        private CoreTimeInterval GetIntervalOption() =>
             TimeInterval switch
             {
                 TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
@@ -56,7 +66,7 @@ namespace HSMServer.Model
                 _ => CoreTimeInterval.Custom,
             };
 
-        internal long GetCustomIntervalTicks()
+        private long GetCustomIntervalTicks()
         {
             if (TimeInterval == TimeInterval.Custom && TimeSpan.TryParse(CustomTimeInterval, out var timeInterval))
                 return timeInterval.Ticks;

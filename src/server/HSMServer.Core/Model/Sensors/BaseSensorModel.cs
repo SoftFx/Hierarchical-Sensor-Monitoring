@@ -13,16 +13,6 @@ namespace HSMServer.Core.Model
         Blocked = byte.MaxValue,
     }
 
-    public enum TimeInterval : byte
-    {
-        TenMinutes,
-        Hour,
-        Day,
-        Week,
-        Month,
-        Custom = byte.MaxValue,
-    }
-
 
     internal interface IBarSensor
     {
