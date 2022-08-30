@@ -50,3 +50,29 @@
 .info-link {
     cursor: pointer;
 }
+
+#timeIntervalSelect {
+    grid-row-start: 1;
+    grid-column-start: 1;
+    width: 100%;
+}
+
+.customTimeInterval {
+    grid-row-start: 1;
+    grid-column-start: 1;
+    position: relative;
+    width: 90%;
+    height: 95%;
+    top: 1px;
+    left: 1px;
+    border-width: 0;
+    border-color: transparent;
+}
+
+.customTimeInterval:hover,
+.customTimeInterval:active,
+.customTimeInterval:focus {
+    outline: 0px !important;
+    -webkit-appearance: none;
+    box-shadow: none !important;
+}

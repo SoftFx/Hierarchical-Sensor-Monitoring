@@ -417,26 +417,32 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor, oldStatus);
         }
 
-        private void UpdateIntervalPolicy(TimeSpan newInterval, BaseSensorModel sensor)
+        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, BaseSensorModel sensor)
         {
             var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
 
-            if (oldPolicy == null && newInterval != TimeSpan.Zero)
+            if (oldPolicy == null && !newInterval.IsEmpty)
             {
-                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.Ticks);
+                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.TimeInterval);
                 sensor.ExpectedUpdateIntervalPolicy = newPolicy;
+
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
             else if (oldPolicy != null)
             {
-                if (newInterval == TimeSpan.Zero)
+                if (newInterval.IsEmpty)
                 {
-                    sensor.ExpectedUpdateIntervalPolicy = null;
+                    var oldStatus = sensor.ValidationResult;
+
+                    sensor.RemoveExpectedUpdateInterval();
+                    NotifyAboutChanges(sensor, oldStatus);
+
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
-                else if (newInterval.Ticks != oldPolicy.ExpectedUpdateInterval)
+                else if (!oldPolicy.IsEqual(newInterval))
                 {
-                    oldPolicy.ExpectedUpdateInterval = newInterval.Ticks;
+                    oldPolicy.Update(newInterval);
+
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
             }

@@ -80,6 +80,12 @@ namespace HSMServer.Core.Model
             return ValidationResult != oldValidationResult;
         }
 
+        internal void RemoveExpectedUpdateInterval()
+        {
+            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            ExpectedUpdateIntervalPolicy = null;
+        }
+
 
         internal void BuildProductNameAndPath(ProductModel parentProduct)
         {

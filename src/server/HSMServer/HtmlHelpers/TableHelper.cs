@@ -2,7 +2,6 @@
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Helpers;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -477,53 +476,6 @@ namespace HSMServer.HtmlHelpers
         private static string GetHistoryRawComment(string comment) =>
             !string.IsNullOrEmpty(comment) && _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
 
-        #endregion
-
-        #region Sensor info
-
-        public static string CreateSensorInfoTable(SensorInfoViewModel sensorInfo)
-        {
-            StringBuilder result = new StringBuilder();
-
-            string encodedId = SensorPathHelper.EncodeGuid(sensorInfo.Id);
-            result.Append("<div style='margin: 10px'><div class='row justify-content-start'><div class='col-md-auto'>" +
-                          $"<h5 style='margin: 10px 20px 10px;'>{sensorInfo.ProductName}/{sensorInfo.Path}</h5><div>" +
-                          $"{CreateEditButtonForInfo(encodedId)}{CreateSaveButtonForInfo(encodedId)}" +
-                          $"{CreateResetButtonForInfo(encodedId)}</div></div></div></div>");
-            result.Append("<table class='table table-bordered'><tbody>");
-            result.Append($"<tr><td>Product</td><td>{sensorInfo.ProductName}</td></tr>");
-            result.Append($"<tr><td>Path</td><td>{sensorInfo.Path}</td></tr>");
-            result.Append($"<tr><td>Sensor type</td><td>{sensorInfo.SensorType}</td></tr>");
-            result.Append("<tr><td>Expected update interval<i class='fas fa-question-circle' " +
-                          "title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td><td><input disabled type='text' " +
-                          $"class='form-control' style='max-width:300px' id='interval_{encodedId}' " +
-                          $"value='{sensorInfo.ExpectedUpdateInterval}'></td></tr>");
-            result.Append("<tr><td>Description</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
-                          $" id='description_{encodedId}' value='{sensorInfo.Description}'></td></tr>");
-            result.Append("<tr><td>Unit</td><td><input disabled type='text' class='form-control' style='max-width:300px'" +
-                          $" id='unit_{encodedId}' value='{sensorInfo.Unit}'></td></tr>");
-
-            result.Append("</div>");
-            return result.ToString();
-        }
-
-        public static string CreateEditButtonForInfo(string encodedId)
-        {
-            return $"<button id='editInfo_{encodedId}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                   " title='edit meta info'><i class='fas fa-edit'></i></button>";
-        }
-
-        public static string CreateSaveButtonForInfo(string encodedId)
-        {
-            return $"<button disabled id='saveInfo_{encodedId}' style='margin-left: 5px' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                   " title='save meta info'><i class='fas fa-check'></i></button>";
-        }
-
-        public static string CreateResetButtonForInfo(string encodedId)
-        {
-            return $"<button disabled style='margin-left: 5px' id='revertInfo_{encodedId}' type='button' class='btn btn-secondary' data-bs-toggle='tooltip'" +
-                " title='revert changes'><i class='fas fa-times'></i></button></td></tr>";
-        }
         #endregion
     }
 }
