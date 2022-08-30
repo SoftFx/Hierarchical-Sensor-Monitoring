@@ -33,7 +33,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Unit = RandomGenerator.GetRandomString(),
                 Interval = new()
                 {
-                    ExpectedUpdatePeriod = TimeInterval.Custom,
+                    TimeInterval = TimeInterval.Custom,
                     CustomPeriod = TimeSpan.FromMinutes(10).Ticks,
                 }
             };

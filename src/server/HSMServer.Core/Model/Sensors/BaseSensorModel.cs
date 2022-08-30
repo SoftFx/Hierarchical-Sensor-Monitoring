@@ -13,16 +13,6 @@ namespace HSMServer.Core.Model
         Blocked = byte.MaxValue,
     }
 
-    public enum TimeInterval : byte
-    {
-        TenMinutes,
-        Hour,
-        Day,
-        Week,
-        Month,
-        Custom = byte.MaxValue,
-    }
-
 
     internal interface IBarSensor
     {
@@ -85,10 +75,15 @@ namespace HSMServer.Core.Model
 
             var oldValidationResult = ValidationResult;
 
-            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
             ValidationResult += ExpectedUpdateIntervalPolicy.Validate(LastValue);
 
             return ValidationResult != oldValidationResult;
+        }
+
+        internal void RemoveExpectedUpdateInterval()
+        {
+            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            ExpectedUpdateIntervalPolicy = null;
         }
 
 

@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Cache.Entities;
-using System;
+﻿using System;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
@@ -25,11 +24,21 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal void Update(ExpectedUpdateIntervalUpdate updateModel)
+        public TimeIntervalModel ToTimeIntervalModel() =>
+            new()
+            {
+                TimeInterval = ExpectedUpdatePeriod,
+                CustomPeriod = CustomPeriod,
+            };
+
+        internal void Update(TimeIntervalModel model)
         {
-            ExpectedUpdatePeriod = updateModel.ExpectedUpdatePeriod;
-            CustomPeriod = updateModel.CustomPeriod;
+            ExpectedUpdatePeriod = model.TimeInterval;
+            CustomPeriod = model.CustomPeriod;
         }
+
+        internal bool IsEqual(TimeIntervalModel model) =>
+            ExpectedUpdatePeriod == model.TimeInterval && CustomPeriod == model.CustomPeriod;
 
         internal ValidationResult Validate(BaseValue value)
         {
