@@ -2,8 +2,8 @@
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using Microsoft.Win32;
 using System;
-using System.Management;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
@@ -15,15 +15,18 @@ namespace HSMDataCollector.CustomFuncSensor
         private readonly string _windowsVersion;
 
         public WindowsUpdateFuncSensor(string nodeName, string productKey, IValuesQueue queue,
-            string description, TimeSpan timerSpan, SensorType type, bool isLogging, TimeSpan updateInterval) 
+            string description, TimeSpan timerSpan, SensorType type, bool isLogging, TimeSpan updateInterval)
             : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}", productKey, queue, description, timerSpan, type)
         {
             _updateInterval = updateInterval;
 
-            ManagementObject obj = GetManagementObject();
-            TryGetWindowsValue(obj, TextConstants.Version, out _windowsVersion);
-            _windowsLastUpdate = TryGetWindowsValue(obj, TextConstants.InstallDate, out var strDate) 
-                ? ToUTC(strDate) : DateTime.MinValue;
+            //ManagementObject obj = GetManagementObject();
+            //TryGetWindowsValue(obj, TextConstants.Version, out _windowsVersion);
+            //_windowsLastUpdate = TryGetWindowsValue(obj, TextConstants.InstallDate, out var strDate)
+            //    ? ToUTC(strDate) : DateTime.MinValue;
+
+            _windowsVersion = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+            _windowsLastUpdate = GetWindowsInstallationDateTime();
 
             if (isLogging)
             {
@@ -31,45 +34,76 @@ namespace HSMDataCollector.CustomFuncSensor
             }
         }
 
-        private static DateTime ToUTC(string str) => 
-            ManagementDateTimeConverter.ToDateTime(str).ToUniversalTime();
+        //private static DateTime ToUTC(string str) =>
+        //    ManagementDateTimeConverter.ToDateTime(str).ToUniversalTime();
 
-        private static ManagementObject GetManagementObject()
+        //private static ManagementObject GetManagementObject()
+        //{
+        //    var searcher = new ManagementObjectSearcher(TextConstants.Win32OperatingSystem);
+        //    ManagementObjectCollection collection = searcher.Get();
+        //    if (collection == null)
+        //        return null;
+
+        //    foreach (ManagementObject obj in collection)
+        //        return obj;
+
+        //    return null;
+        //}
+
+        //private bool TryGetWindowsValue(ManagementObject obj, string key, out string value)
+        //{
+        //    bool isComplete = false;
+        //    try
+        //    {
+        //        value = obj[key].ToString();
+        //        isComplete = true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        value = string.Empty;
+        //        _logger?.Error(ex, $"Failed to get windows {key}");
+        //        CreateErrorDataObject(ex);
+        //    }
+
+        //    return isComplete;
+        //}
+
+        public DateTime GetWindowsInstallationDateTime()
         {
-            var searcher = new ManagementObjectSearcher(TextConstants.Win32OperatingSystem);
-            ManagementObjectCollection collection = searcher.Get();
-            if (collection == null) 
-                return null;
-
-            foreach (ManagementObject obj in collection)
-                return obj;
-
-            return null;
-        }
-
-        private bool TryGetWindowsValue(ManagementObject obj, string key, out string value)
-        {
-            bool isComplete = false;
             try
             {
-                value = obj[key].ToString();
-                isComplete = true;
+                var view = Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32;
+
+                RegistryKey localMachineX64View = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+                RegistryKey key = localMachineX64View.OpenSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion");
+                //string pathName = (string)registryKey.GetValue("productName");
+
+                //Microsoft.Win32.RegistryKey key = Microsoft.Win32.RegistryKey.OpenRemoteBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Environment.MachineName);
+                //key = key.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", false);
+
+                if (key != null)
+                {
+                    //unix add windows ticks
+                    DateTime installDate = new DateTime(1970, 1, 1).AddSeconds(Convert.ToInt64($"{key.GetValue("InstallDate")}"));
+
+                    return installDate;
+                }
+
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                value = string.Empty;
-                _logger?.Error(ex, $"Failed to get windows {key}");
+                _logger?.Error(ex, $"Failed to get windows InstallDate");
                 CreateErrorDataObject(ex);
             }
 
-            return isComplete;
+            return DateTime.MinValue;
         }
 
-        private bool IsVersionNeedUpdate() => 
+        private bool IsVersionNeedUpdate() =>
             DateTime.UtcNow - _windowsLastUpdate >= _updateInterval;
 
         private string GetDescription() =>
-            $"Windows Version: {_windowsVersion} Last Update Date: {_windowsLastUpdate}\n " +
+            $"{_windowsVersion} Last Update Date: {_windowsLastUpdate}\n " +
             $"User Description: {Description}";
 
         protected override UnitedSensorValue GetInvokeResult() =>
