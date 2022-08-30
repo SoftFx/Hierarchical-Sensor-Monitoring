@@ -40,7 +40,7 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
-            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.Interval);
+            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateInterval);
             Description = updatedModel.Description;
             Unit = updatedModel.Unit;
 

@@ -9,7 +9,7 @@ namespace HSMServer.Core.Cache.Entities
 
         public string Description { get; init; }
 
-        public TimeIntervalModel Interval { get; init; }
+        public TimeIntervalModel ExpectedUpdateInterval { get; init; }
 
         public string Unit { get; init; }
     }
