@@ -24,6 +24,7 @@ namespace HSMServer.Core.Model.Authentication
 
 
         public NotificationSettings Notifications { get; internal set; }
+        public Filter Filter { get; set; }
 
 
         public User(string userName) : this()
@@ -36,6 +37,7 @@ namespace HSMServer.Core.Model.Authentication
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             Notifications = new();
+            Filter = new();
         }
 
 
@@ -55,6 +57,7 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
 
             Notifications = new(user.Notifications.ToEntity());
+            Filter = new(user.Filter.ToEntity());
         }
 
         public User(UserEntity entity)
@@ -76,6 +79,7 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
+            Filter = new(entity.Filter);
         }
 
         /// <summary>
@@ -96,6 +100,7 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(user.Notifications.ToEntity());
+            Filter = new(user.Filter.ToEntity());
         }
 
         public User Copy()
@@ -103,6 +108,7 @@ namespace HSMServer.Core.Model.Authentication
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
             copy.Notifications = new(Notifications.ToEntity());
+            copy.Filter = new(Filter.ToEntity());
             return copy;
         }
     }
