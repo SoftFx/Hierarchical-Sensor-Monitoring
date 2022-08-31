@@ -42,6 +42,7 @@
   <ItemGroup>
     <Folder Include="Images\" />
     <Folder Include="wwwroot\js\bundles\" />
+    <Folder Include="wwwroot\lib\datetimepicker\" />
   </ItemGroup>
 
   <ItemGroup>

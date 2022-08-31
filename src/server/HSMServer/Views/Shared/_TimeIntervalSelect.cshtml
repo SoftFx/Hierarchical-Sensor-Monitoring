@@ -5,6 +5,11 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
+<script src="~/moment.js/moment-with-locales.min.js"></script>
+<link href="~/lib/datetimepicker/css/datetimepicker.css" rel="stylesheet">
+<script src="~/lib/datetimepicker/js/datetimepicker.js"></script>
+
+
 <form>
     <div class="d-grid">
         <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="Html.GetEnumSelectList<TimeInterval>()"></select>
@@ -14,8 +19,15 @@
 
 <input id="customTimeIntervalText" style="display:none;" value="@TimeInterval.Custom" />
 
+<div id="picker"></div>
+
 
 <script>
+    $('#picker').dateTimePicker({
+        showTime: true,
+        selectData: "now"
+    });
+
     displaySelectedOption();
 
     $('#timeIntervalSelect').change(function () {

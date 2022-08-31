@@ -86,7 +86,7 @@ function customMenu(node) {
         },
         "CleanHistory": {
             "separator_before": false,
-            "separator_after": false,
+            "separator_after": true,
             "label": "Clean history",
             "action": function (obj) {
                 //modal
@@ -121,7 +121,7 @@ function customMenu(node) {
             }
         },
         "EnableNotifications": {
-            "separator_before": true,
+            "separator_before": false,
             "separator_after": false,
             "label": "Enable notifications",
             "icon": "fab fa-telegram",
