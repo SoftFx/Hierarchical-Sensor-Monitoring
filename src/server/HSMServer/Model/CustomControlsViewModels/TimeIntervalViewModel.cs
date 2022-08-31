@@ -41,10 +41,11 @@ namespace HSMServer.Model
 
         internal void Update(TimeIntervalModel model)
         {
-            var customIntervalTicks = model?.CustomPeriod;
+            var interval = model?.TimeInterval ?? CoreTimeInterval.Custom;
+            var customPeriod = model?.CustomPeriod ?? 0;
 
-            TimeInterval = SetTimeInterval(model?.TimeInterval, customIntervalTicks);
-            CustomTimeInterval = new TimeSpan(customIntervalTicks ?? 0).ToString();
+            TimeInterval = SetTimeInterval(interval, customPeriod);
+            CustomTimeInterval = new TimeSpan(customPeriod).ToString();
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -74,21 +75,16 @@ namespace HSMServer.Model
             return 0;
         }
 
-        private static TimeInterval SetTimeInterval(CoreTimeInterval? interval, long? customIntervalTicks)
-        {
-            if (interval is null)
-                return TimeInterval.None;
-
-            return interval.Value switch
+        private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customIntervalTicks) =>
+            interval switch
             {
                 CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
                 CoreTimeInterval.Hour => TimeInterval.Hour,
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.Custom => (customIntervalTicks ?? 0) == 0 ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.Custom => customIntervalTicks == 0 ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
-        }
     }
 }

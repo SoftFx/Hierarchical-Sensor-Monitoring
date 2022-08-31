@@ -353,7 +353,7 @@ namespace HSMServer.Controllers
                 Id = sensor.Id,
                 Description = updatedModel.Description,
                 Unit = updatedModel.Unit,
-                Interval = updatedModel.ExpectedUpdateInterval.ToModel(),
+                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
             };
 
             _treeValuesCache.UpdateSensor(sensorUpdate);

@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        public TimeIntervalModel ToTimeIntervalModel() =>
+        public TimeIntervalModel ToTimeInterval() =>
             new()
             {
                 TimeInterval = ExpectedUpdatePeriod,

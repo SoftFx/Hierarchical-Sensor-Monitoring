@@ -259,7 +259,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(updatedSensor);
-            UpdateIntervalPolicy(updatedSensor.Interval, sensor);
+            UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
