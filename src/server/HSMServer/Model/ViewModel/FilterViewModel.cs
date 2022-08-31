@@ -1,4 +1,4 @@
-﻿using System.Linq;
+﻿using HSMServer.Core.Model;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -17,5 +17,19 @@ namespace HSMServer.Model.ViewModel
         public bool IsBlockedSensors { get; set; }
 
         public int TreeUpdateInterval { get; set; } = 5;
+
+
+        public FilterViewModel(Filter filter)
+        {
+            HasOkStatus = filter.HasOkStatus;
+            HasWarningStatus = filter.HasWarningStatus;
+            HasErrorStatus = filter.HasErrorStatus;
+            HasUnknownStatus = filter.HasUnknownStatus;
+            SensorsHasData = filter.SensorsHasData;
+            HasTelegramNotifications = filter.HasTelegramNotifications;
+            IsIgnoredSensors = filter.IsIgnoredSensors;
+            IsBlockedSensors = filter.IsBlockedSensors;
+            TreeUpdateInterval = filter.TreeUpdateInterval;
+        }
     }
 }

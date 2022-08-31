@@ -1,6 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-
-namespace HSMServer.Core.Model
+﻿namespace HSMServer.Core.Model
 {
     public sealed class Filter
     {
@@ -21,32 +19,17 @@ namespace HSMServer.Core.Model
 
         internal Filter() { }
 
-        internal Filter(FilterEntity entity)
+        internal Filter(Filter filter)
         {
-            HasOkStatus = entity.HasOkStatus;
-            HasWarningStatus = entity.HasWarningStatus;
-            HasErrorStatus = entity.HasErrorStatus;
-            HasUnknownStatus = entity.HasUnknownStatus;
-            SensorsHasData = entity.SensorsHasData;
-            HasTelegramNotifications = entity.HasTelegramNotifications;
-            IsIgnoredSensors = entity.IsIgnoredSensors;
-            IsBlockedSensors = entity.IsBlockedSensors;
-            TreeUpdateInterval = entity.TreeUpdateInterval;
+            HasOkStatus = filter.HasOkStatus;
+            HasWarningStatus = filter.HasWarningStatus;
+            HasErrorStatus = filter.HasErrorStatus;
+            HasUnknownStatus = filter.HasUnknownStatus;
+            SensorsHasData = filter.SensorsHasData;
+            HasTelegramNotifications = filter.HasTelegramNotifications;
+            IsIgnoredSensors = filter.IsIgnoredSensors;
+            IsBlockedSensors = filter.IsBlockedSensors;
+            TreeUpdateInterval = filter.TreeUpdateInterval;
         }
-
-
-        internal FilterEntity ToEntity() =>
-            new()
-            {
-                HasOkStatus = HasOkStatus,
-                HasWarningStatus = HasWarningStatus,
-                HasErrorStatus = HasErrorStatus,
-                HasUnknownStatus = HasUnknownStatus,
-                SensorsHasData = SensorsHasData,
-                HasTelegramNotifications = HasTelegramNotifications,
-                IsIgnoredSensors = IsIgnoredSensors,
-                IsBlockedSensors = IsBlockedSensors,
-                TreeUpdateInterval = TreeUpdateInterval
-            };
     }
 }
