@@ -63,11 +63,6 @@ function selectNodeAjax(selectedId) {
     });
 }
 
-function nameSorting(a, b) {
-    return a.toLowerCase().split(' ').filter(element => element) > 
-        b.toLowerCase().split(' ').filter(element => element) ? 1 : -1;
-}
-
 function timeSorting(a, b) {
     return b.diff(a);
 }
