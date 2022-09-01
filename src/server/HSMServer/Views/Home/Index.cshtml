@@ -112,9 +112,9 @@
 
 
     <div>
-        <div id="mainContainer" class="row justify-content-start mw-100">
+        <div class="row justify-content-start mw-100">
             <div class="scrollableBlock col-auto ms-2">
-                <div id="treeContainer">
+                <div>
                     <div class="col-md-auto">
                         <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
                     </div>
@@ -138,14 +138,12 @@
     $('#sortByName').off("click").on("click",
         function() {
             isTimeSorting = false;
-            initializeTree();
             $('#jstree').jstree(true).refresh(true);
         });
 
     $('#sortByTime').off("click").on("click",
         function() {
             isTimeSorting = true;
-            initializeTree();
             $('#jstree').jstree(true).refresh(true);
         });
 

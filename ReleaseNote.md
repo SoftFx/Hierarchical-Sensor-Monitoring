@@ -16,3 +16,8 @@
 ### Site
 
 * DateTime format has been changed to style dd/MM/yyyy (ex. 23/08/2022)
+* Main layout has been fixed  
+
+### Other
+
+* Bugfixing, optimization
