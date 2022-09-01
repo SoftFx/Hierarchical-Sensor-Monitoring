@@ -7,6 +7,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public TelegramSettingsEntity TelegramSettings { get; init; }
 
         public List<string> EnabledSensors { get; init; }
+
+        public Dictionary<string, long> IgnoredSensors { get; init; }
     }
 
 

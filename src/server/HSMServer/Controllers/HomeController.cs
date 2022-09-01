@@ -102,7 +102,10 @@ namespace HSMServer.Controllers
             void DisableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Remove(sensorId);
 
-            UpdateUserEnabledSensors(selectedId, false, DisableSensors);
+            void RemoveIgnoredSensors(Dictionary<Guid, DateTime> userIgnoredSensors, Guid sensorId) =>
+                userIgnoredSensors.Remove(sensorId);
+
+            UpdateUserEnabledSensors(selectedId, false, DisableSensors, RemoveIgnoredSensors);
         }
 
         [HttpGet]
@@ -122,14 +125,16 @@ namespace HSMServer.Controllers
 
         }
 
-        private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus, Action<HashSet<Guid>, Guid> updateAction)
+        private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus,
+            Action<HashSet<Guid>, Guid> updateEnabledSenors, Action<Dictionary<Guid, DateTime>, Guid> updateIgnoredSensors = null)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
             foreach (var sensorId in sensors)
             {
-                updateAction(user.Notifications.EnabledSensors, sensorId);
+                updateEnabledSenors.Invoke(user.Notifications.EnabledSensors, sensorId);
+                updateIgnoredSensors?.Invoke(user.Notifications.IgnoredSensors, sensorId);
 
                 if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
                     sensor.UpdateNotificationsStatus(notificationsUpdatedStatus);

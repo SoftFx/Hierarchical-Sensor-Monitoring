@@ -11,6 +11,8 @@ namespace HSMServer.Core.Model
 
         public HashSet<Guid> EnabledSensors { get; } = new();
 
+        public Dictionary<Guid, DateTime> IgnoredSensors { get; } = new();
+
 
         internal NotificationSettings()
         {
@@ -29,14 +31,34 @@ namespace HSMServer.Core.Model
                     if (Guid.TryParse(sensorIdStr, out var sensorId))
                         EnabledSensors.Add(sensorId);
             }
+
+            if (entity?.IgnoredSensors is not null)
+            {
+                IgnoredSensors.Clear();
+
+                foreach (var (sensorIdStr, endIgnorePeriodTicks) in entity.IgnoredSensors)
+                    if (Guid.TryParse(sensorIdStr, out var sensorId))
+                        IgnoredSensors.Add(sensorId, new DateTime(endIgnorePeriodTicks));
+            }
         }
 
+
+        public bool RemoveSensor(Guid sensorId)
+        {
+            bool isSensorRemoved = false;
+
+            isSensorRemoved |= EnabledSensors.Remove(sensorId);
+            isSensorRemoved |= IgnoredSensors.Remove(sensorId);
+
+            return isSensorRemoved;
+        }
 
         internal NotificationSettingsEntity ToEntity() =>
             new()
             {
                 TelegramSettings = Telegram.ToEntity(),
                 EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
+                IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
             };
     }
 }

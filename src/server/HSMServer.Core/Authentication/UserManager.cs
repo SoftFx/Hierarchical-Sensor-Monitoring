@@ -106,7 +106,7 @@ namespace HSMServer.Core.Authentication
         {
             foreach (var (_, user) in _users)
             {
-                if (!user.Notifications.EnabledSensors.Remove(sensorId))
+                if (!user.Notifications.RemoveSensor(sensorId))
                     continue;
 
                 _databaseCore.UpdateUser(user);
