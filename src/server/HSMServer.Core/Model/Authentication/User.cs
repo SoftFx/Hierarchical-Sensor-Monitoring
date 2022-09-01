@@ -81,7 +81,8 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
-            TreeFilter = JsonSerializer.Deserialize<Filter>(((JsonElement)entity.TreeFilter).GetRawText());
+            TreeFilter = entity.TreeFilter is null ? new Filter() : 
+                JsonSerializer.Deserialize<Filter>(((JsonElement)entity.TreeFilter).GetRawText());
         }
 
         /// <summary>

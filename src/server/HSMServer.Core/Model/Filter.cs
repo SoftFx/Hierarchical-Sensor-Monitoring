@@ -14,10 +14,10 @@
 
         public bool IsBlockedSensors { get; set; }
 
-        public int TreeUpdateInterval { get; set; }
+        public int TreeUpdateInterval { get; set; } = 5;
 
 
-        internal Filter() { }
+        public Filter() { }
 
         internal Filter(Filter filter)
         {

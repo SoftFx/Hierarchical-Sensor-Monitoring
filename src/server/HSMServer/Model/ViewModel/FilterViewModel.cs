@@ -19,6 +19,8 @@ namespace HSMServer.Model.ViewModel
         public int TreeUpdateInterval { get; set; } = 5;
 
 
+        public FilterViewModel() { }
+
         public FilterViewModel(Filter filter)
         {
             HasOkStatus = filter.HasOkStatus;
