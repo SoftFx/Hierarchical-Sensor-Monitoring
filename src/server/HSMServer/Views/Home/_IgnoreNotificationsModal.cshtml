@@ -8,7 +8,7 @@
 
 @if (Model != null)
 {
-    <form asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
+    <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
         <input style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
 
         <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
@@ -21,15 +21,31 @@
                         </div>
                     </div>
 
-                    <div class="modal-body" id="ignoreNotifications_body">
+                    <div class="modal-body">
+                        <p>Please, select how long you would like to ignore notifications</p>
+                            
+                        <partial name="_TimeIntervalSelect" for="IgnorePeriod" />
+
                         <div class="row">
-                            <label class="col-3 col-form-label" asp-for="IgnorePeriod"></label>
-                            <div class="col-9"><partial name="_TimeIntervalSelect" for="IgnorePeriod" /></div>
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Days"></label>
+                                <input class="form-control" type="number" asp-for="Days" />
+                            </div>
+
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Hours"></label>
+                                <input class="form-control" type="number" asp-for="Hours" />
+                            </div>
+
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Minutes"></label>
+                                <input class="form-control" type="number" asp-for="Minutes" />
+                            </div>
                         </div>
                     </div>
 
                     <div class="modal-footer">
-                        <button class="btn btn-secondary col-2" type="submit" id="ignoreNotifications_okButton">OK</button>
+                        <button class="btn btn-secondary col-2" type="submit">OK</button>
                         <button class="btn btn-secondary col-2" type="button" onclick="hideIgnoreNotificationsModal()">Cancel</button>
                     </div>
                 </div>
@@ -40,6 +56,23 @@
 
 
 <script>
+    $(document).on("submit", "#ignoreNotifications_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#ignoreNotifications_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            async: true
+        }).done(function () {
+            hideIgnoreNotificationsModal();
+        });
+    });
+
     function hideIgnoreNotificationsModal() {
         $('#ignoreNotifications_modal').modal('hide');
     }
