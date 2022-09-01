@@ -33,5 +33,20 @@ namespace HSMServer.Model.ViewModel
             IsBlockedSensors = filter.IsBlockedSensors;
             TreeUpdateInterval = filter.TreeUpdateInterval;
         }
+
+
+        public Filter ToFilter() =>
+            new ()
+            {
+                HasOkStatus = HasOkStatus,
+                HasWarningStatus = HasWarningStatus,
+                HasErrorStatus = HasErrorStatus,
+                HasUnknownStatus = HasUnknownStatus,
+                SensorsHasData = SensorsHasData,
+                HasTelegramNotifications = HasTelegramNotifications,
+                IsIgnoredSensors = IsIgnoredSensors,
+                IsBlockedSensors = IsBlockedSensors,
+                TreeUpdateInterval = TreeUpdateInterval,
+            };
     }
 }

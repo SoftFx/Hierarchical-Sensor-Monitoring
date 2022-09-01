@@ -76,9 +76,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void ApplyFilter(FilterViewModel filter)
+        public IActionResult ApplyFilter(FilterViewModel viewModel)
         {
+            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
+            user.TreeFilter = viewModel.ToFilter();
+            _userManager.UpdateUser(user);
 
+            return View("Index", _treeViewModel);
         }
 
         [HttpPost]
