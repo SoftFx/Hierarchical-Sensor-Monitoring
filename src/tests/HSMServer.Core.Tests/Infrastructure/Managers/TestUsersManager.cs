@@ -1,5 +1,6 @@
 ﻿using HSMCommon;
 using HSMServer.Core.Model.Authentication;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -33,6 +34,9 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static User TestUserManager { get; } =
             BuildUser(ProductRoleEnum.ProductManager, name: TestUserManagerName);
+
+        internal static User EmptyUser { get; } =
+            new User() { UserName = string.Empty, CertificateThumbprint = string.Empty, CertificateFileName = string.Empty, Password = string.Empty };
 
         internal static User Admin { get; } =
             BuildUser(TestUserAdminName, true);

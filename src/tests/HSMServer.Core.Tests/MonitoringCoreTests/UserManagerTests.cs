@@ -56,12 +56,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Add user(s), Negative")]
         public void AddEmptyUserTest()
         {
-            var emptyUser = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty };
-
-            _userManager.AddUser(emptyUser);
+            _userManager.AddUser(TestUsersManager.EmptyUser);
 
             var actual = _userManager.GetUsers();
-            var expected = new List<User>(2) { TestUsersManager.DefaultUser, emptyUser };
+            var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.EmptyUser };
 
             CompareUserLists(actual, expected);
         }
