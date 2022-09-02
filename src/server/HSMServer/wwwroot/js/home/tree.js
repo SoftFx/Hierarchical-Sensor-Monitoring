@@ -116,41 +116,48 @@ function customMenu(node) {
                 });
             }
         },
-        "EnableNotifications": {
+        "Notifications": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Enable notifications",
-            "icon": "fab fa-telegram",
-            "action": function (obj) {
-                updateSensorsNotifications(enableNotifications, node);
-            }
-        },
-        "DisableNotifications": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Disable notifications",
-            "icon": "fab fa-telegram",
-            "action": function (obj) {
-                updateSensorsNotifications(disableNotifications, node);
-            }
-        },
-        "IgnoreNotifications": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Ignore notifications",
-            "action": function (obj) {
-                $.ajax({
-                    type: 'get',
-                    url: ignoreNotifications + '?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false,
-                    success: function (viewData) {
-                        $("#ignoreNotificatios_partial").html(viewData);
+            "label": "Notifications",
+            "submenu": {
+                "EnableNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Enable notifications",
+                    "icon": "fab fa-telegram",
+                    "action": function (obj) {
+                        updateSensorsNotifications(enableNotifications, node);
                     }
-                }).done(function () {
-                    $('#ignoreNotifications_modal').modal('show');
-                });
+                },
+                "DisableNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Disable notifications",
+                    "icon": "fab fa-telegram",
+                    "action": function (obj) {
+                        updateSensorsNotifications(disableNotifications, node);
+                    }
+                },
+                "IgnoreNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Ignore notifications",
+                    "action": function (obj) {
+                        $.ajax({
+                            type: 'get',
+                            url: ignoreNotifications + '?Selected=' + node.id,
+                            datatype: 'html',
+                            contenttype: 'application/json',
+                            cache: false,
+                            success: function (viewData) {
+                                $("#ignoreNotificatios_partial").html(viewData);
+                            }
+                        }).done(function () {
+                            $('#ignoreNotifications_modal').modal('show');
+                        });
+                    }
+                }
             }
         }
     }
@@ -159,19 +166,15 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
-    if (node.children.length != 0) {
-        delete items.IgnoreNotifications;
-    }
-
     if (document.getElementById(`${node.id}_notifications`)) {
         let partialNotifications = $(`#${node.id}_partialNotifications`).val();
         if (partialNotifications !== "True") {
-            delete items.EnableNotifications;
+            delete items.Notifications.submenu.EnableNotifications;
         }
     }
     else {
-        delete items.DisableNotifications;
-        delete items.IgnoreNotifications;
+        delete items.Notifications.submenu.DisableNotifications;
+        delete items.Notifications.submenu.IgnoreNotifications;
     }
 
     return items;
