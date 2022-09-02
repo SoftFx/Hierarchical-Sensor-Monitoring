@@ -2,11 +2,25 @@
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.TreeViewModels;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
 {
     public class SensorInfoViewModel
     {
+        private readonly List<TimeInterval> _predefinedIntervals =
+            new()
+            {
+                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
+
         public string Path { get; }
 
         public string ProductName { get; }
@@ -32,7 +46,7 @@ namespace HSMServer.Model.ViewModel
             ProductName = sensor.Product;
             SensorType = sensor.SensorType;
 
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval;
+            ExpectedUpdateInterval = new(sensor.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
             Description = sensor.Description;
             Unit = sensor.Unit;
         }
@@ -40,7 +54,7 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
-            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateInterval);
+            ExpectedUpdateInterval = new(updatedModel.ExpectedUpdateInterval, _predefinedIntervals);
             Description = updatedModel.Description;
             Unit = updatedModel.Unit;
 

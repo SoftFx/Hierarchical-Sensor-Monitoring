@@ -7,6 +7,21 @@ namespace HSMServer.Model
 {
     public class IgnoreNotificationsViewModel
     {
+        private readonly List<TimeInterval> _predefinedIntervals =
+            new()
+            {
+                TimeInterval.TenMinutes,
+                TimeInterval.TwentyMinutes,
+                TimeInterval.ThirtyMinutes,
+                TimeInterval.FourtyMinutes,
+                TimeInterval.FiftyMinutes,
+                TimeInterval.Hour,
+                TimeInterval.TwoHours,
+                TimeInterval.Day,
+                TimeInterval.Custom
+            };
+
+
         public string Path { get; }
 
         public string TreeElement { get; }
@@ -64,6 +79,7 @@ namespace HSMServer.Model
         private IgnoreNotificationsViewModel(string encodedId)
         {
             EncodedId = encodedId;
+            IgnorePeriod = new(_predefinedIntervals);
         }
     }
 }

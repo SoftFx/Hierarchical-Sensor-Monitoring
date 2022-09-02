@@ -7,7 +7,7 @@
 
 <form>
     <div class="d-grid">
-        <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="Html.GetEnumSelectList<TimeInterval>()"></select>
+        <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
         <input class="customTimeInterval form-control" placeholder="dd.HH:mm:ss" style="display:none;" asp-for="CustomTimeInterval" />
     </div>
 </form>

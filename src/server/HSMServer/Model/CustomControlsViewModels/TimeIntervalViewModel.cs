@@ -1,5 +1,8 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Extensions;
+using HSMServer.Core.Model;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
@@ -11,8 +14,18 @@ namespace HSMServer.Model
         None,
         [Display(Name = "10 minutes")]
         TenMinutes,
+        [Display(Name = "20 minutes")]
+        TwentyMinutes,
+        [Display(Name = "30 minutes")]
+        ThirtyMinutes,
+        [Display(Name = "40 minutes")]
+        FourtyMinutes,
+        [Display(Name = "50 minutes")]
+        FiftyMinutes,
         [Display(Name = "1 hour")]
         Hour,
+        [Display(Name = "2 hours")]
+        TwoHours,
         [Display(Name = "1 day")]
         Day,
         [Display(Name = "1 week")]
@@ -25,6 +38,8 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
+        public List<SelectListItem> IntervalItems { get; init; }
+
         public TimeInterval TimeInterval { get; set; }
 
         public string CustomTimeInterval { get; set; }
@@ -33,7 +48,12 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model)
+        internal TimeIntervalViewModel(List<TimeInterval> intervals)
+        {
+            IntervalItems = GetIntrevalItems(intervals);
+        }
+
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals) : this(intervals)
         {
             Update(model);
         }
@@ -86,5 +106,15 @@ namespace HSMServer.Model
                 CoreTimeInterval.Custom => customIntervalTicks == 0 ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
+
+        private static List<SelectListItem> GetIntrevalItems(List<TimeInterval> intervals)
+        {
+            var items = new List<SelectListItem>(intervals.Count);
+
+            foreach (var interval in intervals)
+                items.Add(new SelectListItem() { Text = interval.GetDisplayName(), Value = interval.ToString() });
+
+            return items;
+        }
     }
 }
