@@ -63,11 +63,9 @@ namespace HSMServer.BackgroundTask
                 bool needUpdateUser = false;
 
                 foreach (var (sensorId, endOfIgnorePeriod) in user.Notifications.IgnoredSensors)
-                    if (DateTime.UtcNow >= endOfIgnorePeriod)
-                    {
-                        user.Notifications.IgnoredSensors.TryRemove(sensorId, out _);
+                    if (DateTime.UtcNow >= endOfIgnorePeriod &&
+                        user.Notifications.IgnoredSensors.TryRemove(sensorId, out _))
                         needUpdateUser = true;
-                    }
 
                 if (needUpdateUser)
                     _userManager.UpdateUser(user);
