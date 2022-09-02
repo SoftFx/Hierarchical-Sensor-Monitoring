@@ -1,6 +1,8 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using Microsoft.Extensions.Hosting;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,11 +13,13 @@ namespace HSMServer.BackgroundTask
         private const int Delay = 60000; // 1 minute
 
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IUserManager _userManager;
 
 
-        public MonitoringBackgroundService(ITreeValuesCache treeValuesCache)
+        public MonitoringBackgroundService(ITreeValuesCache treeValuesCache, IUserManager userManager)
         {
             _treeValuesCache = treeValuesCache;
+            _userManager = userManager;
         }
 
 
@@ -27,6 +31,7 @@ namespace HSMServer.BackgroundTask
                 {
                     ValidateSensors();
                     UpdateAccessKeysState();
+                    RemoveOutdatedIgnoredSensors();
                 }
 
                 await Task.Delay(Delay, stoppingToken);
@@ -49,6 +54,24 @@ namespace HSMServer.BackgroundTask
             foreach (var key in _treeValuesCache.GetAccessKeys())
                 if (key.HasExpired)
                     _treeValuesCache.UpdateAccessKey(new() { Id = key.Id, State = KeyState.Expired });
+        }
+
+        private void RemoveOutdatedIgnoredSensors()
+        {
+            foreach (var user in _userManager.GetUsers())
+            {
+                bool needUpdateUser = false;
+
+                foreach (var (sensorId, endOfIgnorePeriod) in user.Notifications.IgnoredSensors)
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        user.Notifications.IgnoredSensors.TryRemove(sensorId, out _);
+                        needUpdateUser = true;
+                    }
+
+                if (needUpdateUser)
+                    _userManager.UpdateUser(user);
+            }
         }
     }
 }
