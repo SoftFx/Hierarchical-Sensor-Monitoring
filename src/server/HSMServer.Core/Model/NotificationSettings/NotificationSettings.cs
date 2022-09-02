@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,7 +12,7 @@ namespace HSMServer.Core.Model
 
         public HashSet<Guid> EnabledSensors { get; } = new();
 
-        public Dictionary<Guid, DateTime> IgnoredSensors { get; } = new();
+        public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
 
 
         internal NotificationSettings()
@@ -38,7 +39,7 @@ namespace HSMServer.Core.Model
 
                 foreach (var (sensorIdStr, endIgnorePeriodTicks) in entity.IgnoredSensors)
                     if (Guid.TryParse(sensorIdStr, out var sensorId))
-                        IgnoredSensors.Add(sensorId, new DateTime(endIgnorePeriodTicks));
+                        IgnoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
             }
         }
 
@@ -48,7 +49,7 @@ namespace HSMServer.Core.Model
             bool isSensorRemoved = false;
 
             isSensorRemoved |= EnabledSensors.Remove(sensorId);
-            isSensorRemoved |= IgnoredSensors.Remove(sensorId);
+            isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
         }

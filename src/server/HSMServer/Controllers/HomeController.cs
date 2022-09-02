@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -102,8 +103,8 @@ namespace HSMServer.Controllers
             void DisableSensors(HashSet<Guid> userEnabledSensors, Guid sensorId) =>
                 userEnabledSensors.Remove(sensorId);
 
-            void RemoveIgnoredSensors(Dictionary<Guid, DateTime> userIgnoredSensors, Guid sensorId) =>
-                userIgnoredSensors.Remove(sensorId);
+            void RemoveIgnoredSensors(ConcurrentDictionary<Guid, DateTime> userIgnoredSensors, Guid sensorId) =>
+                userIgnoredSensors.TryRemove(sensorId, out _);
 
             UpdateUserEnabledSensors(selectedId, false, DisableSensors, RemoveIgnoredSensors);
         }
@@ -111,9 +112,11 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var decodedId = SensorPathHelper.Decode(selectedId);
 
-            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                return PartialView("_IgnoreNotificationsModal", new IgnoreNotificationsViewModel(node));
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
                 return PartialView("_IgnoreNotificationsModal", new IgnoreNotificationsViewModel(sensor));
 
             return PartialView("_IgnoreNotificationsModal", null);
@@ -122,11 +125,21 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model)
         {
+            var sensors = GetNodeSensors(model.EncodedId);
+            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
+            foreach (var sensorId in sensors)
+            {
+                user.Notifications.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
+
+                //TODO : update ignore icon
+            }
+
+            _userManager.UpdateUser(user);
         }
 
         private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus,
-            Action<HashSet<Guid>, Guid> updateEnabledSenors, Action<Dictionary<Guid, DateTime>, Guid> updateIgnoredSensors = null)
+            Action<HashSet<Guid>, Guid> updateEnabledSenors, Action<ConcurrentDictionary<Guid, DateTime>, Guid> updateIgnoredSensors = null)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
