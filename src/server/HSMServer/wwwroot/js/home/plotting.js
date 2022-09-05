@@ -4,10 +4,13 @@
     //console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     if (zoomData === undefined || zoomData === null) {
-        Plotly.newPlot(graphElementId, convertedData);    
+        var layout = { autosize: true };
+        var config = { responsive: true }
+        Plotly.newPlot(graphElementId, convertedData, layout, config);    
     } else {
         let layout = createLayoutFromZoomData(zoomData);
-        Plotly.newPlot(graphElementId, convertedData, layout);
+        var config = { responsive: true }
+        Plotly.newPlot(graphElementId, convertedData, layout, config);
     }
 
     let graphDiv = document.getElementById(graphElementId);

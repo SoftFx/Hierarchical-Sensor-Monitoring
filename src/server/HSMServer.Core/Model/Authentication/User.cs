@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace HSMServer.Core.Model.Authentication
 {
@@ -24,6 +25,7 @@ namespace HSMServer.Core.Model.Authentication
 
 
         public NotificationSettings Notifications { get; internal set; }
+        public TreeUserFilter TreeFilter { get; set; }
 
 
         public User(string userName) : this()
@@ -36,6 +38,7 @@ namespace HSMServer.Core.Model.Authentication
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             Notifications = new();
+            TreeFilter = new();
         }
 
 
@@ -55,6 +58,7 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
 
             Notifications = new(user.Notifications.ToEntity());
+            TreeFilter = new(user.TreeFilter);
         }
 
         public User(UserEntity entity)
@@ -76,6 +80,8 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
+            TreeFilter = entity.TreeFilter is null ? new TreeUserFilter() : 
+                JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
         }
 
         /// <summary>
@@ -96,6 +102,7 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(user.Notifications.ToEntity());
+            TreeFilter = new(user.TreeFilter);
         }
 
         public User Copy()
@@ -103,6 +110,7 @@ namespace HSMServer.Core.Model.Authentication
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
             copy.Notifications = new(Notifications.ToEntity());
+            copy.TreeFilter = new(TreeFilter);
             return copy;
         }
     }

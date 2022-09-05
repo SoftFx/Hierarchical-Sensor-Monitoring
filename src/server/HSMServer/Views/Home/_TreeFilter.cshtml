@@ -1,0 +1,100 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Model.ViewModel
+
+@model UserFilterViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<form asp-controller="@ViewConstants.HomeController"
+      asp-action="@nameof(HomeController.ApplyFilter)"
+      method="post" class="px-2" id="filter" style="display: none;">
+
+    <h6 class="dropdown-header">Update tree interval</h6>
+    <div class="d-flex">
+        <input type="number" id="treeInterval" asp-for="TreeUpdateInterval" class="form-control" min="5" max="600"
+               value="@Model.TreeUpdateInterval" />
+        <label for="treeInterval" title="Expected update tree interval" class="form-text ms-2">sec</label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Status</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus"/>
+        <label class="form-check-label" for="ok" title="Ok">
+            Ok <i class="fas fa-circle tree-icon-ok"></i>
+        </label>
+    </div>
+
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="warning" asp-for="HasWarningStatus"/>
+        <label class="form-check-label" for="warning" title="Warning">
+            Warning <i class="fas fa-circle tree-icon-warning"></i>
+        </label>
+    </div>
+
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="error" asp-for="HasErrorStatus"/>
+        <label class="form-check-label" for="error" title="Error">
+            Error <i class="fas fa-circle tree-icon-error"></i>
+        </label>
+    </div>
+
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="unknown" asp-for="HasUnknownStatus"/>
+        <label class="form-check-label" for="unknown" title="Unknown">
+            Unknown <i class="fas fa-circle tree-icon-unknown"></i>
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+
+    <h6 class="dropdown-header">History</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="history" asp-for="IsEmptyHistory"/>
+        <label class="form-check-label" for="history">
+            No data
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Notifications</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="notifications" asp-for="HasTelegramNotifications"/>
+        <label class="form-check-label" for="notifications" title="Telegram">
+            Telegram <i class="fab fa-telegram"></i>
+        </label>
+    </div>
+
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="ignored" asp-for="IsIgnoredSensors"/>
+        <label class="form-check-label" for="ignored" title="Ignored sensors">
+            Ignored sensors <i class="fa-solid fa-eye-slash"></i>
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Blocked</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsBlockedSensors"/>
+        <label class="form-check-label" for="blocked" title="Blocked sensors">
+            Blocked sensors <i class="fa-solid fa-circle-minus"></i>
+        </label>
+    </div>
+    <div class="dropdown-divider"></div>
+
+    <h6 class="dropdown-header">Sort By</h6>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" id="sorting"
+               value="@((int)TreeSortType.ByName)" asp-for="TreeSortType"/>
+        <label class="form-check-label" for="name">By Name <i class="fas fa-sort-alpha-down"></i></label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" id="sorting"
+               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType" />
+        <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
+    </div>
+
+    <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
+</form>

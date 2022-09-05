@@ -4,32 +4,30 @@
     ViewData["Title"] = "Login";
 }
 
+<div class="mx-auto" style="width: 30vh">
+    <h4>Login</h4>
+    <div>
+        <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded">
+            <div class="mb-1">
+                <input class="form-control" placeholder="Username" name="username" id="usernameInput"
+                       value="@Model.Username" type="text" /><br />
+            </div>
+            <div class="mb-3">
+                <input class="form-control" placeholder="Password" name="password" type="password"
+                       id="passwordInput" value="@Model.Password" />
+            </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="keepLoggedInInput" name="keepLoggedIn"
+                       onchange="if(this.checked) this.value='true'; else this.value='false';" />
+                <label class="form-check-label" for="keepLoggedInInput">Keep logged in</label>
+            </div>
 
+            <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-sign-in-alt"></i></button>
+        </form>
 
-<div class="container-sm" style="margin-left: 40%">
-    <div class="row justify-content-center">
-
-        <h4 style="margin: 20px 0px">Login</h4>
-        <div class="login-form-div">
-            <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded">
-                <div class="mb-1">
-                    <input class="form-control" placeholder="Username" name="username" id="usernameInput" value="@Model.Username" type="text" style="width: 200px" /><br />
-                </div>
-                <div class="mb-3">
-                    <input class="form-control" placeholder="Password" name="password" type="password" id="passwordInput" value="@Model.Password" style="width: 200px" />
-                </div>
-                <div class="mb-3 form-check">
-                    <input type="checkbox" class="form-check-input" id="keepLoggedInInput" name="keepLoggedIn" onchange="if(this.checked) this.value='true'; else this.value='false';" />
-                    <label class="form-check-label" for="keepLoggedInInput">Keep logged in</label>
-                </div>
-
-                <button type="submit" id="loginSubmit" class="btn btn-secondary">Submit <i class="fas fa-sign-in-alt"></i></button>
-            </form>
-
-            @if (TempData["ErrorMessage"] != null)
-            {
-                <span style="color: red;font-size: large;font-weight:normal">@TempData["ErrorMessage"].ToString()</span>
-            }
-        </div>
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <span style="color: red; font-size: large; font-weight:normal">@TempData["ErrorMessage"].ToString()</span>
+        }
     </div>
 </div>

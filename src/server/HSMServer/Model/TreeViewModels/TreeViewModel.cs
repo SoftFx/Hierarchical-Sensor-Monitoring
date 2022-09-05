@@ -44,10 +44,6 @@ namespace HSMServer.Model.TreeViewModels
                 if (node.Parent == null)
                     node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
 
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.Recursion();
-
             UpdateAccessKeysCharacteristics(user);
             ResetNotificationsCharacteristics(user);
         }

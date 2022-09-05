@@ -21,15 +21,13 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
+        public List<SensorNodeViewModel> FilteredSensors { get; internal set; }
 
         public bool IsAvailableForUser { get; internal set; }
 
         public bool IsAddingAccessKeysAvailable { get; internal set; }
 
-        public int AllSensorsCount { get; private set; }
-
-        public int VisibleSensorsCount { get; private set; }
+        public int InnerFilteredSensorsCount { get; internal set; }
 
         public int SensorsWithNotificationsCount { get; internal set; }
 
@@ -62,29 +60,6 @@ namespace HSMServer.Model.TreeViewModels
         internal void AddAccessKey(AccessKeyViewModel key) =>
             AccessKeys.TryAdd(key.Id, key);
 
-        internal void Recursion()
-        {
-            int visibleSensorsCount = 0;
-            int allSensorsCount = 0;
-
-            if (Nodes != null && !Nodes.IsEmpty)
-            {
-                foreach (var (_, node) in Nodes)
-                {
-                    node.Recursion();
-
-                    visibleSensorsCount += node.VisibleSensorsCount;
-                    allSensorsCount += node.AllSensorsCount;
-                }
-            }
-
-            VisibleSensorsCount = visibleSensorsCount + VisibleSensors.Count;
-            AllSensorsCount = allSensorsCount + Sensors.Count;
-
-            ModifyUpdateTime();
-            ModifyStatus();
-        }
-
         internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
         {
             if (Nodes != null && !Nodes.IsEmpty)
@@ -98,26 +73,5 @@ namespace HSMServer.Model.TreeViewModels
         }
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
-
-        private void ModifyUpdateTime()
-        {
-            var sensorMaxTime = VisibleSensors.Count == 0 ? null : VisibleSensors?.Max(x => x.UpdateTime);
-            var nodeMaxTime = Nodes.Values.Count == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
-
-            if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
-                UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
-            else if (sensorMaxTime.HasValue)
-                UpdateTime = sensorMaxTime.Value;
-            else if (nodeMaxTime.HasValue)
-                UpdateTime = nodeMaxTime.Value;
-        }
-
-        private void ModifyStatus()
-        {
-            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Ok : VisibleSensors.Max(s => s.Status);
-            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
-
-            Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
-        }
     }
 }

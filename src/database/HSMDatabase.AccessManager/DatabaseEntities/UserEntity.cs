@@ -14,5 +14,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public List<KeyValuePair<string, byte>> ProductsRoles { get; set; }
 
         public NotificationSettingsEntity NotificationSettings { get; set; }
+        public object TreeFilter { get; set; }
     }
 }
