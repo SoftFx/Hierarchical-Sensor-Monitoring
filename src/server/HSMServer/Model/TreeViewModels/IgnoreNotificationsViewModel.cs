@@ -26,8 +26,6 @@ namespace HSMServer.Model
 
         public string TreeElement { get; }
 
-        public DateTime DateTimeNow { get; }
-
         public string EncodedId { get; set; }
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
@@ -38,11 +36,11 @@ namespace HSMServer.Model
 
         public int Minutes { get; set; }
 
-        public DateTime EndOfIgnorePeriod =>
-            DateTimeNow.AddDays(Days)
-                       .AddHours(Hours)
-                       .AddMinutes(Minutes)
-                       .AddSeconds(-DateTimeNow.Second);
+        public DateTime DateTimeNow { get; set; }
+
+        public DateTime EndOfIgnorePeriod => DateTimeNow.AddDays(Days)
+                                                        .AddHours(Hours)
+                                                        .AddMinutes(Minutes);
 
 
         // public constructor without parameters for action Home/IgnoreNotifications
@@ -74,11 +72,14 @@ namespace HSMServer.Model
         private IgnoreNotificationsViewModel(string encodedId)
         {
             EncodedId = encodedId;
-            DateTimeNow = DateTime.UtcNow;
             IgnorePeriod = new(_predefinedIntervals)
             {
                 CanCustomInputBeVisible = false,
             };
+
+            var now = DateTime.UtcNow;
+            DateTimeNow = now.AddSeconds(-now.Second)
+                             .AddMilliseconds(-now.Millisecond);
         }
     }
 }
