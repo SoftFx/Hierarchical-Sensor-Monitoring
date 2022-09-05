@@ -12,8 +12,6 @@
     </div>
 </form>
 
-<input id="customTimeIntervalText" style="display:none;" value="@TimeInterval.Custom" />
-
 
 <script>
     displaySelectedOption();
@@ -23,10 +21,11 @@
     });
 
     function displaySelectedOption() {
-        var selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
-        var customOptionText = $('#customTimeIntervalText').val();
+        if ('@Model.CanCustomInputBeVisible' === "False") {
+            return;
+        }
 
-        if (selectedOptionText == customOptionText) {
+        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Custom') {
             $('.customTimeInterval').show();
         }
         else {

@@ -10,14 +10,14 @@ namespace HSMServer.Model
         private readonly List<TimeInterval> _predefinedIntervals =
             new()
             {
+                TimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes,
-                TimeInterval.TwentyMinutes,
                 TimeInterval.ThirtyMinutes,
-                TimeInterval.FourtyMinutes,
-                TimeInterval.FiftyMinutes,
-                TimeInterval.Hour,
-                TimeInterval.TwoHours,
-                TimeInterval.Day,
+                TimeInterval.FourHours,
+                TimeInterval.EightHours,
+                TimeInterval.SixteenHours,
+                TimeInterval.ThirtySixHours,
+                TimeInterval.SixtyHours,
                 TimeInterval.Custom
             };
 
@@ -25,6 +25,8 @@ namespace HSMServer.Model
         public string Path { get; }
 
         public string TreeElement { get; }
+
+        public DateTime DateTimeNow { get; }
 
         public string EncodedId { get; set; }
 
@@ -36,18 +38,11 @@ namespace HSMServer.Model
 
         public int Minutes { get; set; }
 
-        public DateTime EndOfIgnorePeriod
-        {
-            get
-            {
-                var now = DateTime.UtcNow;
-
-                return now.AddDays(Days)
-                          .AddHours(Hours)
-                          .AddMinutes(Minutes)
-                          .AddSeconds(-now.Second);
-            }
-        }
+        public DateTime EndOfIgnorePeriod =>
+            DateTimeNow.AddDays(Days)
+                       .AddHours(Hours)
+                       .AddMinutes(Minutes)
+                       .AddSeconds(-DateTimeNow.Second);
 
 
         // public constructor without parameters for action Home/IgnoreNotifications
@@ -79,7 +74,11 @@ namespace HSMServer.Model
         private IgnoreNotificationsViewModel(string encodedId)
         {
             EncodedId = encodedId;
-            IgnorePeriod = new(_predefinedIntervals);
+            DateTimeNow = DateTime.UtcNow;
+            IgnorePeriod = new(_predefinedIntervals)
+            {
+                CanCustomInputBeVisible = false,
+            };
         }
     }
 }

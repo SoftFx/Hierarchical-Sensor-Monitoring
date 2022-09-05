@@ -10,7 +10,7 @@
 @if (Model != null)
 {
     <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
-        <input style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+        <input class="d-none" asp-for="EncodedId" value="@Model.EncodedId" />
 
         <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
             <div class="modal-dialog modal-dialog-centered" role="document">
@@ -27,24 +27,24 @@
                             
                         <partial name="_TimeIntervalSelect" for="IgnorePeriod" />
 
-                        <div class="row">
+                        <div class="row" id="interval_inputs">
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Days"></label>
-                                <input class="form-control" type="number" asp-for="Days" />
+                                <input id="ignoreNotifications_days" class="form-control" type="number" asp-for="Days" min="0" />
                             </div>
 
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Hours"></label>
-                                <input class="form-control" type="number" asp-for="Hours" />
+                                <input id="ignoreNotifications_hours" class="form-control" type="number" asp-for="Hours" min="0" max="23" />
                             </div>
 
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Minutes"></label>
-                                <input class="form-control" type="number" asp-for="Minutes" />
+                                <input id="ignoreNotifications_minutes" class="form-control" type="number" asp-for="Minutes" min="0" max="59" />
                             </div>
                         </div>
 
-                        <p class="font-italic mt-2 mb-0">Note: @Model.TreeElement notifications will be ignored until @Model.EndOfIgnorePeriod.ToString(ViewConstants.NodeUpdateTimeFormat)</p>
+                        <p id="ignoreNotifications_note" class="mt-3 mb-0" style="font-style:italic">Note: @Model.TreeElement notifications will be ignored until @Model.EndOfIgnorePeriod.ToString(ViewConstants.NodeUpdateTimeFormat)</p>
                     </div>
 
                     <div class="modal-footer">
@@ -59,6 +59,8 @@
 
 
 <script>
+    calculateInputs();
+
     $(document).on("submit", "#ignoreNotifications_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -76,7 +78,51 @@
         });
     });
 
+    $("#ignoreNotifications_modal").on("hidden.bs.modal", function () {
+        $('#ignoreNotificatios_partial').empty();
+    });
+
+    $('#timeIntervalSelect').change(function () {
+        calculateInputs();
+    });
+
+    $('#interval_inputs :input').on('change', function () {
+        $(`#timeIntervalSelect option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
+    });
+
     function hideIgnoreNotificationsModal() {
         $('#ignoreNotifications_modal').modal('hide');
+    }
+
+    function calculateInputs() {
+        clearInputs();
+
+        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        let periods = selectedOptionText.split(' ');
+
+        if (periods.length % 2 != 0) {
+            return;
+        }
+
+        for (let i = 0; i < periods.length; i += 2) {
+            let value = periods[i];
+            let timeType = periods[i + 1];
+
+            if (timeType.includes("minute")) {
+                $('#ignoreNotifications_minutes').val(value);
+            }
+            else if (timeType.includes("hour")) {
+                $('#ignoreNotifications_hours').val(value);
+            }
+            else if (timeType.includes("day")) {
+                $('#ignoreNotifications_days').val(value);
+            }
+        }
+    }
+
+    function clearInputs() {
+        $('#interval_inputs :input').each(function () {
+            this.value = '0';
+        });
     }
 </script>

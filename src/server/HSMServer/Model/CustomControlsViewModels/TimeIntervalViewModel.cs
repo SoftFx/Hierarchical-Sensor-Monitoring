@@ -12,22 +12,26 @@ namespace HSMServer.Model
     {
         [Display(Name = "Never")]
         None,
+        [Display(Name = "5 minutes")]
+        FiveMinutes,
         [Display(Name = "10 minutes")]
         TenMinutes,
-        [Display(Name = "20 minutes")]
-        TwentyMinutes,
         [Display(Name = "30 minutes")]
         ThirtyMinutes,
-        [Display(Name = "40 minutes")]
-        FourtyMinutes,
-        [Display(Name = "50 minutes")]
-        FiftyMinutes,
         [Display(Name = "1 hour")]
         Hour,
-        [Display(Name = "2 hours")]
-        TwoHours,
+        [Display(Name = "4 hours")]
+        FourHours,
+        [Display(Name = "8 hours")]
+        EightHours,
+        [Display(Name = "16 hours")]
+        SixteenHours,
         [Display(Name = "1 day")]
         Day,
+        [Display(Name = "1 day 12 hours")]
+        ThirtySixHours,
+        [Display(Name = "2 days 12 hours")]
+        SixtyHours,
         [Display(Name = "1 week")]
         Week,
         [Display(Name = "1 month")]
@@ -38,7 +42,10 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
-        public List<SelectListItem> IntervalItems { get; init; }
+        public List<SelectListItem> IntervalItems { get; }
+
+        public bool CanCustomInputBeVisible { get; init; } = true;
+
 
         public TimeInterval TimeInterval { get; set; }
 
