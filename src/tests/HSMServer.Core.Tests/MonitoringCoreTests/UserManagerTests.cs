@@ -304,7 +304,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users, Negative")]
         public void GetEmptyManagersTest()
         {
-            var emptyManager = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty, ProductsRoles = TestUsersManager.TestUserManager.ProductsRoles };
+            var emptyManager = new User() { UserName = string.Empty, CertificateThumbprint = string.Empty, CertificateFileName = string.Empty, Password = string.Empty, ProductsRoles = TestUsersManager.TestUserManager.ProductsRoles };
 
             _userManager.AddUser(emptyManager);
 
