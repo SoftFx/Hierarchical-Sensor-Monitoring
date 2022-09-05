@@ -28,7 +28,8 @@ namespace HSMServer.Controllers
     {
         private const int DEFAULT_REQUESTED_COUNT = 40;
 
-        private static readonly JsonResult _emptyResult = new(new EmptyResult());
+        private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
+        private static readonly EmptyResult _emptyResult = new EmptyResult();
 
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
@@ -190,7 +191,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
-                return _emptyResult;
+                return _emptyJsonResult;
 
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
@@ -201,7 +202,7 @@ namespace HSMServer.Controllers
         public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
-                return _emptyResult;
+                return _emptyJsonResult;
 
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
@@ -326,33 +327,31 @@ namespace HSMServer.Controllers
         #region Sensor info
 
         [HttpGet]
-        public HtmlString GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
+        public IActionResult GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
-                return new HtmlString(string.Empty);
+                return _emptyResult;
 
-            return ViewHelper.CreateSensorInfoTable(new SensorInfoViewModel(sensor));
+            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
         }
 
         [HttpPost]
-        public void UpdateSensorInfo([FromBody] UpdateSensorInfoViewModel updateModel)
+        public IActionResult UpdateSensorInfo(SensorInfoViewModel updatedModel)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updateModel.EncodedId), out var sensor))
-                return;
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var sensor))
+                return _emptyResult;
 
-            var viewModel = new SensorInfoViewModel(sensor);
-            viewModel.Update(updateModel);
+            var sensorUpdate = new SensorUpdate
+            {
+                Id = sensor.Id,
+                Description = updatedModel.Description,
+                Unit = updatedModel.Unit,
+                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+            };
 
-            TimeSpan.TryParse(viewModel.ExpectedUpdateInterval, out var interval);
+            _treeValuesCache.UpdateSensor(sensorUpdate);
 
-            _treeValuesCache.UpdateSensor(
-                new SensorUpdate
-                {
-                    Id = sensor.Id,
-                    Description = viewModel.Description,
-                    ExpectedUpdateInterval = interval,
-                    Unit = viewModel.Unit
-                });
+            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor).Update(sensorUpdate));
         }
 
         #endregion

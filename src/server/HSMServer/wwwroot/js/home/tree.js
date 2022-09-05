@@ -25,10 +25,10 @@
                 return timeSorting(timeA, timeB);
             }
             else {
-                a = this.get_text(a);
-                b = this.get_text(b);
+                a = this.get_node(a).text.toLowerCase();
+                b = this.get_node(b).text.toLowerCase();
 
-                return nameSorting(a, b);
+                return a > b ? 1 : -1;
             }
         }
     });
@@ -62,10 +62,6 @@ function selectNodeAjax(selectedId) {
         if ($(selectedAccordionId).attr('aria-expanded') == 'false')
             $(selectedAccordionId).click();
     });
-}
-
-function nameSorting(a, b) {
-    return a.toLowerCase() > b.toLowerCase() ? 1 : -1;
 }
 
 function timeSorting(a, b) {

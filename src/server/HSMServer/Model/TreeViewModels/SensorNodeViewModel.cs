@@ -30,7 +30,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsPlottingSupported { get; private set; }
 
-        internal TimeSpan ExpectedUpdateInterval { get; private set; }
+        internal TimeIntervalViewModel ExpectedUpdateInterval { get; private set; } = new();
 
         internal string Unit { get; private set; }
 
@@ -74,8 +74,6 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(BaseSensorModel model)
         {
-            ExpectedUpdateInterval = new TimeSpan(model.ExpectedUpdateIntervalPolicy?.ExpectedUpdateInterval ?? 0L);
-
             Name = model.DisplayName;
             SensorType = model.Type;
             Description = model.Description;
@@ -85,6 +83,8 @@ namespace HSMServer.Model.TreeViewModels
             Product = model.ProductName;
             Path = model.Path;
             Unit = model.Unit;
+
+            ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
 
             LastValue = model.LastValue;
             HasData = model.HasData;

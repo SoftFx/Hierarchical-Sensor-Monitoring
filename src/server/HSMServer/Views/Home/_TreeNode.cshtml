@@ -3,10 +3,7 @@
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)'
-    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
-    <span>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)</span>
-    @if (Model.SensorsWithNotificationsCount > 0)
+<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
@@ -28,9 +25,7 @@
         <ul>
             @foreach (var sensor in Model.FilteredSensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)'
-                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
-                    <span>@Model.GetShortName(sensor.Name)</span>
+                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
                     @if (sensor.IsNotificationsEnabled)
                     {
                         <span>

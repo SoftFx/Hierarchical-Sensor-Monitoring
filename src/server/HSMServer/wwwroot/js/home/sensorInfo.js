@@ -20,9 +20,8 @@ function showMetaInfo(id) {
         cache: false,
         async: true
     }).done(function (data) {
-        $('#sensor_info_' + id).empty().append(JSON.parse(data).value);
+        displaySensorMetaInfo(id, data);
         setLinkText(id, "Hide meta info");
-        initializeEditInfoButtons(id);
     });
 }
 
@@ -36,68 +35,36 @@ function setLinkText(sensorId, text) {
     link.textContent = text;
 }
 
-function initializeEditInfoButtons(sensorId) {
-    $('#editInfo_' + sensorId).on("click", editInfoButtonClick);
-    $('#revertInfo_' + sensorId).on("click", revertInfoClick);
-    $('#saveInfo_' + sensorId).on("click", saveInfoClick);
+function disableExpectedUpdateIntervalControl() {
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
+
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.setAttribute('disabled', true);
+    });
 }
 
 function editInfoButtonClick() {
-    let sensorId = this.id.substring("editInfo_".length);
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
     $('#description_' + sensorId).removeAttr("disabled");
     $('#unit_' + sensorId).removeAttr("disabled");
     $('#saveInfo_' + sensorId).removeAttr("disabled");
     $('#revertInfo_' + sensorId).removeAttr("disabled");
-}
 
-function revertInfoClick() {
-    let sensorId = this.id.substring("revertInfo_".length);
-    reloadInfo(sensorId);
-}
-
-function saveInfoClick() {
-    let sensorId = this.id.substring('saveInfo_'.length);
-    let description = getDescription(sensorId);
-    let interval = getInterval(sensorId);
-    let unit = getUnit(sensorId);
-    let body = Info(description, interval, sensorId, unit);
-    saveSensorInfo(body);
-}
-
-function saveSensorInfo(body) {
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(body),
-        url: updateSensorInfoAction,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true
-    }).done(function () {
-        reloadInfo(body.EncodedId);
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.removeAttribute('disabled');
     });
 }
 
-function Info(description, updatePeriod, encodedId, unit) {
-    return { "Description": description, "ExpectedUpdateInterval": updatePeriod, "EncodedId": encodedId , "Unit": unit };
+function revertInfoClick() {
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
+
+    showMetaInfo(sensorId);
 }
 
-function getDescription(sensorId) {
-    return $('#description_' + sensorId).val();
-}
+function displaySensorMetaInfo(sensorId, viewData) {
+    $('#sensor_info_' + sensorId).html(viewData);
 
-function getInterval(sensorId) {
-    return $('#interval_' + sensorId).val();
-}
-
-function getUnit(sensorId) {
-    return $('#unit_' + sensorId).val();
-}
-
-function reloadInfo(sensorId) {
-    let link = document.getElementById('sensorInfo_link_' + sensorId);
-    link.click();
-    link.click();
+    disableExpectedUpdateIntervalControl();
 }

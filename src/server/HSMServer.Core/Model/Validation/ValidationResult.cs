@@ -16,7 +16,20 @@ namespace HSMServer.Core.Model
         private HashSet<string> Errors { get; init; } = new();
 
 
-        public SensorStatus Result { get; init; } = SensorStatus.Ok;
+        public SensorStatus Result
+        {
+            get
+            {
+                if (Messages.Count != 0)
+                    return SensorStatus.Unknown;
+                else if (Errors.Count != 0)
+                    return SensorStatus.Error;
+                else if (Warnings.Count != 0)
+                    return SensorStatus.Warning;
+
+                return SensorStatus.Ok;
+            }
+        }
 
 
         public string Message
@@ -63,8 +76,6 @@ namespace HSMServer.Core.Model
                     Messages.Add(message);
                     break;
             }
-
-            Result = result;
         }
 
 
@@ -85,11 +96,27 @@ namespace HSMServer.Core.Model
 
             return new()
             {
-                Result = result1.Result > result2.Result ? result1.Result : result2.Result,
-
                 Messages = GetUnionErrors(result1.Messages, result2.Messages),
                 Warnings = GetUnionErrors(result1.Warnings, result2.Warnings),
                 Errors = GetUnionErrors(result1.Errors, result2.Errors),
+            };
+        }
+
+        public static ValidationResult operator -(ValidationResult result1, ValidationResult result2)
+        {
+            static HashSet<string> GetExceptErrors(HashSet<string> errors1, HashSet<string> errors2)
+            {
+                var errors = new HashSet<string>(errors1);
+                errors.ExceptWith(errors2);
+
+                return errors;
+            }
+
+            return new()
+            {
+                Warnings = GetExceptErrors(result1.Warnings, result2.Warnings),
+                Errors = GetExceptErrors(result1.Errors, result2.Errors),
+                Messages = GetExceptErrors(result1.Messages, result2.Messages),
             };
         }
 

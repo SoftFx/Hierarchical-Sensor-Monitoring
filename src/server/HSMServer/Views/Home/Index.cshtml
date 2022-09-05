@@ -95,12 +95,10 @@
         </div>
     </div>
 
-
-
     <div class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
         <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(((User)User).TreeFilter)) </div>
 
-        <div id="mainContainer" class="justify-content-start mw-100 me-1">
+        <div class=" row justify-content-start mw-100 me-1">
             <div class="scrollableBlock col-auto ms-2">
                 <div id="treeContainer">
                     <div class="col-md-auto">
@@ -115,7 +113,8 @@
 </div>
 
 @{
-    int GetFiltersCount(TreeUserFilter filter){
+    int GetFiltersCount(TreeUserFilter filter)
+    {
         int result = 0;
 
         if (filter.HasOkStatus)
@@ -146,13 +145,11 @@
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
 
-    $("#show").click(function() {
-
+    $("#show").click(function () {
         if (!$("#filter").is(":visible"))
             $("#filter").css("display", "block");
         else
             $("#filter").css("display", "none");
-
     });
 
     function getSelectedNodeId(selectedNode) {
@@ -188,7 +185,7 @@
             contentType: 'application/json',
             cache: false,
             async: true
-        }).done(function(treeData) {
+        }).done(function (treeData) {
             $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
         });
@@ -206,7 +203,7 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function(sensorsData) {
+            }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
                 for (let i = 0; i < array.length; i++) {
                     updateSelectedSensor(array[i]);
@@ -226,6 +223,7 @@
         $("#state").empty();
         $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
     }
+
     var interval = $("#treeInterval").val() * 1000;
     setInterval(updateTreeTimer, interval);
     setInterval(updateSelectedSensors, interval);

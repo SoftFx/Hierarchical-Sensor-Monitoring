@@ -54,10 +54,6 @@ namespace HSMServer.HtmlHelpers
             return new HtmlString(TableHelper.CreateTable(user, users, productsDict));
         }
 
-        public static HtmlString CreateSensorInfoTable(SensorInfoViewModel viewModel)
-        {
-            return new HtmlString(TableHelper.CreateSensorInfoTable(viewModel));
-        }
         public static string GetStatusHeaderColorClass(SensorStatus status)
         {
             switch (status)

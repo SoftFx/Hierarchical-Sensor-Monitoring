@@ -79,8 +79,11 @@ namespace HSMServer.Core.Notifications
             if (!IsValidBotConfigurations())
                 return ConfigurationsError;
 
-            _bot = new TelegramBotClient(BotToken);
             _token = new CancellationToken();
+            _bot = new TelegramBotClient(BotToken)
+            {
+                Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
+            };
 
             try
             {
@@ -193,12 +196,12 @@ namespace HSMServer.Core.Notifications
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            if (update.Type == UpdateType.Message)
+            if (update?.Type == UpdateType.Message)
             {
-                var message = update.Message;
+                var message = update?.Message;
                 var command = message?.Text?.ToLowerInvariant();
 
-                if (command.StartsWith(StartBotCommand))
+                if (command?.StartsWith(StartBotCommand) ?? false)
                 {
                     var parts = command.Split(' ');
                     if (parts.Length != 2)
@@ -228,6 +231,10 @@ namespace HSMServer.Core.Notifications
                         response.Append("Your token is invalid.");
 
                     await botClient.SendTextMessageAsync(message.Chat, response.ToString(), cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    _logger.Warn($"There is some invalid update message: {command}");
                 }
             }
         }

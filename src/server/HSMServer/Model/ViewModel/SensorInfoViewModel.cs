@@ -1,41 +1,50 @@
-﻿using HSMServer.Model.TreeViewModels;
-using System;
+﻿using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
+using HSMServer.Helpers;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.ViewModel
 {
     public class SensorInfoViewModel
     {
-        public Guid Id { get; }
-
         public string Path { get; }
 
         public string ProductName { get; }
 
-        public string SensorType { get; }
+        public SensorType SensorType { get; }
 
-        public string Description { get; private set; }
+        public string EncodedId { get; set; }
 
-        public string ExpectedUpdateInterval { get; private set; }
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
-        public string Unit { get; private set; }
+        public string Description { get; set; }
 
+        public string Unit { get; set; }
+
+
+        // public constructor without parameters for action Home/UpdateSensorInfo
+        public SensorInfoViewModel() { }
 
         public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
-            Id = sensor.Id;
-            Path = sensor.Path;
+            EncodedId = SensorPathHelper.EncodeGuid(sensor.Id);
+            Path = $"/{sensor.Path}";
             ProductName = sensor.Product;
+            SensorType = sensor.SensorType;
+
+            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval;
             Description = sensor.Description;
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval.ToString();
             Unit = sensor.Unit;
-            SensorType = sensor.SensorType.ToString();
         }
 
-        public void Update(UpdateSensorInfoViewModel updateModel)
+
+        internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
-            Description = updateModel.Description;
-            ExpectedUpdateInterval = updateModel.ExpectedUpdateInterval;
-            Unit = updateModel.Unit;
+            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateInterval);
+            Description = updatedModel.Description;
+            Unit = updatedModel.Unit;
+
+            return this;
         }
     }
 }
