@@ -12,8 +12,9 @@
         },
         "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
         "sort": function (a, b) {
+            var isTimeSort = $("input[name='TreeSortType']:checked").val() == "1";
 
-            if (isTimeSorting) {
+            if (isTimeSort) {
                 nodeA = this.get_node(a);
                 nodeB = this.get_node(b);
 

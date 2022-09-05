@@ -1,8 +1,9 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Model
 @using HSMServer.Model.ViewModel
 
-@model FilterViewModel
+@model UserFilterViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -13,35 +14,35 @@
     <h6 class="dropdown-header">Update tree interval</h6>
     <div class="d-flex">
         <input type="number" id="treeInterval" asp-for="TreeUpdateInterval" class="form-control" min="5" max="600"
-        value="@Model.TreeUpdateInterval"/>
+               value="@Model.TreeUpdateInterval" />
         <label for="treeInterval" title="Expected update tree interval" class="form-text ms-2">sec</label>
     </div>
     <div class="dropdown-divider"></div>
 
     <h6 class="dropdown-header">Status</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus">
+        <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus"/>
         <label class="form-check-label" for="ok" title="Ok">
             Ok <i class="fas fa-circle tree-icon-ok"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="warning" asp-for="HasWarningStatus">
+        <input type="checkbox" class="form-check-input" id="warning" asp-for="HasWarningStatus"/>
         <label class="form-check-label" for="warning" title="Warning">
             Warning <i class="fas fa-circle tree-icon-warning"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="error" asp-for="HasErrorStatus">
+        <input type="checkbox" class="form-check-input" id="error" asp-for="HasErrorStatus"/>
         <label class="form-check-label" for="error" title="Error">
             Error <i class="fas fa-circle tree-icon-error"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="unknown" asp-for="HasUnknownStatus">
+        <input type="checkbox" class="form-check-input" id="unknown" asp-for="HasUnknownStatus"/>
         <label class="form-check-label" for="unknown" title="Unknown">
             Unknown <i class="fas fa-circle tree-icon-unknown"></i>
         </label>
@@ -51,7 +52,7 @@
 
     <h6 class="dropdown-header">History</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="history" asp-for="SensorsHasData">
+        <input type="checkbox" class="form-check-input" id="history" asp-for="SensorsHasData"/>
         <label class="form-check-label" for="history">
             With data
         </label>
@@ -60,14 +61,14 @@
 
     <h6 class="dropdown-header">Notifications</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="notifications" asp-for="HasTelegramNotifications">
+        <input type="checkbox" class="form-check-input" id="notifications" asp-for="HasTelegramNotifications"/>
         <label class="form-check-label" for="notifications" title="Telegram">
             Telegram <i class="fab fa-telegram"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="ignored" asp-for="IsIgnoredSensors">
+        <input type="checkbox" class="form-check-input" id="ignored" asp-for="IsIgnoredSensors"/>
         <label class="form-check-label" for="ignored" title="Ignored sensors">
             Ignored sensors <i class="fa-solid fa-eye-slash"></i>
         </label>
@@ -76,7 +77,7 @@
 
     <h6 class="dropdown-header">Blocked</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsBlockedSensors">
+        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsBlockedSensors"/>
         <label class="form-check-label" for="blocked" title="Blocked sensors">
             Blocked sensors <i class="fa-solid fa-circle-minus"></i>
         </label>
@@ -85,36 +86,15 @@
 
     <h6 class="dropdown-header">Sort By</h6>
     <div class="form-check">
-        <input checked class="form-check-input" type="radio" name="inlineRadioOptions" id="name" value="name">
+        <input class="form-check-input" type="radio" id="sorting"
+               value="@((int)TreeSortType.Name)" asp-for="TreeSortType"/>
         <label class="form-check-label" for="name">By Name <i class="fas fa-sort-alpha-down"></i></label>
     </div>
     <div class="form-check">
-        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="time" value="time">
+        <input class="form-check-input" type="radio" id="sorting"
+               value="@((int)TreeSortType.Time)" asp-for="TreeSortType" />
         <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 
     <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
-
-<script>
-    //$('#applyBtn').off("click").on("click",
-    //    function () {
-
-    //        let isSelectedTimeSort = $("#time").is(":checked");
-    //        if (isSelectedTimeSort == isTimeSorting) return;
-
-
-
-    //        if ($("#name").is(":checked")) {
-    //            isTimeSorting = false;
-    //            $("#currentSort").attr("class", "fas fa-sort-alpha-down");
-    //        }
-    //        else {
-    //            isTimeSorting = true;
-    //            $("#currentSort").attr("class", "fas fa-sort-numeric-down-alt");
-    //        }
-
-    //        initializeTree();
-    //        $('#jstree').jstree(true).refresh(true);
-    //    });
-</script>

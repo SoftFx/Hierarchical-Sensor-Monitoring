@@ -1,9 +1,105 @@
-﻿@model HSMServer.Model.TreeViewModels.TreeViewModel
+﻿@using HSMServer.Core.Model
+@using HSMServer.Core.Model.Authentication
+@using HSMServer.Model.TreeViewModels
+@model HSMServer.Model.TreeViewModels.TreeViewModel
+
+@{
+    UpdateFilteredSensors();
+}
 
 <ul>
     @foreach (var (_, node) in Model.Nodes)
-    {
-        @if (node.Parent == null && node.IsAvailableForUser && node.VisibleSensorsCount != 0)
+        @if (node.Parent == null && node.IsAvailableForUser && node.InnerFilteredSensorsCount != 0)
             @await Html.PartialAsync("_TreeNode", node)
-    }
 </ul>
+
+@{
+    bool IsVisibleSensor(SensorNodeViewModel sensor, TreeUserFilter filter)
+    {
+        bool IsDefault(TreeUserFilter filter) =>
+            !(filter.IsBlockedSensors || filter.HasTelegramNotifications || filter.IsIgnoredSensors
+                 || filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus
+                 || filter.HasUnknownStatus);
+
+        bool IsVisibleStatus(SensorStatus status, TreeUserFilter filter) =>
+            status switch
+            {
+                SensorStatus.Ok => filter.HasOkStatus,
+                SensorStatus.Warning => filter.HasWarningStatus,
+                SensorStatus.Error => filter.HasErrorStatus,
+                SensorStatus.Unknown => filter.HasUnknownStatus,
+                _ => false
+            };
+
+
+        if (IsDefault(filter))
+            return true;
+
+        if (IsVisibleStatus(sensor.Status, filter))
+            return true;
+
+        if (sensor.HasData && filter.SensorsHasData)
+            return true;
+
+        if (sensor.IsNotificationsEnabled && filter.HasTelegramNotifications)
+            return true;
+
+        return false;
+    }
+
+    void UpdateFilteredSensors()
+    {
+        foreach (var (_, node) in Model.Nodes)
+            if (node.Parent == null)
+                Recursion(node);
+    }
+
+    void Recursion(ProductNodeViewModel node)
+    {
+        void UpdateTimeAndStatus()
+        {
+            var sensors = node.FilteredSensors;
+            var nodes = node.Nodes.Values.ToList();
+
+            var sensorMaxTime = DateTime.MinValue;
+            var nodeMaxTime = DateTime.MinValue;
+            var statusFromSensors = SensorStatus.Ok;
+            var statusFromNodes = SensorStatus.Ok;
+
+            if (sensors.Count > 0)
+            {
+                sensorMaxTime = sensors.Max(x => x.UpdateTime);
+                statusFromSensors = sensors.Max(s => s.Status);
+            }
+            if (nodes.Count > 0)
+            {
+                nodeMaxTime = nodes.Max(x => x.UpdateTime);
+                statusFromNodes = nodes.Max(n => n.Status);
+            }
+
+            node.UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
+            node.Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
+        }
+
+
+        int visibleSensorsCount = 0;
+        node.FilteredSensors = new List<SensorNodeViewModel>(node.Sensors.Count);
+        node.InnerFilteredSensorsCount = 0;
+
+        foreach (var (_, sensor) in node.Sensors)
+            if (IsVisibleSensor(sensor, ((User)User).TreeFilter))
+                node.FilteredSensors.Add(sensor);
+
+        node.InnerFilteredSensorsCount = node.FilteredSensors.Count;
+
+        foreach (var (_, child) in node.Nodes)
+        {
+            Recursion(child);
+            visibleSensorsCount += child.InnerFilteredSensorsCount;
+        }
+
+        node.InnerFilteredSensorsCount = visibleSensorsCount + node.FilteredSensors.Count;
+
+        UpdateTimeAndStatus();
+    }
+}

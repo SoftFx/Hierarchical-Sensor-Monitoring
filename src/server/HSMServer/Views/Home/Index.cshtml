@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Model.ViewModel
@@ -36,8 +37,6 @@
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
 
-    var isTimeSorting = false;
-
     var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
     var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
 </script>
@@ -73,18 +72,16 @@
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
 
-
-
 <div id="mainContainer">
     <div>
         <div class="d-flex">
             <div class="d-flex me-auto">
                 <button id="show" type="button" class="btn btn-sm btn-secondary mt-1 ms-4">
-                    <i class="fa-solid fa-filter"></i> Filters
+                    <i class="fa-solid fa-filter"></i> Filters (@GetFiltersCount(((User)User).TreeFilter))
                 </button>
 
                 <div class="mx-3 my-2">
-                    <i id="currentSort" class="fas fa-sort-alpha-down"></i>
+                    <i id="currentSort" class="@(((User)User).TreeFilter.TreeSortType == TreeSortType.Time ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
             </div>
 
@@ -101,7 +98,7 @@
 
 
     <div class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
-        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new FilterViewModel(((User)Context.User).TreeFilter)) </div>
+        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(((User)User).TreeFilter)) </div>
 
         <div id="mainContainer" class="justify-content-start mw-100 me-1">
             <div class="scrollableBlock col-auto ms-2">
@@ -117,7 +114,30 @@
     </div>
 </div>
 
+@{
+    int GetFiltersCount(TreeUserFilter filter){
+        int result = 0;
 
+        if (filter.HasOkStatus)
+            ++result;
+        if (filter.HasWarningStatus)
+            ++result;
+        if (filter.HasErrorStatus)
+            ++result;
+        if (filter.HasUnknownStatus)
+            ++result;
+        if (filter.SensorsHasData)
+            ++result;
+        if (filter.HasTelegramNotifications)
+            ++result;
+        if (filter.IsIgnoredSensors)
+            ++result;
+        if (filter.IsBlockedSensors)
+            ++result;
+
+        return result;
+    }
+}
 
 <script>
     initializeTree();
@@ -125,20 +145,6 @@
 
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
-
-    $('#sortByName').off("click").on("click",
-        function() {
-            isTimeSorting = false;
-            initializeTree();
-            $('#jstree').jstree(true).refresh(true);
-        });
-
-    $('#sortByTime').off("click").on("click",
-        function() {
-            isTimeSorting = true;
-            initializeTree();
-            $('#jstree').jstree(true).refresh(true);
-        });
 
     $("#show").click(function() {
 
@@ -220,7 +226,7 @@
         $("#state").empty();
         $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
     }
-
-    setInterval(updateTreeTimer, 5000);
-    setInterval(updateSelectedSensors, 5000);
+    var interval = $("#treeInterval").val() * 1000;
+    setInterval(updateTreeTimer, interval);
+    setInterval(updateSelectedSensors, interval);
 </script>

@@ -20,7 +20,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-
 namespace HSMServer.Controllers
 {
     [Authorize]
@@ -76,12 +75,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult ApplyFilter(FilterViewModel viewModel)
+        public IActionResult ApplyFilter(UserFilterViewModel viewModel)
         {
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
+            var user = HttpContext.User as User;
             user.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(user);
 
+            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
             return View("Index", _treeViewModel);
         }
 

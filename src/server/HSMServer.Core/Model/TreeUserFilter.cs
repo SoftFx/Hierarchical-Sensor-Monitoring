@@ -1,9 +1,9 @@
-﻿using HSMServer.Core.Model;
-
-namespace HSMServer.Model.ViewModel
+﻿namespace HSMServer.Core.Model
 {
-    public class FilterViewModel
+    public sealed class TreeUserFilter
     {
+        private const int DefaultInterval = 5;
+
         public bool HasOkStatus { get; set; }
         public bool HasWarningStatus { get; set; }
         public bool HasErrorStatus { get; set; }
@@ -16,12 +16,14 @@ namespace HSMServer.Model.ViewModel
 
         public bool IsBlockedSensors { get; set; }
 
-        public int TreeUpdateInterval { get; set; } = 5;
+        public int TreeUpdateInterval { get; set; } = DefaultInterval;
+
+        public TreeSortType TreeSortType { get; set; } = TreeSortType.Name;
 
 
-        public FilterViewModel() { }
+        public TreeUserFilter() { }
 
-        public FilterViewModel(Filter filter)
+        internal TreeUserFilter(TreeUserFilter filter)
         {
             HasOkStatus = filter.HasOkStatus;
             HasWarningStatus = filter.HasWarningStatus;
@@ -32,21 +34,13 @@ namespace HSMServer.Model.ViewModel
             IsIgnoredSensors = filter.IsIgnoredSensors;
             IsBlockedSensors = filter.IsBlockedSensors;
             TreeUpdateInterval = filter.TreeUpdateInterval;
+            TreeSortType = filter.TreeSortType;
         }
+    }
 
-
-        public Filter ToFilter() =>
-            new ()
-            {
-                HasOkStatus = HasOkStatus,
-                HasWarningStatus = HasWarningStatus,
-                HasErrorStatus = HasErrorStatus,
-                HasUnknownStatus = HasUnknownStatus,
-                SensorsHasData = SensorsHasData,
-                HasTelegramNotifications = HasTelegramNotifications,
-                IsIgnoredSensors = IsIgnoredSensors,
-                IsBlockedSensors = IsBlockedSensors,
-                TreeUpdateInterval = TreeUpdateInterval,
-            };
+    public enum TreeSortType : int
+    {
+        Name = 0,
+        Time = 1
     }
 }

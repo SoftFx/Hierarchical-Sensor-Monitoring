@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
-using Telegram.Bot.Types;
 
 namespace HSMServer.Core.Model.Authentication
 {
@@ -26,7 +25,7 @@ namespace HSMServer.Core.Model.Authentication
 
 
         public NotificationSettings Notifications { get; internal set; }
-        public Filter TreeFilter { get; set; }
+        public TreeUserFilter TreeFilter { get; set; }
 
 
         public User(string userName) : this()
@@ -81,8 +80,8 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
-            TreeFilter = entity.TreeFilter is null ? new Filter() : 
-                JsonSerializer.Deserialize<Filter>(((JsonElement)entity.TreeFilter).GetRawText());
+            TreeFilter = entity.TreeFilter is null ? new TreeUserFilter() : 
+                JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
         }
 
         /// <summary>
