@@ -87,12 +87,12 @@
     <h6 class="dropdown-header">Sort By</h6>
     <div class="form-check">
         <input class="form-check-input" type="radio" id="sorting"
-               value="@((int)TreeSortType.Name)" asp-for="TreeSortType"/>
+               value="@((int)TreeSortType.ByName)" asp-for="TreeSortType"/>
         <label class="form-check-label" for="name">By Name <i class="fas fa-sort-alpha-down"></i></label>
     </div>
     <div class="form-check">
         <input class="form-check-input" type="radio" id="sorting"
-               value="@((int)TreeSortType.Time)" asp-for="TreeSortType" />
+               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType" />
         <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 

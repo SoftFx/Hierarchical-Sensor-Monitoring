@@ -18,7 +18,7 @@
 
         public int TreeUpdateInterval { get; set; } = DefaultInterval;
 
-        public TreeSortType TreeSortType { get; set; } = TreeSortType.Name;
+        public TreeSortType TreeSortType { get; set; } = TreeSortType.ByName;
 
 
         public TreeUserFilter() { }
@@ -40,7 +40,7 @@
 
     public enum TreeSortType : int
     {
-        Name = 0,
-        Time = 1
+        ByName = 0,
+        ByTime = 1
     }
 }
