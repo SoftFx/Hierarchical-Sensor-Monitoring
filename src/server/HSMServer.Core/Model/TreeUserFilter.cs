@@ -9,7 +9,7 @@
         public bool HasErrorStatus { get; set; }
         public bool HasUnknownStatus { get; set; }
 
-        public bool SensorsHasData { get; set; }
+        public bool IsEmptyHistory { get; set; }
 
         public bool HasTelegramNotifications { get; set; }
         public bool IsIgnoredSensors { get; set; }
@@ -29,7 +29,7 @@
             HasWarningStatus = filter.HasWarningStatus;
             HasErrorStatus = filter.HasErrorStatus;
             HasUnknownStatus = filter.HasUnknownStatus;
-            SensorsHasData = filter.SensorsHasData;
+            IsEmptyHistory = filter.IsEmptyHistory;
             HasTelegramNotifications = filter.HasTelegramNotifications;
             IsIgnoredSensors = filter.IsIgnoredSensors;
             IsBlockedSensors = filter.IsBlockedSensors;

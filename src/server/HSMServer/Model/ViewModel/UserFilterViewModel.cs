@@ -9,7 +9,7 @@ namespace HSMServer.Model.ViewModel
         public bool HasErrorStatus { get; set; }
         public bool HasUnknownStatus { get; set; }
 
-        public bool SensorsHasData { get; set; }
+        public bool IsEmptyHistory { get; set; }
 
         public bool HasTelegramNotifications { get; set; }
         public bool IsIgnoredSensors { get; set; }
@@ -29,7 +29,7 @@ namespace HSMServer.Model.ViewModel
             HasWarningStatus = filter.HasWarningStatus;
             HasErrorStatus = filter.HasErrorStatus;
             HasUnknownStatus = filter.HasUnknownStatus;
-            SensorsHasData = filter.SensorsHasData;
+            IsEmptyHistory = filter.IsEmptyHistory;
             HasTelegramNotifications = filter.HasTelegramNotifications;
             IsIgnoredSensors = filter.IsIgnoredSensors;
             IsBlockedSensors = filter.IsBlockedSensors;
@@ -45,7 +45,7 @@ namespace HSMServer.Model.ViewModel
                 HasWarningStatus = HasWarningStatus,
                 HasErrorStatus = HasErrorStatus,
                 HasUnknownStatus = HasUnknownStatus,
-                SensorsHasData = SensorsHasData,
+                IsEmptyHistory = IsEmptyHistory,
                 HasTelegramNotifications = HasTelegramNotifications,
                 IsIgnoredSensors = IsIgnoredSensors,
                 IsBlockedSensors = IsBlockedSensors,

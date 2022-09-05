@@ -38,7 +38,7 @@
         if (IsVisibleStatus(sensor.Status, filter))
             return true;
 
-        if (sensor.HasData && filter.SensorsHasData)
+        if (!sensor.HasData && filter.IsEmptyHistory)
             return true;
 
         if (sensor.IsNotificationsEnabled && filter.HasTelegramNotifications)
