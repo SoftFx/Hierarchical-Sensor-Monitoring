@@ -280,10 +280,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users, Negative")]
         public void GetEmptyViewersTest()
         {
-            _userManager.AddUser(TestUsersManager.GetEmptyUser());
+            var emptyViewer = TestUsersManager.GetEmptyUser();
+            emptyViewer.ProductsRoles = new (TestUsersManager.TestUserViewer.ProductsRoles);
+            _userManager.AddUser(emptyViewer);
 
             var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
-            var expected = new List<User>(1) { TestUsersManager.GetEmptyUser() };
+            var expected = new List<User>(1) { emptyViewer };
 
             CompareUserLists(expected, actual);
         }
@@ -304,7 +306,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users, Negative")]
         public void GetEmptyManagersTest()
         {
-            var emptyManager = new User() { UserName = string.Empty, CertificateThumbprint = string.Empty, CertificateFileName = string.Empty, Password = string.Empty, ProductsRoles = TestUsersManager.TestUserManager.ProductsRoles };
+            var emptyManager = TestUsersManager.GetEmptyUser();
+            emptyManager.ProductsRoles = new (TestUsersManager.TestUserManager.ProductsRoles);
 
             _userManager.AddUser(emptyManager);
 
