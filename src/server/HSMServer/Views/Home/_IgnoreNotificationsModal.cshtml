@@ -10,8 +10,8 @@
 @if (Model != null)
 {
     <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
-        <input class="d-none" asp-for="EncodedId"/>
-        <input class="d-none" asp-for="DateTimeNow"/>
+        <input class="d-none" asp-for="EncodedId" />
+        <input class="d-none" asp-for="DateTimeNow" />
 
         <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
             <div class="modal-dialog modal-dialog-centered" role="document">

@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -134,17 +135,19 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model)
         {
-            var sensors = GetNodeSensors(model.EncodedId);
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
+            void IgnoreSensors(ConcurrentDictionary<Guid, DateTime> ignoredSensors, Guid sensorId) =>
+                ignoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
 
-            foreach (var sensorId in sensors)
-            {
-                user.Notifications.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
+            UpdateUserIgnoredSensors(model.EncodedId, IgnoreSensors);
+        }
 
-                //TODO : update ignore icon
-            }
+        [HttpPost]
+        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId)
+        {
+            void RemoveIgnoredSensors(ConcurrentDictionary<Guid, DateTime> ignoredSensors, Guid sensorId) =>
+                ignoredSensors.TryRemove(sensorId, out _);
 
-            _userManager.UpdateUser(user);
+            UpdateUserIgnoredSensors(selectedId, RemoveIgnoredSensors);
         }
 
         private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus,
@@ -160,6 +163,17 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
                     sensor.UpdateNotificationsStatus(notificationsUpdatedStatus);
             }
+
+            _userManager.UpdateUser(user);
+        }
+
+        private void UpdateUserIgnoredSensors(string selectedNode, Action<ConcurrentDictionary<Guid, DateTime>, Guid> updateAction)
+        {
+            var sensors = GetNodeSensors(selectedNode);
+            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
+
+            foreach (var sensorId in sensors)
+                updateAction.Invoke(user.Notifications.IgnoredSensors, sensorId);
 
             _userManager.UpdateUser(user);
         }

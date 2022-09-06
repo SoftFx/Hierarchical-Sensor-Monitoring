@@ -144,6 +144,7 @@ function customMenu(node) {
                     "separator_before": false,
                     "separator_after": false,
                     "label": "Ignore notifications",
+                    "icon": "fa-solid fa-bell-slash",
                     "action": function (obj) {
                         $.ajax({
                             type: 'get',
@@ -158,6 +159,15 @@ function customMenu(node) {
                             $('#ignoreNotifications_modal').modal('show');
                         });
                     }
+                },
+                "RemoveIgnoreNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Remove ignoring",
+                    "icon": "fa-solid fa-bell",
+                    "action": function (obj) {
+                        updateSensorsNotifications(removeIgnoringNotifications, node);
+                    }
                 }
             }
         }
@@ -167,15 +177,22 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
-    if (document.getElementById(`${node.id}_notifications`)) {
+    if (document.getElementById(`${node.id}_ignoreNotifications`)) {
+        delete items.Notifications.submenu.EnableNotifications;
+        delete items.Notifications.submenu.IgnoreNotifications;
+    }
+    else if (document.getElementById(`${node.id}_notifications`)) {
         let partialNotifications = $(`#${node.id}_partialNotifications`).val();
         if (partialNotifications !== "True") {
             delete items.Notifications.submenu.EnableNotifications;
         }
+
+        delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
     else {
         delete items.Notifications.submenu.DisableNotifications;
         delete items.Notifications.submenu.IgnoreNotifications;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
 
     return items;
