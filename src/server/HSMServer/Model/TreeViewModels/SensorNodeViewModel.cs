@@ -54,6 +54,9 @@ namespace HSMServer.Model.TreeViewModels
 
         public string GetTimeAgo(TimeSpan time)
         {
+            if (time == TimeSpan.MinValue)
+                return " - no data";
+
             if (time.TotalDays > 30)
                 return "> a month ago";
 

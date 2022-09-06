@@ -18,7 +18,7 @@
     const string allShortPeriod = "All";
 
     var sensorId = Model.EncodedId;
-    var time = DateTime.UtcNow - Model.UpdateTime;
+    var time = Model.UpdateTime != DateTime.MinValue ? DateTime.UtcNow - Model.UpdateTime : TimeSpan.MinValue;
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
