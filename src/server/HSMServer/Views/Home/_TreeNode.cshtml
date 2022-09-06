@@ -4,7 +4,7 @@
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
+<li id='@Model.EncodedId' title='@Model.Name &#013;@(Model.UpdateTime != DateTime.MinValue ? Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
@@ -26,7 +26,7 @@
         <ul>
             @foreach (var sensor in Model.FilteredSensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
+                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@(sensor.UpdateTime != DateTime.MinValue ? sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
                     @if ((User as User).Notifications.IgnoredSensors.ContainsKey(sensor.Id))
                     {
                         <span>
