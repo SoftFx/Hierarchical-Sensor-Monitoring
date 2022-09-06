@@ -125,7 +125,7 @@ function customMenu(node) {
                 "EnableNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Enable notifications",
+                    "label": "Enable",
                     "icon": "fab fa-telegram",
                     "action": function (obj) {
                         updateSensorsNotifications(enableNotifications, node);
@@ -134,7 +134,7 @@ function customMenu(node) {
                 "DisableNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Disable notifications",
+                    "label": "Disable",
                     "icon": "fab fa-telegram",
                     "action": function (obj) {
                         updateSensorsNotifications(disableNotifications, node);
@@ -143,7 +143,7 @@ function customMenu(node) {
                 "IgnoreNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Ignore notifications",
+                    "label": "Ignore",
                     "icon": "fa-solid fa-bell-slash",
                     "action": function (obj) {
                         $.ajax({
