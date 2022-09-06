@@ -3,6 +3,7 @@
 @using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.TreeViewModels
+@using HSMServer.Model
 @using HSMServer.Model.ViewModel
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
@@ -24,6 +25,8 @@
 
     var enableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController))";
     var disableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.DisableNotifications), ViewConstants.HomeController))";
+    var ignoreNotifications = "@Html.Raw(Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController))";
+    var removeIgnoringNotifications = "@Html.Raw(Url.Action(nameof(HomeController.RemoveIgnoringNotifications), ViewConstants.HomeController))";
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
@@ -71,6 +74,8 @@
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
+
+<div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
 <div id="mainContainer">
     <div>

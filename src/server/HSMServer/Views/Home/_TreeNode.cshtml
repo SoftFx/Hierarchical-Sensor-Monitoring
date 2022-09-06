@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.HtmlHelpers
+@using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
@@ -26,7 +27,13 @@
             @foreach (var sensor in Model.FilteredSensors)
             {
                 <li id='@sensor.EncodedId' title='@sensor.Name &#013;@(sensor.UpdateTime != DateTime.MinValue ? sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
-                    @if (sensor.IsNotificationsEnabled)
+                    @if ((User as User).Notifications.IgnoredSensors.ContainsKey(sensor.Id))
+                    {
+                        <span>
+                            <i id="@(sensor.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+                        </span>
+                    }
+                    else if (sensor.IsNotificationsEnabled)
                     {
                         <span>
                             <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>

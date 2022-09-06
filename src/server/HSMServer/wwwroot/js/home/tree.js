@@ -83,7 +83,7 @@ function customMenu(node) {
         },
         "CleanHistory": {
             "separator_before": false,
-            "separator_after": false,
+            "separator_after": true,
             "label": "Clean history",
             "action": function (obj) {
                 //modal
@@ -117,22 +117,58 @@ function customMenu(node) {
                 });
             }
         },
-        "EnableNotifications": {
-            "separator_before": true,
-            "separator_after": false,
-            "label": "Enable notifications",
-            "icon": "fab fa-telegram",
-            "action": function (obj) {
-                updateSensorsNotifications(enableNotifications, node);
-            }
-        },
-        "DisableNotifications": {
+        "Notifications": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Disable notifications",
-            "icon": "fab fa-telegram",
-            "action": function (obj) {
-                updateSensorsNotifications(disableNotifications, node);
+            "label": "Notifications",
+            "submenu": {
+                "EnableNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Enable notifications",
+                    "icon": "fab fa-telegram",
+                    "action": function (obj) {
+                        updateSensorsNotifications(enableNotifications, node);
+                    }
+                },
+                "DisableNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Disable notifications",
+                    "icon": "fab fa-telegram",
+                    "action": function (obj) {
+                        updateSensorsNotifications(disableNotifications, node);
+                    }
+                },
+                "IgnoreNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Ignore notifications",
+                    "icon": "fa-solid fa-bell-slash",
+                    "action": function (obj) {
+                        $.ajax({
+                            type: 'get',
+                            url: ignoreNotifications + '?Selected=' + node.id,
+                            datatype: 'html',
+                            contenttype: 'application/json',
+                            cache: false,
+                            success: function (viewData) {
+                                $("#ignoreNotificatios_partial").html(viewData);
+                            }
+                        }).done(function () {
+                            $('#ignoreNotifications_modal').modal('show');
+                        });
+                    }
+                },
+                "RemoveIgnoreNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Remove ignoring",
+                    "icon": "fa-solid fa-bell",
+                    "action": function (obj) {
+                        updateSensorsNotifications(removeIgnoringNotifications, node);
+                    }
+                }
             }
         }
     }
@@ -141,14 +177,22 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
-    if (document.getElementById(`${node.id}_notifications`)) {
+    if (document.getElementById(`${node.id}_ignoreNotifications`)) {
+        delete items.Notifications.submenu.EnableNotifications;
+        delete items.Notifications.submenu.IgnoreNotifications;
+    }
+    else if (document.getElementById(`${node.id}_notifications`)) {
         let partialNotifications = $(`#${node.id}_partialNotifications`).val();
         if (partialNotifications !== "True") {
-            delete items.EnableNotifications;
+            delete items.Notifications.submenu.EnableNotifications;
         }
+
+        delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
     else {
-        delete items.DisableNotifications;
+        delete items.Notifications.submenu.DisableNotifications;
+        delete items.Notifications.submenu.IgnoreNotifications;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
 
     return items;

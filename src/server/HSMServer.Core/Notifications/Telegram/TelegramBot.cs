@@ -181,6 +181,7 @@ namespace HSMServer.Core.Notifications
 
             return user.Notifications.Telegram.MessagesAreEnabled &&
                    user.Notifications.EnabledSensors.Contains(sensor.Id) &&
+                   !user.Notifications.IgnoredSensors.ContainsKey(sensor.Id) &&
                    newStatus != oldStatus &&
                    (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }
