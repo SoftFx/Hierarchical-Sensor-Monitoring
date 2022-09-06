@@ -21,15 +21,15 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> FilteredSensors { get; internal set; }
+        public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
-        public bool IsAvailableForUser { get; internal set; }
+        public bool IsAvailableForUser { get; internal set; } //r
 
-        public bool IsAddingAccessKeysAvailable { get; internal set; }
+        public bool IsAddingAccessKeysAvailable { get; internal set; } //r
 
-        public int InnerFilteredSensorsCount { get; internal set; }
+        public int InnerFilteredSensorsCount { get; internal set; } //r
 
-        public int SensorsWithNotificationsCount { get; internal set; }
+        public int SensorsWithNotificationsCount { get; internal set; } //r
 
 
         public ProductNodeViewModel(ProductModel model)

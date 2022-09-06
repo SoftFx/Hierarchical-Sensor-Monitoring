@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Extensions
 @using HSMServer.Model
 
 @model IgnoreNotificationsViewModel
@@ -131,7 +132,7 @@
     }
 
     function updateNote() {
-        let now = moment.utc('@(Model?.DateTimeNow.ToString(ViewConstants.NodeUpdateTimeFormat))');
+        let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())');
         let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
                                            .add($('#ignoreNotifications_hours').val(), 'h')
                                            .add($('#ignoreNotifications_days').val(), 'd');

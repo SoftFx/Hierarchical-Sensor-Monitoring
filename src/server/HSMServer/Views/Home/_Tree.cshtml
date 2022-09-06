@@ -1,17 +1,20 @@
 ﻿@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.TreeViewModels
+
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
 @{
     UpdateFilteredSensors();
 }
 
+
 <ul>
     @foreach (var (_, node) in Model.Nodes)
         @if (node.Parent == null && node.IsAvailableForUser && node.InnerFilteredSensorsCount != 0)
             @await Html.PartialAsync("_TreeNode", node)
 </ul>
+
 
 @{
     bool IsVisibleSensor(SensorNodeViewModel sensor, TreeUserFilter filter)

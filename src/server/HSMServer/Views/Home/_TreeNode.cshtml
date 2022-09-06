@@ -1,10 +1,17 @@
 ﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
+@using HSMServer.Extensions
 @using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@(Model.UpdateTime != DateTime.MinValue ? Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
+@{
+    var user = User as User;
+    var userNotifications = user.Notifications;
+}
+
+<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "fas fa-circle @Model.Status.ToIconClass()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
+    @Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)
+    @if (Model.SensorsWithNotificationsCount > 0)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
@@ -21,19 +28,20 @@
             }
         }
 
-    @if (Model.FilteredSensors != null && Model.FilteredSensors.Count != 0)
+    @if ((Model.Sensors?.Count ?? 0) > 0)
     {
         <ul>
-            @foreach (var sensor in Model.FilteredSensors)
+            @foreach (var (_, sensor) in Model.Sensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@(sensor.UpdateTime != DateTime.MinValue ? sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
-                    @if ((User as User).Notifications.IgnoredSensors.ContainsKey(sensor.Id))
+                <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "fas fa-circle @sensor.Status.ToIconClass()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>
+                    @Model.GetShortName(sensor.Name)
+                    @if (userNotifications.IgnoredSensors.ContainsKey(sensor.Id))
                     {
                         <span>
                             <i id="@(sensor.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
                         </span>
                     }
-                    else if (sensor.IsNotificationsEnabled)
+                    else if (userNotifications.EnabledSensors.Contains(sensor.Id))
                     {
                         <span>
                             <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>

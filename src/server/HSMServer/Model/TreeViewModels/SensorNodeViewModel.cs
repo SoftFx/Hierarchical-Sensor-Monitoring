@@ -38,9 +38,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ValidationError { get; private set; }
 
-        public override SensorStatus Status { get; internal set; }
-
-        public bool IsNotificationsEnabled { get; internal set; }
+        public bool IsNotificationsEnabled { get; internal set; } //r
 
 
         public SensorNodeViewModel(BaseSensorModel model)

@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
 
 namespace HSMServer.Model.TreeViewModels
@@ -12,9 +13,12 @@ namespace HSMServer.Model.TreeViewModels
 
         public DateTime UpdateTime { get; internal set; }
 
-        public virtual SensorStatus Status { get; internal set; }
+        public SensorStatus Status { get; internal set; }
 
         public NodeViewModel Parent { get; internal set; }
+
+        public string Tooltip =>
+            $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
 
         public string GetShortName(string name) =>
