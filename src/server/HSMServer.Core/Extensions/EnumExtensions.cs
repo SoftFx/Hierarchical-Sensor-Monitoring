@@ -9,11 +9,13 @@ namespace HSMServer.Core.Extensions
     {
         public static string GetDisplayName(this Enum enumValue)
         {
+            var enumValueStr = enumValue.ToString();
+
             return enumValue.GetType()
-                            .GetMember(enumValue.ToString())
+                            .GetMember(enumValueStr)
                             .First()
                             .GetCustomAttribute<DisplayAttribute>()
-                            ?.GetName() ?? enumValue.ToString();
+                            ?.Name ?? enumValueStr;
         }
     }
 }
