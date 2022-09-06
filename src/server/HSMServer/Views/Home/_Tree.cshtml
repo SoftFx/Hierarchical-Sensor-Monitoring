@@ -16,13 +16,16 @@
 @{
     bool IsVisibleSensor(SensorNodeViewModel sensor, TreeUserFilter filter)
     {
-        bool IsDefault(TreeUserFilter filter) =>
+        bool IsDefault() =>
             !(filter.IsBlockedSensors || filter.HasTelegramNotifications || filter.IsIgnoredSensors
                  || filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus
-                 || filter.HasUnknownStatus);
+                 || filter.HasUnknownStatus) && sensor.HasData;
 
-        bool IsVisibleStatus(SensorStatus status, TreeUserFilter filter) =>
-            status switch
+        bool IsStatusFiltering() =>
+            filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus || filter.HasUnknownStatus;
+
+        bool SensorHasVisibleStatus() =>
+            sensor.Status switch
             {
                 SensorStatus.Ok => filter.HasOkStatus,
                 SensorStatus.Warning => filter.HasWarningStatus,
@@ -32,19 +35,27 @@
             };
 
 
-        if (IsDefault(filter))
+        if (IsDefault())
             return true;
 
-        if (IsVisibleStatus(sensor.Status, filter))
-            return true;
+        bool isStatusFiltering = IsStatusFiltering();
+        bool isEmptyFiltering = filter.IsEmptyHistory;
+        bool isNotiificationsFiltering = filter.HasTelegramNotifications;
 
-        if (!sensor.HasData && filter.IsEmptyHistory)
-            return true;
+        bool? isStatusPassed = isStatusFiltering ? SensorHasVisibleStatus() : null;
+        bool? isEmptyPassed = isEmptyFiltering ? !sensor.HasData : null;
+        bool? isNotificationsPassed = isNotiificationsFiltering ? sensor.IsNotificationsEnabled : null;
 
-        if (sensor.IsNotificationsEnabled && filter.HasTelegramNotifications)
-            return true;
+        if (isStatusPassed.HasValue && !isStatusPassed.Value)
+            return false;
 
-        return false;
+        if (isEmptyPassed.HasValue && !isEmptyPassed.Value)
+            return false;
+
+        if (isNotificationsPassed.HasValue && !isNotificationsPassed.Value)
+            return false;
+
+        return true;
     }
 
     void UpdateFilteredSensors()

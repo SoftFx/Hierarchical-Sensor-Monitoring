@@ -21,7 +21,9 @@ namespace HSMServer.Model.TreeViewModels
             Id = sensor.EncodedId;
             Value = sensor.ShortStringValue;
             StatusColorClass = ViewHelper.GetStatusHeaderColorClass(sensor.Status);
-            UpdatedTimeStr = $"updated {sensor.GetTimeAgo(DateTime.UtcNow - sensor.UpdateTime)}";
+            UpdatedTimeStr = sensor.UpdateTime != DateTime.MinValue 
+                ? $"updated {sensor.GetTimeAgo(DateTime.UtcNow - sensor.UpdateTime)}"
+                : "updated - no data";
             ValidationError = sensor.ValidationError;
         }
     }
