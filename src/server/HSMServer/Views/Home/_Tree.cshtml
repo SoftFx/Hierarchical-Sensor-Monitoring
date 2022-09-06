@@ -19,7 +19,7 @@
         bool IsDefault() =>
             !(filter.IsBlockedSensors || filter.HasTelegramNotifications || filter.IsIgnoredSensors
                  || filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus
-                 || filter.HasUnknownStatus) && sensor.HasData;
+                 || filter.HasUnknownStatus || filter.IsEmptyHistory);
 
         bool IsStatusFiltering() =>
             filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus || filter.HasUnknownStatus;
@@ -36,7 +36,7 @@
 
 
         if (IsDefault())
-            return true;
+            return sensor.HasData;
 
         bool isStatusFiltering = IsStatusFiltering();
         bool isEmptyFiltering = filter.IsEmptyHistory;
