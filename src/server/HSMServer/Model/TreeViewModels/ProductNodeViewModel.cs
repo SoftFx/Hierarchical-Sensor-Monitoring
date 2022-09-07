@@ -65,7 +65,7 @@ namespace HSMServer.Model.TreeViewModels
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
-        internal void UpdateCharacteristics()
+        internal void RecalculateCharacteristics()
         {
             int allSensorsCount = 0;
 
@@ -73,7 +73,7 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.UpdateCharacteristics();
+                    node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;
                 }

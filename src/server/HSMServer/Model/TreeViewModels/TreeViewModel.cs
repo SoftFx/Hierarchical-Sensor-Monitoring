@@ -39,7 +39,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)
-                    node.UpdateCharacteristics();
+                    node.RecalculateCharacteristics();
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)
