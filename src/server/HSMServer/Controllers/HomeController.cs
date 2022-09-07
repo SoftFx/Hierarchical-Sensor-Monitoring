@@ -150,6 +150,19 @@ namespace HSMServer.Controllers
             UpdateUserIgnoredSensors(selectedId, RemoveIgnoredSensors);
         }
 
+        [HttpPost]
+        public string GetPath([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var decodedId = SensorPathHelper.Decode(selectedId);
+
+            //if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                //return node.Path;
+            /*else*/ if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                return sensor.Path;
+
+            return string.Empty;
+        }
+
         private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus,
             Action<NotificationSettings, Guid> updateSettings)
         {

@@ -4,7 +4,8 @@
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@(Model.UpdateTime != DateTime.MinValue ? Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
+<li id='@Model.EncodedId' title='@Model.Name &#013;@(Model.UpdateTime != DateTime.MinValue ? Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    
+    @if (Model.SensorsWithNotificationsCount > 0)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>

@@ -16,6 +16,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public NodeViewModel Parent { get; internal set; }
 
+        public string Path { get; internal set; }
+
 
         public string GetShortName(string name) =>
             name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;

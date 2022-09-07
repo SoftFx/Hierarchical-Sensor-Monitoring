@@ -81,6 +81,31 @@ function customMenu(node) {
                 showAccessKeysList(node.id, true);
             }
         },
+        "CopyPath": {
+            "separator_before": false,
+            "separator_after": true,
+            "label": "Copy path",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'POST',
+                    url: getPath + '?Selected=' + node.id,
+                    dataType: 'html',
+                    contentType: 'application/json',
+                    cache: false,
+                    async: true
+                }).done(function (data) {
+                    const copyToClipboardAsync = str => {
+                        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                            alert(str);
+                            return navigator.clipboard.writeText(str);
+                        }
+                        return Promise.reject('The Clipboard API is not available.');
+                    };
+
+                    copyToClipboardAsync(data);
+                });
+            }
+        },
         "CleanHistory": {
             "separator_before": false,
             "separator_after": true,

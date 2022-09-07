@@ -22,8 +22,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ShortStringValue { get; private set; }
 
-        public string Path { get; private set; }
-
         public string Product { get; private set; }
 
         public string FileNameString { get; private set; }

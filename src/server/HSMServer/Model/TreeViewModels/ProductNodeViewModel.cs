@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -37,12 +36,15 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
+
+            //Path = Parent == null ? model.DisplayName : $"{Parent.Path}/{model.DisplayName}";
         }
 
 
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
+            //Path = Parent == null ? model.DisplayName : $"{Parent.Path}/{model.DisplayName}";
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
