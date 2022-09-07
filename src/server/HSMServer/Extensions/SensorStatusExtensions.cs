@@ -7,7 +7,6 @@ namespace HSMServer.Extensions
         public static string ToCssIconClass(this SensorStatus status) =>
             status switch
             {
-                SensorStatus.Unknown => "tree-icon-unknown",
                 SensorStatus.Ok => "tree-icon-ok",
                 SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",

@@ -113,5 +113,8 @@ namespace HSMServer.Core.Model.Authentication
             copy.TreeFilter = new(TreeFilter);
             return copy;
         }
+
+        public bool IsProductAvailable(string productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
     }
 }

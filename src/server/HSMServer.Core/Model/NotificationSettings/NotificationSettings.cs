@@ -15,6 +15,9 @@ namespace HSMServer.Core.Model
         public bool IsAnyIgnored { get; set; }
 
 
+        public NodeNotificationsState() => Reset();
+
+
         internal void Reset()
         {
             IsAnyEnabled = false;

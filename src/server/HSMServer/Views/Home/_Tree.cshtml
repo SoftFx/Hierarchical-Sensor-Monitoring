@@ -14,13 +14,8 @@
 
 <ul>
     @foreach (var (nodeId, node) in Model.Nodes)
-    {
-        bool isProductAvailableForUser = UserRoleHelper.IsAllProductsTreeAllowed(user) ||
-                                         ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
-
-        @if (node.Parent == null && isProductAvailableForUser && node.InnerFilteredSensorsCount != 0)
+        @if (node.Parent == null && user.IsProductAvailable(nodeId) && node.InnerFilteredSensorsCount != 0)
             @await Html.PartialAsync("_TreeNode", node)
-    }
 </ul>
 
 

@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void UpdateNodesCharacteristics()
+        internal void RecalculateNodesCharacteristics()
         {
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)

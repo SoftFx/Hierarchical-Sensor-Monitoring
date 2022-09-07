@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
@@ -86,16 +87,16 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ModifyUpdateTime()
         {
-            var sensorMaxTime = Sensors.Values.Count == 0 ? DateTime.MinValue : Sensors.Values.Max(x => x.UpdateTime);
-            var nodeMaxTime = Nodes.Values.Count == 0 ? DateTime.MinValue : Nodes.Values.Max(x => x.UpdateTime);
+            var sensorMaxTime = Sensors.Values.MaxOrDefault(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.MaxOrDefault(x => x.UpdateTime);
 
             UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
         }
 
         private void ModifyStatus()
         {
-            var statusFromSensors = Sensors.Values.Count == 0 ? SensorStatus.Ok : Sensors.Values.Max(s => s.Status);
-            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
+            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
+            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
 
             Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
