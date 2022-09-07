@@ -742,7 +742,7 @@ namespace HSMServer.Core.Cache
             var sensorValues = _databaseCore.GetLatestValues(GetSensors());
 
             foreach (var (sensorId, value) in sensorValues)
-                if (_sensors.TryGetValue(sensorId, out var sensor))
+                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                     sensor.AddValue(value);
         }
 
