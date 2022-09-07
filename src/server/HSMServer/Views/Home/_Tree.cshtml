@@ -47,7 +47,7 @@
 
         bool? isStatusPassed = isStatusFiltering ? SensorHasVisibleStatus() : null;
         bool? isEmptyPassed = isEmptyFiltering ? !sensor.HasData : null;
-        bool? isNotificationsPassed = isNotiificationsFiltering ? sensor.IsNotificationsEnabled : null;
+        bool? isNotificationsPassed = isNotiificationsFiltering ? (User as User).Notifications.EnabledSensors.Contains(sensor.Id) : null;
 
         if (isStatusPassed.HasValue && !isStatusPassed.Value)
             return false;

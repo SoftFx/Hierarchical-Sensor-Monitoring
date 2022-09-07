@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -28,8 +27,6 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsAddingAccessKeysAvailable { get; internal set; } //r
 
         public int InnerFilteredSensorsCount { get; internal set; } //r
-
-        public int SensorsWithNotificationsCount { get; internal set; } //r
 
 
         public ProductNodeViewModel(ProductModel model)

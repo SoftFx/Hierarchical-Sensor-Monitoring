@@ -38,8 +38,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ValidationError { get; private set; }
 
-        public bool IsNotificationsEnabled { get; internal set; } //r
-
 
         public SensorNodeViewModel(BaseSensorModel model)
         {
@@ -93,21 +91,6 @@ namespace HSMServer.Model.TreeViewModels
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
-        }
-
-        internal void UpdateNotificationsStatus(bool isNotificationsEnabled)
-        {
-            IsNotificationsEnabled = isNotificationsEnabled;
-
-            var delta = isNotificationsEnabled ? 1 : -1;
-            var parent = Parent;
-
-            while (parent != null)
-            {
-                (parent as ProductNodeViewModel).SensorsWithNotificationsCount += delta;
-
-                parent = parent.Parent;
-            }
         }
 
         private static string UnitsToString(double value, string unit)

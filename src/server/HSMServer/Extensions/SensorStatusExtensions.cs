@@ -13,5 +13,8 @@ namespace HSMServer.Extensions
                 SensorStatus.Error => "tree-icon-error",
                 _ => "tree-icon-unknown",
             };
+
+        public static string ToIcon(this SensorStatus status) =>
+            $"fas fa-circle {status.ToIconClass()}";
     }
 }
