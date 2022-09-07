@@ -5,6 +5,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -36,15 +38,14 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
-
-            //Path = Parent == null ? model.DisplayName : $"{Parent.Path}/{model.DisplayName}";
+            Path = string.Empty;  //GetPath(model);
         }
 
 
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-            //Path = Parent == null ? model.DisplayName : $"{Parent.Path}/{model.DisplayName}";
+            Path = Parent == null ? string.Empty : $"{Parent.Path}/{model.DisplayName}";
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -75,5 +76,25 @@ namespace HSMServer.Model.TreeViewModels
         }
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
+
+        //private string GetPath(ProductModel model)
+        //{
+        //    var list = new List<string>();
+        //    var currentParent = model.ParentProduct;
+        //    if (currentParent == null)
+        //        return string.Empty;
+
+        //    while (currentParent.ParentProduct != null)
+        //    {
+        //        list.Add(currentParent.DisplayName);
+        //        currentParent = currentParent.ParentProduct;
+        //    }
+            
+        //    list.Reverse();
+        //    list.Add(model.DisplayName);
+
+        //    return string.Join('/', list);
+        //}
     }
 }
