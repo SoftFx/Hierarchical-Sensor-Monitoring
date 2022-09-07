@@ -8,9 +8,9 @@
     var user = User as User;
     var userNotifications = user.Notifications;
 
-    userNotifications.InitNodeNotificationsState(Model.Id);
+    user.InitNodeStates(Model.Id);
 
-    var modelNotificationsState = userNotifications.Nodes[Model.Id];
+    var nodeState = user.NodeStates[Model.Id];
 }
 
 <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)
@@ -21,9 +21,8 @@
             {
                 <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
 
-                modelNotificationsState.IsAnyEnabled |= userNotifications.Nodes[child.Id].IsAnyEnabled;
-                modelNotificationsState.IsAllEnabled &= userNotifications.Nodes[child.Id].IsAllEnabled;
-                modelNotificationsState.IsAnyIgnored &= userNotifications.Nodes[child.Id].IsAnyIgnored;
+                nodeState.ChangeEnableState(user.NodeStates[child.Id].IsAnyNotificationsEnabled);
+                nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAnyNotificationsIgnored);
             }
         }
     
@@ -35,9 +34,8 @@
                 var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
                 var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
 
-                modelNotificationsState.IsAnyEnabled |= isSensorNotificationsEnabled;
-                modelNotificationsState.IsAllEnabled &= isSensorNotificationsEnabled;
-                modelNotificationsState.IsAnyIgnored &= isSensorNotificationsIgnored;
+                nodeState.ChangeEnableState(isSensorNotificationsEnabled);
+                nodeState.ChangeIgnoreState(isSensorNotificationsIgnored);
 
                 <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
                     @if (isSensorNotificationsIgnored)
@@ -57,17 +55,17 @@
         </ul>
     }
 
-    @if (modelNotificationsState.IsAnyIgnored)
+    @if (nodeState.IsAnyNotificationsIgnored)
     {
         <span>
             <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
         </span>
     }
-    else if (modelNotificationsState.IsAnyEnabled)
+    else if (nodeState.IsAnyNotificationsEnabled)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@((!modelNotificationsState.IsAllEnabled).ToString())' style='display: none' />
+            <input id='@(Model.EncodedId)_partialNotifications' value='@((!nodeState.IsAllNotificationsEnabled).ToString())' style='display: none' />
         </span>
     }
 </li>
