@@ -39,11 +39,6 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void UpdateNodesCharacteristics(User user)
         {
-            var userIsAdmin = UserRoleHelper.IsAllProductsTreeAllowed(user);
-            foreach (var (nodeId, node) in Nodes)
-                if (node.Parent == null)
-                    node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
-
             UpdateAccessKeysCharacteristics(user);
         }
 

@@ -27,10 +27,10 @@
             }
         }
     
-    @if ((Model.Sensors?.Count ?? 0) > 0)
+    @if ((Model.FilteredSensors?.Count ?? 0) > 0)
     {
         <ul>
-            @foreach (var (_, sensor) in Model.Sensors)
+            @foreach (var sensor in Model.FilteredSensors)
             {
                 var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
                 var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);

@@ -22,8 +22,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
-        public bool IsAvailableForUser { get; internal set; } //r
-
         public bool IsAddingAccessKeysAvailable { get; internal set; } //r
 
         public int InnerFilteredSensorsCount { get; internal set; } //r

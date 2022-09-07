@@ -1,18 +1,26 @@
 ﻿@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Helpers;
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
 @{
+    var user = User as User;
+
     UpdateFilteredSensors();
 }
 
 
 <ul>
-    @foreach (var (_, node) in Model.Nodes)
-        @if (node.Parent == null && node.IsAvailableForUser && node.InnerFilteredSensorsCount != 0)
+    @foreach (var (nodeId, node) in Model.Nodes)
+    {
+        bool isProductAvailableForUser = UserRoleHelper.IsAllProductsTreeAllowed(user) ||
+                                         ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
+
+        @if (node.Parent == null && isProductAvailableForUser && node.InnerFilteredSensorsCount != 0)
             @await Html.PartialAsync("_TreeNode", node)
+    }
 </ul>
 
 
@@ -47,7 +55,7 @@
 
         bool? isStatusPassed = isStatusFiltering ? SensorHasVisibleStatus() : null;
         bool? isEmptyPassed = isEmptyFiltering ? !sensor.HasData : null;
-        bool? isNotificationsPassed = isNotiificationsFiltering ? (User as User).Notifications.EnabledSensors.Contains(sensor.Id) : null;
+        bool? isNotificationsPassed = isNotiificationsFiltering ? user.Notifications.EnabledSensors.Contains(sensor.Id) : null;
 
         if (isStatusPassed.HasValue && !isStatusPassed.Value)
             return false;
@@ -101,7 +109,7 @@
         node.InnerFilteredSensorsCount = 0;
 
         foreach (var (_, sensor) in node.Sensors)
-            if (IsVisibleSensor(sensor, ((User)User).TreeFilter))
+            if (IsVisibleSensor(sensor, user.TreeFilter))
                 node.FilteredSensors.Add(sensor);
 
         node.InnerFilteredSensorsCount = node.FilteredSensors.Count;
