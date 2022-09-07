@@ -120,8 +120,6 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
-            _treeViewModel.UpdateAccessKeysCharacteristics(user);
-
             var availableProducts = TreeValuesCache.GetProducts(user, isAllProducts);
             foreach (var product in availableProducts)
             {

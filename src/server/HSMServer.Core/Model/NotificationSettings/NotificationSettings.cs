@@ -6,6 +6,27 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
+    public class NodeNotificationsState
+    {
+        public bool IsAnyEnabled { get; set; }
+
+        public bool IsAllEnabled { get; set; }
+
+        public bool IsAnyIgnored { get; set; }
+
+
+        public NodeNotificationsState() => Reset();
+
+
+        internal void Reset()
+        {
+            IsAnyEnabled = false;
+            IsAllEnabled = true;
+            IsAnyIgnored = true;
+        }
+    }
+
+
     public sealed class NotificationSettings
     {
         public TelegramSettings Telegram { get; }
@@ -13,6 +34,8 @@ namespace HSMServer.Core.Model
         public HashSet<Guid> EnabledSensors { get; } = new();
 
         public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
+
+        public ConcurrentDictionary<string, NodeNotificationsState> Nodes { get; } = new();
 
 
         internal NotificationSettings()
@@ -52,6 +75,14 @@ namespace HSMServer.Core.Model
             isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
+        }
+
+        public void InitNodeNotificationsState(string nodeId)
+        {
+            if (!Nodes.ContainsKey(nodeId))
+                Nodes.TryAdd(nodeId, new NodeNotificationsState());
+
+            Nodes[nodeId].Reset();
         }
 
         internal NotificationSettingsEntity ToEntity() =>

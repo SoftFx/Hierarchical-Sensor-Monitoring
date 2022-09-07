@@ -1,5 +1,8 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -21,15 +24,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> FilteredSensors { get; internal set; }
+        public int AllSensorsCount { get; private set; }
 
-        public bool IsAvailableForUser { get; internal set; }
+        public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
-        public bool IsAddingAccessKeysAvailable { get; internal set; }
-
-        public int InnerFilteredSensorsCount { get; internal set; }
-
-        public int SensorsWithNotificationsCount { get; internal set; }
+        public int InnerFilteredSensorsCount { get; internal set; } //r
 
 
         public ProductNodeViewModel(ProductModel model)
@@ -38,6 +37,10 @@ namespace HSMServer.Model.TreeViewModels
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
         }
+
+
+        public bool IsChangingAccessKeysAvailable(User user) =>
+            user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
 
         internal void Update(ProductModel model)
@@ -60,18 +63,42 @@ namespace HSMServer.Model.TreeViewModels
         internal void AddAccessKey(AccessKeyViewModel key) =>
             AccessKeys.TryAdd(key.Id, key);
 
-        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
+        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
+        internal void RecalculateCharacteristics()
         {
+            int allSensorsCount = 0;
+
             if (Nodes != null && !Nodes.IsEmpty)
+            {
                 foreach (var (_, node) in Nodes)
-                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
+                {
+                    node.RecalculateCharacteristics();
 
-            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
+                    allSensorsCount += node.AllSensorsCount;
+                }
+            }
 
-            foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
+            AllSensorsCount = allSensorsCount + Sensors.Count;
+
+            ModifyUpdateTime();
+            ModifyStatus();
         }
 
-        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+        private void ModifyUpdateTime()
+        {
+            var sensorMaxTime = Sensors.Values.MaxOrDefault(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.MaxOrDefault(x => x.UpdateTime);
+
+            UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
+        }
+
+        private void ModifyStatus()
+        {
+            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
+            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
+
+            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
+        }
     }
 }

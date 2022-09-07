@@ -2,6 +2,7 @@
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -379,7 +380,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
 
             foreach (var value in booleanValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
 
@@ -396,7 +397,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
 
             foreach (var value in integerValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
 
@@ -413,7 +414,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
 
             foreach (var value in doubleValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
 
@@ -430,7 +431,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
 
             foreach (var value in stringValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
 
             sb.Append("</tbody>");
 
@@ -448,7 +449,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
 
             foreach (var value in intBarValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
 
             sb.Append("</tbody>");
 
@@ -466,7 +467,7 @@ namespace HSMServer.HtmlHelpers
             sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
 
             foreach (var value in doubleBarValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
+                sb.Append($"<tr><td>{value.Time.ToDefaultFormat()}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
 
             sb.Append("</tbody>");
 

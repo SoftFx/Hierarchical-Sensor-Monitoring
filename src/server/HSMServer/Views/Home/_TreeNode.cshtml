@@ -1,39 +1,52 @@
 ﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
+@using HSMServer.Extensions
 @using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@(Model.UpdateTime != DateTime.MinValue ? Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)    @if (Model.SensorsWithNotificationsCount > 0)
-    {
-        <span>
-            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@((Model.SensorsWithNotificationsCount < Model.InnerFilteredSensorsCount).ToString())' style='display: none' />
-        </span>
-    }
+@{
+    var user = User as User;
+    var userNotifications = user.Notifications;
 
+    userNotifications.InitNodeNotificationsState(Model.Id);
+
+    var modelNotificationsState = userNotifications.Nodes[Model.Id];
+}
+
+<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
         {
             @if (child.InnerFilteredSensorsCount != 0)
             {
                 <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+
+                modelNotificationsState.IsAnyEnabled |= userNotifications.Nodes[child.Id].IsAnyEnabled;
+                modelNotificationsState.IsAllEnabled &= userNotifications.Nodes[child.Id].IsAllEnabled;
+                modelNotificationsState.IsAnyIgnored &= userNotifications.Nodes[child.Id].IsAnyIgnored;
             }
         }
-
-    @if (Model.FilteredSensors != null && Model.FilteredSensors.Count != 0)
+    
+    @if ((Model.FilteredSensors?.Count ?? 0) > 0)
     {
         <ul>
             @foreach (var sensor in Model.FilteredSensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@(sensor.UpdateTime != DateTime.MinValue ? sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat) : "no data")' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
-                    @if ((User as User).Notifications.IgnoredSensors.ContainsKey(sensor.Id))
+                var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
+                var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
+
+                modelNotificationsState.IsAnyEnabled |= isSensorNotificationsEnabled;
+                modelNotificationsState.IsAllEnabled &= isSensorNotificationsEnabled;
+                modelNotificationsState.IsAnyIgnored &= isSensorNotificationsIgnored;
+
+                <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
+                    @if (isSensorNotificationsIgnored)
                     {
                         <span>
                             <i id="@(sensor.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
                         </span>
                     }
-                    else if (sensor.IsNotificationsEnabled)
+                    else if (isSensorNotificationsEnabled)
                     {
                         <span>
                             <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
@@ -42,5 +55,19 @@
                 </li>
             }
         </ul>
+    }
+
+    @if (modelNotificationsState.IsAnyIgnored)
+    {
+        <span>
+            <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+        </span>
+    }
+    else if (modelNotificationsState.IsAnyEnabled)
+    {
+        <span>
+            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+            <input id='@(Model.EncodedId)_partialNotifications' value='@((!modelNotificationsState.IsAllEnabled).ToString())' style='display: none' />
+        </span>
     }
 </li>
