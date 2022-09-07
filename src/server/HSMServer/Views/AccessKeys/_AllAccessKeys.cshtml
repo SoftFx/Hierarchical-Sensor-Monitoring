@@ -1,8 +1,13 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Model.Authentication
 
 @model List<AccessKeyViewModel>
+
+@{
+    var user = User as User;
+}
 
 
 @foreach (var key in Model)
@@ -11,7 +16,7 @@
         @if (key.HasProductColumn)
         {
             <td style="word-wrap: break-word">
-                @if (key.IsChangeAvailable && key.ParentProduct.Parent == null)
+                @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
                     @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.Id }, null)
                 }
@@ -30,7 +35,7 @@
         <td>@key.AuthorName</td>
         <td>@key.State</td>
         <td nowrap>
-            @if (key.IsChangeAvailable)
+            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
                 <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'>
                     <i class='fas fa-edit'></i>

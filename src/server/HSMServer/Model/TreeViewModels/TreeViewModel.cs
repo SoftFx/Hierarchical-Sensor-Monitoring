@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
@@ -39,18 +38,7 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void UpdateNodesCharacteristics(User user)
         {
-            UpdateAccessKeysCharacteristics(user);
-        }
 
-        internal void UpdateAccessKeysCharacteristics(User user)
-        {
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
-
-            foreach (var (productId, role) in user.ProductsRoles)
-                if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
-                    node.UpdateAccessKeysAvailableOperations(true);
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)

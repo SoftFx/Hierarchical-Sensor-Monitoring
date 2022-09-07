@@ -1,4 +1,6 @@
 ﻿using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -22,8 +24,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
-        public bool IsAddingAccessKeysAvailable { get; internal set; } //r
-
         public int InnerFilteredSensorsCount { get; internal set; } //r
 
 
@@ -33,6 +33,10 @@ namespace HSMServer.Model.TreeViewModels
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
         }
+
+
+        public bool IsChangingAccessKeysAvailable(User user) =>
+            user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
 
         internal void Update(ProductModel model)
@@ -54,18 +58,6 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void AddAccessKey(AccessKeyViewModel key) =>
             AccessKeys.TryAdd(key.Id, key);
-
-        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
-        {
-            if (Nodes != null && !Nodes.IsEmpty)
-                foreach (var (_, node) in Nodes)
-                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
-
-            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
-
-            foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
-        }
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
     }
