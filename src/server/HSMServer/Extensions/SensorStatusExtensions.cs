@@ -4,7 +4,7 @@ namespace HSMServer.Extensions
 {
     public static class SensorStatusExtensions
     {
-        public static string ToIconClass(this SensorStatus status) =>
+        public static string ToCssIconClass(this SensorStatus status) =>
             status switch
             {
                 SensorStatus.Unknown => "tree-icon-unknown",
@@ -15,6 +15,6 @@ namespace HSMServer.Extensions
             };
 
         public static string ToIcon(this SensorStatus status) =>
-            $"fas fa-circle {status.ToIconClass()}";
+            $"fas fa-circle {status.ToCssIconClass()}";
     }
 }

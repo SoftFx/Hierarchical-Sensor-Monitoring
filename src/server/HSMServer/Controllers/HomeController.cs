@@ -83,7 +83,6 @@ namespace HSMServer.Controllers
             user.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(user);
 
-            _treeViewModel.UpdateNodesCharacteristics();
             return View("Index", _treeViewModel);
         }
 
@@ -104,7 +103,7 @@ namespace HSMServer.Controllers
             void EnableSensors(NotificationSettings settings, Guid sensorId) =>
                 settings.EnabledSensors.Add(sensorId);
 
-            UpdateUserEnabledSensors(selectedId, EnableSensors);
+            UpdateUserNotificationSettings(selectedId, EnableSensors);
         }
 
         [HttpPost]
@@ -116,7 +115,7 @@ namespace HSMServer.Controllers
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
             }
 
-            UpdateUserEnabledSensors(selectedId, DisableSensors);
+            UpdateUserNotificationSettings(selectedId, DisableSensors);
         }
 
         [HttpGet]
@@ -142,7 +141,7 @@ namespace HSMServer.Controllers
                     settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
             }
 
-            UpdateUserIgnoredSensors(model.EncodedId, IgnoreSensors);
+            UpdateUserNotificationSettings(model.EncodedId, IgnoreSensors);
         }
 
         [HttpPost]
@@ -151,27 +150,16 @@ namespace HSMServer.Controllers
             void RemoveIgnoredSensors(NotificationSettings settings, Guid sensorId) =>
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
 
-            UpdateUserIgnoredSensors(selectedId, RemoveIgnoredSensors);
+            UpdateUserNotificationSettings(selectedId, RemoveIgnoredSensors);
         }
 
-        private void UpdateUserEnabledSensors(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
             foreach (var sensorId in sensors)
                 updateSettings.Invoke(user.Notifications, sensorId);
-
-            _userManager.UpdateUser(user);
-        }
-
-        private void UpdateUserIgnoredSensors(string selectedNode, Action<NotificationSettings, Guid> updateAction)
-        {
-            var sensors = GetNodeSensors(selectedNode);
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
-
-            foreach (var sensorId in sensors)
-                updateAction.Invoke(user.Notifications, sensorId);
 
             _userManager.UpdateUser(user);
         }
