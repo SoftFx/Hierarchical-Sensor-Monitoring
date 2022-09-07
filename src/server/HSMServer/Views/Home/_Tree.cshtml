@@ -78,32 +78,6 @@
 
     void Recursion(ProductNodeViewModel node)
     {
-        void UpdateTimeAndStatus()
-        {
-            var sensors = node.FilteredSensors;
-            var nodes = node.Nodes.Values.ToList();
-
-            var sensorMaxTime = DateTime.MinValue;
-            var nodeMaxTime = DateTime.MinValue;
-            var statusFromSensors = SensorStatus.Ok;
-            var statusFromNodes = SensorStatus.Ok;
-
-            if (sensors.Count > 0)
-            {
-                sensorMaxTime = sensors.Max(x => x.UpdateTime);
-                statusFromSensors = sensors.Max(s => s.Status);
-            }
-            if (nodes.Count > 0)
-            {
-                nodeMaxTime = nodes.Max(x => x.UpdateTime);
-                statusFromNodes = nodes.Max(n => n.Status);
-            }
-
-            node.UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
-            node.Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
-        }
-
-
         int visibleSensorsCount = 0;
         node.FilteredSensors = new List<SensorNodeViewModel>(node.Sensors.Count);
         node.InnerFilteredSensorsCount = 0;
@@ -121,7 +95,5 @@
         }
 
         node.InnerFilteredSensorsCount = visibleSensorsCount + node.FilteredSensors.Count;
-
-        UpdateTimeAndStatus();
     }
 }

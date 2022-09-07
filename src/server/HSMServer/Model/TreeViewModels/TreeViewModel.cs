@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -36,9 +35,11 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void UpdateNodesCharacteristics(User user)
+        internal void UpdateNodesCharacteristics()
         {
-
+            foreach (var (_, node) in Nodes)
+                if (node.Parent == null)
+                    node.UpdateCharacteristics();
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)

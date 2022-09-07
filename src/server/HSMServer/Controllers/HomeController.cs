@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -46,7 +45,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+            _treeViewModel.UpdateNodesCharacteristics();
 
             return View(_treeViewModel);
         }
@@ -72,7 +71,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+            _treeViewModel.UpdateNodesCharacteristics();
 
             return PartialView("_Tree", _treeViewModel);
         }
@@ -84,7 +83,7 @@ namespace HSMServer.Controllers
             user.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(user);
 
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+            _treeViewModel.UpdateNodesCharacteristics();
             return View("Index", _treeViewModel);
         }
 

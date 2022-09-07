@@ -11,9 +11,9 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Name { get; protected set; }
 
-        public DateTime UpdateTime { get; internal set; }
+        public DateTime UpdateTime { get; protected set; }
 
-        public SensorStatus Status { get; internal set; }
+        public SensorStatus Status { get; protected set; }
 
         public NodeViewModel Parent { get; internal set; }
 

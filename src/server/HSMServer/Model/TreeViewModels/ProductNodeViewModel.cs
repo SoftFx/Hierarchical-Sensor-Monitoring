@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
@@ -21,6 +22,8 @@ namespace HSMServer.Model.TreeViewModels
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
+
+        public int AllSensorsCount { get; private set; }
 
         public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
@@ -60,5 +63,41 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
+        internal void UpdateCharacteristics()
+        {
+            int allSensorsCount = 0;
+
+            if (Nodes != null && !Nodes.IsEmpty)
+            {
+                foreach (var (_, node) in Nodes)
+                {
+                    node.UpdateCharacteristics();
+
+                    allSensorsCount += node.AllSensorsCount;
+                }
+            }
+
+            AllSensorsCount = allSensorsCount + Sensors.Count;
+
+            ModifyUpdateTime();
+            ModifyStatus();
+        }
+
+        private void ModifyUpdateTime()
+        {
+            var sensorMaxTime = Sensors.Values.Count == 0 ? DateTime.MinValue : Sensors.Values.Max(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.Count == 0 ? DateTime.MinValue : Nodes.Values.Max(x => x.UpdateTime);
+
+            UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
+        }
+
+        private void ModifyStatus()
+        {
+            var statusFromSensors = Sensors.Values.Count == 0 ? SensorStatus.Ok : Sensors.Values.Max(s => s.Status);
+            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
+
+            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
+        }
     }
 }
