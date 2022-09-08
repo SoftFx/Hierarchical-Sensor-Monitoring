@@ -1,5 +1,5 @@
 ﻿@using HSMServer.Core.Model
-@using HSMServer.HtmlHelpers
+@using HSMServer.Extensions
 
 @model HSMServer.Model.TreeViewModels.SensorNodeViewModel
 
@@ -37,7 +37,7 @@
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='fas fa-circle sensor-icon-with-margin @ViewHelper.GetStatusHeaderColorClass(Model.Status)'
+                                    <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                         title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
                                         @if (!string.IsNullOrEmpty(Model.ValidationError))
@@ -79,7 +79,7 @@
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='fas fa-circle sensor-icon-with-margin @ViewHelper.GetStatusHeaderColorClass(Model.Status)' title='Status: @Model.Status'></li>
+                                    <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
                                         @if (!string.IsNullOrEmpty(Model.ValidationError))
                                         {

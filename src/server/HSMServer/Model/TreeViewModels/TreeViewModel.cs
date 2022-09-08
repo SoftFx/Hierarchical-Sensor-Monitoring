@@ -1,9 +1,7 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -37,40 +35,11 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void UpdateNodesCharacteristics(User user)
-        {
-            var userIsAdmin = UserRoleHelper.IsAllProductsTreeAllowed(user);
-            foreach (var (nodeId, node) in Nodes)
-                if (node.Parent == null)
-                    node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
-
-            UpdateAccessKeysCharacteristics(user);
-            ResetNotificationsCharacteristics(user);
-        }
-
-        internal void UpdateAccessKeysCharacteristics(User user)
+        internal void RecalculateNodesCharacteristics()
         {
             foreach (var (_, node) in Nodes)
                 if (node.Parent == null)
-                    node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
-
-            foreach (var (productId, role) in user.ProductsRoles)
-                if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
-                    node.UpdateAccessKeysAvailableOperations(true);
-        }
-
-        internal void ResetNotificationsCharacteristics(User user)
-        {
-            foreach (var (_, node) in Nodes)
-                node.SensorsWithNotificationsCount = 0;
-
-            foreach (var (_, sensor) in Sensors)
-            {
-                sensor.IsNotificationsEnabled = false;
-
-                if (user.Notifications.EnabledSensors.Contains(sensor.Id))
-                    sensor.UpdateNotificationsStatus(true);
-            }
+                    node.RecalculateCharacteristics();
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)

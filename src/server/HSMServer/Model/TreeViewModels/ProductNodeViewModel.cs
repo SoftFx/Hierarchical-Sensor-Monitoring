@@ -1,12 +1,14 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -22,15 +24,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> FilteredSensors { get; internal set; }
+        public int AllSensorsCount { get; private set; }
 
-        public bool IsAvailableForUser { get; internal set; }
+        public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
 
-        public bool IsAddingAccessKeysAvailable { get; internal set; }
-
-        public int InnerFilteredSensorsCount { get; internal set; }
-
-        public int SensorsWithNotificationsCount { get; internal set; }
+        public int InnerFilteredSensorsCount { get; internal set; } //r
 
 
         public ProductNodeViewModel(ProductModel model)
@@ -38,14 +36,17 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
-            Path = string.Empty;  //GetPath(model);
+            //Path = GetPath(model);
         }
+
+
+        public bool IsChangingAccessKeysAvailable(User user) =>
+            user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
 
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-            Path = Parent == null ? string.Empty : $"{Parent.Path}/{model.DisplayName}";
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -63,20 +64,43 @@ namespace HSMServer.Model.TreeViewModels
         internal void AddAccessKey(AccessKeyViewModel key) =>
             AccessKeys.TryAdd(key.Id, key);
 
-        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
-        {
-            if (Nodes != null && !Nodes.IsEmpty)
-                foreach (var (_, node) in Nodes)
-                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
-
-            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
-
-            foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
-        }
-
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
+        internal void RecalculateCharacteristics()
+        {
+            int allSensorsCount = 0;
+
+            if (Nodes != null && !Nodes.IsEmpty)
+            {
+                foreach (var (_, node) in Nodes)
+                {
+                    node.RecalculateCharacteristics();
+
+                    allSensorsCount += node.AllSensorsCount;
+                }
+            }
+
+            AllSensorsCount = allSensorsCount + Sensors.Count;
+
+            ModifyUpdateTime();
+            ModifyStatus();
+        }
+
+        private void ModifyUpdateTime()
+        {
+            var sensorMaxTime = Sensors.Values.MaxOrDefault(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.MaxOrDefault(x => x.UpdateTime);
+
+            UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
+        }
+
+        private void ModifyStatus()
+        {
+            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
+            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
+
+            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
+        }
 
         //private string GetPath(ProductModel model)
         //{
@@ -90,7 +114,7 @@ namespace HSMServer.Model.TreeViewModels
         //        list.Add(currentParent.DisplayName);
         //        currentParent = currentParent.ParentProduct;
         //    }
-            
+
         //    list.Reverse();
         //    list.Add(model.DisplayName);
 

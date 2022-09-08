@@ -152,7 +152,7 @@ namespace HSMServer.Core.Cache
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return new List<ProductModel>();
 
-            var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+            var availableProducts = products.Where(p => user.IsProductAvailable(p.Id)).ToList();
 
             return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
@@ -742,7 +742,7 @@ namespace HSMServer.Core.Cache
             var sensorValues = _databaseCore.GetLatestValues(GetSensors());
 
             foreach (var (sensorId, value) in sensorValues)
-                if (_sensors.TryGetValue(sensorId, out var sensor))
+                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                     sensor.AddValue(value);
         }
 

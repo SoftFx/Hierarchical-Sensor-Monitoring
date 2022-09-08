@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -46,7 +45,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+            _treeViewModel.RecalculateNodesCharacteristics();
 
             return View(_treeViewModel);
         }
@@ -54,23 +53,25 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            if (string.IsNullOrEmpty(selectedId))
-                return PartialView("_TreeNodeSensors", null);
+            NodeViewModel viewModel = null;
 
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            if (!string.IsNullOrEmpty(selectedId))
+            {
+                var decodedId = SensorPathHelper.Decode(selectedId);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return PartialView("_TreeNodeSensors", node);
-            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
-                return PartialView("_TreeNodeSensors", sensor);
+                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                    viewModel = node;
+                else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                    viewModel = sensor;
+            }
 
-            return PartialView("_TreeNodeSensors", null);
+            return PartialView("_NodeDataPanel", viewModel);
         }
 
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
+            _treeViewModel.RecalculateNodesCharacteristics();
 
             return PartialView("_Tree", _treeViewModel);
         }
@@ -82,7 +83,6 @@ namespace HSMServer.Controllers
             user.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(user);
 
-            _treeViewModel.UpdateNodesCharacteristics(HttpContext.User as User);
             return View("Index", _treeViewModel);
         }
 
@@ -103,7 +103,7 @@ namespace HSMServer.Controllers
             void EnableSensors(NotificationSettings settings, Guid sensorId) =>
                 settings.EnabledSensors.Add(sensorId);
 
-            UpdateUserEnabledSensors(selectedId, true, EnableSensors);
+            UpdateUserNotificationSettings(selectedId, EnableSensors);
         }
 
         [HttpPost]
@@ -115,7 +115,7 @@ namespace HSMServer.Controllers
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
             }
 
-            UpdateUserEnabledSensors(selectedId, false, DisableSensors);
+            UpdateUserNotificationSettings(selectedId, DisableSensors);
         }
 
         [HttpGet]
@@ -135,19 +135,22 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model)
         {
-            void IgnoreSensors(ConcurrentDictionary<Guid, DateTime> ignoredSensors, Guid sensorId) =>
-                ignoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
+            void IgnoreSensors(NotificationSettings settings, Guid sensorId)
+            {
+                if (settings.EnabledSensors.Contains(sensorId))
+                    settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
+            }
 
-            UpdateUserIgnoredSensors(model.EncodedId, IgnoreSensors);
+            UpdateUserNotificationSettings(model.EncodedId, IgnoreSensors);
         }
 
         [HttpPost]
         public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            void RemoveIgnoredSensors(ConcurrentDictionary<Guid, DateTime> ignoredSensors, Guid sensorId) =>
-                ignoredSensors.TryRemove(sensorId, out _);
+            void RemoveIgnoredSensors(NotificationSettings settings, Guid sensorId) =>
+                settings.IgnoredSensors.TryRemove(sensorId, out _);
 
-            UpdateUserIgnoredSensors(selectedId, RemoveIgnoredSensors);
+            UpdateUserNotificationSettings(selectedId, RemoveIgnoredSensors);
         }
 
         [HttpPost]
@@ -163,30 +166,13 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private void UpdateUserEnabledSensors(string selectedNode, bool notificationsUpdatedStatus,
-            Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
 
             foreach (var sensorId in sensors)
-            {
                 updateSettings.Invoke(user.Notifications, sensorId);
-
-                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                    sensor.UpdateNotificationsStatus(notificationsUpdatedStatus);
-            }
-
-            _userManager.UpdateUser(user);
-        }
-
-        private void UpdateUserIgnoredSensors(string selectedNode, Action<ConcurrentDictionary<Guid, DateTime>, Guid> updateAction)
-        {
-            var sensors = GetNodeSensors(selectedNode);
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
-
-            foreach (var sensorId in sensors)
-                updateAction.Invoke(user.Notifications.IgnoredSensors, sensorId);
 
             _userManager.UpdateUser(user);
         }

@@ -24,8 +24,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string NodePath { get; private set; }
 
-        public bool IsChangeAvailable { get; internal set; }
-
         public bool HasProductColumn { get; internal set; } = true;
 
 
