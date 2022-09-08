@@ -96,7 +96,6 @@ function customMenu(node) {
                 }).done(function (data) {
                     const copyToClipboardAsync = str => {
                         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-                            alert(str);
                             return navigator.clipboard.writeText(str);
                         }
                         return Promise.reject('The Clipboard API is not available.');
