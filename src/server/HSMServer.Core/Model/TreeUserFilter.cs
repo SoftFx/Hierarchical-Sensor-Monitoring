@@ -22,19 +22,38 @@ namespace HSMServer.Core.Model
     {
         private const int DefaultInterval = 5;
 
+
+        private bool HasFilterByStatus => HasOkStatus || HasWarningStatus || HasErrorStatus || HasUnknownStatus;
+
+        private bool HasFilterByHistory => IsEmptyHistory;
+
+        private bool HasFilterByNotifications => HasTelegramNotifications || IsIgnoredSensors;
+
+        private bool HasFilterByState => IsBlockedSensors;
+
+
         public bool HasOkStatus { get; set; }
+
         public bool HasWarningStatus { get; set; }
+
         public bool HasErrorStatus { get; set; }
+
         public bool HasUnknownStatus { get; set; }
+
 
         public bool IsEmptyHistory { get; set; }
 
+
         public bool HasTelegramNotifications { get; set; }
+
         public bool IsIgnoredSensors { get; set; }
+
 
         public bool IsBlockedSensors { get; set; }
 
+
         public int TreeUpdateInterval { get; set; } = DefaultInterval;
+
 
         public TreeSortType TreeSortType { get; set; } = TreeSortType.ByName;
 
@@ -60,23 +79,15 @@ namespace HSMServer.Core.Model
         {
             FilterGroups selectedFiltersMask = 0;
 
-            if (HasFilterByStatus())
+            if (HasFilterByStatus)
                 selectedFiltersMask |= FilterGroups.ByStatus;
-            if (HasFilterByHistory())
+            if (HasFilterByHistory)
                 selectedFiltersMask |= FilterGroups.ByHistory;
-            if (HasFilterByNotifications())
+            if (HasFilterByNotifications)
                 selectedFiltersMask |= FilterGroups.ByNotifications;
             // TODO: by state
 
             return selectedFiltersMask;
         }
-
-        private bool HasFilterByStatus() => HasOkStatus || HasWarningStatus || HasErrorStatus || HasUnknownStatus;
-
-        private bool HasFilterByHistory() => IsEmptyHistory;
-
-        private bool HasFilterByNotifications() => HasTelegramNotifications || IsIgnoredSensors;
-
-        private bool HasFilterByState() => IsBlockedSensors;
     }
 }
