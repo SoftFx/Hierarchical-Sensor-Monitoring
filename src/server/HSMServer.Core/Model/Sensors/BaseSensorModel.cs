@@ -152,7 +152,11 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
-        internal void ClearValues() => Storage.Clear();
+        internal void ClearValues()
+        {
+            Storage.Clear();
+            ValidationResult = ValidationResult.Ok;
+        }
 
         internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
 

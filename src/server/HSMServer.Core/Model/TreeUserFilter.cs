@@ -1,5 +1,23 @@
-﻿namespace HSMServer.Core.Model
+﻿using System;
+
+namespace HSMServer.Core.Model
 {
+    [Flags]
+    public enum FilterGroups
+    {
+        ByStatus = 1,
+        ByHistory = 2,
+        ByNotifications = 4,
+        ByState = 8,
+    }
+
+    public enum TreeSortType : int
+    {
+        ByName = 0,
+        ByTime = 1
+    }
+
+
     public sealed class TreeUserFilter
     {
         private const int DefaultInterval = 5;
@@ -36,11 +54,29 @@
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = filter.TreeSortType;
         }
-    }
 
-    public enum TreeSortType : int
-    {
-        ByName = 0,
-        ByTime = 1
+
+        public FilterGroups ToMask()
+        {
+            FilterGroups selectedFiltersMask = 0;
+
+            if (HasFilterByStatus())
+                selectedFiltersMask |= FilterGroups.ByStatus;
+            if (HasFilterByHistory())
+                selectedFiltersMask |= FilterGroups.ByHistory;
+            if (HasFilterByNotifications())
+                selectedFiltersMask |= FilterGroups.ByNotifications;
+            // TODO: by state
+
+            return selectedFiltersMask;
+        }
+
+        private bool HasFilterByStatus() => HasOkStatus || HasWarningStatus || HasErrorStatus || HasUnknownStatus;
+
+        private bool HasFilterByHistory() => IsEmptyHistory;
+
+        private bool HasFilterByNotifications() => HasTelegramNotifications || IsIgnoredSensors;
+
+        private bool HasFilterByState() => IsBlockedSensors;
     }
 }

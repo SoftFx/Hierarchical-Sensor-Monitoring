@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.TreeViewModels
-@using HSMServer.Core.Helpers
+@using HSMServer.Extensions
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
@@ -20,50 +20,6 @@
 
 
 @{
-    bool IsVisibleSensor(SensorNodeViewModel sensor, TreeUserFilter filter)
-    {
-        bool IsDefault() =>
-            !(filter.IsBlockedSensors || filter.HasTelegramNotifications || filter.IsIgnoredSensors
-                 || filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus
-                 || filter.HasUnknownStatus || filter.IsEmptyHistory);
-
-        bool IsStatusFiltering() =>
-            filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus || filter.HasUnknownStatus;
-
-        bool SensorHasVisibleStatus() =>
-            sensor.Status switch
-            {
-                SensorStatus.Ok => filter.HasOkStatus,
-                SensorStatus.Warning => filter.HasWarningStatus,
-                SensorStatus.Error => filter.HasErrorStatus,
-                SensorStatus.Unknown => filter.HasUnknownStatus,
-                _ => false
-            };
-
-
-        if (IsDefault())
-            return sensor.HasData;
-
-        bool isStatusFiltering = IsStatusFiltering();
-        bool isEmptyFiltering = filter.IsEmptyHistory;
-        bool isNotiificationsFiltering = filter.HasTelegramNotifications;
-
-        bool? isStatusPassed = isStatusFiltering ? SensorHasVisibleStatus() : null;
-        bool? isEmptyPassed = isEmptyFiltering ? !sensor.HasData : null;
-        bool? isNotificationsPassed = isNotiificationsFiltering ? user.Notifications.EnabledSensors.Contains(sensor.Id) : null;
-
-        if (isStatusPassed.HasValue && !isStatusPassed.Value)
-            return false;
-
-        if (isEmptyPassed.HasValue && !isEmptyPassed.Value)
-            return false;
-
-        if (isNotificationsPassed.HasValue && !isNotificationsPassed.Value)
-            return false;
-
-        return true;
-    }
-
     void UpdateFilteredSensors()
     {
         foreach (var (_, node) in Model.Nodes)
@@ -78,7 +34,7 @@
         node.InnerFilteredSensorsCount = 0;
 
         foreach (var (_, sensor) in node.Sensors)
-            if (IsVisibleSensor(sensor, user.TreeFilter))
+            if (user.IsSensorVisible(sensor))
                 node.FilteredSensors.Add(sensor);
 
         node.InnerFilteredSensorsCount = node.FilteredSensors.Count;
