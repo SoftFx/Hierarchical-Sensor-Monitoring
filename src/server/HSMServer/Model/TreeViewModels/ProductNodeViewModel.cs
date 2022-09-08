@@ -14,6 +14,8 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductNodeViewModel : NodeViewModel
     {
+        private const string PathSeparator = "/";
+
         public string Id { get; }
 
         public string EncodedId { get; }
@@ -36,7 +38,7 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
-            //Path = GetPath(model);
+            Path = model.ParentProduct == null ? PathSeparator : model.DisplayName;
         }
 
 
@@ -47,6 +49,7 @@ namespace HSMServer.Model.TreeViewModels
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
+            Path = model.ParentProduct == null ? PathSeparator : model.DisplayName;
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -74,6 +77,7 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
+                    node.Path = $"{node.Parent.Path}{node.Name}{PathSeparator}";
                     node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;
@@ -101,24 +105,5 @@ namespace HSMServer.Model.TreeViewModels
 
             Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
-
-        //private string GetPath(ProductModel model)
-        //{
-        //    var list = new List<string>();
-        //    var currentParent = model.ParentProduct;
-        //    if (currentParent == null)
-        //        return string.Empty;
-
-        //    while (currentParent.ParentProduct != null)
-        //    {
-        //        list.Add(currentParent.DisplayName);
-        //        currentParent = currentParent.ParentProduct;
-        //    }
-
-        //    list.Reverse();
-        //    list.Add(model.DisplayName);
-
-        //    return string.Join('/', list);
-        //}
     }
 }
