@@ -1,5 +1,4 @@
-﻿@using HSMServer.Constants
-@using HSMServer.Extensions
+﻿@using HSMServer.Extensions
 @using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
@@ -13,24 +12,29 @@
     var nodeState = user.NodeStates[Model.Id];
 }
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)
+
+<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name)
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
         {
-            @if (child.InnerFilteredSensorsCount != 0)
-            {
-                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+            <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
 
-                nodeState.ChangeEnableState(user.NodeStates[child.Id].IsAnyNotificationsEnabled);
-                nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAnyNotificationsIgnored);
-            }
+            nodeState.ChangeSensorsCount(user.NodeStates[child.Id].FilteredSensorsCount);
+            nodeState.ChangeEnableState(user.NodeStates[child.Id].IsAnyNotificationsEnabled);
+            nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAnyNotificationsIgnored);
         }
     
-    @if ((Model.FilteredSensors?.Count ?? 0) > 0)
+    @if ((Model.Sensors?.Count ?? 0) > 0)
     {
         <ul>
-            @foreach (var sensor in Model.FilteredSensors)
+            @foreach (var (_, sensor) in Model.Sensors)
             {
+                var isVisible = user.IsSensorVisible(sensor);
+                nodeState.ChangeSensorsCount(isVisible ? 1 : 0);
+
+                if (!isVisible)
+                    continue;
+
                 var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
                 var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
 
@@ -55,6 +59,7 @@
         </ul>
     }
 
+    (@(nodeState.FilteredSensorsCount == Model.AllSensorsCount ? Model.AllSensorsCount : $"{nodeState.FilteredSensorsCount}/{Model.AllSensorsCount}") sensors)
     @if (nodeState.IsAnyNotificationsIgnored)
     {
         <span>
@@ -69,3 +74,11 @@
         </span>
     }
 </li>
+
+
+<script type="text/javascript">
+    if ('@nodeState.FilteredSensorsCount' === "0") {
+        let node = document.getElementById('@Model.EncodedId');
+        node.remove();
+    }
+</script>

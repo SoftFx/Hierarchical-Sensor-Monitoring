@@ -20,16 +20,19 @@
             IsAllNotificationsEnabled &= isNotificationsEnabled;
         }
 
-        public void ChangeIgnoreState(bool isNotificationsIgnored)
-        {
+        public void ChangeIgnoreState(bool isNotificationsIgnored) =>
             IsAnyNotificationsIgnored &= isNotificationsIgnored;
-        }
+
+        public void ChangeSensorsCount(int visibleSensors) =>
+            FilteredSensorsCount += visibleSensors;
 
         internal void Reset()
         {
             IsAnyNotificationsEnabled = false;
             IsAllNotificationsEnabled = true;
             IsAnyNotificationsIgnored = true;
+
+            FilteredSensorsCount = 0;
         }
     }
 }

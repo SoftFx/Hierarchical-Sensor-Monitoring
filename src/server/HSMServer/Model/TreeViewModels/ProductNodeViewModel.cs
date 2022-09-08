@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
@@ -25,10 +24,6 @@ namespace HSMServer.Model.TreeViewModels
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public int AllSensorsCount { get; private set; }
-
-        public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
-
-        public int InnerFilteredSensorsCount { get; internal set; } //r
 
 
         public ProductNodeViewModel(ProductModel model)

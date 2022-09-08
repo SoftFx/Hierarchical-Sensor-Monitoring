@@ -1,9 +1,23 @@
-﻿@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Model.Authentication
 
-@if (Model?.FilteredSensors != null && Model.FilteredSensors.Count > 0)
+@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+
+@{
+    var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
+
+    if (Model.Sensors != null)
+        foreach (var (_, sensor) in Model.Sensors)
+            if ((User as User).IsSensorVisible(sensor))
+                visibleSensors.Add(sensor);
+}
+
+
+@if (visibleSensors.Count > 0)
 {
     <div>
-        @foreach (var sensor in Model.FilteredSensors)
+        @foreach (var sensor in visibleSensors)
             @await Html.PartialAsync("_SensorAccordion", sensor)
     </div>
 }

@@ -1,50 +1,10 @@
-﻿@using HSMServer.Core.Model
-@using HSMServer.Core.Model.Authentication
-@using HSMServer.Model.TreeViewModels
-@using HSMServer.Extensions
+﻿@using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
-
-@{
-    var user = User as User;
-
-    UpdateFilteredSensors();
-}
 
 
 <ul>
     @foreach (var (nodeId, node) in Model.Nodes)
-        @if (node.Parent == null && user.IsProductAvailable(nodeId) && node.InnerFilteredSensorsCount != 0)
+        @if (node.Parent == null && (User as User).IsProductAvailable(nodeId))
             @await Html.PartialAsync("_TreeNode", node)
 </ul>
-
-
-@{
-    void UpdateFilteredSensors()
-    {
-        foreach (var (_, node) in Model.Nodes)
-            if (node.Parent == null)
-                Recursion(node);
-    }
-
-    void Recursion(ProductNodeViewModel node)
-    {
-        int visibleSensorsCount = 0;
-        node.FilteredSensors = new List<SensorNodeViewModel>(node.Sensors.Count);
-        node.InnerFilteredSensorsCount = 0;
-
-        foreach (var (_, sensor) in node.Sensors)
-            if (user.IsSensorVisible(sensor))
-                node.FilteredSensors.Add(sensor);
-
-        node.InnerFilteredSensorsCount = node.FilteredSensors.Count;
-
-        foreach (var (_, child) in node.Nodes)
-        {
-            Recursion(child);
-            visibleSensorsCount += child.InnerFilteredSensorsCount;
-        }
-
-        node.InnerFilteredSensorsCount = visibleSensorsCount + node.FilteredSensors.Count;
-    }
-}
