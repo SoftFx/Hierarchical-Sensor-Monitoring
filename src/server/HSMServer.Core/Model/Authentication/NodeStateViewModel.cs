@@ -6,7 +6,7 @@
 
         public bool IsAllNotificationsEnabled { get; private set; }
 
-        public bool IsAnyNotificationsIgnored { get; private set; }
+        public bool IsAllNotificationsIgnored { get; private set; }
 
         public int FilteredSensorsCount { get; set; }
 
@@ -21,7 +21,7 @@
         }
 
         public void ChangeIgnoreState(bool isNotificationsIgnored) =>
-            IsAnyNotificationsIgnored &= isNotificationsIgnored;
+            IsAllNotificationsIgnored &= isNotificationsIgnored;
 
         public void ChangeSensorsCount(int visibleSensors) =>
             FilteredSensorsCount += visibleSensors;
@@ -30,7 +30,7 @@
         {
             IsAnyNotificationsEnabled = false;
             IsAllNotificationsEnabled = true;
-            IsAnyNotificationsIgnored = true;
+            IsAllNotificationsIgnored = true;
 
             FilteredSensorsCount = 0;
         }

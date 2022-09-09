@@ -21,7 +21,7 @@
 
             nodeState.ChangeSensorsCount(user.NodeStates[child.Id].FilteredSensorsCount);
             nodeState.ChangeEnableState(user.NodeStates[child.Id].IsAnyNotificationsEnabled);
-            nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAnyNotificationsIgnored);
+            nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAllNotificationsIgnored);
         }
     
     @if ((Model.Sensors?.Count ?? 0) > 0)
@@ -29,17 +29,16 @@
         <ul>
             @foreach (var (_, sensor) in Model.Sensors)
             {
-                var isVisible = user.IsSensorVisible(sensor);
-                nodeState.ChangeSensorsCount(isVisible ? 1 : 0);
-
-                if (!isVisible)
-                    continue;
-
+                var isSensorVisible = user.IsSensorVisible(sensor);
                 var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
                 var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
 
+                nodeState.ChangeSensorsCount(isSensorVisible ? 1 : 0);
                 nodeState.ChangeEnableState(isSensorNotificationsEnabled);
                 nodeState.ChangeIgnoreState(isSensorNotificationsIgnored);
+
+                if (!isSensorVisible)
+                    continue;
 
                 <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
                     @if (isSensorNotificationsIgnored)
@@ -58,9 +57,12 @@
             }
         </ul>
     }
+     
+    @*Touch this span with inline text carefully!*@
+    @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
+    <span class="nodeSensorsCount-span">(@(nodeState.FilteredSensorsCount == Model.AllSensorsCount ? Model.AllSensorsCount : $"{nodeState.FilteredSensorsCount}/{Model.AllSensorsCount}") sensors)</span>
 
-    (@(nodeState.FilteredSensorsCount == Model.AllSensorsCount ? Model.AllSensorsCount : $"{nodeState.FilteredSensorsCount}/{Model.AllSensorsCount}") sensors)
-    @if (nodeState.IsAnyNotificationsIgnored)
+    @if (nodeState.IsAllNotificationsIgnored)
     {
         <span>
             <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>

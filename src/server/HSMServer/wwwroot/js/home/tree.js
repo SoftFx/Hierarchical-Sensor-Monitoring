@@ -107,8 +107,7 @@ function customMenu(node) {
                         cache: false,
                         async: true
                     }).done(function () {
-                        tree.delete_node(node.id);
-                        selectNodeAjax("");
+                        updateTreeTimer();
                     });
                 });
 
