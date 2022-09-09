@@ -87,6 +87,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void BlockSensor([FromQuery(Name = "Selected")] string selectedId)
+        {
+
+        }
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
             var decodedId = SensorPathHelper.Decode(selectedId);

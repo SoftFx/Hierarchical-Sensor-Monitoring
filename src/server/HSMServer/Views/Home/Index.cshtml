@@ -21,6 +21,8 @@
     var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))";
     var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
+    var blockSensor = "@Html.Raw(Url.Action(nameof(HomeController.BlockSensor), ViewConstants.HomeController))";
+    var unblockSensor = "@Html.Raw(Url.Action(nameof(HomeController.BlockSensor), ViewConstants.HomeController))";
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
 
     var enableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController))";
@@ -144,7 +146,7 @@
 }
 
 <script>
-    initializeTree();
+    initializeTree('@((User as User).IsAdmin)');
     initialize();
 
     $("#state").empty();

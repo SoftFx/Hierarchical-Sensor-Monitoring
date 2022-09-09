@@ -1,4 +1,9 @@
-﻿function initializeTree() {
+﻿var userIsAdmin = false;
+
+
+function initializeTree(isAdmin) {
+    userIsAdmin = isAdmin;
+
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
@@ -25,8 +30,8 @@
                 return timeSorting(timeA, timeB);
             }
             else {
-                a = this.get_node(a).text.toLowerCase();
-                b = this.get_node(b).text.toLowerCase();
+                a = this.get_node(a).data.jstree.title.toLowerCase();
+                b = this.get_node(b).data.jstree.title.toLowerCase();
 
                 return a > b ? 1 : -1;
             }
@@ -79,6 +84,46 @@ function customMenu(node) {
             "label": "Access keys",
             "action": function (obj) {
                 showAccessKeysList(node.id, true);
+            }
+        },
+        "BlockSensor": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Block sensor",
+            "icon": "fa-solid fa-ban",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'post',
+                    url: blockSensor + '?Selected=' + node.id,
+                    datatype: 'html',
+                    contenttype: 'application/json',
+                    cache: false,
+                    success: function () {
+                        $(`#${node.id} span`).each(function () {
+                            $(this).addClass("blockedSensor-span");
+                        });
+                    }
+                });
+            }
+        },
+        "UnblockSensor": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Unblock sensor",
+            "icon": "fa-solid fa-ban",
+            "action": function (obj) {
+                $.ajax({
+                    type: 'post',
+                    url: unblockSensor + '?Selected=' + node.id,
+                    datatype: 'html',
+                    contenttype: 'application/json',
+                    cache: false,
+                    success: function () {
+                        $(`#${node.id} span.blockedSensor-span`).each(function () {
+                            $(this).removeClass("blockedSensor-span");
+                        });
+                    }
+                });
             }
         },
         "CleanHistory": {
@@ -174,6 +219,18 @@ function customMenu(node) {
 
     if (node.parents.length != 1) {
         delete items.AccessKeys;
+    }
+
+    if (userIsAdmin === "False" || node.children.length != 0) {
+        delete items.BlockSensor;
+        delete items.UnblockSensor;
+    }
+
+    if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
+        delete items.UnblockSensor;
+    }
+    else {
+        delete items.BlockSensor;
     }
 
     if (document.getElementById(`${node.id}_ignoreNotifications`)) {
