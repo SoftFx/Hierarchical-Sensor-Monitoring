@@ -16,7 +16,9 @@ namespace HSMServer.Model.TreeViewModels
         public SensorStatus Status { get; protected set; }
 
         public NodeViewModel Parent { get; internal set; }
+
         public string Path { get; internal set; }
+
         public string Tooltip =>
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 

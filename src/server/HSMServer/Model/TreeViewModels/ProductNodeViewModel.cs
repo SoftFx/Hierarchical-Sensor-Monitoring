@@ -1,4 +1,5 @@
-﻿using HSMCommon.Extensions;
+﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -14,8 +15,6 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductNodeViewModel : NodeViewModel
     {
-        private const string PathSeparator = "/";
-
         public string Id { get; }
 
         public string EncodedId { get; }
@@ -38,7 +37,7 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
-            Path = model.ParentProduct == null ? PathSeparator : model.DisplayName;
+            Path = CommonConstants.SensorPathSeparator.ToString();
         }
 
 
@@ -49,7 +48,7 @@ namespace HSMServer.Model.TreeViewModels
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-            Path = model.ParentProduct == null ? PathSeparator : model.DisplayName;
+            Path = CommonConstants.SensorPathSeparator.ToString();
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -77,7 +76,7 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.Path = $"{node.Parent.Path}{node.Name}{PathSeparator}";
+                    node.Path = $"{node.Parent.Path}{node.Name}{CommonConstants.SensorPathSeparator}";
                     node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;

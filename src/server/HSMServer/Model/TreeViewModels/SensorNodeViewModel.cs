@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 
@@ -8,7 +9,6 @@ namespace HSMServer.Model.TreeViewModels
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
-        private const string PathSeparator = "/";
 
         public Guid Id { get; }
 
@@ -78,7 +78,7 @@ namespace HSMServer.Model.TreeViewModels
             Status = model.ValidationResult.Result;
             ValidationError = model.ValidationResult.Message;
             Product = model.ProductName;
-            Path = $"{PathSeparator}{model.Path}";
+            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
 
             ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());

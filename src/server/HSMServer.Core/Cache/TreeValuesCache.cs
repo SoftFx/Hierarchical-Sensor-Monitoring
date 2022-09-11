@@ -174,8 +174,7 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            if (path.First() == CommonConstants.SensorPathSeparator)
-                path = path.Remove(0, 1);
+            path = GetPathWithoutStartSeparator(path);
 
             var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
             if (parts.Contains(string.Empty))
@@ -593,8 +592,7 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
-            if (sensorPath.First() == CommonConstants.SensorPathSeparator)
-                sensorPath = sensorPath.Remove(0, 1);
+            sensorPath = GetPathWithoutStartSeparator(sensorPath);
 
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
@@ -768,5 +766,8 @@ namespace HSMServer.Core.Cache
 
             return policies;
         }
+
+        private static string GetPathWithoutStartSeparator(string path) =>
+            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }
