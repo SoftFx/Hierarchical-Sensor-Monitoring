@@ -1,23 +1,29 @@
 # HSM Server
 
 ## New features:
-### Telegram
 
-* Base logic for telegram notifications have been added
-* Telegram tab with notification user settings has been added
-* Configuration tab has been updated for telegram logic
-* Telegram authorization by link has been added
+### New sensor states:
 
-### Tree
+* **Ignore** - you don't receive sensor notifications for a specified period of time
+* **Block** - all data sent to the sensor will be rejected
 
-* Enable/disable sensor notifications logic has been added (context menu)
-* Delete menu item has been renamed to Clean history
+### Filters for Tree:
+
+* Filters by status have been added (*Ok*, *Warning*, *Error*, *Unknown*)
+* Filter by History state has been added (*NoData*)
+* Filters by notifications state have been added (*Enable Telegram*, *Ignore notifications*)
+* Filter by sensor stete has been added (*Blocked state*)
+* Update tree interval setting has been added on Filters panel
+
+### Context menu
+
+* **Copy path** function has been added
+* **Edit** item has been added to context menu
 
 ### Site
 
-* DateTime format has been changed to style dd/MM/yyyy (ex. 23/08/2022)
-* Main layout has been fixed  
+* **Expected update interval** - new more flexible custom control has been added
 
 ### Other
 
-* Bugfixing, optimization
+* Bugfixing & optimization

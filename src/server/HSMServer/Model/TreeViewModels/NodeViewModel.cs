@@ -17,6 +17,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public NodeViewModel Parent { get; internal set; }
 
+        public string Path { get; internal set; }
+
         public string Tooltip =>
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 

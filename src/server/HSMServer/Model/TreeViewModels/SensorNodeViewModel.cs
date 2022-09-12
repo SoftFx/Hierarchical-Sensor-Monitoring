@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 
@@ -21,8 +22,6 @@ namespace HSMServer.Model.TreeViewModels
         public bool HasData { get; private set; }
 
         public string ShortStringValue { get; private set; }
-
-        public string Path { get; private set; }
 
         public string Product { get; private set; }
 
@@ -80,7 +79,7 @@ namespace HSMServer.Model.TreeViewModels
             Status = model.ValidationResult.Result;
             ValidationError = model.ValidationResult.Message;
             Product = model.ProductName;
-            Path = model.Path;
+            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
 
             ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());

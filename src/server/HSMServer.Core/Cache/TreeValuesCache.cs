@@ -4,7 +4,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Notifications;
@@ -172,6 +171,8 @@ namespace HSMServer.Core.Cache
                 message = NotInitializedCacheError;
                 return false;
             }
+
+            path = GetPathWithoutStartSeparator(path);
 
             var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
             if (parts.Contains(string.Empty))
@@ -589,6 +590,8 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
+            sensorPath = GetPathWithoutStartSeparator(sensorPath);
+
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -761,5 +764,8 @@ namespace HSMServer.Core.Cache
 
             return policies;
         }
+
+        private static string GetPathWithoutStartSeparator(string path) =>
+            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }

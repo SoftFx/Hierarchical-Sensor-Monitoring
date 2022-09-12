@@ -8,7 +8,7 @@
 
         public bool IsAllNotificationsIgnored { get; private set; }
 
-        public int FilteredSensorsCount { get; set; }
+        public int FilteredSensorsCount { get; private set; }
 
 
         public NodeStateViewModel() => Reset();
@@ -25,6 +25,13 @@
 
         public void ChangeSensorsCount(int visibleSensors) =>
             FilteredSensorsCount += visibleSensors;
+
+        public void AddChildState(NodeStateViewModel childState)
+        {
+            ChangeSensorsCount(childState.FilteredSensorsCount);
+            ChangeEnableState(childState.IsAnyNotificationsEnabled);
+            ChangeIgnoreState(childState.IsAllNotificationsIgnored);
+        }
 
         internal void Reset()
         {

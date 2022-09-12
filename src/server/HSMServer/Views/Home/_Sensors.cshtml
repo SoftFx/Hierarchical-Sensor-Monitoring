@@ -5,11 +5,12 @@
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
 @{
+    var user = User as User;
     var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
 
     if (Model.Sensors != null)
         foreach (var (_, sensor) in Model.Sensors)
-            if ((User as User).IsSensorVisible(sensor))
+            if (user.IsSensorVisible(sensor))
                 visibleSensors.Add(sensor);
 }
 

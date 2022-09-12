@@ -143,7 +143,7 @@ namespace HSMServer.Controllers
         {
             void IgnoreSensors(NotificationSettings settings, Guid sensorId)
             {
-                if (settings.EnabledSensors.Contains(sensorId))
+                if (settings.IsSensorEnabled(sensorId))
                     settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
             }
 
@@ -157,6 +157,19 @@ namespace HSMServer.Controllers
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
 
             UpdateUserNotificationSettings(selectedId, RemoveIgnoredSensors);
+        }
+
+        [HttpPost]
+        public string GetPath([FromQuery(Name = "Selected")] string selectedId)
+        {
+            var decodedId = SensorPathHelper.Decode(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                return node.Path;
+            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                return sensor.Path;
+
+            return string.Empty;
         }
 
         private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)

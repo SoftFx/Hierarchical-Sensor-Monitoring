@@ -44,6 +44,10 @@ namespace HSMServer.Core.Model
         }
 
 
+        public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
+
+        public bool IsSensorIgnored(Guid sensorId) => IgnoredSensors.ContainsKey(sensorId);
+
         public bool RemoveSensor(Guid sensorId)
         {
             bool isSensorRemoved = false;

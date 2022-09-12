@@ -21,9 +21,7 @@
         {
             <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
 
-            nodeState.ChangeSensorsCount(user.NodeStates[child.Id].FilteredSensorsCount);
-            nodeState.ChangeEnableState(user.NodeStates[child.Id].IsAnyNotificationsEnabled);
-            nodeState.ChangeIgnoreState(user.NodeStates[child.Id].IsAllNotificationsIgnored);
+            nodeState.AddChildState(user.NodeStates[child.Id]);
         }
     
     @if ((Model.Sensors?.Count ?? 0) > 0)
@@ -32,8 +30,8 @@
             @foreach (var (_, sensor) in Model.Sensors)
             {
                 var isSensorVisible = user.IsSensorVisible(sensor);
-                var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
-                var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
+                var isSensorNotificationsEnabled = userNotifications.IsSensorEnabled(sensor.Id);
+                var isSensorNotificationsIgnored = userNotifications.IsSensorIgnored(sensor.Id);
 
                 nodeState.ChangeSensorsCount(isSensorVisible ? 1 : 0);
                 nodeState.ChangeEnableState(isSensorNotificationsEnabled);
@@ -64,7 +62,7 @@
      
     @*Touch this span with inline text carefully!*@
     @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
-    <span class="nodeSensorsCount-span">(@(nodeState.FilteredSensorsCount == Model.AllSensorsCount ? Model.AllSensorsCount : $"{nodeState.FilteredSensorsCount}/{Model.AllSensorsCount}") sensors)</span>
+    <span class="nodeSensorsCount-span">@Model.GetSensorsCountString(nodeState)</span>
 
     @if (nodeState.IsAllNotificationsIgnored)
     {
