@@ -1,5 +1,4 @@
-﻿@using HSMServer.Constants
-@using HSMServer.Extensions
+﻿@using HSMServer.Extensions
 @using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
@@ -8,36 +7,36 @@
     var user = User as User;
     var userNotifications = user.Notifications;
 
-    userNotifications.InitNodeNotificationsState(Model.Id);
+    user.InitNodeStates(Model.Id);
 
-    var modelNotificationsState = userNotifications.Nodes[Model.Id];
+    var nodeState = user.NodeStates[Model.Id];
 }
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name) (@Model.InnerFilteredSensorsCount sensors)
+
+<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name)
     @if (Model.Nodes != null)
         @foreach (var (_, child) in Model.Nodes)
         {
-            @if (child.InnerFilteredSensorsCount != 0)
-            {
-                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+            <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
 
-                modelNotificationsState.IsAnyEnabled |= userNotifications.Nodes[child.Id].IsAnyEnabled;
-                modelNotificationsState.IsAllEnabled &= userNotifications.Nodes[child.Id].IsAllEnabled;
-                modelNotificationsState.IsAnyIgnored &= userNotifications.Nodes[child.Id].IsAnyIgnored;
-            }
+            nodeState.AddChildState(user.NodeStates[child.Id]);
         }
     
-    @if ((Model.FilteredSensors?.Count ?? 0) > 0)
+    @if ((Model.Sensors?.Count ?? 0) > 0)
     {
         <ul>
-            @foreach (var sensor in Model.FilteredSensors)
+            @foreach (var (_, sensor) in Model.Sensors)
             {
-                var isSensorNotificationsEnabled = userNotifications.EnabledSensors.Contains(sensor.Id);
-                var isSensorNotificationsIgnored = userNotifications.IgnoredSensors.ContainsKey(sensor.Id);
+                var isSensorVisible = user.IsSensorVisible(sensor);
+                var isSensorNotificationsEnabled = userNotifications.IsSensorEnabled(sensor.Id);
+                var isSensorNotificationsIgnored = userNotifications.IsSensorIgnored(sensor.Id);
 
-                modelNotificationsState.IsAnyEnabled |= isSensorNotificationsEnabled;
-                modelNotificationsState.IsAllEnabled &= isSensorNotificationsEnabled;
-                modelNotificationsState.IsAnyIgnored &= isSensorNotificationsIgnored;
+                nodeState.ChangeSensorsCount(isSensorVisible ? 1 : 0);
+                nodeState.ChangeEnableState(isSensorNotificationsEnabled);
+                nodeState.ChangeIgnoreState(isSensorNotificationsIgnored);
+
+                if (!isSensorVisible)
+                    continue;
 
                 <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
                     @if (isSensorNotificationsIgnored)
@@ -56,18 +55,22 @@
             }
         </ul>
     }
+     
+    @*Touch this span with inline text carefully!*@
+    @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
+    <span class="nodeSensorsCount-span">@Model.GetSensorsCountString(nodeState)</span>
 
-    @if (modelNotificationsState.IsAnyIgnored)
+    @if (nodeState.IsAllNotificationsIgnored)
     {
         <span>
             <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
         </span>
     }
-    else if (modelNotificationsState.IsAnyEnabled)
+    else if (nodeState.IsAnyNotificationsEnabled)
     {
         <span>
             <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@((!modelNotificationsState.IsAllEnabled).ToString())' style='display: none' />
+            <input id='@(Model.EncodedId)_partialNotifications' value='@((!nodeState.IsAllNotificationsEnabled).ToString())' style='display: none' />
         </span>
     }
 </li>

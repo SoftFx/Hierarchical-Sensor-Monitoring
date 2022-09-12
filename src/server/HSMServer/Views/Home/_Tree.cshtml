@@ -1,94 +1,10 @@
-﻿@using HSMServer.Core.Model
-@using HSMServer.Core.Model.Authentication
-@using HSMServer.Model.TreeViewModels
-@using HSMServer.Core.Helpers
+﻿@using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.TreeViewModel
-
-@{
-    var user = User as User;
-
-    UpdateFilteredSensors();
-}
 
 
 <ul>
     @foreach (var (nodeId, node) in Model.Nodes)
-        @if (node.Parent == null && user.IsProductAvailable(nodeId) && node.InnerFilteredSensorsCount != 0)
+        @if (node.Parent == null && (User as User).IsProductAvailable(nodeId))
             @await Html.PartialAsync("_TreeNode", node)
 </ul>
-
-
-@{
-    bool IsVisibleSensor(SensorNodeViewModel sensor, TreeUserFilter filter)
-    {
-        bool IsDefault() =>
-            !(filter.IsBlockedSensors || filter.HasTelegramNotifications || filter.IsIgnoredSensors
-                 || filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus
-                 || filter.HasUnknownStatus || filter.IsEmptyHistory);
-
-        bool IsStatusFiltering() =>
-            filter.HasOkStatus || filter.HasWarningStatus || filter.HasErrorStatus || filter.HasUnknownStatus;
-
-        bool SensorHasVisibleStatus() =>
-            sensor.Status switch
-            {
-                SensorStatus.Ok => filter.HasOkStatus,
-                SensorStatus.Warning => filter.HasWarningStatus,
-                SensorStatus.Error => filter.HasErrorStatus,
-                SensorStatus.Unknown => filter.HasUnknownStatus,
-                _ => false
-            };
-
-
-        if (IsDefault())
-            return sensor.HasData;
-
-        bool isStatusFiltering = IsStatusFiltering();
-        bool isEmptyFiltering = filter.IsEmptyHistory;
-        bool isNotiificationsFiltering = filter.HasTelegramNotifications;
-
-        bool? isStatusPassed = isStatusFiltering ? SensorHasVisibleStatus() : null;
-        bool? isEmptyPassed = isEmptyFiltering ? !sensor.HasData : null;
-        bool? isNotificationsPassed = isNotiificationsFiltering ? user.Notifications.EnabledSensors.Contains(sensor.Id) : null;
-
-        if (isStatusPassed.HasValue && !isStatusPassed.Value)
-            return false;
-
-        if (isEmptyPassed.HasValue && !isEmptyPassed.Value)
-            return false;
-
-        if (isNotificationsPassed.HasValue && !isNotificationsPassed.Value)
-            return false;
-
-        return true;
-    }
-
-    void UpdateFilteredSensors()
-    {
-        foreach (var (_, node) in Model.Nodes)
-            if (node.Parent == null)
-                Recursion(node);
-    }
-
-    void Recursion(ProductNodeViewModel node)
-    {
-        int visibleSensorsCount = 0;
-        node.FilteredSensors = new List<SensorNodeViewModel>(node.Sensors.Count);
-        node.InnerFilteredSensorsCount = 0;
-
-        foreach (var (_, sensor) in node.Sensors)
-            if (IsVisibleSensor(sensor, user.TreeFilter))
-                node.FilteredSensors.Add(sensor);
-
-        node.InnerFilteredSensorsCount = node.FilteredSensors.Count;
-
-        foreach (var (_, child) in node.Nodes)
-        {
-            Recursion(child);
-            visibleSensorsCount += child.InnerFilteredSensorsCount;
-        }
-
-        node.InnerFilteredSensorsCount = visibleSensorsCount + node.FilteredSensors.Count;
-    }
-}

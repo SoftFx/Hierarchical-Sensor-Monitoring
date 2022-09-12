@@ -148,6 +148,7 @@
 <script>
     initializeTree();
     initialize();
+    updateTreeTimer();
 
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
@@ -193,7 +194,16 @@
             cache: false,
             async: true
         }).done(function (treeData) {
-            $('#jstree').jstree(true).settings.core.data = treeData;
+            let jHtml_treeData = jQuery(treeData);  // get treeData jquery
+
+            // remove all nodes with 0 visible sensors - <li>, that have child <span class="nodeSensorsCount-span"> with text: (0/.. sensors)
+            jHtml_treeData.find(".nodeSensorsCount-span").each(function () {
+                if ($(this).text().startsWith("(0/")) {
+                    $(this).parent().remove();
+                }
+            });
+
+            $('#jstree').jstree(true).settings.core.data = jHtml_treeData.html();
             $('#jstree').jstree(true).refresh(true);
         });
     }
