@@ -4,7 +4,7 @@
 
 ### New sensor states:
 
-* **Ignore** - you don't receive sensor notifications for a specified period of time
+* **Ignore** - you won't receive sensor notifications for a specified time period
 * **Block** - all data sent to the sensor will be rejected
 
 ### Filters for Tree:
@@ -23,7 +23,8 @@
 ### Site
 
 * **Expected update interval** - new more flexible custom control has been added
+* Tree sorting has been improved (nodes are sorted the same way as sensors)
 
-### Other
+## Other
 
 * Bugfixing & optimization
