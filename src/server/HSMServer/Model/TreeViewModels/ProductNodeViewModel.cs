@@ -1,4 +1,5 @@
-﻿using HSMCommon.Extensions;
+﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -36,6 +37,7 @@ namespace HSMServer.Model.TreeViewModels
             Id = model.Id;
             EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
+            Path = CommonConstants.SensorPathSeparator.ToString();
         }
 
 
@@ -73,6 +75,7 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
+                    node.Path = $"{node.Parent.Path}{node.Name}{CommonConstants.SensorPathSeparator}";
                     node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;
