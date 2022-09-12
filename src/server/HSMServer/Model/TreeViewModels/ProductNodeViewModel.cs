@@ -2,6 +2,7 @@
 using HSMCommon.Extensions;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
@@ -38,6 +39,15 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
+
+        public string GetSensorsCountString(NodeStateViewModel nodeState)
+        {
+            var sensorsCount = nodeState.FilteredSensorsCount == AllSensorsCount
+                ? $"{AllSensorsCount}"
+                : $"{nodeState.FilteredSensorsCount}/{AllSensorsCount}";
+
+            return $"({sensorsCount} sensors)";
+        }
 
 
         internal void Update(ProductModel model)

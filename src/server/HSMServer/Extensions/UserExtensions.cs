@@ -26,8 +26,8 @@ namespace HSMServer.Extensions
                 };
 
             bool SensorHasVisibleNotificationsState() =>
-                filter.HasTelegramNotifications == user.Notifications.EnabledSensors.Contains(sensor.Id) ||
-                filter.IsIgnoredSensors == user.Notifications.IgnoredSensors.ContainsKey(sensor.Id);
+                filter.HasTelegramNotifications == user.Notifications.IsSensorEnabled(sensor.Id) ||
+                filter.IsIgnoredSensors == user.Notifications.IsSensorIgnored(sensor.Id);
 
 
             if ((filterMask & sensor.GetStateMask(user)) == filterMask)
@@ -51,7 +51,7 @@ namespace HSMServer.Extensions
         private static FilterGroups GetStateMask(this SensorNodeViewModel sensor, User user)
         {
             var sensorStateMask = FilterGroups.ByStatus | FilterGroups.ByHistory;
-            if (user.Notifications.EnabledSensors.Contains(sensor.Id) || user.Notifications.IgnoredSensors.ContainsKey(sensor.Id))
+            if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id))
                 sensorStateMask |= FilterGroups.ByNotifications;
             // TODO: by state
 

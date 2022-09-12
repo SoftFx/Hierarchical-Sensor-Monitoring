@@ -137,7 +137,7 @@ namespace HSMServer.Controllers
         {
             void IgnoreSensors(NotificationSettings settings, Guid sensorId)
             {
-                if (settings.EnabledSensors.Contains(sensorId))
+                if (settings.IsSensorEnabled(sensorId))
                     settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
             }
 
