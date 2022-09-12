@@ -4,7 +4,7 @@
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
 @{
-    var isEmptyProduct = Model.Parent == null && Model.AllSensorsCount == 0;
+    var isEmptyProduct = Model.AllSensorsCount == 0;
 
     var user = User as User;
     var userNotifications = user.Notifications;
@@ -15,7 +15,7 @@
 }
 
 
-@if (!isEmptyProduct || (isEmptyProduct && user.IsEmptyProductVisible(Model)))
+@if (!isEmptyProduct || user.IsEmptyProductVisible(Model))
 {
     <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name)
         @if (Model.Nodes != null)

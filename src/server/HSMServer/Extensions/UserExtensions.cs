@@ -47,12 +47,10 @@ namespace HSMServer.Extensions
 
             if (filterMask != 0 && (filterMask & productStateMask) == filterMask)
             {
-                bool isProductVisible = true;
+                bool isProductVisible = filterMask.HasFlag(FilterGroups.ByHistory);
 
                 if (filterMask.HasFlag(FilterGroups.ByStatus))
                     isProductVisible &= product.HasVisibleStatus(filter);
-                if (filterMask.HasFlag(FilterGroups.ByHistory))
-                    isProductVisible &= product.AllSensorsCount == 0;
 
                 return isProductVisible;
             }
