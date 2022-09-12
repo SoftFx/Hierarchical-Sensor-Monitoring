@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Helpers;
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Model
 @using HSMServer.Model.ViewModel
@@ -9,6 +10,8 @@
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
 @{
+    var user = User as User;
+
     ViewData["Title"] = "Tree";
 }
 
@@ -148,7 +151,9 @@
 }
 
 <script>
-    initializeTree('@((User as User).IsAdmin)');
+    initializeTree();
+    initializeUserRights('@(user.IsAdmin)',
+                         '@(string.Join(' ', user.ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => SensorPathHelper.Encode(r.Key))))');
     initialize();
     updateTreeTimer();
 

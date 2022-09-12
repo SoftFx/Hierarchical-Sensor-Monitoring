@@ -1,9 +1,13 @@
-﻿var isBlockSensorAllowed = false;
+﻿var isCurrentUserAdmin = false;
+var currentUserProducts = [];
 
 
-function initializeTree(isBlockSensorOperationAllowed) {
-    isBlockSensorAllowed = isBlockSensorOperationAllowed;
+function initializeUserRights(userIsAdmin, userProducts) {
+    isCurrentUserAdmin = userIsAdmin;
+    currentUserProducts = userProducts.split(' ');
+}
 
+function initializeTree() {
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
@@ -245,7 +249,7 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
-    if (isBlockSensorAllowed === "False" || node.children.length != 0) {
+    if (!hasUserNodeRights(node) || node.children.length != 0) {
         delete items.BlockSensor;
         delete items.UnblockSensor;
     }
@@ -288,4 +292,12 @@ function updateSensorsNotifications(action, node) {
     }).done(function () {
         updateTreeTimer();
     });
+}
+
+function hasUserNodeRights(node) {
+    let productId = node.parents.length === 1
+        ? node.id
+        : node.parents[node.parents.length - 2];
+
+    return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
 }
