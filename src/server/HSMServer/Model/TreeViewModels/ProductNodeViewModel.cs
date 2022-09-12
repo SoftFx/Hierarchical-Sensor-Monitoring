@@ -48,7 +48,6 @@ namespace HSMServer.Model.TreeViewModels
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
-            Path = CommonConstants.SensorPathSeparator.ToString();
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
