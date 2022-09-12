@@ -1,8 +1,8 @@
-﻿var userIsAdmin = false;
+﻿var isBlockSensorAllowed = false;
 
 
-function initializeTree(isAdmin) {
-    userIsAdmin = isAdmin;
+function initializeTree(isBlockSensorOperationAllowed) {
+    isBlockSensorAllowed = isBlockSensorOperationAllowed;
 
     $('#jstree').jstree({
         "core": {
@@ -221,7 +221,7 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
-    if (userIsAdmin === "False" || node.children.length != 0) {
+    if (isBlockSensorAllowed === "False" || node.children.length != 0) {
         delete items.BlockSensor;
         delete items.UnblockSensor;
     }
