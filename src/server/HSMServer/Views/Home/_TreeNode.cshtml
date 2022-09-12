@@ -4,6 +4,8 @@
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
 @{
+    var isEmptyProduct = Model.Parent == null && Model.AllSensorsCount == 0;
+
     var user = User as User;
     var userNotifications = user.Notifications;
 
@@ -13,64 +15,70 @@
 }
 
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name)
-    @if (Model.Nodes != null)
-        @foreach (var (_, child) in Model.Nodes)
-        {
-            <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
-
-            nodeState.AddChildState(user.NodeStates[child.Id]);
-        }
-    
-    @if ((Model.Sensors?.Count ?? 0) > 0)
-    {
-        <ul>
-            @foreach (var (_, sensor) in Model.Sensors)
+@if (!isEmptyProduct || (isEmptyProduct && user.IsEmptyProductVisible(Model)))
+{
+    <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(Model.Name)
+        @if (Model.Nodes != null)
+            @foreach (var (_, child) in Model.Nodes)
             {
-                var isSensorVisible = user.IsSensorVisible(sensor);
-                var isSensorNotificationsEnabled = userNotifications.IsSensorEnabled(sensor.Id);
-                var isSensorNotificationsIgnored = userNotifications.IsSensorIgnored(sensor.Id);
+                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
 
-                nodeState.ChangeSensorsCount(isSensorVisible ? 1 : 0);
-                nodeState.ChangeEnableState(isSensorNotificationsEnabled);
-                nodeState.ChangeIgnoreState(isSensorNotificationsIgnored);
-
-                if (!isSensorVisible)
-                    continue;
-
-                <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
-                    @if (isSensorNotificationsIgnored)
-                    {
-                        <span>
-                            <i id="@(sensor.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
-                        </span>
-                    }
-                    else if (isSensorNotificationsEnabled)
-                    {
-                        <span>
-                            <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-                        </span>
-                    }
-                </li>
+                nodeState.AddChildState(user.NodeStates[child.Id]);
             }
-        </ul>
-    }
-     
-    @*Touch this span with inline text carefully!*@
-    @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
-    <span class="nodeSensorsCount-span">@Model.GetSensorsCountString(nodeState)</span>
+    
+        @if ((Model.Sensors?.Count ?? 0) > 0)
+        {
+            <ul>
+                @foreach (var (_, sensor) in Model.Sensors)
+                {
+                    var isSensorVisible = user.IsSensorVisible(sensor);
+                    var isSensorNotificationsEnabled = userNotifications.IsSensorEnabled(sensor.Id);
+                    var isSensorNotificationsIgnored = userNotifications.IsSensorIgnored(sensor.Id);
 
-    @if (nodeState.IsAllNotificationsIgnored)
-    {
-        <span>
-            <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
-        </span>
-    }
-    else if (nodeState.IsAnyNotificationsEnabled)
-    {
-        <span>
-            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@((!nodeState.IsAllNotificationsEnabled).ToString())' style='display: none' />
-        </span>
-    }
-</li>
+                    nodeState.ChangeSensorsCount(isSensorVisible ? 1 : 0);
+                    nodeState.ChangeEnableState(isSensorNotificationsEnabled);
+                    nodeState.ChangeIgnoreState(isSensorNotificationsIgnored);
+
+                    if (!isSensorVisible)
+                        continue;
+
+                    <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>@Model.GetShortName(sensor.Name)
+                        @if (isSensorNotificationsIgnored)
+                        {
+                            <span>
+                                <i id="@(sensor.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+                            </span>
+                        }
+                        else if (isSensorNotificationsEnabled)
+                        {
+                            <span>
+                                <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+                            </span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+     
+        @*Touch this span with inline text carefully!*@
+        @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
+        <span class="nodeSensorsCount-span">@Model.GetSensorsCountString(nodeState)</span>
+
+        @if (!isEmptyProduct)
+        {
+            @if (nodeState.IsAllNotificationsIgnored)
+            {
+                <span>
+                    <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+                </span>
+            }
+            else if (nodeState.IsAnyNotificationsEnabled)
+            {
+                <span>
+                    <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+                    <input id='@(Model.EncodedId)_partialNotifications' value='@((!nodeState.IsAllNotificationsEnabled).ToString())' style='display: none' />
+                </span>
+            }
+        }
+    </li>
+}

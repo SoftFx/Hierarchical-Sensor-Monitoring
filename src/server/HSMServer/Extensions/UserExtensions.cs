@@ -15,16 +15,6 @@ namespace HSMServer.Extensions
                 return sensor.HasData;
 
 
-            bool SensorHasVisibleStatus() =>
-                sensor.Status switch
-                {
-                    SensorStatus.Ok => filter.HasOkStatus,
-                    SensorStatus.Warning => filter.HasWarningStatus,
-                    SensorStatus.Error => filter.HasErrorStatus,
-                    SensorStatus.Unknown => filter.HasUnknownStatus,
-                    _ => false
-                };
-
             bool SensorHasVisibleNotificationsState() =>
                 filter.HasTelegramNotifications == user.Notifications.IsSensorEnabled(sensor.Id) ||
                 filter.IsIgnoredSensors == user.Notifications.IsSensorIgnored(sensor.Id);
@@ -35,7 +25,7 @@ namespace HSMServer.Extensions
                 bool isSensorVisible = true;
 
                 if (filterMask.HasFlag(FilterGroups.ByStatus))
-                    isSensorVisible &= SensorHasVisibleStatus();
+                    isSensorVisible &= sensor.HasVisibleStatus(filter);
                 if (!filterMask.HasFlag(FilterGroups.ByHistory))
                     isSensorVisible &= sensor.HasData;
                 if (filterMask.HasFlag(FilterGroups.ByNotifications))
@@ -43,6 +33,28 @@ namespace HSMServer.Extensions
                 // TODO: by state
 
                 return isSensorVisible;
+            }
+
+            return false;
+        }
+
+        public static bool IsEmptyProductVisible(this User user, ProductNodeViewModel product)
+        {
+            const FilterGroups productStateMask = FilterGroups.ByStatus | FilterGroups.ByHistory;
+
+            var filter = user.TreeFilter;
+            var filterMask = filter.ToMask();
+
+            if (filterMask != 0 && (filterMask & productStateMask) == filterMask)
+            {
+                bool isProductVisible = true;
+
+                if (filterMask.HasFlag(FilterGroups.ByStatus))
+                    isProductVisible &= product.HasVisibleStatus(filter);
+                if (filterMask.HasFlag(FilterGroups.ByHistory))
+                    isProductVisible &= product.AllSensorsCount == 0;
+
+                return isProductVisible;
             }
 
             return false;
@@ -57,5 +69,15 @@ namespace HSMServer.Extensions
 
             return sensorStateMask;
         }
+
+        private static bool HasVisibleStatus(this NodeViewModel node, TreeUserFilter filter) =>
+            node.Status switch
+            {
+                SensorStatus.Ok => filter.HasOkStatus,
+                SensorStatus.Warning => filter.HasWarningStatus,
+                SensorStatus.Error => filter.HasErrorStatus,
+                SensorStatus.Unknown => filter.HasUnknownStatus,
+                _ => false
+            };
     }
 }
