@@ -13,6 +13,7 @@ using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 
@@ -172,6 +173,8 @@ namespace HSMServer.Core.Cache
                 message = NotInitializedCacheError;
                 return false;
             }
+
+            path = GetPathWithoutStartSeparator(path);
 
             var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
             if (parts.Contains(string.Empty))
@@ -589,6 +592,8 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
+            sensorPath = GetPathWithoutStartSeparator(sensorPath);
+
             var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -761,5 +766,8 @@ namespace HSMServer.Core.Cache
 
             return policies;
         }
+
+        private static string GetPathWithoutStartSeparator(string path) =>
+            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }

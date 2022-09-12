@@ -42,6 +42,8 @@
 
     var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
     var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
+
+    var getPath = "@Html.Raw(Url.Action(nameof(HomeController.GetPath), ViewConstants.HomeController))";
 </script>
 
 <link rel="stylesheet" href="~/js/jstree/themes/default/style.min.css" />
