@@ -120,18 +120,7 @@ function customMenu(node) {
             "label": "Block sensor",
             "icon": "fa-solid fa-ban",
             "action": function (obj) {
-                $.ajax({
-                    type: 'post',
-                    url: blockSensor + '?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false,
-                    success: function () {
-                        $(`#${node.id} span`).each(function () {
-                            $(this).addClass("blockedSensor-span");
-                        });
-                    }
-                });
+                changeSensorBlockedState(node, true);
             }
         },
         "UnblockSensor": {
@@ -140,18 +129,7 @@ function customMenu(node) {
             "label": "Unblock sensor",
             "icon": "fa-solid fa-ban",
             "action": function (obj) {
-                $.ajax({
-                    type: 'post',
-                    url: unblockSensor + '?Selected=' + node.id,
-                    datatype: 'html',
-                    contenttype: 'application/json',
-                    cache: false,
-                    success: function () {
-                        $(`#${node.id} span.blockedSensor-span`).each(function () {
-                            $(this).removeClass("blockedSensor-span");
-                        });
-                    }
-                });
+                changeSensorBlockedState(node, false);
             }
         },
         "CleanHistory": {
@@ -291,6 +269,19 @@ function updateSensorsNotifications(action, node) {
         cache: false
     }).done(function () {
         updateTreeTimer();
+    });
+}
+
+function changeSensorBlockedState(node, isBlocked) {
+    $.ajax({
+        type: 'post',
+        url: changeSensorState + '?Selected=' + node.id + '&Block=' + isBlocked,
+        datatype: 'html',
+        contenttype: 'application/json',
+        cache: false,
+        success: function () {
+            updateTreeTimer();
+        }
     });
 }
 

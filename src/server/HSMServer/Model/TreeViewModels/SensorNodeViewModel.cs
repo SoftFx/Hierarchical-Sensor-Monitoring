@@ -19,6 +19,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Description { get; private set; }
 
+        public SensorState State { get; private set; }
+
         public bool HasData { get; private set; }
 
         public string ShortStringValue { get; private set; }
@@ -75,6 +77,7 @@ namespace HSMServer.Model.TreeViewModels
             Name = model.DisplayName;
             SensorType = model.Type;
             Description = model.Description;
+            State = model.State;
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result;
             ValidationError = model.ValidationResult.Message;

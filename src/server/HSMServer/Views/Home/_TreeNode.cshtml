@@ -45,7 +45,7 @@
                         continue;
 
                     <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"title" : "@sensor.Name", "icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>
-                        <span>@Model.GetShortName(sensor.Name)</span>
+                        <span class="@sensor.State.ToCssClass()">@Model.GetShortName(sensor.Name)</span>
 
                         @if (isSensorNotificationsIgnored)
                         {

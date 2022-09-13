@@ -420,6 +420,9 @@ namespace HSMServer.Core.Cache
 
         private void UpdateIntervalPolicy(TimeIntervalModel newInterval, BaseSensorModel sensor)
         {
+            if (newInterval == null)
+                return;
+
             var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
@@ -563,9 +566,10 @@ namespace HSMServer.Core.Cache
                     var sensor = GetSensorModel(entity);
                     _sensors.TryAdd(sensor.Id, sensor);
 
-                    foreach (var policyId in entity.Policies)
-                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                            sensor.AddPolicy(policy);
+                    if (entity.Policies != null)
+                        foreach (var policyId in entity.Policies)
+                            if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
+                                sensor.AddPolicy(policy);
                 }
                 catch (Exception ex)
                 {
@@ -691,8 +695,7 @@ namespace HSMServer.Core.Cache
 
                 if (i != parts.Length - 1)
                 {
-                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName
-                        .Equals(expectedName)).Value;
+                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
 
                     if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
                         return false;
@@ -704,6 +707,7 @@ namespace HSMServer.Core.Cache
                         return false;
                 }
             }
+
             return true;
         }
 
