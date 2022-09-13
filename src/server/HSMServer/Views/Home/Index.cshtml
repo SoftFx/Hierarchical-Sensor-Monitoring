@@ -152,7 +152,7 @@
 <script>
     initializeTree();
     initializeUserRights('@(user.IsAdmin)',
-                         '@(string.Join(' ', user.ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => SensorPathHelper.Encode(r.Key))))');
+                         '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.Encode)))');
     initialize();
     updateTreeTimer();
 

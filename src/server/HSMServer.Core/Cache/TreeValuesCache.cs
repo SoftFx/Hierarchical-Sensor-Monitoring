@@ -202,6 +202,7 @@ namespace HSMServer.Core.Cache
             if (!accessKey.HasPermissionForSendData(out message))
                 return false;
 
+            // TODO: this optimization interferes with checking sensor Blocked state
             //if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
             //    return true;
 
@@ -395,9 +396,6 @@ namespace HSMServer.Core.Cache
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
-            if (sensor?.State == SensorState.Blocked)
-                return;
-
             if (sensor == null)
             {
                 SensorEntity entity = new()
@@ -413,6 +411,8 @@ namespace HSMServer.Core.Cache
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
+            else if (sensor.State == SensorState.Blocked)
+                return;
 
             var oldStatus = sensor.ValidationResult;
 
@@ -713,7 +713,7 @@ namespace HSMServer.Core.Cache
 
                     if (sensor?.State == SensorState.Blocked)
                     {
-                        message = $"Sensor {sensor.ProductName}/{sensor.Path} is blocked.";
+                        message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
                         return false;
                     }
                 }
