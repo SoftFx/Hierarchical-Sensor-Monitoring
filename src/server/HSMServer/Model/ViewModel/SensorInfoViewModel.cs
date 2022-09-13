@@ -42,7 +42,7 @@ namespace HSMServer.Model.ViewModel
         public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
             EncodedId = SensorPathHelper.EncodeGuid(sensor.Id);
-            Path = $"/{sensor.Path}";
+            Path = sensor.Path;
             ProductName = sensor.Product;
             SensorType = sensor.SensorType;
 
