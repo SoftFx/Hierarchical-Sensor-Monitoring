@@ -202,10 +202,10 @@ namespace HSMServer.Core.Cache
             if (!accessKey.HasPermissionForSendData(out message))
                 return false;
 
-            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
-                return true;
+            //if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
+            //    return true;
 
-            return IsValidKeyForPath(parts, product, accessKey, out message);
+            return IsValidSensorPath(parts, product, accessKey, out message);
         }
 
 
@@ -394,6 +394,10 @@ namespace HSMServer.Core.Cache
 
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
+
+            if (sensor?.State == SensorState.Blocked)
+                return;
+
             if (sensor == null)
             {
                 SensorEntity entity = new()
@@ -684,7 +688,7 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private static bool IsValidKeyForPath(string[] parts, ProductModel product,
+        private static bool IsValidSensorPath(string[] parts, ProductModel product,
             AccessKeyModel accessKey, out string message)
         {
             message = string.Empty;
@@ -702,9 +706,16 @@ namespace HSMServer.Core.Cache
                 }
                 else
                 {
-                    if (!product.Sensors.Any(s => s.Value.DisplayName == expectedName) &&
-                        !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                    var sensor = product.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+
+                    if (sensor == null && !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
                         return false;
+
+                    if (sensor?.State == SensorState.Blocked)
+                    {
+                        message = $"Sensor {sensor.ProductName}/{sensor.Path} is blocked.";
+                        return false;
+                    }
                 }
             }
 
