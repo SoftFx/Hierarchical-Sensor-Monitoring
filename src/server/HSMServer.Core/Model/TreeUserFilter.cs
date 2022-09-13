@@ -85,7 +85,8 @@ namespace HSMServer.Core.Model
                 selectedFiltersMask |= FilterGroups.ByHistory;
             if (HasFilterByNotifications)
                 selectedFiltersMask |= FilterGroups.ByNotifications;
-            // TODO: by state
+            if (HasFilterByState)
+                selectedFiltersMask |= FilterGroups.ByState;
 
             return selectedFiltersMask;
         }

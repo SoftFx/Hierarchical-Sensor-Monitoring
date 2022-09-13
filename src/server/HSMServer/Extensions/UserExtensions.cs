@@ -30,7 +30,8 @@ namespace HSMServer.Extensions
                     isSensorVisible &= sensor.HasData;
                 if (filterMask.HasFlag(FilterGroups.ByNotifications))
                     isSensorVisible &= SensorHasVisibleNotificationsState();
-                // TODO: by state
+                if (filterMask.HasFlag(FilterGroups.ByState))
+                    isSensorVisible &= sensor.State == SensorState.Blocked;
 
                 return isSensorVisible;
             }
@@ -63,7 +64,8 @@ namespace HSMServer.Extensions
             var sensorStateMask = FilterGroups.ByStatus | FilterGroups.ByHistory;
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id))
                 sensorStateMask |= FilterGroups.ByNotifications;
-            // TODO: by state
+            if (sensor.State == SensorState.Blocked)
+                sensorStateMask |= FilterGroups.ByState;
 
             return sensorStateMask;
         }
