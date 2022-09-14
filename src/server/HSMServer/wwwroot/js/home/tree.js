@@ -120,12 +120,10 @@ function customMenu(node) {
             "label": "Edit",
             "action": function (obj) {
                 if (node.parents.length == 1) {
-                    //product
-                    console.log(node.id);
                     window.location.href = editProduct + "?Product=" + node.id;
                 }
                 else if (node.children.length == 0) {
-                    //sensor
+                    $("#sensorInfo_link_" + node.id).click();
                 }
             }
         },
