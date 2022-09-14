@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Core.Model.UserFilter
+namespace HSMServer.Core.Model.UserFilters
 {
     public abstract class UserFilterGroupBase
     {
@@ -17,6 +17,12 @@ namespace HSMServer.Core.Model.UserFilter
 
         [JsonIgnore]
         public bool HasAnyEnabledFilters => Properties.Any(p => p.Value);
+
+
+        internal abstract bool IsSensorSuitable(FilteredSensor sensor);
+
+        internal virtual bool NeedToCheckSensor(FilterGroupType mask) =>
+            mask.HasFlag(Type);
     }
 
 

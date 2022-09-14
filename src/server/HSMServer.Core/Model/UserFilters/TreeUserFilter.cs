@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Core.Model.UserFilter
+namespace HSMServer.Core.Model.UserFilters
 {
     [Flags]
     public enum FilterGroupType
@@ -58,6 +58,18 @@ namespace HSMServer.Core.Model.UserFilter
                     selectedFiltersMask |= group.Type;
 
             return selectedFiltersMask;
+        }
+
+        public bool IsSensorVisible(FilteredSensor sensor)
+        {
+            var mask = ToMask();
+            var isSensorVisible = true;
+
+            foreach (var group in Groups)
+                if (group.NeedToCheckSensor(mask))
+                    isSensorVisible &= group.IsSensorSuitable(sensor);
+
+            return isSensorVisible;
         }
     }
 }

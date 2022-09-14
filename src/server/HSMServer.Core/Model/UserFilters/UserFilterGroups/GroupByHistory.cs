@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Model.UserFilter
+﻿namespace HSMServer.Core.Model.UserFilters
 {
     public class GroupByHistory : UserFilterGroupBase
     {
@@ -10,5 +10,12 @@
         public FilterProperty Empty { get; init; } = new();
 
         public GroupByHistory() { }
+
+
+        internal override bool IsSensorSuitable(FilteredSensor sensor) =>
+            Empty.Value || sensor.HasData;
+
+        internal override bool NeedToCheckSensor(FilterGroupType mask) =>
+            !mask.HasFlag(Type);
     }
 }

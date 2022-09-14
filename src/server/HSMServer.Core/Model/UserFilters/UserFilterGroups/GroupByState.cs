@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Model.UserFilter
+﻿namespace HSMServer.Core.Model.UserFilters
 {
     public class GroupByState : UserFilterGroupBase
     {
@@ -10,5 +10,9 @@
         public FilterProperty Blocked { get; init; } = new();
 
         public GroupByState() { }
+
+
+        internal override bool IsSensorSuitable(FilteredSensor sensor) =>
+            Blocked.Value && sensor.State == SensorState.Blocked;
     }
 }

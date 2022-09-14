@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model.UserFilter;
+using HSMServer.Core.Model.UserFilters;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

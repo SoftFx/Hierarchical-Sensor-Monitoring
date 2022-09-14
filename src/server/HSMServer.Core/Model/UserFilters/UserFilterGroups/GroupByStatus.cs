@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Model.UserFilter
+﻿namespace HSMServer.Core.Model.UserFilters
 {
     public sealed class GroupByStatus : UserFilterGroupBase
     {
@@ -16,5 +16,18 @@
         public FilterProperty Unknown { get; init; } = new();
 
         public GroupByStatus() { }
+
+
+        public bool IsStatusSuitable(SensorStatus status) =>
+            status switch
+            {
+                SensorStatus.Ok => Ok.Value,
+                SensorStatus.Warning => Warning.Value,
+                SensorStatus.Error => Error.Value,
+                SensorStatus.Unknown => Unknown.Value,
+                _ => false
+            };
+
+        internal override bool IsSensorSuitable(FilteredSensor sensor) => IsStatusSuitable(sensor.Status);
     }
 }
