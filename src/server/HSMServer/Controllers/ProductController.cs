@@ -91,12 +91,8 @@ namespace HSMServer.Controllers
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
-            if (productNode == null)
-            {
-                var decodedId = SensorPathHelper.Decode(productId);
-                _treeViewModel.Nodes.TryGetValue(decodedId, out productNode);
-            }
+            var decodedId = SensorPathHelper.Decode(productId);
+            _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(productId);
 
