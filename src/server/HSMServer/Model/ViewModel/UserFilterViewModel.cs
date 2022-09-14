@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model.UserFilters;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -25,32 +25,44 @@ namespace HSMServer.Model.ViewModel
 
         public UserFilterViewModel(TreeUserFilter filter)
         {
-            HasOkStatus = filter.HasOkStatus;
-            HasWarningStatus = filter.HasWarningStatus;
-            HasErrorStatus = filter.HasErrorStatus;
-            HasUnknownStatus = filter.HasUnknownStatus;
-            IsEmptyHistory = filter.IsEmptyHistory;
-            HasTelegramNotifications = filter.HasTelegramNotifications;
-            IsIgnoredSensors = filter.IsIgnoredSensors;
-            IsBlockedSensors = filter.IsBlockedSensors;
+            HasOkStatus = filter.ByStatus.Ok.Value;
+            HasWarningStatus = filter.ByStatus.Warning.Value;
+            HasErrorStatus = filter.ByStatus.Error.Value;
+            HasUnknownStatus = filter.ByStatus.Unknown.Value;
+
+            IsEmptyHistory = filter.ByHistory.Empty.Value;
+
+            HasTelegramNotifications = filter.ByNotifications.Enabled.Value;
+            IsIgnoredSensors = filter.ByNotifications.Ignored.Value;
+
+            IsBlockedSensors = filter.ByState.Blocked.Value;
+
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
         }
 
 
-        public TreeUserFilter ToFilter() =>
-            new ()
+        public TreeUserFilter ToFilter()
+        {
+            var filter = new TreeUserFilter()
             {
-                HasOkStatus = HasOkStatus,
-                HasWarningStatus = HasWarningStatus,
-                HasErrorStatus = HasErrorStatus,
-                HasUnknownStatus = HasUnknownStatus,
-                IsEmptyHistory = IsEmptyHistory,
-                HasTelegramNotifications = HasTelegramNotifications,
-                IsIgnoredSensors = IsIgnoredSensors,
-                IsBlockedSensors = IsBlockedSensors,
                 TreeUpdateInterval = TreeUpdateInterval,
                 TreeSortType = (TreeSortType)TreeSortType
             };
+
+            filter.ByStatus.Ok.Value = HasOkStatus;
+            filter.ByStatus.Warning.Value = HasWarningStatus;
+            filter.ByStatus.Error.Value = HasErrorStatus;
+            filter.ByStatus.Unknown.Value = HasUnknownStatus;
+
+            filter.ByHistory.Empty.Value = IsEmptyHistory;
+
+            filter.ByNotifications.Enabled.Value = HasTelegramNotifications;
+            filter.ByNotifications.Ignored.Value = IsIgnoredSensors;
+
+            filter.ByState.Blocked.Value = IsBlockedSensors;
+
+            return filter;
+        }
     }
 }
