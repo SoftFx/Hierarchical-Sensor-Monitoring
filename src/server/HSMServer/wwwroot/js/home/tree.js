@@ -105,6 +105,21 @@ function customMenu(node) {
                 });
             }
         },
+        "Edit": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Edit",
+            "action": function (obj) {
+                if (node.parents.length == 1) {
+                    //product
+                    console.log(node.id);
+                    window.location.href = editProduct + "?Product=" + node.id;
+                }
+                else if (node.children.length == 0) {
+                    //sensor
+                }
+            }
+        },
         "CleanHistory": {
             "separator_before": false,
             "separator_after": true,
@@ -199,6 +214,10 @@ function customMenu(node) {
 
     if (node.parents.length != 1) {
         delete items.AccessKeys;
+
+        if (node.children.length != 0) {
+            delete items.Edit;
+        }
     }
 
     if (document.getElementById(`${node.id}_ignoreNotifications`)) {

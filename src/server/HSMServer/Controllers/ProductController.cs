@@ -9,6 +9,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
+using HSMServer.Helpers;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -91,6 +92,11 @@ namespace HSMServer.Controllers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
             _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
+            if (productNode == null)
+            {
+                var decodedId = SensorPathHelper.Decode(productId);
+                _treeViewModel.Nodes.TryGetValue(decodedId, out productNode);
+            }
 
             var users = _userManager.GetViewers(productId);
 
