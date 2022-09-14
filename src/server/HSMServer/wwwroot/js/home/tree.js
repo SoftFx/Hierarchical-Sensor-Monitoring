@@ -40,6 +40,8 @@ function initializeTree() {
                 return a > b ? 1 : -1;
             }
         }
+    }).on("state_ready.jstree", function () {
+        selectNodeAjax($(this).jstree('get_selected'));
     });
 
     $('#updateTime').empty();
@@ -114,6 +116,19 @@ function customMenu(node) {
                 });
             }
         },
+        "Edit": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Edit",
+            "action": function (obj) {
+                if (node.parents.length == 1) {
+                    window.location.href = editProduct + "?Product=" + node.id;
+                }
+                else if (node.children.length == 0) {
+                    $("#sensorInfo_link_" + node.id).click();
+                }
+            }
+        },
         "BlockSensor": {
             "separator_before": false,
             "separator_after": false,
@@ -131,8 +146,7 @@ function customMenu(node) {
             "action": function (obj) {
                 changeSensorBlockedState(node, false);
             }
-        },
-        "CleanHistory": {
+        }, "CleanHistory": {
             "separator_before": false,
             "separator_after": true,
             "label": "Clean history",
@@ -225,6 +239,10 @@ function customMenu(node) {
 
     if (node.parents.length != 1) {
         delete items.AccessKeys;
+
+        if (node.children.length != 0) {
+            delete items.Edit;
+        }
     }
 
     if (!hasUserNodeRights(node) || node.children.length != 0) {

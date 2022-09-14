@@ -9,6 +9,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
+using HSMServer.Helpers;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -90,7 +91,8 @@ namespace HSMServer.Controllers
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
+            var decodedId = SensorPathHelper.Decode(productId);
+            _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(productId);
 

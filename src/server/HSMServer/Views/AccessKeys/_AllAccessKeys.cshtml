@@ -18,7 +18,7 @@
             <td style="word-wrap: break-word">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.Id }, null)
+                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)
                 }
                 else
                 {

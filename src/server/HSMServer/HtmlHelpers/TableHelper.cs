@@ -172,7 +172,7 @@ namespace HSMServer.HtmlHelpers
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user) ||
                     ProductRoleHelper.IsManager(product.Id, user.ProductsRoles))
-                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.Id}' " +
+                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.EncodedId}' " +
                     "type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
