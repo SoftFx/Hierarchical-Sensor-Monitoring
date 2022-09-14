@@ -22,7 +22,7 @@ namespace HSMServer.Core.Model.UserFilter
 
     public sealed class FilterProperty
     {
-        public bool Value { get; init; }
+        public bool Value { get; set; }
 
 
         public FilterProperty() { }

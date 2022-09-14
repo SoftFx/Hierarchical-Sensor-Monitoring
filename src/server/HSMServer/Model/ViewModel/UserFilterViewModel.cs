@@ -29,40 +29,40 @@ namespace HSMServer.Model.ViewModel
             HasWarningStatus = filter.ByStatus.Warning.Value;
             HasErrorStatus = filter.ByStatus.Error.Value;
             HasUnknownStatus = filter.ByStatus.Unknown.Value;
+
             IsEmptyHistory = filter.ByHistory.Empty.Value;
+
             HasTelegramNotifications = filter.ByNotifications.Enabled.Value;
             IsIgnoredSensors = filter.ByNotifications.Ignored.Value;
+
             IsBlockedSensors = filter.ByState.Blocked.Value;
+
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
         }
 
 
-        public TreeUserFilter ToFilter() =>
-            new()
+        public TreeUserFilter ToFilter()
+        {
+            var filter = new TreeUserFilter()
             {
-                ByStatus = new GroupByStatus()
-                {
-                    Ok = new FilterProperty() { Value = HasOkStatus },
-                    Warning = new FilterProperty() { Value = HasWarningStatus },
-                    Error = new FilterProperty() { Value = HasErrorStatus },
-                    Unknown = new FilterProperty() { Value = HasUnknownStatus },
-                },
-                ByHistory = new GroupByHistory()
-                {
-                    Empty = new FilterProperty() { Value = IsEmptyHistory },
-                },
-                ByNotifications = new GroupByNotifications()
-                {
-                    Enabled = new FilterProperty() { Value = HasTelegramNotifications },
-                    Ignored = new FilterProperty() { Value = IsIgnoredSensors },
-                },
-                ByState = new GroupByState()
-                {
-                    Blocked = new FilterProperty() { Value = IsBlockedSensors },
-                },
                 TreeUpdateInterval = TreeUpdateInterval,
                 TreeSortType = (TreeSortType)TreeSortType
             };
+
+            filter.ByStatus.Ok.Value = HasOkStatus;
+            filter.ByStatus.Warning.Value = HasWarningStatus;
+            filter.ByStatus.Error.Value = HasErrorStatus;
+            filter.ByStatus.Unknown.Value = HasUnknownStatus;
+
+            filter.ByHistory.Empty.Value = IsEmptyHistory;
+
+            filter.ByNotifications.Enabled.Value = HasTelegramNotifications;
+            filter.ByNotifications.Ignored.Value = IsIgnoredSensors;
+
+            filter.ByState.Blocked.Value = IsBlockedSensors;
+
+            return filter;
+        }
     }
 }
