@@ -1,13 +1,13 @@
 ﻿namespace HSMServer.Core.Model.UserFilter
 {
-    public class GroupByNotifications : UserFilterGroup
+    public class GroupByNotifications : UserFilterGroupBase
     {
-        public override FilterGroups Group => FilterGroups.ByNotifications;
+        public override FilterGroupType Type => FilterGroupType.ByNotifications;
 
 
-        public FilterProperty Enabled { get; set; } = new();
+        public FilterProperty Enabled { get; init; } = new();
 
-        public FilterProperty Ignored { get; set; } = new();
+        public FilterProperty Ignored { get; init; } = new();
 
 
         public GroupByNotifications() { }

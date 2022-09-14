@@ -1,17 +1,17 @@
 ﻿namespace HSMServer.Core.Model.UserFilter
 {
-    public sealed class GroupByStatus : UserFilterGroup
+    public sealed class GroupByStatus : UserFilterGroupBase
     {
-        public override FilterGroups Group => FilterGroups.ByStatus;
+        public override FilterGroupType Type => FilterGroupType.ByStatus;
 
 
-        public FilterProperty Ok { get; set; } = new();
+        public FilterProperty Ok { get; init; } = new();
 
-        public FilterProperty Warning { get; set; } = new();
+        public FilterProperty Warning { get; init; } = new();
 
-        public FilterProperty Error { get; set; } = new();
+        public FilterProperty Error { get; init; } = new();
 
-        public FilterProperty Unknown { get; set; } = new();
+        public FilterProperty Unknown { get; init; } = new();
 
 
         public GroupByStatus() { }

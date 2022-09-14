@@ -1,11 +1,11 @@
 ﻿namespace HSMServer.Core.Model.UserFilter
 {
-    public class GroupByHistory : UserFilterGroup
+    public class GroupByHistory : UserFilterGroupBase
     {
-        public override FilterGroups Group => FilterGroups.ByHistory;
+        public override FilterGroupType Type => FilterGroupType.ByHistory;
 
 
-        public FilterProperty Empty { get; set; } = new();
+        public FilterProperty Empty { get; init; } = new();
 
 
         public GroupByHistory() { }

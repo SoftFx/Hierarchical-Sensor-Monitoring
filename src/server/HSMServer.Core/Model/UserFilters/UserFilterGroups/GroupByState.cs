@@ -1,11 +1,11 @@
 ﻿namespace HSMServer.Core.Model.UserFilter
 {
-    public class GroupByState : UserFilterGroup
+    public class GroupByState : UserFilterGroupBase
     {
-        public override FilterGroups Group => FilterGroups.ByState;
+        public override FilterGroupType Type => FilterGroupType.ByState;
 
 
-        public FilterProperty Blocked { get; set; } = new();
+        public FilterProperty Blocked { get; init; } = new();
 
 
         public GroupByState() { }

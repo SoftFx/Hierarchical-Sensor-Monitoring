@@ -25,13 +25,13 @@ namespace HSMServer.Extensions
             {
                 bool isSensorVisible = true;
 
-                if (filterMask.HasFlag(FilterGroups.ByStatus))
+                if (filterMask.HasFlag(FilterGroupType.ByStatus))
                     isSensorVisible &= sensor.HasVisibleStatus(filter);
-                if (!filterMask.HasFlag(FilterGroups.ByHistory))
+                if (!filterMask.HasFlag(FilterGroupType.ByHistory))
                     isSensorVisible &= sensor.HasData;
-                if (filterMask.HasFlag(FilterGroups.ByNotifications))
+                if (filterMask.HasFlag(FilterGroupType.ByNotifications))
                     isSensorVisible &= SensorHasVisibleNotificationsState();
-                if (filterMask.HasFlag(FilterGroups.ByState))
+                if (filterMask.HasFlag(FilterGroupType.ByState))
                     isSensorVisible &= sensor.State == SensorState.Blocked;
 
                 return isSensorVisible;
@@ -42,16 +42,16 @@ namespace HSMServer.Extensions
 
         public static bool IsEmptyProductVisible(this User user, ProductNodeViewModel product)
         {
-            const FilterGroups productStateMask = FilterGroups.ByStatus | FilterGroups.ByHistory;
+            const FilterGroupType productStateMask = FilterGroupType.ByStatus | FilterGroupType.ByHistory;
 
             var filter = user.TreeFilter;
             var filterMask = filter.ToMask();
 
             if (filterMask != 0 && (filterMask & productStateMask) == filterMask)
             {
-                bool isProductVisible = filterMask.HasFlag(FilterGroups.ByHistory);
+                bool isProductVisible = filterMask.HasFlag(FilterGroupType.ByHistory);
 
-                if (filterMask.HasFlag(FilterGroups.ByStatus))
+                if (filterMask.HasFlag(FilterGroupType.ByStatus))
                     isProductVisible &= product.HasVisibleStatus(filter);
 
                 return isProductVisible;
@@ -60,13 +60,13 @@ namespace HSMServer.Extensions
             return false;
         }
 
-        private static FilterGroups GetStateMask(this SensorNodeViewModel sensor, User user)
+        private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
         {
-            var sensorStateMask = FilterGroups.ByStatus | FilterGroups.ByHistory;
+            var sensorStateMask = FilterGroupType.ByStatus | FilterGroupType.ByHistory;
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id))
-                sensorStateMask |= FilterGroups.ByNotifications;
+                sensorStateMask |= FilterGroupType.ByNotifications;
             if (sensor.State == SensorState.Blocked)
-                sensorStateMask |= FilterGroups.ByState;
+                sensorStateMask |= FilterGroupType.ByState;
 
             return sensorStateMask;
         }

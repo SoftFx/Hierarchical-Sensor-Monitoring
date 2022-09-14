@@ -5,7 +5,7 @@ using System.Linq;
 namespace HSMServer.Core.Model.UserFilter
 {
     [Flags]
-    public enum FilterGroups
+    public enum FilterGroupType
     {
         ByStatus = 1,
         ByHistory = 2,
@@ -24,20 +24,22 @@ namespace HSMServer.Core.Model.UserFilter
     {
         private const int DefaultInterval = 5;
 
-        private readonly List<UserFilterGroup> _groups = new();
+        private readonly List<UserFilterGroupBase> _groups = new();
 
 
-        public GroupByStatus ByStatus { get; set; } = new();
+        public GroupByStatus ByStatus { get; init; } = new();
 
-        public GroupByHistory ByHistory { get; set; } = new();
+        public GroupByHistory ByHistory { get; init; } = new();
 
-        public GroupByNotifications ByNotifications { get; set; } = new();
+        public GroupByNotifications ByNotifications { get; init; } = new();
 
-        public GroupByState ByState { get; set; } = new();
+        public GroupByState ByState { get; init; } = new();
 
-        public int TreeUpdateInterval { get; set; } = DefaultInterval;
 
-        public TreeSortType TreeSortType { get; set; } = TreeSortType.ByName;
+        public int TreeUpdateInterval { get; init; } = DefaultInterval;
+
+        public TreeSortType TreeSortType { get; init; } = TreeSortType.ByName;
+
 
         public int EnabledFiltersCount => _groups.Sum(g => g.EnableFiltersCount);
 
@@ -56,18 +58,13 @@ namespace HSMServer.Core.Model.UserFilter
         }
 
 
-        public FilterGroups ToMask()
+        public FilterGroupType ToMask()
         {
-            FilterGroups selectedFiltersMask = 0;
+            FilterGroupType selectedFiltersMask = 0;
 
-            if (ByStatus.HasAnyEnabledFilters)
-                selectedFiltersMask |= FilterGroups.ByStatus;
-            if (ByHistory.HasAnyEnabledFilters)
-                selectedFiltersMask |= FilterGroups.ByHistory;
-            if (ByNotifications.HasAnyEnabledFilters)
-                selectedFiltersMask |= FilterGroups.ByNotifications;
-            if (ByState.HasAnyEnabledFilters)
-                selectedFiltersMask |= FilterGroups.ByState;
+            foreach (var group in _groups)
+                if (group.HasAnyEnabledFilters)
+                    selectedFiltersMask |= group.Type;
 
             return selectedFiltersMask;
         }

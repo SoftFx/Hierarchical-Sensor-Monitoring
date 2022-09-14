@@ -4,12 +4,12 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.UserFilter
 {
-    public abstract class UserFilterGroup
+    public abstract class UserFilterGroupBase
     {
         private readonly List<FilterProperty> _properties = new();
 
         [JsonIgnore]
-        public abstract FilterGroups Group { get; }
+        public abstract FilterGroupType Type { get; }
 
 
         [JsonIgnore]
@@ -28,7 +28,7 @@ namespace HSMServer.Core.Model.UserFilter
 
     public sealed class FilterProperty
     {
-        public bool Value { get; set; }
+        public bool Value { get; init; }
 
 
         public FilterProperty() { }
