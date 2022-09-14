@@ -40,6 +40,8 @@ function initializeTree() {
                 return a > b ? 1 : -1;
             }
         }
+    }).on("state_ready.jstree", function () {
+        selectNodeAjax($(this).jstree('get_selected'));
     });
 
     $('#updateTime').empty();
