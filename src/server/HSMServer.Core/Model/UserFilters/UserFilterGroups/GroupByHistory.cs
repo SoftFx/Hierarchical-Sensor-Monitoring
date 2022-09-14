@@ -2,18 +2,13 @@
 {
     public class GroupByHistory : UserFilterGroupBase
     {
-        public override FilterGroupType Type => FilterGroupType.ByHistory;
+        protected override FilterProperty[] Properties => new[] { Empty };
+
+        internal override FilterGroupType Type => FilterGroupType.ByHistory;
 
 
         public FilterProperty Empty { get; init; } = new();
 
-
         public GroupByHistory() { }
-
-
-        internal override void RegisterProperties()
-        {
-            RegisterProperty(Empty);
-        }
     }
 }

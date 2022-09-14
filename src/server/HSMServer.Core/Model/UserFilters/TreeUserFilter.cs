@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.UserFilter
 {
@@ -24,7 +24,8 @@ namespace HSMServer.Core.Model.UserFilter
     {
         private const int DefaultInterval = 5;
 
-        private readonly List<UserFilterGroupBase> _groups = new();
+        private UserFilterGroupBase[] Groups =>
+            new UserFilterGroupBase[] { ByStatus, ByHistory, ByNotifications, ByState };
 
 
         public GroupByStatus ByStatus { get; init; } = new();
@@ -41,7 +42,8 @@ namespace HSMServer.Core.Model.UserFilter
         public TreeSortType TreeSortType { get; init; } = TreeSortType.ByName;
 
 
-        public int EnabledFiltersCount => _groups.Sum(g => g.EnableFiltersCount);
+        [JsonIgnore]
+        public int EnabledFiltersCount => Groups.Sum(g => g.EnableFiltersCount);
 
 
         public TreeUserFilter() { }
@@ -51,21 +53,11 @@ namespace HSMServer.Core.Model.UserFilter
         {
             FilterGroupType selectedFiltersMask = 0;
 
-            foreach (var group in _groups)
+            foreach (var group in Groups)
                 if (group.HasAnyEnabledFilters)
                     selectedFiltersMask |= group.Type;
 
             return selectedFiltersMask;
-        }
-
-        internal void RegisterGroups()
-        {
-            _groups.Add(ByStatus);
-            _groups.Add(ByHistory);
-            _groups.Add(ByNotifications);
-            _groups.Add(ByState);
-
-            _groups.ForEach(g => g.RegisterProperties());
         }
     }
 }
