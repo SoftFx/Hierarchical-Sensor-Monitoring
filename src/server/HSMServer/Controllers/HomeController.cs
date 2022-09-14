@@ -87,6 +87,18 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void ChangeSensorState([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name = "Block")] bool isBlocked)
+        {
+            var sensorUpdate = new SensorUpdate()
+            {
+                Id = SensorPathHelper.DecodeGuid(selectedId),
+                State = isBlocked ? SensorState.Blocked : SensorState.Available,
+            };
+
+            _treeValuesCache.UpdateSensor(sensorUpdate);
+        }
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
             var decodedId = SensorPathHelper.Decode(selectedId);
@@ -390,8 +402,8 @@ namespace HSMServer.Controllers
             var sensorUpdate = new SensorUpdate
             {
                 Id = sensor.Id,
-                Description = updatedModel.Description,
-                Unit = updatedModel.Unit,
+                Description = updatedModel.Description ?? string.Empty,
+                Unit = updatedModel.Unit ?? string.Empty,
                 ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
             };
 

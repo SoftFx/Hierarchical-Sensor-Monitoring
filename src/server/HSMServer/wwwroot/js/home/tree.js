@@ -1,4 +1,13 @@
-﻿function initializeTree() {
+﻿var isCurrentUserAdmin = false;
+var currentUserProducts = [];
+
+
+function initializeUserRights(userIsAdmin, userProducts) {
+    isCurrentUserAdmin = userIsAdmin;
+    currentUserProducts = userProducts.split(' ');
+}
+
+function initializeTree() {
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
@@ -25,8 +34,8 @@
                 return timeSorting(timeA, timeB);
             }
             else {
-                a = this.get_node(a).text.toLowerCase();
-                b = this.get_node(b).text.toLowerCase();
+                a = this.get_node(a).data.jstree.title.toLowerCase();
+                b = this.get_node(b).data.jstree.title.toLowerCase();
 
                 return a > b ? 1 : -1;
             }
@@ -83,7 +92,7 @@ function customMenu(node) {
         },
         "CopyPath": {
             "separator_before": false,
-            "separator_after": true,
+            "separator_after": false,
             "label": "Copy path",
             "action": function (obj) {
                 $.ajax({
@@ -103,6 +112,24 @@ function customMenu(node) {
 
                     copyToClipboardAsync(data);
                 });
+            }
+        },
+        "BlockSensor": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Block sensor",
+            "icon": "fa-solid fa-ban",
+            "action": function (obj) {
+                changeSensorBlockedState(node, true);
+            }
+        },
+        "UnblockSensor": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Unblock sensor",
+            "icon": "fa-solid fa-ban",
+            "action": function (obj) {
+                changeSensorBlockedState(node, false);
             }
         },
         "CleanHistory": {
@@ -200,6 +227,18 @@ function customMenu(node) {
         delete items.AccessKeys;
     }
 
+    if (!hasUserNodeRights(node) || node.children.length != 0) {
+        delete items.BlockSensor;
+        delete items.UnblockSensor;
+    }
+
+    if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
+        delete items.UnblockSensor;
+    }
+    else {
+        delete items.BlockSensor;
+    }
+
     if (document.getElementById(`${node.id}_ignoreNotifications`)) {
         delete items.Notifications.submenu.EnableNotifications;
         delete items.Notifications.submenu.IgnoreNotifications;
@@ -231,4 +270,25 @@ function updateSensorsNotifications(action, node) {
     }).done(function () {
         updateTreeTimer();
     });
+}
+
+function changeSensorBlockedState(node, isBlocked) {
+    $.ajax({
+        type: 'post',
+        url: changeSensorState + '?Selected=' + node.id + '&Block=' + isBlocked,
+        datatype: 'html',
+        contenttype: 'application/json',
+        cache: false,
+        success: function () {
+            updateTreeTimer();
+        }
+    });
+}
+
+function hasUserNodeRights(node) {
+    let productId = node.parents.length === 1
+        ? node.id
+        : node.parents[node.parents.length - 2];
+
+    return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
 }

@@ -121,6 +121,9 @@ namespace HSMServer.Core.Model.Authentication
         public bool IsProductAvailable(string productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
 
+        public List<string> GetManagerProducts() =>
+            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
+
         public void InitNodeStates(string nodeId)
         {
             if (!NodeStates.ContainsKey(nodeId))

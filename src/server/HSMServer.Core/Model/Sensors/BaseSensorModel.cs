@@ -106,8 +106,9 @@ namespace HSMServer.Core.Model
 
         internal void Update(SensorUpdate sensor)
         {
-            Description = sensor.Description;
-            Unit = sensor.Unit;
+            Description = sensor.Description ?? Description;
+            Unit = sensor.Unit ?? Unit;
+            State = sensor?.State ?? State;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)

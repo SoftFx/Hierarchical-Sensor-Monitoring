@@ -35,7 +35,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 {
                     TimeInterval = TimeInterval.Custom,
                     CustomPeriod = TimeSpan.FromMinutes(10).Ticks,
-                }
+                },
+                State = SensorState.Blocked,
             };
     }
 }
