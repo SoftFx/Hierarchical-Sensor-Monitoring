@@ -12,12 +12,6 @@
 
         public GroupByNotifications() { }
 
-        public GroupByNotifications(GroupByNotifications group)
-        {
-            Enabled = new(group.Enabled);
-            Ignored = new(group.Ignored);
-        }
-
 
         internal override void RegisterProperties()
         {

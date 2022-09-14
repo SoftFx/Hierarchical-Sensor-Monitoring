@@ -10,11 +10,6 @@
 
         public GroupByHistory() { }
 
-        public GroupByHistory(GroupByHistory group)
-        {
-            Empty = new(group.Empty);
-        }
-
 
         internal override void RegisterProperties()
         {

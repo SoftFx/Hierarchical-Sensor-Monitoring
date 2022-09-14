@@ -63,7 +63,7 @@ namespace HSMServer.Core.Model.Authentication
                 ProductsRoles.AddRange(user.ProductsRoles);
 
             Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = new(user.TreeFilter);
+            TreeFilter = user.TreeFilter;
         }
 
         public User(UserEntity entity)
@@ -110,7 +110,7 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = new(user.TreeFilter);
+            TreeFilter = user.TreeFilter;
         }
 
         public User Copy()
@@ -118,7 +118,7 @@ namespace HSMServer.Core.Model.Authentication
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
             copy.Notifications = new(Notifications.ToEntity());
-            copy.TreeFilter = new(TreeFilter);
+            copy.TreeFilter = TreeFilter;
             return copy;
         }
 

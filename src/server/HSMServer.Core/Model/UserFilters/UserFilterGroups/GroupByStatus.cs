@@ -16,14 +16,6 @@
 
         public GroupByStatus() { }
 
-        internal GroupByStatus(GroupByStatus group)
-        {
-            Ok = new FilterProperty(group.Ok);
-            Warning = new FilterProperty(group.Warning);
-            Error = new FilterProperty(group.Error);
-            Unknown = new FilterProperty(group.Unknown);
-        }
-
 
         internal override void RegisterProperties()
         {

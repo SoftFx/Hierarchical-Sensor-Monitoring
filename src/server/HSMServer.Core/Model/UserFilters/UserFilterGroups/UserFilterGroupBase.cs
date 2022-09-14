@@ -32,10 +32,5 @@ namespace HSMServer.Core.Model.UserFilter
 
 
         public FilterProperty() { }
-
-        public FilterProperty(FilterProperty property)
-        {
-            Value = property.Value;
-        }
     }
 }

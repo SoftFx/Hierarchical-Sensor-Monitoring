@@ -46,17 +46,6 @@ namespace HSMServer.Core.Model.UserFilter
 
         public TreeUserFilter() { }
 
-        internal TreeUserFilter(TreeUserFilter filter)
-        {
-            ByStatus = new(filter.ByStatus);
-            ByHistory = new(filter.ByHistory);
-            ByNotifications = new(filter.ByNotifications);
-            ByState = new(filter.ByState);
-
-            TreeUpdateInterval = filter.TreeUpdateInterval;
-            TreeSortType = filter.TreeSortType;
-        }
-
 
         public FilterGroupType ToMask()
         {

@@ -10,11 +10,6 @@
 
         public GroupByState() { }
 
-        public GroupByState(GroupByState group)
-        {
-            Blocked = new FilterProperty(group.Blocked);
-        }
-
 
         internal override void RegisterProperties()
         {
