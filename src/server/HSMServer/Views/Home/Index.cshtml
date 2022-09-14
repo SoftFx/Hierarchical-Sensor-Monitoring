@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Core.Model.UserFilter
 @using HSMServer.Helpers;
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Model
@@ -88,11 +89,11 @@
         <div class="d-flex">
             <div class="d-flex me-auto">
                 <button id="show" type="button" class="btn btn-sm btn-secondary mt-1 ms-4">
-                    <i class="fa-solid fa-filter"></i> Filters (@GetFiltersCount(((User)User).TreeFilter))
+                    <i class="fa-solid fa-filter"></i> Filters (@(user.TreeFilter.EnabledFiltersCount))
                 </button>
 
                 <div class="mx-3 my-2">
-                    <i id="currentSort" class="@(((User)User).TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
+                    <i id="currentSort" class="@(user.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
             </div>
 
@@ -107,7 +108,7 @@
     </div>
 
     <div class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
-        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(((User)User).TreeFilter)) </div>
+        <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
         <div class=" row justify-content-start mw-100 me-1">
             <div class="scrollableBlock col-auto ms-2">
@@ -123,31 +124,6 @@
     </div>
 </div>
 
-@{
-    int GetFiltersCount(TreeUserFilter filter)
-    {
-        int result = 0;
-
-        if (filter.HasOkStatus)
-            ++result;
-        if (filter.HasWarningStatus)
-            ++result;
-        if (filter.HasErrorStatus)
-            ++result;
-        if (filter.HasUnknownStatus)
-            ++result;
-        if (filter.IsEmptyHistory)
-            ++result;
-        if (filter.HasTelegramNotifications)
-            ++result;
-        if (filter.IsIgnoredSensors)
-            ++result;
-        if (filter.IsBlockedSensors)
-            ++result;
-
-        return result;
-    }
-}
 
 <script>
     initializeTree();

@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.UserFilter;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Extensions
@@ -16,8 +17,8 @@ namespace HSMServer.Extensions
 
 
             bool SensorHasVisibleNotificationsState() =>
-                filter.HasTelegramNotifications == user.Notifications.IsSensorEnabled(sensor.Id) ||
-                filter.IsIgnoredSensors == user.Notifications.IsSensorIgnored(sensor.Id);
+                filter.ByNotifications.Enabled.Value == user.Notifications.IsSensorEnabled(sensor.Id) ||
+                filter.ByNotifications.Ignored.Value == user.Notifications.IsSensorIgnored(sensor.Id);
 
 
             if ((filterMask & sensor.GetStateMask(user)) == filterMask)
@@ -73,10 +74,10 @@ namespace HSMServer.Extensions
         private static bool HasVisibleStatus(this NodeViewModel node, TreeUserFilter filter) =>
             node.Status switch
             {
-                SensorStatus.Ok => filter.HasOkStatus,
-                SensorStatus.Warning => filter.HasWarningStatus,
-                SensorStatus.Error => filter.HasErrorStatus,
-                SensorStatus.Unknown => filter.HasUnknownStatus,
+                SensorStatus.Ok => filter.ByStatus.Ok.Value,
+                SensorStatus.Warning => filter.ByStatus.Warning.Value,
+                SensorStatus.Error => filter.ByStatus.Error.Value,
+                SensorStatus.Unknown => filter.ByStatus.Unknown.Value,
                 _ => false
             };
     }

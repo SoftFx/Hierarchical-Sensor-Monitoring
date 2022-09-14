@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model.UserFilter;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -25,30 +25,42 @@ namespace HSMServer.Model.ViewModel
 
         public UserFilterViewModel(TreeUserFilter filter)
         {
-            HasOkStatus = filter.HasOkStatus;
-            HasWarningStatus = filter.HasWarningStatus;
-            HasErrorStatus = filter.HasErrorStatus;
-            HasUnknownStatus = filter.HasUnknownStatus;
-            IsEmptyHistory = filter.IsEmptyHistory;
-            HasTelegramNotifications = filter.HasTelegramNotifications;
-            IsIgnoredSensors = filter.IsIgnoredSensors;
-            IsBlockedSensors = filter.IsBlockedSensors;
+            HasOkStatus = filter.ByStatus.Ok.Value;
+            HasWarningStatus = filter.ByStatus.Warning.Value;
+            HasErrorStatus = filter.ByStatus.Error.Value;
+            HasUnknownStatus = filter.ByStatus.Unknown.Value;
+            IsEmptyHistory = filter.ByHistory.Empty.Value;
+            HasTelegramNotifications = filter.ByNotifications.Enabled.Value;
+            IsIgnoredSensors = filter.ByNotifications.Ignored.Value;
+            IsBlockedSensors = filter.ByState.Blocked.Value;
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
         }
 
 
         public TreeUserFilter ToFilter() =>
-            new ()
+            new()
             {
-                HasOkStatus = HasOkStatus,
-                HasWarningStatus = HasWarningStatus,
-                HasErrorStatus = HasErrorStatus,
-                HasUnknownStatus = HasUnknownStatus,
-                IsEmptyHistory = IsEmptyHistory,
-                HasTelegramNotifications = HasTelegramNotifications,
-                IsIgnoredSensors = IsIgnoredSensors,
-                IsBlockedSensors = IsBlockedSensors,
+                ByStatus = new GroupByStatus()
+                {
+                    Ok = new FilterProperty() { Value = HasOkStatus },
+                    Warning = new FilterProperty() { Value = HasWarningStatus },
+                    Error = new FilterProperty() { Value = HasErrorStatus },
+                    Unknown = new FilterProperty() { Value = HasUnknownStatus },
+                },
+                ByHistory = new GroupByHistory()
+                {
+                    Empty = new FilterProperty() { Value = IsEmptyHistory },
+                },
+                ByNotifications = new GroupByNotifications()
+                {
+                    Enabled = new FilterProperty() { Value = HasTelegramNotifications },
+                    Ignored = new FilterProperty() { Value = IsIgnoredSensors },
+                },
+                ByState = new GroupByState()
+                {
+                    Blocked = new FilterProperty() { Value = IsBlockedSensors },
+                },
                 TreeUpdateInterval = TreeUpdateInterval,
                 TreeSortType = (TreeSortType)TreeSortType
             };

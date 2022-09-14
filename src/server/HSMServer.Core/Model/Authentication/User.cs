@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.UserFilter;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -84,8 +85,11 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
-            TreeFilter = entity.TreeFilter is null ? new TreeUserFilter() :
-                JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
+
+            TreeFilter = entity.TreeFilter is null
+                ? new TreeUserFilter()
+                : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
+            TreeFilter.RegisterGroups();
         }
 
         /// <summary>
