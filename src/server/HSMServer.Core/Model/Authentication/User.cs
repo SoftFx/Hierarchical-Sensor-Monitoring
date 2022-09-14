@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -23,9 +24,12 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
-
         public NotificationSettings Notifications { get; internal set; }
+
         public TreeUserFilter TreeFilter { get; set; }
+
+
+        public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
 
 
         public User(string userName) : this()
@@ -80,7 +84,7 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
-            TreeFilter = entity.TreeFilter is null ? new TreeUserFilter() : 
+            TreeFilter = entity.TreeFilter is null ? new TreeUserFilter() :
                 JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
         }
 
@@ -116,5 +120,16 @@ namespace HSMServer.Core.Model.Authentication
 
         public bool IsProductAvailable(string productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
+
+        public List<string> GetManagerProducts() =>
+            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
+
+        public void InitNodeStates(string nodeId)
+        {
+            if (!NodeStates.ContainsKey(nodeId))
+                NodeStates.TryAdd(nodeId, new NodeStateViewModel());
+
+            NodeStates[nodeId].Reset();
+        }
     }
 }

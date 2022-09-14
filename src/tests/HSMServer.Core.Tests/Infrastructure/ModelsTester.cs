@@ -151,7 +151,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.ProductId, actual.ParentProductId);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
-            Assert.Equal(expected.State, (byte)actual.State);
         }
 
         internal static void TestSensorModel(byte[] expectedSensorValueBytes, BaseSensorModel actual)
@@ -235,12 +234,14 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.Unit, actual.Unit);
+            Assert.Equal(expected.State, actual.State);
         }
 
         internal static void TestSensorModel(SensorUpdate expected, SensorEntity actual)
         {
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.Unit, actual.Unit);
+            Assert.Equal(expected.State, (SensorState)actual.State);
         }
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)

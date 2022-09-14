@@ -27,10 +27,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
-        public List<SensorNodeViewModel> FilteredSensors { get; internal set; } //r
-
-        public int InnerFilteredSensorsCount { get; internal set; } //r
-
 
         public ProductNodeViewModel(ProductModel model)
         {
@@ -43,6 +39,15 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
+
+        public string GetSensorsCountString(NodeStateViewModel nodeState)
+        {
+            var sensorsCount = nodeState.FilteredSensorsCount == AllSensorsCount
+                ? $"{AllSensorsCount}"
+                : $"{nodeState.FilteredSensorsCount}/{AllSensorsCount}";
+
+            return $"({sensorsCount} sensors)";
+        }
 
 
         internal void Update(ProductModel model)

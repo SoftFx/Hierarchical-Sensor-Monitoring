@@ -106,8 +106,9 @@ namespace HSMServer.Core.Model
 
         internal void Update(SensorUpdate sensor)
         {
-            Description = sensor.Description;
-            Unit = sensor.Unit;
+            Description = sensor.Description ?? Description;
+            Unit = sensor.Unit ?? Unit;
+            State = sensor?.State ?? State;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
@@ -152,7 +153,11 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
-        internal void ClearValues() => Storage.Clear();
+        internal void ClearValues()
+        {
+            Storage.Clear();
+            ValidationResult = ValidationResult.Ok;
+        }
 
         internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
 

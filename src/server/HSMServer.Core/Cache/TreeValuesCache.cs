@@ -4,7 +4,6 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Notifications;
@@ -13,7 +12,6 @@ using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 
@@ -204,10 +202,11 @@ namespace HSMServer.Core.Cache
             if (!accessKey.HasPermissionForSendData(out message))
                 return false;
 
-            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
-                return true;
+            // TODO: this optimization interferes with checking sensor Blocked state
+            //if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
+            //    return true;
 
-            return IsValidKeyForPath(parts, product, accessKey, out message);
+            return IsValidSensorPath(parts, product, accessKey, out message);
         }
 
 
@@ -396,6 +395,7 @@ namespace HSMServer.Core.Cache
 
             var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
+
             if (sensor == null)
             {
                 SensorEntity entity = new()
@@ -411,6 +411,8 @@ namespace HSMServer.Core.Cache
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
+            else if (sensor.State == SensorState.Blocked)
+                return;
 
             var oldStatus = sensor.ValidationResult;
 
@@ -422,6 +424,9 @@ namespace HSMServer.Core.Cache
 
         private void UpdateIntervalPolicy(TimeIntervalModel newInterval, BaseSensorModel sensor)
         {
+            if (newInterval == null)
+                return;
+
             var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
@@ -565,9 +570,10 @@ namespace HSMServer.Core.Cache
                     var sensor = GetSensorModel(entity);
                     _sensors.TryAdd(sensor.Id, sensor);
 
-                    foreach (var policyId in entity.Policies)
-                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                            sensor.AddPolicy(policy);
+                    if (entity.Policies != null)
+                        foreach (var policyId in entity.Policies)
+                            if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
+                                sensor.AddPolicy(policy);
                 }
                 catch (Exception ex)
                 {
@@ -682,7 +688,7 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private static bool IsValidKeyForPath(string[] parts, ProductModel product,
+        private static bool IsValidSensorPath(string[] parts, ProductModel product,
             AccessKeyModel accessKey, out string message)
         {
             message = string.Empty;
@@ -693,19 +699,26 @@ namespace HSMServer.Core.Cache
 
                 if (i != parts.Length - 1)
                 {
-                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName
-                        .Equals(expectedName)).Value;
+                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
 
                     if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
                         return false;
                 }
                 else
                 {
-                    if (!product.Sensors.Any(s => s.Value.DisplayName == expectedName) &&
-                        !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                    var sensor = product.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+
+                    if (sensor == null && !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
                         return false;
+
+                    if (sensor?.State == SensorState.Blocked)
+                    {
+                        message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
+                        return false;
+                    }
                 }
             }
+
             return true;
         }
 

@@ -2,7 +2,7 @@
 
 namespace HSMServer.Extensions
 {
-    public static class SensorStatusExtensions
+    public static class SensorExtensions
     {
         public static string ToCssIconClass(this SensorStatus status) =>
             status switch
@@ -15,5 +15,12 @@ namespace HSMServer.Extensions
 
         public static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
+
+        public static string ToCssClass(this SensorState state) =>
+            state switch
+            {
+                SensorState.Blocked => "blockedSensor-span",
+                _ => string.Empty,
+            };
     }
 }

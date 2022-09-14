@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Helpers;
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Model
 @using HSMServer.Model.ViewModel
@@ -9,6 +10,8 @@
 @model HSMServer.Model.TreeViewModels.TreeViewModel
 
 @{
+    var user = User as User;
+
     ViewData["Title"] = "Tree";
 }
 
@@ -21,6 +24,7 @@
     var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))";
     var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
+    var changeSensorState = "@Html.Raw(Url.Action(nameof(HomeController.ChangeSensorState), ViewConstants.HomeController))";
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
 
     var enableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController))";
@@ -148,7 +152,10 @@
 
 <script>
     initializeTree();
+    initializeUserRights('@(user.IsAdmin)',
+                         '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.Encode)))');
     initialize();
+    updateTreeTimer();
 
     $("#state").empty();
     $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
@@ -194,7 +201,16 @@
             cache: false,
             async: true
         }).done(function (treeData) {
-            $('#jstree').jstree(true).settings.core.data = treeData;
+            let jHtml_treeData = jQuery(treeData);  // get treeData jquery
+
+            // remove all nodes with 0 visible sensors - <li>, that have child <span class="nodeSensorsCount-span"> with text: (0/.. sensors)
+            jHtml_treeData.find(".nodeSensorsCount-span").each(function () {
+                if ($(this).text().startsWith("(0/")) {
+                    $(this).parent().remove();
+                }
+            });
+
+            $('#jstree').jstree(true).settings.core.data = jHtml_treeData.html();
             $('#jstree').jstree(true).refresh(true);
         });
     }

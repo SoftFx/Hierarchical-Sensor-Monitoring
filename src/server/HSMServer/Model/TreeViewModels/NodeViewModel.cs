@@ -22,6 +22,7 @@ namespace HSMServer.Model.TreeViewModels
         public string Tooltip =>
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
+
         public string GetShortName(string name) =>
             name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
     }
