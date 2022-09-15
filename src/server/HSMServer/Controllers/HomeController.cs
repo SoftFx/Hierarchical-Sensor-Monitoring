@@ -3,6 +3,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.UserFilters;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Helpers;
 using HSMServer.HtmlHelpers;
@@ -79,11 +80,16 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
         {
-            var user = HttpContext.User as User;
-            user.TreeFilter = viewModel.ToFilter();
-            _userManager.UpdateUser(user);
+            UpdateUserFilters(viewModel.ToFilter());
 
             return View("Index", _treeViewModel);
+        }
+
+        public IActionResult ResetFilters()
+        {
+            UpdateUserFilters(new TreeUserFilter());
+
+            return RedirectToAction(nameof(Index));
         }
 
         [HttpPost]
@@ -191,6 +197,14 @@ namespace HSMServer.Controllers
 
         private List<Guid> GetNodeSensors(string encodedId) =>
             _treeViewModel.GetNodeAllSensors(SensorPathHelper.Decode(encodedId));
+
+        private void UpdateUserFilters(TreeUserFilter filter)
+        {
+            var user = HttpContext.User as User;
+            user.TreeFilter = filter;
+
+            _userManager.UpdateUser(user);
+        }
 
         #region Update
 

@@ -96,5 +96,6 @@
         <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 
-    <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
+    <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="location.href='@Url.Action(nameof(HomeController.ResetFilters), ViewConstants.HomeController)'">Reset</button>
+    <button type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
