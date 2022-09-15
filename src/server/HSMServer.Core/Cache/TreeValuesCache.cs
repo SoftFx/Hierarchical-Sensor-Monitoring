@@ -699,14 +699,14 @@ namespace HSMServer.Core.Cache
 
                 if (i != parts.Length - 1)
                 {
-                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
 
                     if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
                         return false;
                 }
                 else
                 {
-                    var sensor = product.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+                    var sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
                     if (sensor == null && !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
                         return false;

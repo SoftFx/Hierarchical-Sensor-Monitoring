@@ -245,7 +245,7 @@ function customMenu(node) {
         }
     }
 
-    if (!hasUserNodeRights(node) || node.children.length != 0) {
+    if (!hasUserNodeRights(node) || node.children.length != 0 || node.parents.length == 1) {
         delete items.BlockSensor;
         delete items.UnblockSensor;
     }
