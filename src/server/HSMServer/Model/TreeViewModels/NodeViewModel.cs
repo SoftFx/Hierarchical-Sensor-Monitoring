@@ -19,8 +19,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Path { get; internal set; }
 
+
         public string Tooltip =>
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+
+        public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
 
         public string GetShortName(string name) =>
