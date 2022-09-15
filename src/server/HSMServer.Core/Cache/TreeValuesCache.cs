@@ -175,7 +175,7 @@ namespace HSMServer.Core.Cache
             path = GetPathWithoutStartSeparator(path);
 
             var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
-            if (parts.Contains(string.Empty))
+            if (parts.Contains(string.Empty) || path.Contains('\\'))
             {
                 message = ErrorInvalidPath;
                 return false;
