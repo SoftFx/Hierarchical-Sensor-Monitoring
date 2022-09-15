@@ -17,7 +17,7 @@
 
 @if (!isEmptyProduct || user.IsEmptyProductVisible(Model))
 {
-    <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Name", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
+    <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
         <span>@Model.GetShortName(Model.Name) </span>
 
         @if (Model.Nodes != null)
@@ -44,7 +44,7 @@
                     if (!isSensorVisible)
                         continue;
 
-                    <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"title" : "@sensor.Name", "icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>
+                    <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"title" : "@sensor.Title", "icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>
                         <span class="@sensor.State.ToCssClass()">@Model.GetShortName(sensor.Name)</span>
 
                         @if (isSensorNotificationsIgnored)
