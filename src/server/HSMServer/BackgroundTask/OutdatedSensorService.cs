@@ -42,7 +42,7 @@ namespace HSMServer.BackgroundTask
                 if (currentDateTime - _lastChecked > _checkInterval)
                 {
                     ConfigurationObject obj =
-                        _configurationProvider.ReadOrDefaultConfigurationObject(nameof(ConfigurationConstants.SensorExpirationTime));
+                        _configurationProvider.ReadOrDefault(nameof(ConfigurationConstants.SensorExpirationTime));
                     var expireInterval = TimeSpan.Parse(obj.Value);
 
                     var sensorsToRemove = new List<Guid>();

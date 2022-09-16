@@ -29,7 +29,7 @@ namespace HSMServer.Core.Model
         internal TelegramChatEntity ToEntity() =>
             new()
             {
-                Id = Id?.Identifier ?? 0,
+                Id = Id?.Identifier ?? 0L,
                 IsGroup = IsGroup,
                 Name = Name,
                 AuthorizationTime = AuthorizationTime.Ticks,

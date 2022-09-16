@@ -35,12 +35,12 @@ namespace HSMServer.Core.Model
                 foreach (var chat in entity.Chats)
                     Chats.TryAdd(new(chat.Id), new TelegramChat(chat));
 
-            if (entity.ChatIdentifier != 0)
+            if (entity.ChatIdentifier != 0) //TODO: migration logic should be removed
             {
-                var chat = new ChatId(entity.ChatIdentifier);
-                Chats.TryAdd(chat, new TelegramChat()
+                var chatId = new ChatId(entity.ChatIdentifier);
+                Chats.TryAdd(chatId, new TelegramChat()
                 {
-                    Id = chat,
+                    Id = chatId,
                     Name = $"Please, reinitialize account",
                 });
             }

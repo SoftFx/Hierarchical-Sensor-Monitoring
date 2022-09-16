@@ -37,8 +37,9 @@ namespace HSMServer.Core.Notifications
         internal void RegisterChat(Message message, InvitationToken token)
         {
             var user = token.User;
+            var chats = user.Notifications.Telegram.Chats;
 
-            if (!user.Notifications.Telegram.Chats.ContainsKey(message.Chat))
+            if (!chats.ContainsKey(message.Chat))
             {
                 var chatModel = new TelegramChat()
                 {
@@ -47,7 +48,7 @@ namespace HSMServer.Core.Notifications
                     AuthorizationTime = DateTime.UtcNow,
                 };
 
-                if (user.Notifications.Telegram.Chats.TryAdd(message.Chat, chatModel))
+                if (chats.TryAdd(message.Chat, chatModel))
                     RegisterChat(user, chatModel);
             }
 
@@ -68,8 +69,8 @@ namespace HSMServer.Core.Notifications
 
         internal void RemoveChat(User user, ChatId chatId)
         {
-            if (ServerBook.TryGetValue(user.Id, out var chatSettings))
-                if (chatSettings.TryRemove(chatId, out _))
+            if (ServerBook.TryGetValue(user.Id, out var chats))
+                if (chats.TryRemove(chatId, out _))
                     user.Notifications.Telegram.Chats.TryRemove(chatId, out _);
         }
 
