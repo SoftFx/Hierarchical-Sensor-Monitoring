@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,11 +46,17 @@ namespace HSMServer.Core.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal void UserAuthorization(ChatId chat, InvitationToken token)
+        internal void UserAuthorization(Message message, InvitationToken token)
         {
             var user = token.User;
 
-            user.Notifications.Telegram.Chat = chat;
+            user.Notifications.Telegram.Chats.Add(
+                new TelegramChat()
+                {
+                    Id = message.Chat,
+                    UserNickname = message.From.Username,
+                    AuthorizationTime = DateTime.UtcNow,
+                });
 
             RemoveToken(token.Token);
             AddAuthorizedUser(user);

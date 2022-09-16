@@ -1,13 +1,18 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Core.Notifications
 {
     internal sealed record ChatSettings
     {
+        internal Guid User { get; }
+
         internal Guid Token { get; }
 
-        internal ChatId Chat { get; }
+        internal string Username { get; }
+
+        internal TelegramChat Chat { get; }
 
         internal MessageBuilder MessageBuilder { get; } = new();
 

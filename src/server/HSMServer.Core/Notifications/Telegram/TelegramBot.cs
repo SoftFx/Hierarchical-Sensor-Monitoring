@@ -222,7 +222,7 @@ namespace HSMServer.Core.Notifications
                         }
                         else
                         {
-                            _addressBook.UserAuthorization(message.Chat, token);
+                            _addressBook.UserAuthorization(message, token);
                             _userManager.UpdateUser(token.User);
 
                             response.Append("You are succesfully authorized.");

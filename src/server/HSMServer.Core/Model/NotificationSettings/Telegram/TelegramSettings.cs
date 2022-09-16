@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using Telegram.Bot.Types;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -15,7 +16,7 @@ namespace HSMServer.Core.Model
 
         public int MessagesDelay { get; private set; } = DefaultMinDelay;
 
-        public ChatId Chat { get; internal set; }
+        public List<TelegramChat> Chats { get; internal set; } = new();
 
 
         public TelegramSettings() { }
@@ -29,8 +30,12 @@ namespace HSMServer.Core.Model
             MessagesAreEnabled = entity.MessagesAreEnabled;
             MessagesDelay = entity.MessagesDelay;
 
-            if (entity.ChatIdentifier != 0)
-                Chat = new(entity.ChatIdentifier);
+            if (entity.Chats != null)
+                foreach (var chat in entity.Chats)
+                    Chats.Add(new TelegramChat(chat));
+
+            if (entity.ChatIdentifier != 0 && !Chats.Any(ch => ch.Id.Identifier == entity.ChatIdentifier))
+                Chats.Add(new TelegramChat() { Id = new(entity.ChatIdentifier), });
         }
 
 
@@ -47,7 +52,7 @@ namespace HSMServer.Core.Model
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelay,
-                ChatIdentifier = Chat?.Identifier ?? 0,
+                Chats = new List<TelegramChatEntity>(Chats.Select(ch => ch.ToEntity())),
             };
     }
 }
