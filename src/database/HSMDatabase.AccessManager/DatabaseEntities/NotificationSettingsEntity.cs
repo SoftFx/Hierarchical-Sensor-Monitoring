@@ -32,9 +32,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public long Id { get; init; }
 
-        public bool IsGroup { get; init; }
+        public string Name { get; init; }
 
-        public string UserNickname { get; init; }
+        public bool IsGroup { get; init; }
 
         public long AuthorizationTime { get; init; }
     }

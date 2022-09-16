@@ -8,23 +8,17 @@ namespace HSMServer.Core.Notifications
     {
         internal Guid User { get; }
 
-        internal Guid Token { get; }
-
-        internal string Username { get; }
-
         internal TelegramChat Chat { get; }
 
         internal MessageBuilder MessageBuilder { get; } = new();
 
+        internal ChatId ChatId => Chat?.Id;
 
-        internal ChatSettings(Guid token)
-        {
-            Token = token;
-        }
 
-        internal ChatSettings(ChatId id)
+        internal ChatSettings(Guid user, TelegramChat chat)
         {
-            Chat = id;
+            User = user;
+            Chat = chat;
         }
     }
 }

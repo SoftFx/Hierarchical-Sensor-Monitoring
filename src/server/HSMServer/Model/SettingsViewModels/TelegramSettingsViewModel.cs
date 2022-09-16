@@ -26,7 +26,7 @@ namespace HSMServer.Model
             MinStatusLevel = settings.MessagesMinStatus;
             MessagesDelay = settings.MessagesDelay;
 
-            IsUserAuthorized = settings.Chat is not null;
+            //IsUserAuthorized = settings.Chat is not null;
         }
 
 

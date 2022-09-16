@@ -8,9 +8,9 @@ namespace HSMServer.Core.Model
     {
         public ChatId Id { get; init; }
 
-        public bool IsGroup { get; init; }
+        public string Name { get; init; }
 
-        public string UserNickname { get; init; }
+        public bool IsGroup { get; init; }
 
         public DateTime AuthorizationTime { get; init; }
 
@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model
         {
             Id = new(entity.Id);
             IsGroup = entity.IsGroup;
-            UserNickname = entity.UserNickname;
+            Name = entity.Name;
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
 
@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id?.Identifier ?? 0,
                 IsGroup = IsGroup,
-                UserNickname = UserNickname,
+                Name = Name,
                 AuthorizationTime = AuthorizationTime.Ticks,
             };
     }

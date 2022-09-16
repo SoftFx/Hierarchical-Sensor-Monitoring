@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
@@ -11,28 +10,17 @@ namespace HSMServer.Core.Notifications
     internal sealed class AddressBook
     {
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
-        private readonly ConcurrentDictionary<Guid, ChatSettings> _book = new();
-        private readonly ConcurrentDictionary<ChatId, Guid> _chats = new();
+        private readonly ConcurrentDictionary<string, HashSet<Guid>> _telegramBook = new();
 
 
-        internal Dictionary<Guid, ChatSettings> GetAuthorizedUsers =>
-            _book.Where((u, _) => u.Value.Chat is not null).ToDictionary(u => u.Key, v => v.Value);
+        internal ConcurrentDictionary<Guid, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new();
 
 
-        internal InvitationToken GetInvitationToken(User user)
+        internal InvitationToken BuildInvitationToken(User user)
         {
-            if (_book.TryGetValue(user.Id, out var chatSettings))
-            {
-                if (chatSettings.Chat is not null)
-                    return InvitationToken.Empty;
-                else
-                    RemoveToken(chatSettings.Token);
-            }
-
             var invitationToken = new InvitationToken(user);
 
             _tokens[invitationToken.Token] = invitationToken;
-            _book[user.Id] = new ChatSettings(invitationToken.Token);
 
             return invitationToken;
         }
@@ -46,41 +34,45 @@ namespace HSMServer.Core.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal void UserAuthorization(Message message, InvitationToken token)
+        internal void RegisterChat(Message message, InvitationToken token)
         {
             var user = token.User;
 
-            user.Notifications.Telegram.Chats.Add(
-                new TelegramChat()
+            if (!user.Notifications.Telegram.Chats.ContainsKey(message.Chat))
+            {
+                var chatModel = new TelegramChat()
                 {
                     Id = message.Chat,
-                    UserNickname = message.From.Username,
+                    Name = message.From.Username,
                     AuthorizationTime = DateTime.UtcNow,
-                });
+                };
+
+                if (user.Notifications.Telegram.Chats.TryAdd(message.Chat, chatModel))
+                    RegisterChat(user, chatModel);
+            }
 
             RemoveToken(token.Token);
-            AddAuthorizedUser(user);
         }
 
-        internal void AddAuthorizedUser(User user)
+        internal void RegisterChat(User user, TelegramChat chat)
         {
-            var chat = user.Notifications.Telegram.Chat;
+            if (!ServerBook.ContainsKey(user.Id))
+                ServerBook[user.Id] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
-            _book[user.Id] = new ChatSettings(chat);
-            _chats[chat] = user.Id;
+            if (!_telegramBook.ContainsKey(chat.Name))
+                _telegramBook[chat.Name] = new HashSet<Guid>();
+
+            ServerBook[user.Id].TryAdd(chat.Id, new ChatSettings(user.Id, chat));
+            _telegramBook[chat.Name].Add(user.Id);
         }
 
-        internal void RemoveAuthorizedUser(User user)
+        internal void RemoveChat(User user, ChatId chatId)
         {
-            _book.TryRemove(user.Id, out _);
-
-            var userChat = user.Notifications.Telegram.Chat;
-            if (!_book.Any(u => u.Value.Chat == userChat))
-                _chats.TryRemove(userChat, out _);
-
-            user.Notifications.Telegram.Chat = null;
+            if (ServerBook.TryGetValue(user.Id, out var chatSettings))
+                if (chatSettings.TryRemove(chatId, out _))
+                    user.Notifications.Telegram.Chats.TryRemove(chatId, out _);
         }
 
-        internal bool IsUserAuthorized(User user) => _book.ContainsKey(user.Id);
+        internal void RemoveAllChats(User user) => ServerBook.TryRemove(user.Id, out _);
     }
 }

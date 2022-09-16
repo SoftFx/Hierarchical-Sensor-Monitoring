@@ -48,23 +48,23 @@ namespace HSMServer.Core.Notifications
 
             _configurationProvider = configurationProvider;
 
-            FillAuthorizedUsers();
+            FillAddressBook();
         }
 
 
         public string GetInvitationLink(User user) =>
-            _addressBook.GetInvitationToken(user).ToLink(BotName);
+            _addressBook.BuildInvitationToken(user).ToLink(BotName);
 
-        public void RemoveAuthorizedUser(User user)
+        public void RemoveChat(User user, long chatId)
         {
-            _addressBook.RemoveAuthorizedUser(user);
+            _addressBook.RemoveChat(user, new ChatId(chatId));
             _userManager.UpdateUser(user);
         }
 
-        public void SendTestMessage(User user)
+        public void SendTestMessage(long chatId, string message)
         {
             if (IsBotRunning)
-                SendMessageAsync(user.Notifications.Telegram.Chat, $"Test message for {user.UserName}");
+                SendMessageAsync(chatId, message);
         }
 
         public async Task<string> StartBot()
@@ -128,28 +128,28 @@ namespace HSMServer.Core.Notifications
             await StopBot();
         }
 
-        internal void FillAuthorizedUsers()
+        internal void FillAddressBook()
         {
-            var users = _userManager.GetUsers(u => u.Notifications.Telegram.Chat is not null);
-
-            foreach (var user in users)
-                _addressBook.AddAuthorizedUser(user);
+            foreach (var user in _userManager.GetUsers())
+                foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                    _addressBook.RegisterChat(user, chat);
         }
 
         internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             if (IsBotRunning && AreBotMessagesEnabled)
-                foreach (var (userId, chatSettings) in _addressBook.GetAuthorizedUsers)
+                foreach (var (userId, chats) in _addressBook.ServerBook)
                 {
                     var user = _userManager.GetUser(userId);
 
                     if (WhetherSendMessage(user, sensor, oldStatus))
-                    {
-                        if (user.Notifications.Telegram.MessagesDelay > 0)
-                            chatSettings.MessageBuilder.AddMessage(sensor);
-                        else
-                            SendMessageAsync(chatSettings.Chat, MessageBuilder.GetSingleMessage(sensor));
-                    }
+                        foreach (var (_, chat) in chats)
+                        {
+                            if (user.Notifications.Telegram.MessagesDelay > 0)
+                                chat.MessageBuilder.AddMessage(sensor);
+                            else
+                                SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                        }
                 }
         }
 
@@ -157,17 +157,18 @@ namespace HSMServer.Core.Notifications
         {
             while (IsBotRunning)
             {
-                foreach (var (userId, chatSettings) in _addressBook.GetAuthorizedUsers)
+                foreach (var (userId, chats) in _addressBook.ServerBook)
                 {
                     var user = _userManager.GetUser(userId);
                     var userNotificationsDelay = user.Notifications.Telegram.MessagesDelay;
 
-                    if (DateTime.UtcNow >= chatSettings.MessageBuilder.LastSentTime.AddSeconds(userNotificationsDelay))
-                    {
-                        var message = chatSettings.MessageBuilder.GetAggregateMessage();
-                        if (!string.IsNullOrEmpty(message))
-                            SendMessageAsync(chatSettings.Chat, message);
-                    }
+                    foreach (var (_, chat) in chats)
+                        if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(userNotificationsDelay))
+                        {
+                            var message = chat.MessageBuilder.GetAggregateMessage();
+                            if (!string.IsNullOrEmpty(message))
+                                SendMessageAsync(chat.ChatId, message);
+                        }
                 }
 
                 await Task.Delay(500, _token);
@@ -189,11 +190,8 @@ namespace HSMServer.Core.Notifications
         private void SendMessageAsync(ChatId chat, string message) =>
             _bot?.SendTextMessageAsync(chat, message, cancellationToken: _token);
 
-        private void RemoveUserEventHandler(User user)
-        {
-            if (_addressBook.IsUserAuthorized(user))
-                _addressBook.RemoveAuthorizedUser(user);
-        }
+        private void RemoveUserEventHandler(User user) =>
+            _addressBook.RemoveAllChats(user);
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
@@ -222,14 +220,14 @@ namespace HSMServer.Core.Notifications
                         }
                         else
                         {
-                            _addressBook.UserAuthorization(message, token);
+                            _addressBook.RegisterChat(message, token);
                             _userManager.UpdateUser(token.User);
 
                             response.Append("You are succesfully authorized.");
                         }
                     }
                     else
-                        response.Append("Your token is invalid.");
+                        response.Append("Your token is invalid or expired.");
 
                     await botClient.SendTextMessageAsync(message.Chat, response.ToString(), cancellationToken: cancellationToken);
                 }

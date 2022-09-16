@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
+using Telegram.Bot.Types;
 
 namespace HSMServer.Core.Model
 {
@@ -16,7 +17,7 @@ namespace HSMServer.Core.Model
 
         public int MessagesDelay { get; private set; } = DefaultMinDelay;
 
-        public List<TelegramChat> Chats { get; internal set; } = new();
+        public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
 
 
         public TelegramSettings() { }
@@ -32,10 +33,17 @@ namespace HSMServer.Core.Model
 
             if (entity.Chats != null)
                 foreach (var chat in entity.Chats)
-                    Chats.Add(new TelegramChat(chat));
+                    Chats.TryAdd(new(chat.Id), new TelegramChat(chat));
 
-            if (entity.ChatIdentifier != 0 && !Chats.Any(ch => ch.Id.Identifier == entity.ChatIdentifier))
-                Chats.Add(new TelegramChat() { Id = new(entity.ChatIdentifier), });
+            if (entity.ChatIdentifier != 0)
+            {
+                var chat = new ChatId(entity.ChatIdentifier);
+                Chats.TryAdd(chat, new TelegramChat()
+                {
+                    Id = chat,
+                    Name = $"Please, reinitialize account",
+                });
+            }
         }
 
 
@@ -52,7 +60,7 @@ namespace HSMServer.Core.Model
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelay,
-                Chats = new List<TelegramChatEntity>(Chats.Select(ch => ch.ToEntity())),
+                Chats = Chats.Select(ch => ch.Value.ToEntity()).ToList(),
             };
     }
 }
