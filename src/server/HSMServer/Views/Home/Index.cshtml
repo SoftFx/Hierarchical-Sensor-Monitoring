@@ -115,7 +115,7 @@
             <div class="scrollableBlock col-auto ms-2">
                 <div id="treeContainer">
                     <div class="col-md-auto">
-                        <div id="jstree"></div>
+                        <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
                     </div>
                 </div>
             </div>
