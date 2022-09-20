@@ -161,6 +161,7 @@
 
         $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error tree-icon-unknown');
         $('#status_' + id).addClass(dataObject.statusColorClass);
+        $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
 
         $('#validation_' + id).empty();
         if (dataObject.validationError != null && dataObject.validationError != "") {
