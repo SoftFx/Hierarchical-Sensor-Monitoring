@@ -23,8 +23,7 @@ namespace HSMServer.Model.ViewModel
             UsersRights = usersRights.Select(x =>
                 new KeyValuePair<UserViewModel, ProductRoleEnum>(new UserViewModel(x.Key), x.Value)).ToList();
 
-            AccessKeys = product.GetAccessKeys().Select(k => k.Copy()).ToList();
-            AccessKeys.ForEach(k => k.HasProductColumn = false);
+            AccessKeys = product.GetEditProductAccessKeys();
         }
     }
 }
