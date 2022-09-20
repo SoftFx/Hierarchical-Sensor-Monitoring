@@ -52,12 +52,20 @@
 <script>
     var clipboard = new ClipboardJS('[id^="copy_"]');
 
-    function allProductsChanged() {
-        var element = document.getElementById('allProducts');
+    // there is code, that need to call allProductsChanged after closing accessKeys_modal (if there is exist checkbox with id=allProducts)
+    $('#accessKeys_modal').on('hidden.bs.modal', function (e) {
+        allProductsChanged();
+    });
 
+    function allProductsChanged() {
+        //let element = document.getElementById('allProducts');
+        //let isAllProducts = element.checked;
+
+        let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+        console.log('index', isAllProducts);
         $.ajax({
             type: 'GET',
-            url: getAvailableAccessKeys + "?AllProducts=" + element.checked,
+            url: getAvailableAccessKeys + "?AllProducts=" + isAllProducts,
             cache: false,
             async: true,
             success: function (viewData) {
@@ -65,9 +73,4 @@
             }
         });
     }
-
-    // there is code, that need to call allProductsChanged after closing accessKeys_modal (if there is exist checkbox with id=allProducts)
-    //$('#accessKeys_modal').on('hidden.bs.modal', function (e) {
-    //    allProductsChanged();
-    //});
 </script>
