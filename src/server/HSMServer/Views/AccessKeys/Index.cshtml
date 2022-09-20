@@ -4,6 +4,10 @@
 
 @model List<AccessKeyViewModel>
 
+@{
+    ViewData["Title"] = "Access keys";
+}
+
 
 <script>
     var getAvailableAccessKeys = "@Html.Raw(Url.Action(nameof(AccessKeysController.AvailableAccessKeys), ViewConstants.AccessKeysController))";
