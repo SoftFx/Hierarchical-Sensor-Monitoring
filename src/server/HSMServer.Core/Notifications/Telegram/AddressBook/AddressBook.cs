@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
@@ -10,7 +9,7 @@ namespace HSMServer.Core.Notifications
     internal sealed class AddressBook
     {
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
-        private readonly ConcurrentDictionary<string, HashSet<Guid>> _telegramBook = new();
+        //private readonly ConcurrentDictionary<string, HashSet<Guid>> _telegramBook = new();  // TODO: collection for bot commands
 
 
         internal ConcurrentDictionary<Guid, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new();
@@ -60,11 +59,11 @@ namespace HSMServer.Core.Notifications
             if (!ServerBook.ContainsKey(user.Id))
                 ServerBook[user.Id] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
-            if (!_telegramBook.ContainsKey(chat.Name))
-                _telegramBook[chat.Name] = new HashSet<Guid>();
+            //if (!_telegramBook.ContainsKey(chat.Name))
+            //    _telegramBook[chat.Name] = new HashSet<Guid>();
 
             ServerBook[user.Id].TryAdd(chat.Id, new ChatSettings(user.Id, chat));
-            _telegramBook[chat.Name].Add(user.Id);
+            //_telegramBook[chat.Name].Add(user.Id);
         }
 
         internal void RemoveChat(User user, ChatId chatId)
