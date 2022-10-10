@@ -96,10 +96,12 @@
         });
 
     function getRemoveAccessKeyURL(selectedKeyId) {
-        let isAllProducts = document.getElementById('allProducts');
+        let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
 
         let url;
-        if (isAllProducts != undefined) {
+        if (isAllAccessKeysTable != undefined) {
+            let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+
             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
         }
         else {

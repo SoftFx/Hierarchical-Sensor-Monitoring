@@ -108,7 +108,7 @@ namespace HSMServer.Controllers
 
             TreeValuesCache.RemoveAccessKey(accessKeyId);
 
-            return PartialView("_AllAccessKeys", productNode.GetAccessKeys());
+            return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
         }
 
 
