@@ -1,4 +1,7 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model
@@ -14,7 +17,11 @@ namespace HSMServer.Model
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }
 
-        public bool IsUserAuthorized { get; }
+        public List<TelegramChatViewModel> Chats { get; } = new();
+
+        public List<TelegramChatViewModel> Groups { get; } = new();
+
+        public bool IsUserAuthorized => Chats.Count != 0;
 
 
         // public constructor without parameters for action Account/UpdateTelegramSettings
@@ -26,7 +33,15 @@ namespace HSMServer.Model
             MinStatusLevel = settings.MessagesMinStatus;
             MessagesDelay = settings.MessagesDelay;
 
-            //IsUserAuthorized = settings.Chat is not null;
+            foreach (var (_, chat) in settings.Chats)
+            {
+                var chatViewModel = new TelegramChatViewModel(chat);
+
+                if (chat.IsGroup)
+                    Groups.Add(chatViewModel);
+                else
+                    Chats.Add(chatViewModel);
+            }
         }
 
 
@@ -37,5 +52,27 @@ namespace HSMServer.Model
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };
+    }
+
+
+    public class TelegramChatViewModel
+    {
+        public long ChatId { get; }
+
+        public string Username { get; }
+
+        public string AuthorizationTime { get; }
+
+
+        public TelegramChatViewModel(TelegramChat chat)
+        {
+            ChatId = chat.Id.Identifier ?? 0L;
+            Username = chat.Name?.Length == 0
+                ? "Please, reinitialize account"
+                : chat.Name;
+            AuthorizationTime = chat.AuthorizationTime == DateTime.MinValue
+                ? "-"
+                : chat.AuthorizationTime.ToDefaultFormat();
+        }
     }
 }

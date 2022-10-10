@@ -46,23 +46,47 @@
             <button type="submit" class="btn btn-secondary my-1">Save</button>
         </form>
 
-        <h5>Authorization settings</h5>
-
         @if (Model.IsUserAuthorized)
         {
-            <div class="row mx-4" id="userIsAuth">
-                <label class="col-auto p-0">You're authorized in telegram now. You can</label>
-                <div class="col-auto">
-                    <a asp-action="@nameof(AccountController.SendTestTelegramMessage)">send test message</a>
-                </div>
-                <label class="col-auto p-0">or</label>
-                <div class="col-auto">
-                    <a asp-action="@nameof(AccountController.RemoveTelegramAuthorization)">remove your authorization</a>
-                </div>
-            </div>
+            <h5>Authorized accounts</h5>
+
+            <table class="table mx-4">
+                <tr>
+                    <th>Username</th>
+                    <th>Authorized</th>
+                    <th style="text-align:center">Actions</th>
+                </tr>
+                <tr>
+                    @foreach (var chat in Model.Chats)
+                    {
+                        <td>@chat.Username</td>
+                        <td>@chat.AuthorizationTime</td>
+                        <td style="text-align:center">
+                            <div class="dropdown">
+                                <i id="chatActions" class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                                <div class="dropdown-menu" aria-labelledby="chatActions">
+                                    <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
+                                                             asp-route-chatId="@chat.ChatId"
+                                                             asp-route-userName="@chat.Username">
+                                        Send test message
+                                    </a>
+                                    <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
+                                                             asp-route-chatId="@chat.ChatId">
+                                        Remove authorization
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    }
+                </tr>
+            </table>
+
+            <h5>Authorized groups</h5>
         }
         else
         {
+            <h5>Authorization settings</h5>
+
             <div class="row mx-4" id="userIsNotAuth">
                 <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
                 <div class="col-auto">
@@ -70,6 +94,5 @@
                 </div>
             </div>
         }
-
     </div>
 </div>

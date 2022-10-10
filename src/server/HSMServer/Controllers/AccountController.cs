@@ -158,7 +158,7 @@ namespace HSMServer.Controllers
         {
             // TODO: use ViewComponent and remove using TempData for passing products
             TempData[TextConstants.TempDataProductsText] =
-                _treeViewModel.Nodes.Values.ToDictionary(product => product.Name, product => product.Name);
+                _treeViewModel.Nodes.Values.ToDictionary(product => product.Id, product => product.Name);
 
             var users = _userManager.GetUsers().OrderBy(x => x.UserName);
             return View(users.Select(x => new UserViewModel(x)).ToList());
@@ -226,18 +226,18 @@ namespace HSMServer.Controllers
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
 
-        public IActionResult SendTestTelegramMessage()
+        public IActionResult SendTestTelegramMessage(long chatId, string userName)
         {
             var user = HttpContext.User as User;
 
-            _telegramBot.SendTestMessage(0, $"Test message for {user.UserName}");
+            _telegramBot.SendTestMessage(chatId, $"Test message for {userName}");
 
             return RedirectToAction(nameof(Settings));
         }
 
-        public IActionResult RemoveTelegramAuthorization()
+        public IActionResult RemoveTelegramAuthorization(long chatId)
         {
-            _telegramBot.RemoveChat(HttpContext.User as User, 0);
+            _telegramBot.RemoveChat(HttpContext.User as User, chatId);
 
             return RedirectToAction(nameof(Settings));
         }
