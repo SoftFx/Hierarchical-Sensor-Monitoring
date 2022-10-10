@@ -23,7 +23,7 @@ namespace HSMServer.Model.AccessKeysViewModels
     {
         public Guid Id { get; set; }
 
-        public string ExpirationTime { get; }
+        public string ExpirationTime { get; init; }
 
         public bool CloseModal { get; init; }
 
