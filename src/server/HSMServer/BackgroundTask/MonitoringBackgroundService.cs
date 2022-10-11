@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Notifications;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Threading;
@@ -14,12 +15,15 @@ namespace HSMServer.BackgroundTask
 
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IUserManager _userManager;
+        private readonly TelegramBot _telegramBot;
 
 
-        public MonitoringBackgroundService(ITreeValuesCache treeValuesCache, IUserManager userManager)
+        public MonitoringBackgroundService(ITreeValuesCache treeValuesCache, IUserManager userManager,
+            INotificationsCenter notificationsCenter)
         {
             _treeValuesCache = treeValuesCache;
             _userManager = userManager;
+            _telegramBot = notificationsCenter.TelegramBot;
         }
 
 
@@ -32,6 +36,7 @@ namespace HSMServer.BackgroundTask
                     ValidateSensors();
                     UpdateAccessKeysState();
                     RemoveOutdatedIgnoredSensors();
+                    RemoveExpiredInvitationTokens();
                 }
 
                 await Task.Delay(Delay, stoppingToken);
@@ -71,5 +76,7 @@ namespace HSMServer.BackgroundTask
                     _userManager.UpdateUser(user);
             }
         }
+
+        private void RemoveExpiredInvitationTokens() => _telegramBot.RemoveOldInvitationTokens();
     }
 }

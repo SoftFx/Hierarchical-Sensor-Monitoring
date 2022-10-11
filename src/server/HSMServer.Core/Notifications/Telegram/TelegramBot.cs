@@ -59,6 +59,8 @@ namespace HSMServer.Core.Notifications
         public string GetInvitationLink(User user) =>
             _addressBook.BuildInvitationToken(user).ToLink(BotName);
 
+        public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
+
         public void RemoveChat(User user, long chatId)
         {
             _addressBook.RemoveChat(user, new ChatId(chatId));

@@ -228,8 +228,6 @@ namespace HSMServer.Controllers
 
         public IActionResult SendTestTelegramMessage(long chatId, string userName)
         {
-            var user = HttpContext.User as User;
-
             _telegramBot.SendTestMessage(chatId, $"Test message for {userName}");
 
             return RedirectToAction(nameof(Settings));

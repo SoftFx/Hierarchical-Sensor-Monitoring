@@ -24,6 +24,13 @@ namespace HSMServer.Core.Notifications
             return invitationToken;
         }
 
+        internal void RemoveOldTokens()
+        {
+            foreach (var (tokenId, token) in _tokens)
+                if (DateTime.UtcNow >= token.ExpirationTime.AddHours(1))
+                    _tokens.TryRemove(tokenId, out _);
+        }
+
         internal bool TryGetToken(string tokenIdStr, out InvitationToken token)
         {
             token = InvitationToken.Empty;
