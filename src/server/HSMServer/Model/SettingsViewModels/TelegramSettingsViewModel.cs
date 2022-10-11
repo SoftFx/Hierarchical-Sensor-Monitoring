@@ -21,8 +21,6 @@ namespace HSMServer.Model
 
         public List<TelegramChatViewModel> Groups { get; } = new();
 
-        public bool IsUserAuthorized => Chats.Count != 0;
-
 
         // public constructor without parameters for action Account/UpdateTelegramSettings
         public TelegramSettingsViewModel() { }

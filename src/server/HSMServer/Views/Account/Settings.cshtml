@@ -1,4 +1,5 @@
-﻿@using HSMServer.Controllers
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
 @using HSMServer.Core.Model;
 @using HSMServer.Model
 
@@ -46,19 +47,22 @@
             <button type="submit" class="btn btn-secondary my-1">Save</button>
         </form>
 
-        <h5>Authorization settings</h5>
+        <div class="row">
+            <h5 class="col-auto m-0">Authorized accounts</h5>
+            @if (Model.Chats.Count == 0)
+            {
+                <label class="col-auto p-0">(There are no authorized accounts)</label>
+            }
+        </div>
 
-        <div class="row mx-4 mb-2">
-            <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
+        <div class="row mx-4 my-1">
+            <label class="col-auto p-0">If you want to start getting messages in telegram chat click</label>
             <div class="col-auto">
                 <a asp-action="@nameof(AccountController.OpenInvitationLink)" target="_blank">invitation link</a>
             </div>
         </div>
-
-        @if (Model.IsUserAuthorized)
+        @if (Model.Chats.Count > 0)
         {
-            <h5>Authorized accounts</h5>
-
             <table class="table mx-4">
                 <tr>
                     <th>Username</th>
@@ -72,8 +76,8 @@
                         <td>@chat.AuthorizationTime</td>
                         <td style="text-align:center">
                             <div class="dropdown">
-                                <i id="chatActions" class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
-                                <div class="dropdown-menu" aria-labelledby="chatActions">
+                                <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                                <div class="dropdown-menu">
                                     <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
                                                              asp-route-chatId="@chat.ChatId"
                                                              asp-route-userName="@chat.Username">
@@ -89,8 +93,54 @@
                     </tr>
                 }
             </table>
+        }
 
-            <h5>Authorized groups</h5>
+        <div class="row">
+            <h5 class="col-auto m-0">Authorized groups</h5>
+            @if (Model.Groups.Count == 0)
+            {
+                <label class="col-auto p-0">(There are no authorized groups)</label>
+            }
+        </div>
+
+        <div class="row mx-4 my-1">
+            <label class="col-auto p-0">If you want to start getting messages in telegram group</label>
+            <div class="col-auto">
+                <a href="javascript:getGroupStartCommand()">copy message</a>
+            </div>
+            <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
+        </div>
+        @if (Model.Groups.Count > 0)
+        {
+            <table class="table mx-4">
+                <tr>
+                    <th>Username</th>
+                    <th>Authorized</th>
+                </tr>
+                @foreach (var group in Model.Groups)
+                {
+                    <tr>
+                        <td>@group.Username</td>
+                        <td>@group.AuthorizationTime</td>
+                    </tr>
+                }
+            </table>
         }
     </div>
 </div>
+
+
+<script>
+    function getGroupStartCommand() {
+        $.ajax({
+            type: 'GET',
+            url: "@Html.Raw(Url.Action(nameof(AccountController.CopyStartCommandForGroup), ViewConstants.AccountController))",
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (command) {
+            copyToClipboard(command);
+        });
+    }
+</script>

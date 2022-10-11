@@ -59,6 +59,9 @@ namespace HSMServer.Core.Notifications
         public string GetInvitationLink(User user) =>
             _addressBook.BuildInvitationToken(user).ToLink(BotName);
 
+        public string GetStartCommandForGroup(User user) =>
+            _addressBook.BuildInvitationToken(user).ToGroupStartCommand(BotName);
+
         public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
         public void RemoveChat(User user, long chatId)

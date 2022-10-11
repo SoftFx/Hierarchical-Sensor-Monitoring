@@ -31,5 +31,7 @@ namespace HSMServer.Core.Notifications
 
             return Token == Guid.Empty ? telegramLink : $"{telegramLink}?start={Token}";
         }
+
+        internal string ToGroupStartCommand(string botName) => $"@{botName} start {Token}";
     }
 }
