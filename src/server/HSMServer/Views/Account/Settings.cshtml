@@ -46,6 +46,15 @@
             <button type="submit" class="btn btn-secondary my-1">Save</button>
         </form>
 
+        <h5>Authorization settings</h5>
+
+        <div class="row mx-4 mb-2">
+            <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
+            <div class="col-auto">
+                <a asp-action="@nameof(AccountController.OpenInvitationLink)" target="_blank">invitation link</a>
+            </div>
+        </div>
+
         @if (Model.IsUserAuthorized)
         {
             <h5>Authorized accounts</h5>
@@ -56,9 +65,9 @@
                     <th>Authorized</th>
                     <th style="text-align:center">Actions</th>
                 </tr>
-                <tr>
-                    @foreach (var chat in Model.Chats)
-                    {
+                @foreach (var chat in Model.Chats)
+                {
+                    <tr>
                         <td>@chat.Username</td>
                         <td>@chat.AuthorizationTime</td>
                         <td style="text-align:center">
@@ -77,22 +86,11 @@
                                 </div>
                             </div>
                         </td>
-                    }
-                </tr>
+                    </tr>
+                }
             </table>
 
             <h5>Authorized groups</h5>
-        }
-        else
-        {
-            <h5>Authorization settings</h5>
-
-            <div class="row mx-4" id="userIsNotAuth">
-                <label class="col-auto p-0">If you want to start getting messages in telegram click</label>
-                <div class="col-auto">
-                    <a asp-action="@nameof(AccountController.OpenInvitationLink)" target="_blank">invitation link</a>
-                </div>
-            </div>
         }
     </div>
 </div>
