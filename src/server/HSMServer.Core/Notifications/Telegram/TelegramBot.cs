@@ -64,7 +64,12 @@ namespace HSMServer.Core.Notifications
         public string GetStartCommandForGroup(User user) =>
             _addressBook.BuildInvitationToken(user).ToGroupStartCommand(BotName);
 
-        public string GetTelegramLink(string chatName) => $"{TelegramLink}{chatName}";
+        public async Task<string> GetChatLink(long chatId)
+        {
+            var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _token);
+
+            return link.InviteLink;
+        }
 
         public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
@@ -210,14 +215,15 @@ namespace HSMServer.Core.Notifications
             if (update?.Type == UpdateType.Message)
             {
                 var message = update?.Message;
+                var isUserChat = message?.Chat?.Type == ChatType.Private;
                 var command = message?.Text?.ToLowerInvariant();
+                var parts = command?.Split(' ');
 
-                if (command?.StartsWith(StartBotCommand) ?? false)
+                if (!isUserChat && parts.Length > 0 && parts[0] == $"@{BotName.ToLower()}")
+                    parts = parts[1..];
+
+                if (parts.Length == 2 && parts[0].StartsWith(StartBotCommand))
                 {
-                    var parts = command.Split(' ');
-                    if (parts.Length != 2)
-                        return;
-
                     var response = new StringBuilder(1 << 2);
 
                     if (_addressBook.TryGetToken(parts[1], out var token))
@@ -232,7 +238,7 @@ namespace HSMServer.Core.Notifications
                         }
                         else
                         {
-                            _addressBook.RegisterChat(message, token);
+                            _addressBook.RegisterChat(message, token, isUserChat);
                             _userManager.UpdateUser(token.User);
 
                             response.Append("You are succesfully authorized.");
@@ -243,7 +249,7 @@ namespace HSMServer.Core.Notifications
 
                     await botClient.SendTextMessageAsync(message.Chat, response.ToString(), cancellationToken: cToken);
                 }
-                else
+                else if (isUserChat)
                 {
                     _logger.Warn($"There is some invalid update message: {command}");
                 }

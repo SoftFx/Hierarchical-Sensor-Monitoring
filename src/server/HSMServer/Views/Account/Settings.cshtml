@@ -79,8 +79,7 @@
                                 <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
                                 <div class="dropdown-menu">
                                     <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
-                                                             asp-route-chatId="@chat.ChatId"
-                                                             asp-route-userName="@chat.Name">
+                                                             asp-route-chatId="@chat.ChatId">
                                         Send test message
                                     </a>
                                     <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
@@ -114,19 +113,35 @@
         {
             <table class="table mx-4">
                 <tr>
-                    <th>Username</th>
+                    <th>Group name</th>
                     <th>Authorized</th>
+                    <th style="text-align:center">Actions</th>
                 </tr>
                 @foreach (var group in Model.Groups)
                 {
                     <tr>
                         <td>
-                            <a target="_blank" asp-action="@nameof(AccountController.OpenTelegramChat)"
-                                               asp-route-chatName="@group.Name">
+                            <a target="_blank" asp-action="@nameof(AccountController.OpenTelegramGroup)"
+                                               asp-route-chatId="@group.ChatId">
                                 @group.Name
                             </a>
                         </td>
                         <td>@group.AuthorizationTime</td>
+                        <td style="text-align:center">
+                            <div class="dropdown">
+                                <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
+                                                             asp-route-chatId="@group.ChatId">
+                                        Send test message
+                                    </a>
+                                    <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
+                                                             asp-route-chatId="@group.ChatId">
+                                        Remove authorization
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                 }
             </table>

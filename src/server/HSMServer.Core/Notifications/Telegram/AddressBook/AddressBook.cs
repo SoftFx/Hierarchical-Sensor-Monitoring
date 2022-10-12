@@ -40,7 +40,7 @@ namespace HSMServer.Core.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal void RegisterChat(Message message, InvitationToken token)
+        internal void RegisterChat(Message message, InvitationToken token, bool isUserChat)
         {
             var user = token.User;
             var chats = user.Notifications.Telegram.Chats;
@@ -50,8 +50,8 @@ namespace HSMServer.Core.Notifications
                 var chatModel = new TelegramChat()
                 {
                     Id = message.Chat,
-                    Name = message.From.Username,
-                    IsUserChat = true,
+                    Name = isUserChat ? message.From.Username : message.Chat.Title,
+                    IsUserChat = isUserChat,
                     AuthorizationTime = DateTime.UtcNow,
                 };
 

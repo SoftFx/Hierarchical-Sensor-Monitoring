@@ -226,16 +226,16 @@ namespace HSMServer.Controllers
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
 
-        public RedirectResult OpenTelegramChat(string chatName) =>
-            Redirect(_telegramBot.GetTelegramLink(chatName));
+        public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
+            Redirect(await _telegramBot.GetChatLink(chatId));
 
         [HttpGet]
         public string CopyStartCommandForGroup() =>
             _telegramBot.GetStartCommandForGroup(HttpContext.User as User);
 
-        public IActionResult SendTestTelegramMessage(long chatId, string userName)
+        public IActionResult SendTestTelegramMessage(long chatId)
         {
-            _telegramBot.SendTestMessage(chatId, $"Test message for {userName}");
+            _telegramBot.SendTestMessage(chatId, $"Test message for {(HttpContext.User as User).UserName}");
 
             return RedirectToAction(nameof(Settings));
         }
