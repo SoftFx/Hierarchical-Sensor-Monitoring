@@ -21,6 +21,8 @@ namespace HSMServer.Core.Notifications
         private const string StartBotCommand = "/start";
         private const string ConfigurationsError = "Invalid Bot configurations.";
 
+        internal const string TelegramLink = "https://t.me/";
+
         private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
         {
@@ -61,6 +63,8 @@ namespace HSMServer.Core.Notifications
 
         public string GetStartCommandForGroup(User user) =>
             _addressBook.BuildInvitationToken(user).ToGroupStartCommand(BotName);
+
+        public string GetTelegramLink(string chatName) => $"{TelegramLink}{chatName}";
 
         public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 

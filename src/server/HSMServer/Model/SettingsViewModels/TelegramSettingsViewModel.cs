@@ -35,10 +35,10 @@ namespace HSMServer.Model
             {
                 var chatViewModel = new TelegramChatViewModel(chat);
 
-                if (chat.IsGroup)
-                    Groups.Add(chatViewModel);
-                else
+                if (chat.IsUserChat)
                     Chats.Add(chatViewModel);
+                else
+                    Groups.Add(chatViewModel);
             }
         }
 
@@ -57,7 +57,7 @@ namespace HSMServer.Model
     {
         public long ChatId { get; }
 
-        public string Username { get; }
+        public string Name { get; }
 
         public string AuthorizationTime { get; }
 
@@ -65,7 +65,7 @@ namespace HSMServer.Model
         public TelegramChatViewModel(TelegramChat chat)
         {
             ChatId = chat.Id.Identifier ?? 0L;
-            Username = chat.Name?.Length == 0
+            Name = chat.Name?.Length == 0
                 ? "Please, reinitialize account"
                 : chat.Name;
             AuthorizationTime = chat.AuthorizationTime == DateTime.MinValue

@@ -38,7 +38,12 @@ namespace HSMServer.Core.Model
             if (entity.ChatIdentifier != 0) //TODO: migration logic should be removed
             {
                 var chatId = new ChatId(entity.ChatIdentifier);
-                Chats.TryAdd(chatId, new TelegramChat() { Id = chatId, Name = string.Empty });
+                Chats.TryAdd(chatId, new TelegramChat()
+                {
+                    Id = chatId,
+                    Name = string.Empty,
+                    IsUserChat = true,
+                });
             }
         }
 

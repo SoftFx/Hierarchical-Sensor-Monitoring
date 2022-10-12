@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model
 
         public string Name { get; init; }
 
-        public bool IsGroup { get; init; }
+        public bool IsUserChat { get; init; }
 
         public DateTime AuthorizationTime { get; init; }
 
@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model
         internal TelegramChat(TelegramChatEntity entity)
         {
             Id = new(entity.Id);
-            IsGroup = entity.IsGroup;
+            IsUserChat = entity.IsUserChat;
             Name = entity.Name;
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
             new()
             {
                 Id = Id?.Identifier ?? 0L,
-                IsGroup = IsGroup,
+                IsUserChat = IsUserChat,
                 Name = Name,
                 AuthorizationTime = AuthorizationTime.Ticks,
             };

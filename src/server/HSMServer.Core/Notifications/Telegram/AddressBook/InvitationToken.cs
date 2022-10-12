@@ -27,11 +27,11 @@ namespace HSMServer.Core.Notifications
 
         internal string ToLink(string botName)
         {
-            var telegramLink = $"https://t.me/{botName}";
+            var telegramLink = $"{TelegramBot.TelegramLink}{botName}";
 
             return Token == Guid.Empty ? telegramLink : $"{telegramLink}?start={Token}";
         }
 
-        internal string ToGroupStartCommand(string botName) => $"@{botName} start {Token}";
+        internal string ToGroupStartCommand(string botName) => $"@{botName} /start {Token}";
     }
 }

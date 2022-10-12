@@ -226,6 +226,9 @@ namespace HSMServer.Controllers
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
 
+        public RedirectResult OpenTelegramChat(string chatName) =>
+            Redirect(_telegramBot.GetTelegramLink(chatName));
+
         [HttpGet]
         public string CopyStartCommandForGroup() =>
             _telegramBot.GetStartCommandForGroup(HttpContext.User as User);

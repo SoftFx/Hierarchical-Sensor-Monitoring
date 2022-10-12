@@ -72,7 +72,7 @@
                 @foreach (var chat in Model.Chats)
                 {
                     <tr>
-                        <td>@chat.Username</td>
+                        <td>@chat.Name</td>
                         <td>@chat.AuthorizationTime</td>
                         <td style="text-align:center">
                             <div class="dropdown">
@@ -80,7 +80,7 @@
                                 <div class="dropdown-menu">
                                     <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
                                                              asp-route-chatId="@chat.ChatId"
-                                                             asp-route-userName="@chat.Username">
+                                                             asp-route-userName="@chat.Name">
                                         Send test message
                                     </a>
                                     <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
@@ -120,7 +120,12 @@
                 @foreach (var group in Model.Groups)
                 {
                     <tr>
-                        <td>@group.Username</td>
+                        <td>
+                            <a target="_blank" asp-action="@nameof(AccountController.OpenTelegramChat)"
+                                               asp-route-chatName="@group.Name">
+                                @group.Name
+                            </a>
+                        </td>
                         <td>@group.AuthorizationTime</td>
                     </tr>
                 }

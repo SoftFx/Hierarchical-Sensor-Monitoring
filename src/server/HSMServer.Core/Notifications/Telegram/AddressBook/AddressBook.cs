@@ -51,6 +51,7 @@ namespace HSMServer.Core.Notifications
                 {
                     Id = message.Chat,
                     Name = message.From.Username,
+                    IsUserChat = true,
                     AuthorizationTime = DateTime.UtcNow,
                 };
 
