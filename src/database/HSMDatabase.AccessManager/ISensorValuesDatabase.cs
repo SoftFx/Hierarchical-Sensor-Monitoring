@@ -17,8 +17,6 @@ namespace HSMDatabase.AccessManager
 
         void PutSensorValue(SensorValueEntity entity);
 
-        void PutSensorValue(string sensorId, string time, byte[] value);
-
         void RemoveSensorValues(string sensorId);
 
         List<byte[]> GetValues(string sensorId, byte[] to, int count);
