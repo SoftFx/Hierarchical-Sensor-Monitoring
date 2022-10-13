@@ -61,20 +61,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutSensorValue(string sensorId, string time, byte[] value)
-        {
-            var key = Encoding.UTF8.GetBytes($"{sensorId}_{time.PadLeft(19, '0')}");
-
-            try
-            {
-                _openedDb.Put(key, value);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write data for {sensorId}");
-            }
-        }
-
         public void RemoveSensorValues(string sensorId)
         {
             var key = Encoding.UTF8.GetBytes(sensorId);
