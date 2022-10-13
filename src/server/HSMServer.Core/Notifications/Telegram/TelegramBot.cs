@@ -16,7 +16,6 @@ namespace HSMServer.Core.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string ConfigurationsError = "Invalid Bot configurations.";
-        internal const string TelegramLink = "https://t.me/";
 
         private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
@@ -54,10 +53,10 @@ namespace HSMServer.Core.Notifications
 
 
         public string GetInvitationLink(User user) =>
-            _addressBook.BuildInvitationToken(user).ToLink(BotName);
+            $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
         public string GetStartCommandForGroup(User user) =>
-            _addressBook.BuildInvitationToken(user).ToGroupStartCommand(BotName);
+            $"@{BotName} /start {_addressBook.BuildInvitationToken(user)}";
 
         public async Task<string> GetChatLink(long chatId)
         {

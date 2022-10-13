@@ -22,7 +22,7 @@ namespace HSMServer.Core.Notifications
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _config;
 
-        private string BotName => _config.ReadOrDefault(ConfigurationConstants.BotName).Value;
+        private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
 
 
         internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager, IConfigurationProvider config)
@@ -42,40 +42,22 @@ namespace HSMServer.Core.Notifications
                 var command = message?.Text?.ToLowerInvariant();
                 var parts = command?.Split(' ');
 
-                if (!isUserChat && parts.Length > 0 && parts[0] == $"@{BotName.ToLower()}")
+                if (parts == null || parts.Length == 0 || (!isUserChat && parts[0] != BotName))
+                    return;
+
+                if (!isUserChat)
                     parts = parts[1..];
 
-                if (parts.Length == 2 && parts[0].StartsWith(StartBotCommand))
+                var response = parts[0] switch
                 {
-                    var response = new StringBuilder(1 << 2);
+                    StartBotCommand => StartBot(parts, message, isUserChat),
+                    _ => null,
+                };
 
-                    if (_addressBook.TryGetToken(parts[1], out var token))
-                    {
-                        response.Append($"Hi, {token.User.UserName}. ");
-
-                        if (token.ExpirationTime < DateTime.UtcNow)
-                        {
-                            _addressBook.RemoveToken(token.Token);
-
-                            response.Append("Sorry, your invitation token is expired.");
-                        }
-                        else
-                        {
-                            _addressBook.RegisterChat(message, token, isUserChat);
-                            _userManager.UpdateUser(token.User);
-
-                            response.Append("You are succesfully authorized.");
-                        }
-                    }
-                    else
-                        response.Append("Your token is invalid or expired.");
-
-                    await botClient.SendTextMessageAsync(message.Chat, response.ToString(), cancellationToken: cToken);
-                }
-                else if (isUserChat)
-                {
+                if (!string.IsNullOrEmpty(response))
+                    await botClient.SendTextMessageAsync(message.Chat, response, cancellationToken: cToken);
+                else
                     _logger.Warn($"There is some invalid update message: {command}");
-                }
             }
         }
 
@@ -84,6 +66,38 @@ namespace HSMServer.Core.Notifications
             _logger.Error($"There is some error in telegram bot: {ex}");
 
             return Task.CompletedTask;
+        }
+
+
+        private string StartBot(string[] commandParts, Message message, bool isUserChat)
+        {
+            if (commandParts.Length != 2)
+                return null;
+
+            var response = new StringBuilder(1 << 2);
+
+            if (_addressBook.TryGetToken(commandParts[1], out var token))
+            {
+                response.Append($"Hi, {token.User.UserName}. ");
+
+                if (token.ExpirationTime < DateTime.UtcNow)
+                {
+                    _addressBook.RemoveToken(token.Token);
+
+                    response.Append("Sorry, your invitation token is expired.");
+                }
+                else
+                {
+                    _addressBook.RegisterChat(message, token, isUserChat);
+                    _userManager.UpdateUser(token.User);
+
+                    response.Append("You are succesfully authorized.");
+                }
+            }
+            else
+                response.Append("Your token is invalid or expired.");
+
+            return response.ToString();
         }
     }
 }

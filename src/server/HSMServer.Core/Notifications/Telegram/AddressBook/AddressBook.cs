@@ -15,13 +15,13 @@ namespace HSMServer.Core.Notifications
         internal ConcurrentDictionary<Guid, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new();
 
 
-        internal InvitationToken BuildInvitationToken(User user)
+        internal Guid BuildInvitationToken(User user)
         {
             var invitationToken = new InvitationToken(user);
 
             _tokens[invitationToken.Token] = invitationToken;
 
-            return invitationToken;
+            return invitationToken.Token;
         }
 
         internal void RemoveOldTokens()
