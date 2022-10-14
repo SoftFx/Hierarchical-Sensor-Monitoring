@@ -39,7 +39,7 @@ namespace HSMServer.Controllers
                     continue;
                 }
 
-                var value = _configurationProvider.ReadOrDefaultConfigurationObject(paramName);
+                var value = _configurationProvider.ReadOrDefault(paramName);
                 viewModels.Add(new ConfigurationObjectViewModel(value, true));
             }
             viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
