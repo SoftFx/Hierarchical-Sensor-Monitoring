@@ -23,13 +23,5 @@ namespace HSMServer.Core.Notifications
             ExpirationTime = DateTime.UtcNow.AddMinutes(TokenExpirationMinutes);
             User = user;
         }
-
-
-        internal string ToLink(string botName)
-        {
-            var telegramLink = $"https://t.me/{botName}";
-
-            return Token == Guid.Empty ? telegramLink : $"{telegramLink}?start={Token}";
-        }
     }
 }

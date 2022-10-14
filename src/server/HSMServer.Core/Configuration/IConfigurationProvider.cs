@@ -18,10 +18,10 @@ namespace HSMServer.Core.Configuration
         /// </summary>
         /// <param name="name">The parameter name, which MUST be a member of <see cref="ConfigurationConstants"/> class.</param>
         /// <returns>A <see cref="ConfigurationObject"/> entity, containing the parameter value.</returns>
-        ConfigurationObject ReadOrDefaultConfigurationObject(string name);
+        ConfigurationObject ReadOrDefault(string name);
         /// <summary>
         /// Get list of all configuration objects, which names are specified in <see cref="ConfigurationConstants"/> class.
-        /// Method <see cref="ReadOrDefaultConfigurationObject"/> is used to retrieve values.
+        /// Method <see cref="ReadOrDefault"/> is used to retrieve values.
         /// </summary>
         /// <returns>List of <see cref="ConfigurationObject"/>.</returns>
         List<ConfigurationObject> GetAllConfigurationObjects();

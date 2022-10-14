@@ -199,11 +199,11 @@ namespace HSMServer.Controllers
 
         private (string, string, string, string, string) GetMailConfiguration()
         {
-            var server = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPServer).Value;
-            var port = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPort).Value;
-            var login = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPLogin).Value;
-            var password = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPassword).Value;
-            var fromEmail = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPFromEmail).Value;
+            var server = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPServer).Value;
+            var port = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPort).Value;
+            var login = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPLogin).Value;
+            var password = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPassword).Value;
+            var fromEmail = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPFromEmail).Value;
 
             return (server, port, login, password, fromEmail);
         }

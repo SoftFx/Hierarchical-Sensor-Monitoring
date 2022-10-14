@@ -226,16 +226,23 @@ namespace HSMServer.Controllers
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
 
-        public IActionResult SendTestTelegramMessage()
+        public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
+            Redirect(await _telegramBot.GetChatLink(chatId));
+
+        [HttpGet]
+        public string CopyStartCommandForGroup() =>
+            _telegramBot.GetStartCommandForGroup(HttpContext.User as User);
+
+        public IActionResult SendTestTelegramMessage(long chatId)
         {
-            _telegramBot.SendTestMessage(HttpContext.User as User);
+            _telegramBot.SendTestMessage(chatId, $"Test message for {(HttpContext.User as User).UserName}");
 
             return RedirectToAction(nameof(Settings));
         }
 
-        public IActionResult RemoveTelegramAuthorization()
+        public IActionResult RemoveTelegramAuthorization(long chatId)
         {
-            _telegramBot.RemoveAuthorizedUser(HttpContext.User as User);
+            _telegramBot.RemoveChat(HttpContext.User as User, chatId);
 
             return RedirectToAction(nameof(Settings));
         }
