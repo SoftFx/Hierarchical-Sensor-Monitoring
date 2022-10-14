@@ -1,0 +1,64 @@
+﻿@using HSMServer.Model.History;
+@using HSMServer.Extensions;
+@using HSMServer.Core.Model;
+
+@model SensorValuesViewModel
+
+@{
+    bool isBarSensor = Model.SensorType == SensorType.IntegerBar || 
+                       Model.SensorType == SensorType.DoubleBar;
+}
+
+
+@if (Model.Values.Count == 0)
+{
+    <div id="noTableValues_@Model.EncodedId"></div>
+}
+else
+{
+    <div>
+        <table class='table table-striped'>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    @if (isBarSensor)
+                    {
+                        <th>Min</th>
+                        <th>Mean</th>
+                        <th>Max</th>
+                    }
+                    else
+                    {
+                        <th>Value</th>
+                    }
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var value in Model.Values)
+                {
+                    <tr>
+                        <td>@value.Time.ToDefaultFormat()</td>
+                        @if (isBarSensor)
+                        {
+                            var barValue = value as BarSensorValueViewModel;
+
+                            <td>@barValue.Min</td>
+                            <td>@barValue.Mean</td>
+                            <td>@barValue.Max</td>
+                        }
+                        else
+                        {
+                            var simpleValue = value as SimpleSensorValueViewModel;
+
+                            <td>@simpleValue.Value</td>
+                        }
+                        <td>@Html.Raw(value.Comment)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <input id='oldest_date_@Model.EncodedId' type='text' style='display: none' value='@Model.OldestValueTime'/>
+    </div>
+}
