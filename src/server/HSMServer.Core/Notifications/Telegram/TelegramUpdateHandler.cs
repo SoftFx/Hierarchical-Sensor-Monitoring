@@ -39,14 +39,19 @@ namespace HSMServer.Core.Notifications
             {
                 var message = update?.Message;
                 var isUserChat = message?.Chat?.Type == ChatType.Private;
-                var command = message?.Text?.ToLowerInvariant();
-                var parts = command?.Split(' ');
+                var msgText = message?.Text?.ToLowerInvariant();
+                var parts = msgText?.Split(' ');
 
-                if (parts == null || parts.Length == 0 || (!isUserChat && parts[0] != BotName))
+                if (parts == null || parts.Length == 0)
                     return;
 
                 if (!isUserChat)
+                {
+                    if (parts[0] != BotName)
+                        return;
+
                     parts = parts[1..];
+                }
 
                 var response = parts[0] switch
                 {
@@ -57,7 +62,7 @@ namespace HSMServer.Core.Notifications
                 if (!string.IsNullOrEmpty(response))
                     await botClient.SendTextMessageAsync(message.Chat, response, cancellationToken: cToken);
                 else
-                    _logger.Warn($"There is some invalid update message: {command}");
+                    _logger.Warn($"There is some invalid update message: {msgText}");
             }
         }
 
