@@ -5,12 +5,11 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Helpers;
-using HSMServer.HtmlHelpers;
 using HSMServer.Model;
+using HSMServer.Model.History;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
@@ -219,31 +218,30 @@ namespace HSMServer.Controllers
         #region SensorsHistory
 
         [HttpPost]
-        public HtmlString HistoryLatest([FromBody] GetSensorHistoryModel model)
+        public IActionResult HistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return null;
 
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
-            return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
+            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues(values, model.Type));
         }
 
         [HttpPost]
-        public HtmlString History([FromBody] GetSensorHistoryModel model)
+        public IActionResult History([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return null;
 
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
-            return new HtmlString(TableHelper.CreateHistoryTable(GetProcessedValues(values, model.Type), model.Type, model.EncodedId));
+            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues(values, model.Type));
         }
 
         [HttpPost]
-        public HtmlString HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
-            new(TableHelper.CreateHistoryTable(GetAllSensorValues(encodedId), type, encodedId));
-
+        public IActionResult HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
+            GetHistoryTable(encodedId, type, GetAllTableValues(encodedId));
 
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
@@ -292,8 +290,11 @@ namespace HSMServer.Controllers
             var (productName, path) = GetSensorProductAndPath(encodedId);
             string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
 
-            return GetExportHistory(GetAllSensorValues(encodedId), type, fileName);
+            return GetExportHistory(GetAllTableValues(encodedId), type, fileName);
         }
+
+        private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
+            PartialView("_SensorValuesTable", new HistoryValuesViewModel(encodedId, type, values));
 
         private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
         {
@@ -330,14 +331,23 @@ namespace HSMServer.Controllers
 
             var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
 
-            return values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
+            return HistoryProcessorFactory.BuildProcessor().Processing(values);
         }
 
-        private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
-            HistoryProcessorFactory.BuildProcessor(type).ProcessHistory(values);
+        private List<BaseValue> GetAllTableValues(string encodedId) => GetReversedValues(GetAllSensorValues(encodedId));
+
+        private static List<BaseValue> GetReversedValues(List<BaseValue> values)
+        {
+            values.Reverse();
+
+            return values;
+        }
+
+        private static List<BaseValue> GetTableValues(List<BaseValue> values, int type) =>
+             GetReversedValues(HistoryProcessorFactory.BuildProcessor(type).Processing(values));
 
         private static JsonResult GetJsonProcessedValues(List<BaseValue> values, int type) =>
-            new(GetProcessedValues(values, type).Select(v => (object)v));
+            new(HistoryProcessorFactory.BuildProcessor(type).ProcessingAndCompression(values).Select(v => (object)v));
 
         #endregion
 
