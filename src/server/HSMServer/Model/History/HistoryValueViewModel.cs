@@ -3,14 +3,14 @@ using System;
 
 namespace HSMServer.Model.History
 {
-    public abstract class SensorValueViewModel
+    public abstract class HistoryValueViewModel
     {
         public DateTime Time { get; init; }
 
         public string Comment { get; init; }
 
 
-        internal static SensorValueViewModel Create(BaseValue value, int sensorType) =>
+        internal static HistoryValueViewModel Create(BaseValue value, int sensorType) =>
             (SensorType)sensorType switch
             {
                 SensorType.Boolean => Create((BooleanValue)value),
@@ -42,13 +42,13 @@ namespace HSMServer.Model.History
     }
 
 
-    public class SimpleSensorValueViewModel : SensorValueViewModel
+    public class SimpleSensorValueViewModel : HistoryValueViewModel
     {
         public string Value { get; init; }
     }
 
 
-    public class BarSensorValueViewModel : SensorValueViewModel
+    public class BarSensorValueViewModel : HistoryValueViewModel
     {
         public string Min { get; init; }
 

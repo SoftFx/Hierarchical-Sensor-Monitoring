@@ -225,7 +225,7 @@ namespace HSMServer.Controllers
 
             var values = GetSensorValues(model.EncodedId, DEFAULT_REQUESTED_COUNT);
 
-            return GetHistoryTable(model.EncodedId, model.Type, GetReversedProcessedValues(values, model.Type));
+            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues(values, model.Type));
         }
 
         [HttpPost]
@@ -236,16 +236,12 @@ namespace HSMServer.Controllers
 
             var values = GetSensorValues(model.EncodedId, model.From, model.To);
 
-            return GetHistoryTable(model.EncodedId, model.Type, GetReversedProcessedValues(values, model.Type));
+            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues(values, model.Type));
         }
 
         [HttpPost]
         public IActionResult HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
-            GetHistoryTable(encodedId, type, GetAllSensorValues(encodedId));
-
-        private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
-            PartialView("_SensorValuesTable", new SensorValuesViewModel(encodedId, type, values));
-
+            GetHistoryTable(encodedId, type, GetAllTableValues(encodedId));
 
         [HttpPost]
         public JsonResult RawHistoryLatest([FromBody] GetSensorHistoryModel model)
@@ -294,8 +290,11 @@ namespace HSMServer.Controllers
             var (productName, path) = GetSensorProductAndPath(encodedId);
             string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
 
-            return GetExportHistory(GetAllSensorValues(encodedId), type, fileName);
+            return GetExportHistory(GetAllTableValues(encodedId), type, fileName);
         }
+
+        private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
+            PartialView("_SensorValuesTable", new HistoryValuesViewModel(encodedId, type, values));
 
         private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
         {
@@ -335,17 +334,20 @@ namespace HSMServer.Controllers
             return values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
         }
 
+        private List<BaseValue> GetAllTableValues(string encodedId) => GetReversedValues(GetAllSensorValues(encodedId));
+
         private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
             HistoryProcessorFactory.BuildProcessor(type).ProcessHistory(values);
 
-        private static List<BaseValue> GetReversedProcessedValues(List<BaseValue> values, int type)
+        private static List<BaseValue> GetReversedValues(List<BaseValue> values)
         {
-            var processedValues = GetProcessedValues(values, type);
+            values.Reverse();
 
-            processedValues.Reverse();
-
-            return processedValues;
+            return values;
         }
+
+        private static List<BaseValue> GetTableValues(List<BaseValue> values, int type) =>
+             GetReversedValues(GetProcessedValues(values, type));
 
         private static JsonResult GetJsonProcessedValues(List<BaseValue> values, int type) =>
             new(GetProcessedValues(values, type).Select(v => (object)v));

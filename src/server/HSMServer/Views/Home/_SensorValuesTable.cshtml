@@ -1,13 +1,7 @@
 ﻿@using HSMServer.Model.History;
 @using HSMServer.Extensions;
-@using HSMServer.Core.Model;
 
-@model SensorValuesViewModel
-
-@{
-    bool isBarSensor = Model.SensorType == SensorType.IntegerBar || 
-                       Model.SensorType == SensorType.DoubleBar;
-}
+@model HistoryValuesViewModel
 
 
 @if (Model.Values.Count == 0)
@@ -21,7 +15,7 @@ else
             <thead>
                 <tr>
                     <th>Date</th>
-                    @if (isBarSensor)
+                    @if (Model.IsBarSensor)
                     {
                         <th>Min</th>
                         <th>Mean</th>
@@ -39,7 +33,7 @@ else
                 {
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
-                        @if (isBarSensor)
+                        @if (Model.IsBarSensor)
                         {
                             var barValue = value as BarSensorValueViewModel;
 
