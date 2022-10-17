@@ -94,7 +94,7 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.Decode(productId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
-            var users = _userManager.GetViewers(productId);
+            var users = _userManager.GetViewers(decodedId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || users.Any())
