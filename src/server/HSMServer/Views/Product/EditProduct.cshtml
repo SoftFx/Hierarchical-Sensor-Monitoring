@@ -37,58 +37,62 @@
 <input id="productKey" value="@Model.ProductId" style="display: none" />
 <input id="encodedProductId" value="@Model.EncodedProductId" style="display: none" />
 
-<div class="container row justify-content-center">
-    <div style="margin: 10px">
-        <div class="row justify-content-start">
-            <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
+<div class="container">
+    <div class="row justify-content-center">
+        <h5 class="my-3">Edit product '@Model.ProductName'</h5>
+
+        @*<div style="margin: 10px">
+            <div class="row justify-content-start">
+                <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
+                <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
 
 
-            <div class="mb-3">
-                <label for="email" class="form-label">Email address</label>
-                <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email address</label>
+                    <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+                </div>
+
+                <div class="mb-3">
+                    <label for="productRole" class="form-label">Choose a role permission</label>
+                    @ViewHelper.CreateProductRoleSelect()
+                </div>
+
+                <span id="new_invite_span" style="display: none"></span>
+
+                <div class="mb-3">
+                    <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
+                        <i class="fas fa-envelope"></i> Invite
+                    </button>
+                </div>
             </div>
+        </div>*@
 
-            <div class="mb-3">
-                <label for="productRole" class="form-label">Choose a role permission</label>
-                @ViewHelper.CreateProductRoleSelect()
-            </div>
+        @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
 
-            <span id="new_invite_span" style="display: none"></span>
 
-            <div class="mb-3">
-                <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
-                    <i class="fas fa-envelope"></i> Invite
+        <div>
+            <div class="row">
+                <h5 class="col-auto">Access keys</h5>
+                <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
+                    <i class='fas fa-plus'></i>
                 </button>
             </div>
+
+            <table class="table">
+                <tr>
+                    <th>Display name</th>
+                    <th>Key</th>
+                    <th>Permissions</th>
+                    <th>Expiration</th>
+                    <th>Author</th>
+                    <th>State</th>
+                    <th></th>
+                </tr>
+                <tbody id="accessKeysTable">
+                    @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
+                </tbody>
+            </table>
         </div>
-    </div>
-
-    @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
-
-
-    <div class="row justify-content-start">
-        <div class="row" style='margin: 20px 0px 10px;'>
-            <h5 class="col-auto">Product '@Model.ProductName' access keys</h5>
-            <button style='margin-left: 0px 5px' type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
-                <i class='fas fa-plus'></i>
-            </button>
-        </div>
-
-        <table class="table">
-            <tr>
-                <th>Display name</th>
-                <th>Key</th>
-                <th>Permissions</th>
-                <th>Expiration</th>
-                <th>Author</th>
-                <th>State</th>
-                <th></th>
-            </tr>
-            <tbody id="accessKeysTable">
-                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
-            </tbody>
-        </table>
     </div>
 </div>
 
@@ -103,18 +107,18 @@
         userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
-    let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
-    if (inviteErrorText !== undefined) {
-        let inviteErrorSpan = document.getElementById('new_invite_span');
-        inviteErrorSpan.textContent = inviteErrorText;
-        inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-    }
+    //let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
+    //if (inviteErrorText !== undefined) {
+    //    let inviteErrorSpan = document.getElementById('new_invite_span');
+    //    inviteErrorSpan.textContent = inviteErrorText;
+    //    inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    //}
 
     //copy buttons
     var clipboard = new ClipboardJS('[id^="copy_"]');
 </script>
 
-<script>
+@*<script>
     function createInviteData(productKey, email, dateTime, productRole) {
         return {
             "ProductKey": productKey,
@@ -144,7 +148,7 @@
             }
         });
     });
-</script>
+</script>*@
 
 <script>
     function createUserRightData(userId, role, productKey) {
