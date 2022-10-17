@@ -9,6 +9,8 @@ namespace HSMServer.Model.History
 
         public string Comment { get; init; }
 
+        public SensorStatus Status { get; init; }
+
 
         internal static HistoryValueViewModel Create(BaseValue value, int sensorType) =>
             (SensorType)sensorType switch
@@ -27,16 +29,19 @@ namespace HSMServer.Model.History
             {
                 Value = value.Value.ToString(),
                 Time = value.Time,
+                Status = value.Status,
                 Comment = value.Comment,
             };
 
         private static BarSensorValueViewModel Create<T>(BarBaseValue<T> value) where T : struct =>
             new()
             {
+                Count = value.Count,
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
                 Time = value.Time,
+                Status = value.Status,
                 Comment = value.Comment,
             };
     }
@@ -50,6 +55,8 @@ namespace HSMServer.Model.History
 
     public class BarSensorValueViewModel : HistoryValueViewModel
     {
+        public int Count { get; init; }
+
         public string Min { get; init; }
 
         public string Max { get; init; }

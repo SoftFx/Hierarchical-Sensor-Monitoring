@@ -20,11 +20,13 @@ else
                         <th>Min</th>
                         <th>Mean</th>
                         <th>Max</th>
+                        <th>Count</th>
                     }
                     else
                     {
                         <th>Value</th>
                     }
+                    <th>Status</th>
                     <th>Comment</th>
                 </tr>
             </thead>
@@ -40,6 +42,7 @@ else
                             <td>@barValue.Min</td>
                             <td>@barValue.Mean</td>
                             <td>@barValue.Max</td>
+                            <td>@barValue.Count</td>
                         }
                         else
                         {
@@ -47,6 +50,7 @@ else
 
                             <td>@simpleValue.Value</td>
                         }
+                        <td><span class="@value.Status.ToIcon()"></span> @value.Status</td>
                         <td>@Html.Raw(value.Comment)</td>
                     </tr>
                 }
