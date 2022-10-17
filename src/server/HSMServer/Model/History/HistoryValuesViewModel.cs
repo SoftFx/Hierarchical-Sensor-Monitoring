@@ -15,7 +15,7 @@ namespace HSMServer.Model.History
 
         public List<HistoryValueViewModel> Values { get; }
 
-        public bool IsBarSensor => _sensorType == SensorType.IntegerBar || _sensorType == SensorType.DoubleBar;
+        public bool IsBarSensor => _sensorType is SensorType.IntegerBar or SensorType.DoubleBar;
 
 
         internal HistoryValuesViewModel(string encodedId, int type, List<BaseValue> values)

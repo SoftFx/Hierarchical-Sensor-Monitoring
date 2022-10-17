@@ -331,13 +331,10 @@ namespace HSMServer.Controllers
 
             var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
 
-            return values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
+            return HistoryProcessorFactory.BuildProcessor().Processing(values);
         }
 
         private List<BaseValue> GetAllTableValues(string encodedId) => GetReversedValues(GetAllSensorValues(encodedId));
-
-        private static List<BaseValue> GetProcessedValues(List<BaseValue> values, int type) =>
-            HistoryProcessorFactory.BuildProcessor(type).ProcessHistory(values);
 
         private static List<BaseValue> GetReversedValues(List<BaseValue> values)
         {
@@ -347,10 +344,10 @@ namespace HSMServer.Controllers
         }
 
         private static List<BaseValue> GetTableValues(List<BaseValue> values, int type) =>
-             GetReversedValues(GetProcessedValues(values, type));
+             GetReversedValues(HistoryProcessorFactory.BuildProcessor(type).Processing(values));
 
         private static JsonResult GetJsonProcessedValues(List<BaseValue> values, int type) =>
-            new(GetProcessedValues(values, type).Select(v => (object)v));
+            new(HistoryProcessorFactory.BuildProcessor(type).ProcessingAndCompression(values).Select(v => (object)v));
 
         #endregion
 
