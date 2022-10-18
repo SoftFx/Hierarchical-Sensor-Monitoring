@@ -12,9 +12,12 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         public abstract string GetCsvHistory(List<BaseValue> originalData);
 
-        public List<BaseValue> ProcessHistory(List<BaseValue> values)
+        public List<BaseValue> Processing(List<BaseValue> values) =>
+            values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
+
+        public List<BaseValue> ProcessingAndCompression(List<BaseValue> values)
         {
-            values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
+            values = Processing(values);
 
             if (values.Count < 2)
                 return values;
@@ -23,11 +26,10 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             if (interval == TimeSpan.Zero)
                 return values;
 
-            return ProcessHistory(values, interval);
+            return Compress(values, interval);
         }
 
-        protected virtual List<BaseValue> ProcessHistory(List<BaseValue> unprocessedHistory, TimeSpan compressionInterval) =>
-            unprocessedHistory;
+        protected virtual List<BaseValue> Compress(List<BaseValue> history, TimeSpan compressionInterval) => history;
 
         private static TimeSpan CountInterval(List<BaseValue> values)
         {

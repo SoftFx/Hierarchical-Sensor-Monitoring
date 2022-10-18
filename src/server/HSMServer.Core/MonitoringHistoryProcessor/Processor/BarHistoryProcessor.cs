@@ -43,7 +43,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         protected virtual string GetCsvRow(BarBaseValue<T> value) =>
             $"{value.OpenTime.ToUniversalTime():s},{value.CloseTime.ToUniversalTime():s},{value.Min},{value.Max},{value.Mean},{value.Count},{value.LastValue}";
 
-        protected override List<BaseValue> ProcessHistory(List<BaseValue> values, TimeSpan compressionInterval)
+        protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
         {
             if (values == null || values.Count == 0)
                 return new();
