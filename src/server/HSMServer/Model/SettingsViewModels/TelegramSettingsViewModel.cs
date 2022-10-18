@@ -19,8 +19,6 @@ namespace HSMServer.Model
 
         public List<TelegramChatViewModel> Chats { get; } = new();
 
-        public List<TelegramChatViewModel> Groups { get; } = new();
-
 
         // public constructor without parameters for action Account/UpdateTelegramSettings
         public TelegramSettingsViewModel() { }
@@ -32,14 +30,7 @@ namespace HSMServer.Model
             MessagesDelay = settings.MessagesDelay;
 
             foreach (var (_, chat) in settings.Chats)
-            {
-                var chatViewModel = new TelegramChatViewModel(chat);
-
-                if (chat.IsUserChat)
-                    Chats.Add(chatViewModel);
-                else
-                    Groups.Add(chatViewModel);
-            }
+                Chats.Add(new TelegramChatViewModel(chat));
         }
 
 

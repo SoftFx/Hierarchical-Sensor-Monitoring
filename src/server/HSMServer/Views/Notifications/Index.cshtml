@@ -17,8 +17,8 @@
 
         <h5>Messages settings</h5>
 
-        <form class="mx-4 my-2" method="post" asp-action="@nameof(AccountController.UpdateTelegramSettings)">
-            @await Html.PartialAsync("~/Views/Telegram/_NotificationsSettings.cshtml")
+        <form class="mx-4 my-2" method="post" asp-action="@nameof(NotificationsController.UpdateTelegramSettings)">
+            @await Html.PartialAsync("_NotificationsSettings")
         </form>
 
         <div class="my-2">
@@ -33,7 +33,7 @@
             <div class="row mx-4 my-1">
                 <label class="col-auto p-0">If you want to start getting messages in telegram chat click</label>
                 <div class="col-auto">
-                    <a asp-action="@nameof(AccountController.OpenInvitationLink)" target="_blank">invitation link</a>
+                    <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>
                 </div>
             </div>
             @if (Model.Chats.Count > 0)
@@ -53,11 +53,11 @@
                                 <div class="dropdown">
                                     <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
                                     <div class="dropdown-menu">
-                                        <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
+                                        <a class="dropdown-item" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
                                                                  asp-route-chatId="@chat.ChatId">
                                             Send test message
                                         </a>
-                                        <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
+                                        <a class="dropdown-item" asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
                                                                  asp-route-chatId="@chat.ChatId">
                                             Remove authorization
                                         </a>

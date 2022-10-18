@@ -105,13 +105,13 @@
             <h6 class="fw-bold">Messages settings</h6>
 
             <form class="mx-4 my-2" method="post">
-                @await Html.PartialAsync("~/Views/Telegram/_NotificationsSettings.cshtml", Model.Telegram)
+                @await Html.PartialAsync("~/Views/Notifications/_NotificationsSettings.cshtml", Model.Telegram)
             </form>
 
             <div class="my-2">
                 <div class="row">
                     <h6 class="col-auto fw-bold">Groups</h6>
-                    @if (Model.Telegram.Groups.Count == 0)
+                    @if (Model.Telegram.Chats.Count == 0)
                     {
                         <h6 class="col-auto p-0">(There are no authorized groups)</h6>
                     }
@@ -124,7 +124,7 @@
                     </div>
                     <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
                 </div>
-                @if (Model.Telegram.Groups.Count > 0)
+                @if (Model.Telegram.Chats.Count > 0)
                 {
                     <table class="table mx-4">
                         <tr>
@@ -132,13 +132,13 @@
                             <th>Authorized</th>
                             <th style="text-align:center">Actions</th>
                         </tr>
-                        @foreach (var group in Model.Telegram.Groups)
+                        @foreach (var group in Model.Telegram.Chats)
                         {
                             <tr>
                                 <td>
-                                    <a target="_blank" asp-controller="@nameof(AccountController)"
-                               asp-action="@nameof(AccountController.OpenTelegramGroup)"
-                               asp-route-chatId="@group.ChatId">
+                                    <a target="_blank" asp-controller="@nameof(NotificationsController)"
+                                                       asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
+                                                       asp-route-chatId="@group.ChatId">
                                         @group.Name
                                     </a>
                                 </td>
@@ -147,14 +147,14 @@
                                     <div class="dropdown">
                                         <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
                                         <div class="dropdown-menu">
-                                            <a class="dropdown-item" asp-controller="@nameof(AccountController)"
-                                       asp-action="@nameof(AccountController.SendTestTelegramMessage)"
-                                       asp-route-chatId="@group.ChatId">
+                                            <a class="dropdown-item" asp-controller="@nameof(NotificationsController)"
+                                                                     asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                                                     asp-route-chatId="@group.ChatId">
                                                 Send test message
                                             </a>
-                                            <a class="dropdown-item" asp-controller="@nameof(AccountController)"
-                                       asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
-                                       asp-route-chatId="@group.ChatId">
+                                            <a class="dropdown-item" asp-controller="@nameof(NotificationsController)"
+                                                                     asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                                                     asp-route-chatId="@group.ChatId">
                                                 Remove authorization
                                             </a>
                                         </div>
@@ -333,7 +333,7 @@
     function getGroupStartCommand() {
         $.ajax({
             type: 'GET',
-            url: "@Html.Raw(Url.Action(nameof(AccountController.CopyStartCommandForGroup), ViewConstants.AccountController))",
+            url: "@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))",
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
