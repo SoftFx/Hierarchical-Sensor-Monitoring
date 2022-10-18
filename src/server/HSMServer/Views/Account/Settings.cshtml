@@ -18,30 +18,7 @@
         <h5>Messages settings</h5>
 
         <form class="mx-4 my-2" method="post" asp-action="@nameof(AccountController.UpdateTelegramSettings)">
-            <div class="form-group row">
-                <label class="col-2 col-form-label" asp-for="MessagesDelay"></label>
-                <div class="col-auto p-0">
-                    <div class="input-group">
-                        <input type="number" class="form-control" asp-for="MessagesDelay">
-                        <span class="input-group-text">sec</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-group row mt-2">
-                <label class="col-2 col-form-label" asp-for="MinStatusLevel"></label>
-                <div class="col-auto p-0">
-                    <select class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
-                </div>
-            </div>
-
-            <div class="form-group row mt-2">
-                <label class="col-2 col-form-label" asp-for="EnableMessages"></label>
-                <div class="col-auto form-check form-switch mt-2">
-                    <input class="form-check-input" type="checkbox" asp-for="EnableMessages">
-                </div>
-            </div>
-            <button type="submit" class="btn btn-secondary my-1">Save</button>
+            @await Html.PartialAsync("~/Views/Telegram/_NotificationsSettings.cshtml")
         </form>
 
         <div class="my-2">
@@ -92,76 +69,5 @@
                 </table>
             }
         </div>
-
-        <div class="my-2">
-            <div class="row">
-                <h5 class="col-auto m-0">Groups</h5>
-                @if (Model.Groups.Count == 0)
-                {
-                    <label class="col-auto p-0">(There are no authorized groups)</label>
-                }
-            </div>
-
-            <div class="row mx-4 my-1">
-                <label class="col-auto p-0">If you want to start getting messages in telegram group</label>
-                <div class="col-auto">
-                    <a href="javascript:getGroupStartCommand()">copy message</a>
-                </div>
-                <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
-            </div>
-            @if (Model.Groups.Count > 0)
-            {
-                <table class="table mx-4">
-                    <tr>
-                        <th>Group name</th>
-                        <th>Authorized</th>
-                        <th style="text-align:center">Actions</th>
-                    </tr>
-                    @foreach (var group in Model.Groups)
-                    {
-                        <tr>
-                            <td>
-                                <a target="_blank" asp-action="@nameof(AccountController.OpenTelegramGroup)"
-                                                   asp-route-chatId="@group.ChatId">
-                                    @group.Name
-                                </a>
-                            </td>
-                            <td>@group.AuthorizationTime</td>
-                            <td style="text-align:center">
-                                <div class="dropdown">
-                                    <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
-                                    <div class="dropdown-menu">
-                                        <a class="dropdown-item" asp-action="@nameof(AccountController.SendTestTelegramMessage)"
-                                                                 asp-route-chatId="@group.ChatId">
-                                            Send test message
-                                        </a>
-                                        <a class="dropdown-item" asp-action="@nameof(AccountController.RemoveTelegramAuthorization)"
-                                                                 asp-route-chatId="@group.ChatId">
-                                            Remove authorization
-                                        </a>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </table>
-            }
-        </div>
     </div>
 </div>
-
-
-<script>
-    function getGroupStartCommand() {
-        $.ajax({
-            type: 'GET',
-            url: "@Html.Raw(Url.Action(nameof(AccountController.CopyStartCommandForGroup), ViewConstants.AccountController))",
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (command) {
-            copyToClipboard(command);
-        });
-    }
-</script>

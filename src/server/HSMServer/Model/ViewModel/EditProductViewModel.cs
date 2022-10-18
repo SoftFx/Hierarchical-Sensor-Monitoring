@@ -13,6 +13,7 @@ namespace HSMServer.Model.ViewModel
         public string EncodedProductId { get; set; }
         public List<KeyValuePair<UserViewModel, ProductRoleEnum>> UsersRights { get; set; }
         public List<AccessKeyViewModel> AccessKeys { get; set; }
+        public TelegramSettingsViewModel Telegram { get; set; } = new();
 
         public EditProductViewModel(ProductNodeViewModel product,
             List<KeyValuePair<User, ProductRoleEnum>> usersRights)

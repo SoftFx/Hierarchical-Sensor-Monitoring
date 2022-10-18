@@ -202,7 +202,7 @@ namespace HSMServer.HtmlHelpers
             //header template
             result.Append("<div>" +
                 "<div class='row justify-content-start'>" +
-                $"<h5>Members</h5></div></div>");
+                $"<h5 class='mt-1'>Members</h5></div></div>");
 
             result.Append("<div class='col-xxl'>");
             //table template
