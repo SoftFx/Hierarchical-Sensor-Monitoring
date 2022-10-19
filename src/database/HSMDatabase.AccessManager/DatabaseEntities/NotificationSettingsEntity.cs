@@ -3,10 +3,14 @@ using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed class NotificationSettingsEntity
+    public class NotificationSettingsEntity
     {
         public TelegramSettingsEntity TelegramSettings { get; init; }
+    }
 
+
+    public sealed class UserNotificationSettingsEntity : NotificationSettingsEntity
+    {
         public List<string> EnabledSensors { get; init; }
 
         public Dictionary<string, long> IgnoredSensors { get; init; }

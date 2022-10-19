@@ -13,7 +13,7 @@ namespace HSMServer.Model.ViewModel
         public string EncodedProductId { get; set; }
         public List<KeyValuePair<UserViewModel, ProductRoleEnum>> UsersRights { get; set; }
         public List<AccessKeyViewModel> AccessKeys { get; set; }
-        public TelegramSettingsViewModel Telegram { get; set; } = new();
+        public TelegramSettingsViewModel Telegram { get; set; }
 
         public EditProductViewModel(ProductNodeViewModel product,
             List<KeyValuePair<User, ProductRoleEnum>> usersRights)
@@ -25,6 +25,7 @@ namespace HSMServer.Model.ViewModel
                 new KeyValuePair<UserViewModel, ProductRoleEnum>(new UserViewModel(x.Key), x.Value)).ToList();
 
             AccessKeys = product.GetEditProductAccessKeys();
+            Telegram = product.TelegramSettings;
         }
     }
 }

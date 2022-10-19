@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.UserFilters;
+using HSMServer.Core.Notifications;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,7 +10,7 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Model.Authentication
 {
-    public class User : ClaimsPrincipal
+    public class User : ClaimsPrincipal, INotificatable
     {
         public Guid Id { get; set; }
 
@@ -25,12 +26,14 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
-        public NotificationSettings Notifications { get; internal set; }
+        public UserNotificationSettings Notifications { get; internal set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 
 
         public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
+
+        string INotificatable.Id => Id.ToString();
 
 
         public User(string userName) : this()
