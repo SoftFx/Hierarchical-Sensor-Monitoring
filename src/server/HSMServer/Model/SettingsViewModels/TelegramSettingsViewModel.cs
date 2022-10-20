@@ -25,14 +25,20 @@ namespace HSMServer.Model
 
         public TelegramSettingsViewModel(TelegramSettings settings)
         {
+            Update(settings);
+        }
+
+
+        internal void Update(TelegramSettings settings)
+        {
             EnableMessages = settings.MessagesAreEnabled;
             MinStatusLevel = settings.MessagesMinStatus;
             MessagesDelay = settings.MessagesDelay;
 
+            Chats.Clear();
             foreach (var (_, chat) in settings.Chats)
                 Chats.Add(new TelegramChatViewModel(chat));
         }
-
 
         internal TelegramMessagesSettingsUpdate GetUpdateModel() =>
             new()

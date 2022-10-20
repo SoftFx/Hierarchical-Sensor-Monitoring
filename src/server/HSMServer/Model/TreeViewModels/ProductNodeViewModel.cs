@@ -56,6 +56,7 @@ namespace HSMServer.Model.TreeViewModels
         internal void Update(ProductModel model)
         {
             Name = model.DisplayName;
+            TelegramSettings.Update(model.Notifications.Telegram);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)

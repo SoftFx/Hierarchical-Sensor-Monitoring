@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using Telegram.Bot.Types;
-using User = HSMServer.Core.Model.Authentication.User;
 
 namespace HSMServer.Core.Notifications
 {
@@ -81,6 +80,6 @@ namespace HSMServer.Core.Notifications
                     entity.GetChats().TryRemove(chatId, out _);
         }
 
-        internal void RemoveAllChats(User user) => ServerBook.TryRemove(user, out _);
+        internal void RemoveAllChats(INotificatable entity) => ServerBook.TryRemove(entity, out _);
     }
 }

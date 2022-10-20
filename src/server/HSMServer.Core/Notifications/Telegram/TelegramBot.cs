@@ -50,6 +50,7 @@ namespace HSMServer.Core.Notifications
             _userManager.RemoveUserEvent += RemoveUserEventHandler;
 
             _cache = cache;
+            _cache.ChangeProductEvent += RemoveProductEventHandler;
             _cache.NotifyAboutChangesEvent += SendMessage;
 
             _configurationProvider = configurationProvider;
@@ -218,6 +219,12 @@ namespace HSMServer.Core.Notifications
             _bot?.SendTextMessageAsync(chat, message, cancellationToken: _token);
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
+
+        private void RemoveProductEventHandler(ProductModel product, TransactionType transaction)
+        {
+            if (transaction == TransactionType.Delete)
+                _addressBook.RemoveAllChats(product);
+        }
 
         private bool IsValidBotConfigurations() =>
             !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken);
