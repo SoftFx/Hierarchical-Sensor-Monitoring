@@ -85,16 +85,16 @@ namespace HSMServer.Controllers
 
         #region Edit Product
 
-        [ProductRoleFilterByProductId(ProductRoleEnum.ProductManager)]
-        public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
+        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            var decodedId = SensorPathHelper.Decode(productId);
+            var decodedId = SensorPathHelper.Decode(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
-            var users = _userManager.GetViewers(productId);
+            var users = _userManager.GetViewers(decodedId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || users.Any())
