@@ -12,12 +12,12 @@ namespace HSMServer.Core.Notifications
         //private readonly ConcurrentDictionary<string, HashSet<Guid>> _telegramBook = new();  // TODO: collection for bot commands
 
 
-        internal ConcurrentDictionary<Guid, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new();
+        internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
 
 
-        internal Guid BuildInvitationToken(User user)
+        internal Guid BuildInvitationToken(INotificatable entity)
         {
-            var invitationToken = new InvitationToken(user);
+            var invitationToken = new InvitationToken(entity);
 
             _tokens[invitationToken.Token] = invitationToken;
 
@@ -42,8 +42,8 @@ namespace HSMServer.Core.Notifications
 
         internal void RegisterChat(Message message, InvitationToken token, bool isUserChat)
         {
-            var user = token.User;
-            var chats = user.Notifications.Telegram.Chats;
+            var entity = token.Entity;
+            var chats = entity.GetChats();
 
             if (!chats.ContainsKey(message.Chat))
             {
@@ -56,31 +56,31 @@ namespace HSMServer.Core.Notifications
                 };
 
                 if (chats.TryAdd(message.Chat, chatModel))
-                    RegisterChat(user, chatModel);
+                    RegisterChat(entity, chatModel);
             }
 
             RemoveToken(token.Token);
         }
 
-        internal void RegisterChat(User user, TelegramChat chat)
+        internal void RegisterChat(INotificatable entity, TelegramChat chat)
         {
-            if (!ServerBook.ContainsKey(user.Id))
-                ServerBook[user.Id] = new ConcurrentDictionary<ChatId, ChatSettings>();
+            if (!ServerBook.ContainsKey(entity))
+                ServerBook[entity] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
             //if (!_telegramBook.ContainsKey(chat.Name))
             //    _telegramBook[chat.Name] = new HashSet<Guid>();
 
-            ServerBook[user.Id].TryAdd(chat.Id, new ChatSettings(user.Id, chat));
-            //_telegramBook[chat.Name].Add(user.Id);
+            ServerBook[entity].TryAdd(chat.Id, new ChatSettings(chat));
+            //_telegramBook[chat.Name].Add(entity.Id);
         }
 
-        internal void RemoveChat(User user, ChatId chatId)
+        internal void RemoveChat(INotificatable entity, ChatId chatId)
         {
-            if (ServerBook.TryGetValue(user.Id, out var chats))
+            if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
-                    user.Notifications.Telegram.Chats.TryRemove(chatId, out _);
+                    entity.GetChats().TryRemove(chatId, out _);
         }
 
-        internal void RemoveAllChats(User user) => ServerBook.TryRemove(user.Id, out _);
+        internal void RemoveAllChats(User user) => ServerBook.TryRemove(user, out _);
     }
 }

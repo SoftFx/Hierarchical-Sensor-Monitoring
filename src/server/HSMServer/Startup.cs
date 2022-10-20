@@ -50,8 +50,8 @@ namespace HSMServer
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
-            services.AddSingleton<INotificationsCenter, NotificationsCenter>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+            services.AddSingleton<INotificationsCenter, NotificationsCenter>();
             services.AddSingleton<TreeViewModel>();
 
             services.AddHostedService<OutdatedSensorService>();

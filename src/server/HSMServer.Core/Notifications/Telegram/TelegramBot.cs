@@ -1,5 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using System;
@@ -24,6 +26,7 @@ namespace HSMServer.Core.Notifications
         };
 
         private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly TelegramUpdateHandler _updateHandler;
 
@@ -40,13 +43,17 @@ namespace HSMServer.Core.Notifications
             ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
 
-        internal TelegramBot(IUserManager userManager, IConfigurationProvider configurationProvider)
+        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache,
+            IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _userManager.RemoveUserEvent += RemoveUserEventHandler;
 
+            _cache = cache;
+            _cache.NotifyAboutChangesEvent += SendMessage;
+
             _configurationProvider = configurationProvider;
-            _updateHandler = new(_addressBook, _userManager, _configurationProvider);
+            _updateHandler = new(_addressBook, _userManager, _cache, _configurationProvider);
 
             FillAddressBook();
         }
@@ -55,8 +62,8 @@ namespace HSMServer.Core.Notifications
         public string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
-        public string GetStartCommandForGroup(User user) =>
-            $"@{BotName} /start {_addressBook.BuildInvitationToken(user)}";
+        public string GetStartCommandForGroup(ProductModel product) =>
+            $"@{BotName} /start {_addressBook.BuildInvitationToken(product)}";
 
         public async Task<string> GetChatLink(long chatId)
         {
@@ -67,10 +74,14 @@ namespace HSMServer.Core.Notifications
 
         public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
-        public void RemoveChat(User user, long chatId)
+        public void RemoveChat(INotificatable entity, long chatId)
         {
-            _addressBook.RemoveChat(user, new ChatId(chatId));
-            _userManager.UpdateUser(user);
+            _addressBook.RemoveChat(entity, new ChatId(chatId));
+
+            if (entity is User user)
+                _userManager.UpdateUser(user);
+            else if (entity is ProductModel product)
+                _cache.UpdateProduct(product);
         }
 
         public void SendTestMessage(long chatId, string message)
@@ -140,29 +151,33 @@ namespace HSMServer.Core.Notifications
             await StopBot();
         }
 
-        internal void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            if (IsBotRunning && AreBotMessagesEnabled)
-                foreach (var (userId, chats) in _addressBook.ServerBook)
-                {
-                    var user = _userManager.GetUser(userId);
-
-                    if (WhetherSendMessage(user, sensor, oldStatus))
-                        foreach (var (_, chat) in chats)
-                        {
-                            if (user.Notifications.Telegram.MessagesDelay > 0)
-                                chat.MessageBuilder.AddMessage(sensor);
-                            else
-                                SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-                        }
-                }
-        }
-
         private void FillAddressBook()
         {
             foreach (var user in _userManager.GetUsers())
                 foreach (var (_, chat) in user.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(user, chat);
+
+            foreach (var product in _cache.GetProducts(null))
+                foreach (var (_, chat) in product.Notifications.Telegram.Chats)
+                    _addressBook.RegisterChat(product, chat);
+        }
+
+        private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
+        {
+            if (IsBotRunning && AreBotMessagesEnabled)
+                foreach (var (userId, chats) in _addressBook.ServerBook)
+                {
+                    //var user = _userManager.GetUser(userId);
+
+                    //if (WhetherSendMessage(user, sensor, oldStatus))
+                    //    foreach (var (_, chat) in chats)
+                    //    {
+                    //        if (user.Notifications.Telegram.MessagesDelay > 0)
+                    //            chat.MessageBuilder.AddMessage(sensor);
+                    //        else
+                    //            SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                    //    }
+                }
         }
 
         private async void MessageReceiver(object _)
@@ -171,16 +186,16 @@ namespace HSMServer.Core.Notifications
             {
                 foreach (var (userId, chats) in _addressBook.ServerBook)
                 {
-                    var user = _userManager.GetUser(userId);
-                    var userNotificationsDelay = user.Notifications.Telegram.MessagesDelay;
+                    //var user = _userManager.GetUser(userId);
+                    //var userNotificationsDelay = user.Notifications.Telegram.MessagesDelay;
 
-                    foreach (var (_, chat) in chats)
-                        if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(userNotificationsDelay))
-                        {
-                            var message = chat.MessageBuilder.GetAggregateMessage();
-                            if (!string.IsNullOrEmpty(message))
-                                SendMessageAsync(chat.ChatId, message);
-                        }
+                    //foreach (var (_, chat) in chats)
+                    //    if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(userNotificationsDelay))
+                    //    {
+                    //        var message = chat.MessageBuilder.GetAggregateMessage();
+                    //        if (!string.IsNullOrEmpty(message))
+                    //            SendMessageAsync(chat.ChatId, message);
+                    //    }
                 }
 
                 await Task.Delay(500, _token);

@@ -33,7 +33,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             InitializeDatabase();
 
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
 
 

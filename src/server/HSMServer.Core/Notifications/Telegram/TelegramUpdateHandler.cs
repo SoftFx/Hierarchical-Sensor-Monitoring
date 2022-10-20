@@ -1,5 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using NLog;
 using System;
@@ -10,6 +12,7 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using User = HSMServer.Core.Model.Authentication.User;
 
 namespace HSMServer.Core.Notifications
 {
@@ -20,15 +23,18 @@ namespace HSMServer.Core.Notifications
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
         private readonly IConfigurationProvider _config;
 
         private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager, IConfigurationProvider config)
+        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
+            ITreeValuesCache cache, IConfigurationProvider config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
+            _cache = cache;
             _config = config;
         }
 
@@ -83,7 +89,7 @@ namespace HSMServer.Core.Notifications
 
             if (_addressBook.TryGetToken(commandParts[1], out var token))
             {
-                response.Append($"Hi, {token.User.UserName}. ");
+                response.Append(token.Entity.BuildStartCommandGreetings());
 
                 if (token.ExpirationTime < DateTime.UtcNow)
                 {
@@ -94,9 +100,13 @@ namespace HSMServer.Core.Notifications
                 else
                 {
                     _addressBook.RegisterChat(message, token, isUserChat);
-                    _userManager.UpdateUser(token.User);
 
-                    response.Append("You are succesfully authorized.");
+                    if (token.Entity is User user)
+                        _userManager.UpdateUser(user);
+                    else if (token.Entity is ProductModel product)
+                        _cache.UpdateProduct(product);
+
+                    response.Append(token.Entity.BuildStartCommandSuccessfullResponse());
                 }
             }
             else

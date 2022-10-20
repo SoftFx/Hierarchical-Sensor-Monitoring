@@ -136,7 +136,7 @@
                         {
                             <tr>
                                 <td>
-                                    <a target="_blank" asp-controller="@nameof(NotificationsController)"
+                                    <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
                                                        asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
                                                        asp-route-chatId="@group.ChatId">
                                         @group.Name
@@ -147,13 +147,14 @@
                                     <div class="dropdown">
                                         <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
                                         <div class="dropdown-menu">
-                                            <a class="dropdown-item" asp-controller="@nameof(NotificationsController)"
+                                            <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
                                                                      asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
                                                                      asp-route-chatId="@group.ChatId">
                                                 Send test message
                                             </a>
-                                            <a class="dropdown-item" asp-controller="@nameof(NotificationsController)"
+                                            <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
                                                                      asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                                                     asp-route-productId="@Model.ProductId"
                                                                      asp-route-chatId="@group.ChatId">
                                                 Remove authorization
                                             </a>
@@ -331,9 +332,11 @@
 
 <script>
     function getGroupStartCommand() {
+        let productId = $('#encodedProductId').val();
+
         $.ajax({
             type: 'GET',
-            url: "@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))",
+            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?ProductId=${productId}`,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
