@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using NLog;
 using System;
@@ -12,7 +11,6 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using User = HSMServer.Core.Model.Authentication.User;
 
 namespace HSMServer.Core.Notifications
 {
@@ -89,7 +87,7 @@ namespace HSMServer.Core.Notifications
 
             if (_addressBook.TryGetToken(commandParts[1], out var token))
             {
-                response.Append(token.Entity.BuildStartCommandGreetings());
+                response.Append(token.Entity.BuildGreetings());
 
                 if (token.ExpirationTime < DateTime.UtcNow)
                 {
@@ -100,13 +98,9 @@ namespace HSMServer.Core.Notifications
                 else
                 {
                     _addressBook.RegisterChat(message, token, isUserChat);
+                    token.Entity.UpdateEntity(_userManager, _cache);
 
-                    if (token.Entity is User user)
-                        _userManager.UpdateUser(user);
-                    else if (token.Entity is ProductModel product)
-                        _cache.UpdateProduct(product);
-
-                    response.Append(token.Entity.BuildStartCommandSuccessfullResponse());
+                    response.Append(token.Entity.BuildSuccessfullResponse());
                 }
             }
             else

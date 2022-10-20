@@ -36,12 +36,9 @@ namespace HSMServer.Controllers
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string productId)
         {
             var entity = GetEntity(productId);
-            entity.NotificationSettings.Telegram.Update(telegramSettings.GetUpdateModel());
+            entity.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
 
-            if (entity is User user)
-                _userManager.UpdateUser(user);
-            else if (entity is ProductModel product)
-                _cache.UpdateProduct(product);
+            entity.UpdateEntity(_userManager, _cache);
 
             return GetResult(productId);
         }

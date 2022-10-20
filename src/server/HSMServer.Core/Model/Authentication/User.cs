@@ -33,7 +33,10 @@ namespace HSMServer.Core.Model.Authentication
 
         public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
 
+
         string INotificatable.Id => Id.ToString();
+
+        NotificationSettings INotificatable.Notifications => Notifications;
 
 
         public User(string userName) : this()

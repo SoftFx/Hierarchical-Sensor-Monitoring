@@ -78,11 +78,7 @@ namespace HSMServer.Core.Notifications
         public void RemoveChat(INotificatable entity, long chatId)
         {
             _addressBook.RemoveChat(entity, new ChatId(chatId));
-
-            if (entity is User user)
-                _userManager.UpdateUser(user);
-            else if (entity is ProductModel product)
-                _cache.UpdateProduct(product);
+            entity.UpdateEntity(_userManager, _cache);
         }
 
         public void SendTestMessage(long chatId, string message)
@@ -171,7 +167,7 @@ namespace HSMServer.Core.Notifications
                     if (WhetherSendMessage(entity, sensor, oldStatus))
                         foreach (var (_, chat) in chats)
                         {
-                            if (entity.NotificationSettings.Telegram.MessagesDelay > 0)
+                            if (entity.Notifications.Telegram.MessagesDelay > 0)
                                 chat.MessageBuilder.AddMessage(sensor);
                             else
                                 SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
@@ -185,7 +181,7 @@ namespace HSMServer.Core.Notifications
             {
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    var notificationsDelay = entity.NotificationSettings.Telegram.MessagesDelay;
+                    var notificationsDelay = entity.Notifications.Telegram.MessagesDelay;
 
                     foreach (var (_, chat) in chats)
                         if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(notificationsDelay))
@@ -203,10 +199,9 @@ namespace HSMServer.Core.Notifications
         private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
         {
             var newStatus = sensor.ValidationResult;
-            var telegramSettings = entity.NotificationSettings.Telegram;
-            var minStatus = telegramSettings.MessagesMinStatus;
+            var minStatus = entity.Notifications.Telegram.MessagesMinStatus;
 
-            return telegramSettings.MessagesAreEnabled &&
+            return entity.Notifications.Telegram.MessagesAreEnabled &&
                    (entity is not User user || (user.Notifications.IsSensorEnabled(sensor.Id) && !user.Notifications.IsSensorIgnored(sensor.Id))) &&
                    newStatus != oldStatus &&
                    (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);

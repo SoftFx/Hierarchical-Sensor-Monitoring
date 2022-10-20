@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using System.Collections.Concurrent;
@@ -11,42 +13,10 @@ namespace HSMServer.Core.Notifications
     {
         internal string Id { get; }
 
-
-        public NotificationSettings NotificationSettings
-        {
-            get
-            {
-                if (this is User user)
-                    return user.Notifications;
-                else if (this is ProductModel product)
-                    return product.Notifications;
-
-                return null;
-            }
-        }
+        public NotificationSettings Notifications { get; }
 
         internal ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
-            NotificationSettings?.Telegram.Chats ?? new();
-
-        internal string BuildStartCommandGreetings()
-        {
-            if (this is User user)
-                return $"Hi, {user.UserName}. ";
-            else if (this is ProductModel)
-                return $"Hi. ";
-
-            return string.Empty;
-        }
-
-        internal string BuildStartCommandSuccessfullResponse()
-        {
-            if (this is User)
-                return "You are succesfully authorized.";
-            else if (this is ProductModel product)
-                return $"Product '{product.DisplayName}' is successfully added to group.";
-
-            return string.Empty;
-        }
+            Notifications?.Telegram.Chats ?? new();
     }
 
 
@@ -54,6 +24,34 @@ namespace HSMServer.Core.Notifications
     {
         public bool Equals(INotificatable x, INotificatable y) => x.Id == y.Id;
 
-        public int GetHashCode([DisallowNull] INotificatable obj) => obj.GetHashCode();
+        public int GetHashCode([DisallowNull] INotificatable obj) => obj.Id.GetHashCode();
+    }
+
+
+    public static class NotificatableExtensions
+    {
+        public static void UpdateEntity(this INotificatable entity, IUserManager userManager, ITreeValuesCache cache)
+        {
+            if (entity is User user)
+                userManager.UpdateUser(user);
+            else if (entity is ProductModel product)
+                cache.UpdateProduct(product);
+        }
+
+        internal static string BuildGreetings(this INotificatable entity) =>
+            entity switch
+            {
+                User user => $"Hi, {user.UserName}. ",
+                ProductModel => $"Hi. ",
+                _ => string.Empty,
+            };
+
+        internal static string BuildSuccessfullResponse(this INotificatable entity) =>
+            entity switch
+            {
+                User => "You are succesfully authorized.",
+                ProductModel product => $"Product '{product.DisplayName}' is successfully added to group.",
+                _ => string.Empty,
+            };
     }
 }
