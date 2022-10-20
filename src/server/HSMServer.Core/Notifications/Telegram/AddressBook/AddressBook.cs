@@ -42,7 +42,7 @@ namespace HSMServer.Core.Notifications
         internal void RegisterChat(Message message, InvitationToken token, bool isUserChat)
         {
             var entity = token.Entity;
-            var chats = entity.GetChats();
+            var chats = entity.Chats;
 
             if (!chats.ContainsKey(message.Chat))
             {
@@ -77,7 +77,7 @@ namespace HSMServer.Core.Notifications
         {
             if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
-                    entity.GetChats().TryRemove(chatId, out _);
+                    entity.Chats.TryRemove(chatId, out _);
         }
 
         internal void RemoveAllChats(INotificatable entity) => ServerBook.TryRemove(entity, out _);

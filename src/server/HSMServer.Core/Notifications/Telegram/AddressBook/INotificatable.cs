@@ -12,11 +12,27 @@ namespace HSMServer.Core.Notifications
         internal string Id { get; }
 
 
+        public NotificationSettings NotificationSettings
+        {
+            get
+            {
+                if (this is User user)
+                    return user.Notifications;
+                else if (this is ProductModel product)
+                    return product.Notifications;
+
+                return null;
+            }
+        }
+
+        internal ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
+            NotificationSettings?.Telegram.Chats ?? new();
+
         internal string BuildStartCommandGreetings()
         {
             if (this is User user)
                 return $"Hi, {user.UserName}. ";
-            else if (this is ProductModel product)
+            else if (this is ProductModel)
                 return $"Hi. ";
 
             return string.Empty;
@@ -27,21 +43,9 @@ namespace HSMServer.Core.Notifications
             if (this is User)
                 return "You are succesfully authorized.";
             else if (this is ProductModel product)
-                return $"Product {product.DisplayName} is successfully added to group.";
+                return $"Product '{product.DisplayName}' is successfully added to group.";
 
             return string.Empty;
-        }
-
-        internal ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> GetChats()
-        {
-            NotificationSettings notificationSettings = null;
-
-            if (this is User user)
-                notificationSettings = user.Notifications;
-            else if (this is ProductModel product)
-                notificationSettings = product.Notifications;
-
-            return notificationSettings?.Telegram.Chats ?? new();
         }
     }
 

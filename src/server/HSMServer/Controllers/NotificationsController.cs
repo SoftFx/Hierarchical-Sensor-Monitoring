@@ -1,5 +1,7 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Constants;
+using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Notifications;
 using HSMServer.Helpers;
@@ -31,14 +33,17 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
+        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string productId)
         {
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
-            user.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
+            var entity = GetEntity(productId);
+            entity.NotificationSettings.Telegram.Update(telegramSettings.GetUpdateModel());
 
-            _userManager.UpdateUser(user);
+            if (entity is User user)
+                _userManager.UpdateUser(user);
+            else if (entity is ProductModel product)
+                _cache.UpdateProduct(product);
 
-            return RedirectToAction(nameof(Index));
+            return GetResult(productId);
         }
 
         public RedirectResult OpenInvitationLink() =>
@@ -56,24 +61,34 @@ namespace HSMServer.Controllers
             return _telegramBot.GetStartCommandForGroup(product);
         }
 
-        public IActionResult SendTestTelegramMessage(long chatId)
+        public IActionResult SendTestTelegramMessage(long chatId, string productId)
         {
-            _telegramBot.SendTestMessage(chatId, $"Test message for {(HttpContext.User as User).UserName}");
+            var testMessage = $"Test message for {(HttpContext.User as User).UserName}.";
+            if (GetEntity(productId) is ProductModel product)
+                testMessage = $"{testMessage} (Product {product.DisplayName})";
 
-            return RedirectToAction(nameof(Index));
+            _telegramBot.SendTestMessage(chatId, testMessage);
+
+            return GetResult(productId);
         }
 
         public IActionResult RemoveTelegramAuthorization(long chatId, string productId)
         {
-            INotificatable entity = !string.IsNullOrEmpty(productId)
-                ? _cache.GetProduct(productId)
-                : GetCurrentUser();
+            _telegramBot.RemoveChat(GetEntity(productId), chatId);
 
-            _telegramBot.RemoveChat(entity, chatId);
-
-            return RedirectToAction(nameof(Index));
+            return GetResult(productId);
         }
 
+        private INotificatable GetEntity(string productId) =>
+            !string.IsNullOrEmpty(productId)
+                ? _cache.GetProduct(SensorPathHelper.Decode(productId))
+                : GetCurrentUser();
+
         private User GetCurrentUser() => _userManager.GetUser((HttpContext.User as User).Id);
+
+        private RedirectToActionResult GetResult(string productId) =>
+            string.IsNullOrEmpty(productId)
+                ? RedirectToAction(nameof(Index))
+                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = productId });
     }
 }
