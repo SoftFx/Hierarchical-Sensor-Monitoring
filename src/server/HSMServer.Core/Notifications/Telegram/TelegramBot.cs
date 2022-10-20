@@ -166,18 +166,16 @@ namespace HSMServer.Core.Notifications
         private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             if (IsBotRunning && AreBotMessagesEnabled)
-                foreach (var (userId, chats) in _addressBook.ServerBook)
+                foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    //var user = _userManager.GetUser(userId);
-
-                    //if (WhetherSendMessage(user, sensor, oldStatus))
-                    //    foreach (var (_, chat) in chats)
-                    //    {
-                    //        if (user.Notifications.Telegram.MessagesDelay > 0)
-                    //            chat.MessageBuilder.AddMessage(sensor);
-                    //        else
-                    //            SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-                    //    }
+                    if (WhetherSendMessage(entity, sensor, oldStatus))
+                        foreach (var (_, chat) in chats)
+                        {
+                            if (entity.NotificationSettings.Telegram.MessagesDelay > 0)
+                                chat.MessageBuilder.AddMessage(sensor);
+                            else
+                                SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                        }
                 }
         }
 
@@ -185,32 +183,31 @@ namespace HSMServer.Core.Notifications
         {
             while (IsBotRunning)
             {
-                foreach (var (userId, chats) in _addressBook.ServerBook)
+                foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    //var user = _userManager.GetUser(userId);
-                    //var userNotificationsDelay = user.Notifications.Telegram.MessagesDelay;
+                    var notificationsDelay = entity.NotificationSettings.Telegram.MessagesDelay;
 
-                    //foreach (var (_, chat) in chats)
-                    //    if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(userNotificationsDelay))
-                    //    {
-                    //        var message = chat.MessageBuilder.GetAggregateMessage();
-                    //        if (!string.IsNullOrEmpty(message))
-                    //            SendMessageAsync(chat.ChatId, message);
-                    //    }
+                    foreach (var (_, chat) in chats)
+                        if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(notificationsDelay))
+                        {
+                            var message = chat.MessageBuilder.GetAggregateMessage();
+                            if (!string.IsNullOrEmpty(message))
+                                SendMessageAsync(chat.ChatId, message);
+                        }
                 }
 
                 await Task.Delay(500, _token);
             }
         }
 
-        private static bool WhetherSendMessage(User user, BaseSensorModel sensor, ValidationResult oldStatus)
+        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
         {
             var newStatus = sensor.ValidationResult;
-            var minStatus = user.Notifications.Telegram.MessagesMinStatus;
+            var telegramSettings = entity.NotificationSettings.Telegram;
+            var minStatus = telegramSettings.MessagesMinStatus;
 
-            return user.Notifications.Telegram.MessagesAreEnabled &&
-                   user.Notifications.IsSensorEnabled(sensor.Id) &&
-                   !user.Notifications.IsSensorIgnored(sensor.Id) &&
+            return telegramSettings.MessagesAreEnabled &&
+                   (entity is not User user || (user.Notifications.IsSensorEnabled(sensor.Id) && !user.Notifications.IsSensorIgnored(sensor.Id))) &&
                    newStatus != oldStatus &&
                    (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }
