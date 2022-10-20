@@ -60,11 +60,7 @@ namespace HSMServer.Core.Model.Authentication
             CertificateThumbprint = user.CertificateThumbprint;
             CertificateFileName = user.CertificateFileName;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-                ProductsRoles.AddRange(user.ProductsRoles);
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
             TreeFilter = user.TreeFilter;
         }
@@ -104,13 +100,7 @@ namespace HSMServer.Core.Model.Authentication
             //CertificateThumbprint = user.CertificateThumbprint;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(user.ProductsRoles);
-            }
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
             TreeFilter = user.TreeFilter;
         }
