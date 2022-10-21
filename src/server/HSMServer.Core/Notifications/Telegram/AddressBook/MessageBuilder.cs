@@ -86,7 +86,7 @@ namespace HSMServer.Core.Notifications
 
             return new()
             {
-                SensorValueTime = sensor.LastValue.Time,
+                SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
                 SensorPath = sensor.Path,
                 ProductName = sensor.ProductName,
                 Message = builder.ToString(),

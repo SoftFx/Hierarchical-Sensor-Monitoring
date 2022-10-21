@@ -203,6 +203,7 @@ namespace HSMServer.Core.Notifications
 
             return entity.Notifications.Telegram.MessagesAreEnabled &&
                    (entity is not User user || (user.Notifications.IsSensorEnabled(sensor.Id) && !user.Notifications.IsSensorIgnored(sensor.Id))) &&
+                   (entity is not ProductModel product || sensor.ProductId == product.Id) &&
                    newStatus != oldStatus &&
                    (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }
