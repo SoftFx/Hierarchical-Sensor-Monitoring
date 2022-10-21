@@ -37,7 +37,9 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel ParentProduct { get; private set; }
 
-        public NotificationSettings Notifications { get; }
+        public ProductNotificationSettings Notifications { get; }
+
+        NotificationSettings INotificatable.Notifications => Notifications;
 
 
         public ProductModel()

@@ -13,6 +13,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long CreationDate { get; set; }
         public List<string> SubProductsIds { get; init; }
         public List<string> SensorsIds { get; init; }
-        public NotificationSettingsEntity NotificationSettings { get; set; }
+        public ProductNotificationSettingsEntity NotificationSettings { get; set; }
     }
 }
