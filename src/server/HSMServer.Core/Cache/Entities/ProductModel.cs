@@ -39,7 +39,11 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductNotificationSettings Notifications { get; }
 
+
         NotificationSettings INotificatable.Notifications => Notifications;
+
+        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
+            Notifications.Telegram.MessagesAreEnabled && sensor.ProductId == Id;
 
 
         public ProductModel()

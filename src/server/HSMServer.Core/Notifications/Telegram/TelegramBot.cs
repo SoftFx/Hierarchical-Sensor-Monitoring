@@ -164,7 +164,7 @@ namespace HSMServer.Core.Notifications
             if (IsBotRunning && AreBotMessagesEnabled)
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    if (WhetherSendMessage(entity, sensor, oldStatus))
+                    if (entity.WhetherSendMessage(sensor, oldStatus))
                         foreach (var (_, chat) in chats)
                         {
                             if (entity.Notifications.Telegram.MessagesDelay > 0)
@@ -194,18 +194,6 @@ namespace HSMServer.Core.Notifications
 
                 await Task.Delay(500, _token);
             }
-        }
-
-        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            var newStatus = sensor.ValidationResult;
-            var minStatus = entity.Notifications.Telegram.MessagesMinStatus;
-
-            return entity.Notifications.Telegram.MessagesAreEnabled &&
-                   (entity is not User user || (user.Notifications.IsSensorEnabled(sensor.Id) && !user.Notifications.IsSensorIgnored(sensor.Id))) &&
-                   (entity is not ProductModel product || sensor.ProductId == product.Id) &&
-                   newStatus != oldStatus &&
-                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
         }
 
         private void SendMessageAsync(ChatId chat, string message) =>

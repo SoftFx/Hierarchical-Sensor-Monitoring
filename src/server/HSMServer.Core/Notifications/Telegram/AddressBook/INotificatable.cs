@@ -17,6 +17,19 @@ namespace HSMServer.Core.Notifications
 
         internal ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
             Notifications?.Telegram.Chats ?? new();
+
+
+        internal bool AreNotificationsEnabled(BaseSensorModel sensor);
+
+        internal bool WhetherSendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
+        {
+            var newStatus = sensor.ValidationResult;
+            var minStatus = Notifications.Telegram.MessagesMinStatus;
+
+            return AreNotificationsEnabled(sensor) &&
+                   newStatus != oldStatus &&
+                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
+        }
     }
 
 
