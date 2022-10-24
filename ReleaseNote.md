@@ -5,6 +5,7 @@
 ### Telegram
 
 * Ability to receive messages from telegram bot in telegram group has been added (groups can be customized for a specific product)
+* New telegram commands /info and /status have been added
 
 ### Site
 
