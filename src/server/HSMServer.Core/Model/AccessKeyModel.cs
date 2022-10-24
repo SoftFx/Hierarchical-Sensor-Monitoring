@@ -24,6 +24,9 @@ namespace HSMServer.Core.Model
 
     public sealed class AccessKeyModel
     {
+        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
+
+
         public Guid Id { get; }
 
         public string AuthorId { get; }
@@ -73,8 +76,7 @@ namespace HSMServer.Core.Model
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors |
-                          KeyPermissions.CanSendSensorData |KeyPermissions.CanReadSensorData;
+            Permissions = _fullPermissions;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
