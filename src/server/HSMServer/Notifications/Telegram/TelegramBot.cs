@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using System;

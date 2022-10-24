@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using System;
 using Xunit;

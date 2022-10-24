@@ -1,6 +1,5 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using System;

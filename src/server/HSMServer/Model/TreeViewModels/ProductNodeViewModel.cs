@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMCommon.Extensions;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;

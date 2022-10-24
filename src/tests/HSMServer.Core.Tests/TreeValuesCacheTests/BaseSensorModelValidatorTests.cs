@@ -1,6 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;

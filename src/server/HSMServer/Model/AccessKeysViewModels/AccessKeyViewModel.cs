@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;

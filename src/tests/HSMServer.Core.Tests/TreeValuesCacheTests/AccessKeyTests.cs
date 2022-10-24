@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;

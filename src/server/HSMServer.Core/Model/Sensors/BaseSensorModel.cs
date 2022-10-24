@@ -1,6 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntitites;
 using System;
 using System.Collections.Generic;
 

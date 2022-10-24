@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
 using System;

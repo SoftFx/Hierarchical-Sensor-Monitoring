@@ -1,8 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntitites;
 using System;
 
-namespace HSMServer.Core.Cache.Entities
+namespace HSMServer.Core.Model
 {
     [Flags]
     public enum KeyPermissions : long

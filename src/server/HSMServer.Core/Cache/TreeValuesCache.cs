@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntitites;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
