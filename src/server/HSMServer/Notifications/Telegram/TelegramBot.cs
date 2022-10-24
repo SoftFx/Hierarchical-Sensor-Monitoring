@@ -64,7 +64,7 @@ namespace HSMServer.Notifications
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
         public string GetStartCommandForGroup(ProductModel product) =>
-            $"{TelegramBotCommands.StartBotCommand}@{BotName} {_addressBook.BuildInvitationToken(product)}";
+            $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
         public async Task<string> GetChatLink(long chatId)
         {

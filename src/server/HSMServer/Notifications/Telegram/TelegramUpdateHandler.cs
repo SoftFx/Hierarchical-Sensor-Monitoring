@@ -58,9 +58,9 @@ namespace HSMServer.Notifications
 
                 var response = parts[0] switch
                 {
-                    TelegramBotCommands.StartBotCommand => StartBot(parts, message, isUserChat),
-                    TelegramBotCommands.InfoBotCommand => EntitiesInfo(message.Chat, isUserChat),
-                    TelegramBotCommands.StatusBotCommand => ServerStatus(),
+                    TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
+                    TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
+                    TelegramBotCommands.Status => ServerStatus(),
                     _ => null,
                 };
 
