@@ -14,7 +14,7 @@ namespace HSMServer.Core.Cache.Entities
     }
 
 
-    public sealed class ProductModel
+    public sealed class ProductModel : INotificatable
     {
         public string Id { get; }
 
@@ -36,12 +36,23 @@ namespace HSMServer.Core.Cache.Entities
 
         public ProductModel ParentProduct { get; private set; }
 
+        public ProductNotificationSettings Notifications { get; }
+
+
+        string INotificatable.Name => DisplayName;
+
+        NotificationSettings INotificatable.Notifications => Notifications;
+
+        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
+            Notifications.Telegram.MessagesAreEnabled && sensor.ProductId == Id;
+
 
         public ProductModel()
         {
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
             SubProducts = new ConcurrentDictionary<string, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
+            Notifications = new();
         }
 
         public ProductModel(ProductEntity entity) : this()
@@ -52,6 +63,7 @@ namespace HSMServer.Core.Cache.Entities
             DisplayName = entity.DisplayName;
             Description = entity.Description;
             CreationDate = new DateTime(entity.CreationDate);
+            Notifications = new(entity.NotificationSettings);
         }
 
         public ProductModel(string name) : this()
@@ -91,6 +103,7 @@ namespace HSMServer.Core.Cache.Entities
                 CreationDate = CreationDate.Ticks,
                 SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
                 SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
+                NotificationSettings = Notifications.ToEntity(),
             };
     }
 }

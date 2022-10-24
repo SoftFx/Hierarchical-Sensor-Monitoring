@@ -9,7 +9,7 @@ using System.Text.Json;
 
 namespace HSMServer.Core.Model.Authentication
 {
-    public class User : ClaimsPrincipal
+    public class User : ClaimsPrincipal, INotificatable
     {
         public Guid Id { get; set; }
 
@@ -25,12 +25,24 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
-        public NotificationSettings Notifications { get; internal set; }
+        public UserNotificationSettings Notifications { get; internal set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 
 
         public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
+
+
+        string INotificatable.Id => Id.ToString();
+
+        string INotificatable.Name => UserName;
+
+        NotificationSettings INotificatable.Notifications => Notifications;
+
+        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
+            Notifications.Telegram.MessagesAreEnabled &&
+            Notifications.IsSensorEnabled(sensor.Id) &&
+            !Notifications.IsSensorIgnored(sensor.Id);
 
 
         public User(string userName) : this()
@@ -57,11 +69,7 @@ namespace HSMServer.Core.Model.Authentication
             CertificateThumbprint = user.CertificateThumbprint;
             CertificateFileName = user.CertificateFileName;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-                ProductsRoles.AddRange(user.ProductsRoles);
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
             TreeFilter = user.TreeFilter;
         }
@@ -101,13 +109,7 @@ namespace HSMServer.Core.Model.Authentication
             //CertificateThumbprint = user.CertificateThumbprint;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(user.ProductsRoles);
-            }
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
             TreeFilter = user.TreeFilter;
         }

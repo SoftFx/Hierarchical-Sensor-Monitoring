@@ -83,6 +83,13 @@
                     <input id='@(Model.EncodedId)_partialNotifications' value='@((!nodeState.IsAllNotificationsEnabled).ToString())' style='display: none' />
                 </span>
             }
+            
+            @if (Model.TelegramSettings.Chats.Count > 0)
+            {
+                <span>
+                    <i class="fa-solid fa-people-group"></i>
+                </span>
+            }
         }
     </li>
 }

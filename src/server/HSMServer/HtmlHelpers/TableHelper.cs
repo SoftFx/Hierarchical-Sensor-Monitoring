@@ -193,9 +193,9 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
             //header template
-            result.Append("<div style='margin: 10px'>" +
+            result.Append("<div>" +
                 "<div class='row justify-content-start'>" +
-                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Members</h5></div></div>");
+                $"<h5 class='mt-1'>Members</h5></div></div>");
 
             result.Append("<div class='col-xxl'>");
             //table template

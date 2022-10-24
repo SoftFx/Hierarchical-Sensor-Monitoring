@@ -111,7 +111,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            void EnableSensors(NotificationSettings settings, Guid sensorId) =>
+            void EnableSensors(UserNotificationSettings settings, Guid sensorId) =>
                 settings.EnabledSensors.Add(sensorId);
 
             UpdateUserNotificationSettings(selectedId, EnableSensors);
@@ -120,7 +120,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            void DisableSensors(NotificationSettings settings, Guid sensorId)
+            void DisableSensors(UserNotificationSettings settings, Guid sensorId)
             {
                 settings.EnabledSensors.Remove(sensorId);
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
@@ -146,7 +146,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model)
         {
-            void IgnoreSensors(NotificationSettings settings, Guid sensorId)
+            void IgnoreSensors(UserNotificationSettings settings, Guid sensorId)
             {
                 if (settings.IsSensorEnabled(sensorId))
                     settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
@@ -158,7 +158,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            void RemoveIgnoredSensors(NotificationSettings settings, Guid sensorId) =>
+            void RemoveIgnoredSensors(UserNotificationSettings settings, Guid sensorId) =>
                 settings.IgnoredSensors.TryRemove(sensorId, out _);
 
             UpdateUserNotificationSettings(selectedId, RemoveIgnoredSensors);
@@ -177,7 +177,7 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(string selectedNode, Action<UserNotificationSettings, Guid> updateSettings)
         {
             var sensors = GetNodeSensors(selectedNode);
             var user = _userManager.GetCopyUser((HttpContext.User as User).Id);

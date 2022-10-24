@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Notifications
+﻿namespace HSMServer.Notifications
 {
     public interface INotificationsCenter
     {

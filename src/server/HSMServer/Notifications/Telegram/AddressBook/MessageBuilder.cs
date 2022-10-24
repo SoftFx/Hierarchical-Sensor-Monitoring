@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     internal sealed class MessageBuilder
     {
@@ -19,7 +19,7 @@ namespace HSMServer.Core.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-           var productId = sensor.ProductId;
+            var productId = sensor.ProductId;
 
             if (!_messages.ContainsKey(productId))
                 _messages[productId] = new Dictionary<string, MessagesQueue>();
@@ -86,7 +86,7 @@ namespace HSMServer.Core.Notifications
 
             return new()
             {
-                SensorValueTime = sensor.LastValue.Time,
+                SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
                 SensorPath = sensor.Path,
                 ProductName = sensor.ProductName,
                 Message = builder.ToString(),

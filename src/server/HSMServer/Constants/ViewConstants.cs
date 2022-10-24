@@ -11,6 +11,7 @@
         public const string ProductController = "Product";
         public const string ConfigurationController = "Configuration";
         public const string AccessKeysController = "AccessKeys";
+        public const string NotificationsController = "Notifications";
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";

@@ -33,6 +33,9 @@ namespace HSMServer.Core.Model
 
         public DateTime CreationDate { get; private set; }
 
+        /// <summary>
+        /// Sensor parent product ID
+        /// </summary>
         public string ParentProductId { get; private set; }
 
         public string DisplayName { get; private set; }
@@ -47,6 +50,9 @@ namespace HSMServer.Core.Model
 
         public string ProductName { get; private set; }
 
+        /// <summary>
+        /// Product ID that is parent for this sensor and doesn't have parent product (top level product)
+        /// </summary>
         public string ProductId { get; private set; }
 
         public string Path { get; private set; }

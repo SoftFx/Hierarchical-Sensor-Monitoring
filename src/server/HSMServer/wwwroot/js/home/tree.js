@@ -177,7 +177,7 @@ function customMenu(node) {
         "Notifications": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Notifications",
+            "label": "Private notifications",
             "submenu": {
                 "EnableNotifications": {
                     "separator_before": false,

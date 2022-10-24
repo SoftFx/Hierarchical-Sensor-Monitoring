@@ -6,7 +6,6 @@ using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Notifications;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
@@ -30,7 +29,6 @@ namespace HSMServer.Core.Cache
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
-        private readonly TelegramBot _telegramBot;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
@@ -42,13 +40,13 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
+        public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager,
-            IUpdatesQueue updatesQueue, INotificationsCenter notificationsCenter)
+
+        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
-            _telegramBot = notificationsCenter.TelegramBot;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -87,6 +85,13 @@ namespace HSMServer.Core.Cache
             AddProduct(product);
 
             return product;
+        }
+
+        public void UpdateProduct(ProductModel product)
+        {
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
 
         public void RemoveProduct(string productId)
@@ -308,8 +313,7 @@ namespace HSMServer.Core.Cache
 
         public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
         {
-            _telegramBot.SendMessage(sensor, oldStatus);
-
+            NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
@@ -665,13 +669,6 @@ namespace HSMServer.Core.Cache
 
             sensor.AddPolicy(policy);
             _databaseCore.AddPolicy(policy.ToEntity());
-        }
-
-        private void UpdateProduct(ProductModel product)
-        {
-            _databaseCore.UpdateProduct(product.ToProductEntity());
-
-            ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
 
         private bool AddKeyToTree(AccessKeyModel key)

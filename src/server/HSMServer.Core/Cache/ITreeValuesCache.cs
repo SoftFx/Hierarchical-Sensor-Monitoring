@@ -23,12 +23,15 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
+        event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
+
 
         List<ProductModel> GetTree();
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName);
+        void UpdateProduct(ProductModel product);
         void RemoveProduct(string id);
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
