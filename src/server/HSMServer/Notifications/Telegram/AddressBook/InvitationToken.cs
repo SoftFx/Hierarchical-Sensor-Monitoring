@@ -1,6 +1,7 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     internal readonly struct InvitationToken
     {

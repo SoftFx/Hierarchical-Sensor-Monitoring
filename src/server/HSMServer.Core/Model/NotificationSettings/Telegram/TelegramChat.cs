@@ -15,7 +15,7 @@ namespace HSMServer.Core.Model
         public DateTime AuthorizationTime { get; init; }
 
 
-        internal TelegramChat() { }
+        public TelegramChat() { }
 
         internal TelegramChat(TelegramChatEntity entity)
         {

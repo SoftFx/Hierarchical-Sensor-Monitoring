@@ -13,7 +13,7 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using User = HSMServer.Core.Model.Authentication.User;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     public sealed class TelegramBot : IAsyncDisposable
     {

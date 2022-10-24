@@ -12,7 +12,7 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {

@@ -4,7 +4,7 @@ using HSMServer.Core.Configuration;
 using System;
 using System.Threading.Tasks;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     public sealed class NotificationsCenter : INotificationsCenter, IAsyncDisposable
     {

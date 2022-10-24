@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.UserFilters;
-using HSMServer.Core.Notifications;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

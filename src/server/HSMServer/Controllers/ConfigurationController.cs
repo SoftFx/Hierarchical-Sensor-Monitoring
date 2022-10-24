@@ -1,8 +1,8 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
-using HSMServer.Core.Notifications;
 using HSMServer.Model.ViewModel;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;

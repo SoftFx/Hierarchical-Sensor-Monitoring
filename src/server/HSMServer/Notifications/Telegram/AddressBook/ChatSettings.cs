@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using Telegram.Bot.Types;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     internal sealed record ChatSettings
     {

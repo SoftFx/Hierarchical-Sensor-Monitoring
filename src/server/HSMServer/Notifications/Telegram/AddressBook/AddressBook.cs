@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Telegram.Bot.Types;
 
-namespace HSMServer.Core.Notifications
+namespace HSMServer.Notifications
 {
     internal sealed class AddressBook
     {

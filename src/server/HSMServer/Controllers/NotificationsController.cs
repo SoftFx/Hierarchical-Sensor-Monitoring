@@ -2,10 +2,11 @@
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Notifications;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
