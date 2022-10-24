@@ -64,7 +64,7 @@ namespace HSMServer.Notifications
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
         public string GetStartCommandForGroup(ProductModel product) =>
-            $"@{BotName} /start {_addressBook.BuildInvitationToken(product)}";
+            $"/start@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
         public async Task<string> GetChatLink(long chatId)
         {
@@ -114,6 +114,8 @@ namespace HSMServer.Notifications
                 _bot = null;
                 return exc.Message;
             }
+
+            await _bot.SetMyCommandsAsync(TelegramBotCommands.BuildCommands(), cancellationToken: _token);
 
             _bot.StartReceiving(_updateHandler, _options, _token);
             ThreadPool.QueueUserWorkItem(MessageReceiver);

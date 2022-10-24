@@ -4,6 +4,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using NLog;
 using System;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,10 +17,6 @@ namespace HSMServer.Notifications
 {
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
-        private const string StartBotCommand = "/start";
-        private const string InfoBotCommand = "/info";
-        private const string StatusBotCommand = "/status";
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
@@ -53,17 +50,17 @@ namespace HSMServer.Notifications
 
                 if (!isUserChat)
                 {
-                    if (parts[0] != BotName)
+                    if (!parts[0].Contains(BotName))
                         return;
 
-                    parts = parts[1..];
+                    parts[0] = parts[0].Replace(BotName, string.Empty);
                 }
 
                 var response = parts[0] switch
                 {
-                    StartBotCommand => StartBot(parts, message, isUserChat),
-                    InfoBotCommand => EntitiesInfo(message.Chat, isUserChat),
-                    StatusBotCommand => ServerStatus(),
+                    TelegramBotCommands.StartBotCommand => StartBot(parts, message, isUserChat),
+                    TelegramBotCommands.InfoBotCommand => EntitiesInfo(message.Chat, isUserChat),
+                    TelegramBotCommands.StatusBotCommand => ServerStatus(),
                     _ => null,
                 };
 
@@ -116,14 +113,15 @@ namespace HSMServer.Notifications
         private string EntitiesInfo(ChatId chat, bool isUserChat)
         {
             var response = new StringBuilder(1 << 6);
+            var entityStr = isUserChat ? "user" : "product";
 
-            response.AppendLine(isUserChat ? "Authorized user(s) settings:" : "Added product(s) settings:");
+            response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:");
 
             foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
             {
                 var telegramSetting = entity.Notifications.Telegram;
 
-                response.AppendLine(entity.Name);
+                response.AppendLine($"{entityStr} '{entity.Name}'");
                 response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelay}");
                 response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}");
                 response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}");
@@ -134,7 +132,9 @@ namespace HSMServer.Notifications
 
         private static string ServerStatus()
         {
-            return "HSM server is alive";
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+
+            return $"HSM server {version.Major}.{version.Minor}.{version.Build} is alive";
         }
     }
 }
