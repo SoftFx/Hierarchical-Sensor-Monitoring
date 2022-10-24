@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 using System.Linq;

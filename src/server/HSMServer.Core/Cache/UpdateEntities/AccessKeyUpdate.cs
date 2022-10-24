@@ -1,6 +1,7 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 
-namespace HSMServer.Core.Cache.Entities
+namespace HSMServer.Core.Cache.UpdateEntitites
 {
     public readonly struct AccessKeyUpdate
     {

@@ -1,10 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 
-namespace HSMServer.Core.Cache.Entities
+namespace HSMServer.Core.Model
 {
     [Flags]
     public enum ProductState : int
