@@ -10,7 +10,8 @@ namespace HSMServer.Core.Model
     {
         CanSendSensorData = 1,
         CanAddNodes = 2,
-        CanAddSensors = 4
+        CanAddSensors = 4,
+        CanReadSensorData = 8,
     }
 
     public enum KeyState : byte
@@ -72,7 +73,8 @@ namespace HSMServer.Core.Model
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
+            Permissions = KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors |
+                          KeyPermissions.CanSendSensorData |KeyPermissions.CanReadSensorData;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
