@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Core.Notifications
@@ -8,11 +9,12 @@ namespace HSMServer.Core.Notifications
     internal sealed class AddressBook
     {
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
-        //private readonly ConcurrentDictionary<string, HashSet<Guid>> _telegramBook = new();  // TODO: collection for bot commands
-
+        private readonly ConcurrentDictionary<ChatId, HashSet<INotificatable>> _telegramBook = new();
 
         internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
 
+
+        internal HashSet<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat);
 
         internal Guid BuildInvitationToken(INotificatable entity)
         {
@@ -66,11 +68,11 @@ namespace HSMServer.Core.Notifications
             if (!ServerBook.ContainsKey(entity))
                 ServerBook[entity] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
-            //if (!_telegramBook.ContainsKey(chat.Name))
-            //    _telegramBook[chat.Name] = new HashSet<Guid>();
+            if (!_telegramBook.ContainsKey(chat.Id))
+                _telegramBook[chat.Id] = new HashSet<INotificatable>();
 
             ServerBook[entity].TryAdd(chat.Id, new ChatSettings(chat));
-            //_telegramBook[chat.Name].Add(entity.Id);
+            _telegramBook[chat.Id].Add(entity);
         }
 
         internal void RemoveChat(INotificatable entity, ChatId chatId)
@@ -78,8 +80,22 @@ namespace HSMServer.Core.Notifications
             if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
                     entity.Chats.TryRemove(chatId, out _);
+
+            RemoveEntity(entity, chatId);
         }
 
-        internal void RemoveAllChats(INotificatable entity) => ServerBook.TryRemove(entity, out _);
+        internal void RemoveAllChats(INotificatable entity)
+        {
+            ServerBook.TryRemove(entity, out _);
+
+            foreach (var (chatId, _) in entity.Chats)
+                RemoveEntity(entity, chatId);
+        }
+
+        private void RemoveEntity(INotificatable entity, ChatId chatId)
+        {
+            if (_telegramBook.TryGetValue(chatId, out var entities))
+                entities.Remove(entity);
+        }
     }
 }

@@ -36,6 +36,8 @@ namespace HSMServer.Core.Model.Authentication
 
         string INotificatable.Id => Id.ToString();
 
+        string INotificatable.Name => UserName;
+
         NotificationSettings INotificatable.Notifications => Notifications;
 
         bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>

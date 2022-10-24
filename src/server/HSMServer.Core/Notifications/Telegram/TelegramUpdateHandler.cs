@@ -17,6 +17,8 @@ namespace HSMServer.Core.Notifications
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private const string StartBotCommand = "/start";
+        private const string InfoBotCommand = "/info";
+        private const string StatusBotCommand = "/status";
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly AddressBook _addressBook;
@@ -60,6 +62,8 @@ namespace HSMServer.Core.Notifications
                 var response = parts[0] switch
                 {
                     StartBotCommand => StartBot(parts, message, isUserChat),
+                    InfoBotCommand => EntitiesInfo(message.Chat, isUserChat),
+                    StatusBotCommand => ServerStatus(),
                     _ => null,
                 };
 
@@ -83,7 +87,7 @@ namespace HSMServer.Core.Notifications
             if (commandParts.Length != 2)
                 return null;
 
-            var response = new StringBuilder(1 << 2);
+            var response = new StringBuilder(1 << 5);
 
             if (_addressBook.TryGetToken(commandParts[1], out var token))
             {
@@ -107,6 +111,30 @@ namespace HSMServer.Core.Notifications
                 response.Append("Your token is invalid or expired.");
 
             return response.ToString();
+        }
+
+        private string EntitiesInfo(ChatId chat, bool isUserChat)
+        {
+            var response = new StringBuilder(1 << 6);
+
+            response.AppendLine(isUserChat ? "Authorized user(s) settings:" : "Added product(s) settings:");
+
+            foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
+            {
+                var telegramSetting = entity.Notifications.Telegram;
+
+                response.AppendLine(entity.Name);
+                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelay}");
+                response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}");
+                response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}");
+            }
+
+            return response.ToString();
+        }
+
+        private static string ServerStatus()
+        {
+            return "HSM server is alive";
         }
     }
 }

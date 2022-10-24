@@ -40,6 +40,8 @@ namespace HSMServer.Core.Cache.Entities
         public ProductNotificationSettings Notifications { get; }
 
 
+        string INotificatable.Name => DisplayName;
+
         NotificationSettings INotificatable.Notifications => Notifications;
 
         bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>

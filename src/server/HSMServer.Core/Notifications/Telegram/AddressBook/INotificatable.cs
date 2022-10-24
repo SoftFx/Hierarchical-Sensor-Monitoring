@@ -13,6 +13,8 @@ namespace HSMServer.Core.Notifications
     {
         internal string Id { get; }
 
+        internal string Name { get; }
+
         public NotificationSettings Notifications { get; }
 
         internal ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
