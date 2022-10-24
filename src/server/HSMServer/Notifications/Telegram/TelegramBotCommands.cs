@@ -10,7 +10,7 @@ namespace HSMServer.Notifications
         internal const string StatusBotCommand = "/status";
 
 
-        internal static List<BotCommand> BuildCommands() =>
+        internal static List<BotCommand> Commands =>
             new()
             {
                 new BotCommand()
