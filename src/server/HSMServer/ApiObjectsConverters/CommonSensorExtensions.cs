@@ -3,9 +3,9 @@ using HSMSensorDataObjects.FullDataObject;
 using System.Text.Json;
 using SensorType = HSMSensorDataObjects.SensorType;
 
-namespace HSMServer.Core.Converters
+namespace HSMServer.ApiObjectsConverters
 {
-    public static class CommonSensorValuesToSensorValuesExtensions
+    public static class CommonSensorExtensions
     {
         public static SensorValueBase Convert(this CommonSensorValue value) =>
             value.SensorType switch
@@ -19,7 +19,7 @@ namespace HSMServer.Core.Converters
                 _ => null,
             };
 
-        internal static T Convert<T>(this CommonSensorValue sensorValue) =>
+        public static T Convert<T>(this CommonSensorValue sensorValue) =>
             JsonSerializer.Deserialize<T>(sensorValue.TypedValue);
     }
 }

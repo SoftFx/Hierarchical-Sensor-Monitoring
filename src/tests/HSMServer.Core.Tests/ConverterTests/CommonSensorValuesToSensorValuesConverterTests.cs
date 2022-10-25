@@ -1,8 +1,8 @@
-﻿using System.Text.Json;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
-using HSMServer.Core.Converters;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Tests.Infrastructure;
+using System.Text.Json;
 using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests

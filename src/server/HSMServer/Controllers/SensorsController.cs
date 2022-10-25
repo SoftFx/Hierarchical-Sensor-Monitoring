@@ -2,8 +2,8 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.Swagger;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Authorization;

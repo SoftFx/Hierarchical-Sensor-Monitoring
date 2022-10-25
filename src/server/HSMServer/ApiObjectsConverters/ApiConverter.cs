@@ -1,12 +1,11 @@
 ﻿using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
-using System;
 using System.Linq;
 using System.Text.Json;
 using ObjectsSensorStatus = HSMSensorDataObjects.SensorStatus;
 
-namespace HSMServer.Core.Converters
+namespace HSMServer.ApiObjectsConverters
 {
     public static class ApiConverter
     {
