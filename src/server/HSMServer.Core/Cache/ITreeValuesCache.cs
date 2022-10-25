@@ -36,8 +36,7 @@ namespace HSMServer.Core.Cache
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
-        bool TryGetProductByKey(string key, out ProductModel product, out string message);
-        bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message);
+        bool TryCheckKeyWritePermissions(StoreInfo storeInfo, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);

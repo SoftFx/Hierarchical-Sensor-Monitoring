@@ -131,19 +131,6 @@ namespace HSMServer.Core.Cache
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public bool TryGetProductByKey(string key, out ProductModel product, out string message)
-        {
-            key = GetAccessKeyModel(key)?.ProductId ?? key;
-
-            var hasProduct = _tree.TryGetValue(key, out product);
-            message = hasProduct ? string.Empty : ErrorKeyNotFound;
-
-            return hasProduct;
-        }
-
-        private AccessKeyModel GetAccessKeyModel(string key) =>
-            Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
-
         public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
         {
             var products = _tree.Values.ToList();
@@ -161,39 +148,14 @@ namespace HSMServer.Core.Cache
             return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
 
-        public bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message)
+        public bool TryCheckKeyWritePermissions(StoreInfo storeInfo, out string message)
         {
-            (string key, string path, _) = storeInfo;
-
-            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
-            {
-                message = ErrorPathKey;
+            if (!TryCheckStoreInfo(storeInfo, out var key, out var path, out message) ||
+                !TryCheckPath(path, out var parts, out message) ||
+                !TryGetProductByKey(key, out var product, out message))
                 return false;
-            }
 
-            if (!IsInitialized)
-            {
-                message = NotInitializedCacheError;
-                return false;
-            }
-
-            path = GetPathWithoutStartSeparator(path);
-
-            var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
-            if (parts.Contains(string.Empty) || path.Contains('\\'))
-            {
-                message = ErrorInvalidPath;
-                return false;
-            }
-            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
-            {
-                message = ErrorTooLongPath;
-                return false;
-            }
-
-            if (!TryGetProductByKey(key, out var product, out message))
-                return false;
-            else if (product.Id == key)
+            if (product.Id == key)
                 return true;
 
             // TODO: remove after refactoring sensors data storing
@@ -685,6 +647,56 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
+        private bool TryCheckStoreInfo(StoreInfo info, out string key, out string path, out string message)
+        {
+            (key, path, _) = info;
+            message = string.Empty;
+
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
+            {
+                message = ErrorPathKey;
+                return false;
+            }
+
+            if (!IsInitialized)
+            {
+                message = NotInitializedCacheError;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryCheckPath(string path, out string[] parts, out string message)
+        {
+            path = GetPathWithoutStartSeparator(path);
+            parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
+            message = string.Empty;
+
+            if (parts.Contains(string.Empty) || path.Contains('\\'))
+            {
+                message = ErrorInvalidPath;
+                return false;
+            }
+            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
+            {
+                message = ErrorTooLongPath;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryGetProductByKey(string key, out ProductModel product, out string message)
+        {
+            var productId = GetAccessKeyModel(key)?.ProductId ?? key;
+
+            var hasProduct = _tree.TryGetValue(productId, out product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
+
+            return hasProduct;
+        }
+
         private static bool IsValidSensorPath(string[] parts, ProductModel product,
             AccessKeyModel accessKey, out string message)
         {
@@ -751,6 +763,9 @@ namespace HSMServer.Core.Cache
 
             return sensor;
         }
+
+        private AccessKeyModel GetAccessKeyModel(string key) =>
+            Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
 
         private void FillSensorsData()
         {
