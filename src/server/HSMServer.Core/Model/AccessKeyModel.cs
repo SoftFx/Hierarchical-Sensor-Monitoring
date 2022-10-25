@@ -137,11 +137,11 @@ namespace HSMServer.Core.Model
             return false;
         }
 
-        internal bool HasPermissionForSendData(out string message)
-            => !IsExpired(out message) && IsHasPermission(KeyPermissions.CanSendSensorData, out message);
+        internal bool NotExpiredAndHasPermission(KeyPermissions permissions, out string message) =>
+            !IsExpired(out message) && IsHasPermission(permissions, out message);
 
-        internal bool HasPermissionCreateProductBranch(out string message)
-            => IsHasPermission(KeyPermissions.CanAddNodes, out message)
-            && IsHasPermission(KeyPermissions.CanAddSensors, out message);
+        internal bool HasPermissionCreateProductBranch(out string message) =>
+            IsHasPermission(KeyPermissions.CanAddNodes, out message) &&
+            IsHasPermission(KeyPermissions.CanAddSensors, out message);
     }
 }

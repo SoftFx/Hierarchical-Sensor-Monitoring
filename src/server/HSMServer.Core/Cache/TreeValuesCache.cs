@@ -23,6 +23,7 @@ namespace HSMServer.Core.Cache
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
+        private const string NotExistingSensor = "Sensor with your path does not exists";
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -166,7 +167,7 @@ namespace HSMServer.Core.Cache
             }
 
             var accessKey = GetAccessKeyModel(key);
-            if (!accessKey.HasPermissionForSendData(out message))
+            if (!accessKey.NotExpiredAndHasPermission(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
             // TODO: this optimization interferes with checking sensor Blocked state
@@ -176,6 +177,16 @@ namespace HSMServer.Core.Cache
             return IsValidSensorPath(parts, product, accessKey, out message);
         }
 
+        public bool TryCheckKeyReadPermissions(StoreInfo storeInfo, out string message)
+        {
+            if (!TryCheckStoreInfo(storeInfo, out var key, out var path, out message) ||
+                !TryCheckPath(path, out var parts, out message) ||
+                !TryGetProductByKey(key, out var product, out message) ||
+                !GetAccessKeyModel(key).NotExpiredAndHasPermission(KeyPermissions.CanReadSensorData, out message))
+                return false;
+
+            return IsValidSensorPath(parts, product, out message);
+        }
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
@@ -725,6 +736,34 @@ namespace HSMServer.Core.Cache
                         message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
                         return false;
                     }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsValidSensorPath(string[] parts, ProductModel product, out string message)
+        {
+            message = string.Empty;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var expectedName = parts[i];
+
+                if (i != parts.Length - 1)
+                {
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
+
+                    if (product == null)
+                    {
+                        message = NotExistingSensor;
+                        return false;
+                    }
+                }
+                else if (product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value == null)
+                {
+                    message = NotExistingSensor;
+                    return false;
                 }
             }
 
