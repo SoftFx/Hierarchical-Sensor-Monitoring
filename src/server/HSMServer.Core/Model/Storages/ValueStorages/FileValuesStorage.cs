@@ -23,5 +23,12 @@ namespace HSMServer.Core.Model
 
         internal override FileValue AddValue(FileValue value) =>
             base.AddValue(value.CompressContent());
+
+        internal override void Clear()
+        {
+            base.Clear();
+
+            _lastValue = null;
+        }
     }
 }

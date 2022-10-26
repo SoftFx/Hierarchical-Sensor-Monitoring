@@ -54,19 +54,22 @@
 
                         @Model.ShortStringValue
                     </div>
-                    <div class='row'>
-                        <div class='col-md-auto'>
-                            <button id='button_view_@sensorId' class='button-view-file-sensor btn btn-secondary' title='View'>
-                                <i class='fas fa-eye'></i>
-                            </button>
+                    @if (Model.LastValue != null)
+                    {
+                        <div class='row'>
+                            <div class='col-md-auto'>
+                                <button id='button_view_@sensorId' class='button-view-file-sensor btn btn-secondary' title='View'>
+                                    <i class='fas fa-eye'></i>
+                                </button>
+                            </div>
+                            <div class='col'>
+                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                                <button id='button_download_@sensorId' class='button-download-file-sensor-value btn btn-secondary' title='Download'>
+                                    <i class='fas fa-file-download'></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class='col'>
-                            <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                            <button id='button_download_@sensorId' class='button-download-file-sensor-value btn btn-secondary' title='Download'>
-                                <i class='fas fa-file-download'></i>
-                            </button>
-                        </div>
-                    </div>
+                    }
                 </div>
             </div>
         }
