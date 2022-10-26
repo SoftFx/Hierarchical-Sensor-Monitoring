@@ -33,9 +33,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var actualValue = fileValue.CompressContent();
 
             Assert.Equal(fileValue.Value.Length, actualValue.OriginalSize);
-            Assert.Equal(compressedValue.Value.Length, actualValue.Value.Length);
-            Assert.Equal(compressedValue.Value, actualValue.Value);
-            Assert.NotEqual(fileValue.Value, actualValue.Value);
+
+            if (compressedValue.Value.Length < fileValue.Value.Length)
+            {
+                Assert.Equal(compressedValue.Value.Length, actualValue.Value.Length);
+                Assert.Equal(compressedValue.Value, actualValue.Value);
+                Assert.NotEqual(fileValue.Value, actualValue.Value);
+            }
+            else
+            {
+                Assert.Equal(fileValue.Value, actualValue.Value);
+            }
         }
 
 
