@@ -284,6 +284,34 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public BaseSensorModel GetSensor(StoreInfo info)
+        {
+            (string key, string path, _) = info;
+
+            if (TryGetProductByKey(key, out var product, out _))
+            {
+                path = GetPathWithoutStartSeparator(path);
+                var pathParts = path.Split(CommonConstants.SensorPathSeparator);
+
+                for (int i = 0; i < pathParts.Length; i++)
+                {
+                    var expectedName = pathParts[i];
+
+                    if (i != pathParts.Length - 1)
+                    {
+                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
+
+                        if (product == null)
+                            return null;
+                    }
+                    else
+                        return product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+                }
+            }
+
+            return null;
+        }
+
         public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);

@@ -77,6 +77,11 @@
             <param name="values"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
+            <summary>
+            Get history for some sensor
+            </summary>
+        </member>
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles

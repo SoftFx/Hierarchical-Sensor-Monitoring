@@ -36,7 +36,9 @@ namespace HSMServer.Core.Cache
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
+
         bool TryCheckKeyWritePermissions(StoreInfo storeInfo, out string message);
+        bool TryCheckKeyReadPermissions(StoreInfo storeInfo, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
@@ -48,6 +50,7 @@ namespace HSMServer.Core.Cache
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
         BaseSensorModel GetSensor(Guid sensorId);
+        BaseSensorModel GetSensor(StoreInfo info);
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);

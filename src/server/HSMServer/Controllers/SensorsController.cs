@@ -1,11 +1,13 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.Swagger;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +17,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
 using System.Text;
+using System.Text.Json;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -357,6 +360,59 @@ namespace HSMServer.Controllers
                 return BadRequest(values);
             }
         }
+
+        /// <summary>
+        /// Get history for some sensor
+        /// </summary>
+        [HttpPost("history")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<string> Get([FromBody] HistoryRequest request)
+        {
+            try
+            {
+                if (!request.TryValidate(out var message))
+                    return BadRequest(message);
+
+                var storeInfo = new StoreInfo
+                {
+                    Key = request.Key,
+                    Path = request.Path,
+                };
+
+                if (_cache.TryCheckKeyReadPermissions(storeInfo, out message))
+                {
+                    var sensor = _cache.GetSensor(storeInfo);
+                    var historyValues = request.To.HasValue
+                        ? _cache.GetSensorValues(sensor.Id, request.From, request.To.Value)
+                        : _cache.GetSensorValues(sensor.Id, request.Count.Value);
+
+                    return Ok(JsonSerializer.Serialize(Convert(historyValues)));
+                }
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get history!");
+                return BadRequest(request);
+            }
+        }
+
+        private static object Convert(List<BaseValue> values) =>
+            values[0] switch
+            {
+                BooleanValue => values.Cast<BooleanValue>(),
+                IntegerValue => values.Cast<IntegerValue>(),
+                DoubleValue => values.Cast<DoubleValue>(),
+                StringValue => values.Cast<StringValue>(),
+                IntegerBarValue => values.Cast<IntegerBarValue>(),
+                DoubleBarValue => values.Cast<DoubleBarValue>(),
+                FileValue => values.Cast<FileValue>(),
+                _ => values,
+            };
 
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
