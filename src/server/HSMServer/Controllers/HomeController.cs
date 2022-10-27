@@ -354,9 +354,12 @@ namespace HSMServer.Controllers
         #region File
 
         [HttpGet]
-        public FileResult GetFile([FromQuery(Name = "Selected")] string encodedId)
+        public IActionResult GetFile([FromQuery(Name = "Selected")] string encodedId)
         {
             var value = GetFileSensorValue(encodedId);
+            if (value == null)
+                return _emptyResult;
+
             var (_, path) = GetSensorProductAndPath(encodedId);
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -368,6 +371,9 @@ namespace HSMServer.Controllers
         public IActionResult GetFileStream([FromQuery(Name = "Selected")] string encodedId)
         {
             var value = GetFileSensorValue(encodedId);
+            if (value == null)
+                return _emptyResult;
+
             var (_, path) = GetSensorProductAndPath(encodedId);
 
             var fileContentsStream = new MemoryStream(value.Value);
