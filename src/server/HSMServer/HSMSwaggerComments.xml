@@ -79,7 +79,7 @@
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
             <summary>
-            Get history for some sensor
+            Get history [from, to] or [from - count] for some sensor
             </summary>
         </member>
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">

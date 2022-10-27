@@ -362,7 +362,7 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Get history for some sensor
+        /// Get history [from, to] or [from - count] for some sensor
         /// </summary>
         [HttpPost("history")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -389,7 +389,7 @@ namespace HSMServer.Controllers
                         ? _cache.GetSensorValues(sensor.Id, request.From, request.To.Value)
                         : _cache.GetSensorValues(sensor.Id, request.Count.Value);
 
-                    return Ok(JsonSerializer.Serialize(Convert(historyValues)));
+                    return Ok(JsonSerializer.Serialize(historyValues.Convert(request.Key, request.Path)));
                 }
 
                 return StatusCode(406, message);
@@ -400,19 +400,6 @@ namespace HSMServer.Controllers
                 return BadRequest(request);
             }
         }
-
-        private static object Convert(List<BaseValue> values) =>
-            values[0] switch
-            {
-                BooleanValue => values.Cast<BooleanValue>(),
-                IntegerValue => values.Cast<IntegerValue>(),
-                DoubleValue => values.Cast<DoubleValue>(),
-                StringValue => values.Cast<StringValue>(),
-                IntegerBarValue => values.Cast<IntegerBarValue>(),
-                DoubleBarValue => values.Cast<DoubleBarValue>(),
-                FileValue => values.Cast<FileValue>(),
-                _ => values,
-            };
 
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
