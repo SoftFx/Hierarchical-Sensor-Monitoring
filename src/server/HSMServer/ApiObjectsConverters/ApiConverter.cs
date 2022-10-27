@@ -1,6 +1,8 @@
 ﻿using HSMSensorDataObjects.BarData;
 using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -299,6 +301,17 @@ namespace HSMServer.ApiObjectsConverters
 
             return apiValues;
         }
+
+
+        public static HistoryRequestModel Convert(this HistoryRequest request) =>
+            new()
+            {
+                Key = request.Key,
+                Path = request.Path,
+                From = request.From,
+                To = request.To,
+                Count = request.Count
+            };
 
 
         private static SensorStatus Convert(this ObjectsSensorStatus status) =>

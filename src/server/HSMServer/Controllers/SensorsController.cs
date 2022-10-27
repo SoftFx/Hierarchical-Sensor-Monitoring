@@ -376,20 +376,13 @@ namespace HSMServer.Controllers
                 if (!request.TryValidate(out var message))
                     return BadRequest(message);
 
-                var storeInfo = new StoreInfo
+                var requestModel = request.Convert();
+                if (_cache.TryCheckKeyReadPermissions(requestModel, out message))
                 {
-                    Key = request.Key,
-                    Path = request.Path,
-                };
+                    var historyValues = _cache.GetSensorValues(requestModel);
+                    var response = JsonSerializer.Serialize(historyValues.Convert(request.Key, request.Path));
 
-                if (_cache.TryCheckKeyReadPermissions(storeInfo, out message))
-                {
-                    var sensor = _cache.GetSensor(storeInfo);
-                    var historyValues = request.To.HasValue
-                        ? _cache.GetSensorValues(sensor.Id, request.From, request.To.Value)
-                        : _cache.GetSensorValues(sensor.Id, request.Count.Value);
-
-                    return Ok(JsonSerializer.Serialize(historyValues.Convert(request.Key, request.Path)));
+                    return Ok(response);
                 }
 
                 return StatusCode(406, message);

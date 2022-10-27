@@ -1,13 +1,10 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Core.SensorsUpdatesQueue
 {
-    public readonly struct StoreInfo
+    public sealed class StoreInfo : BaseRequestModel
     {
-        public string Path { get; init; }
-
-        public string Key { get; init; }
-
         public BaseValue BaseValue { get; init; }
 
 

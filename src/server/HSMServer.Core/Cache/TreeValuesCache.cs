@@ -6,6 +6,7 @@ using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
@@ -149,9 +150,9 @@ namespace HSMServer.Core.Cache
             return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
 
-        public bool TryCheckKeyWritePermissions(StoreInfo storeInfo, out string message)
+        public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
-            if (!TryCheckStoreInfo(storeInfo, out var key, out var path, out message) ||
+            if (!TryCheckRequest(request, out var key, out var path, out message) ||
                 !TryCheckPath(path, out var parts, out message) ||
                 !TryGetProductByKey(key, out var product, out message))
                 return false;
@@ -177,9 +178,9 @@ namespace HSMServer.Core.Cache
             return IsValidSensorPath(parts, product, accessKey, out message);
         }
 
-        public bool TryCheckKeyReadPermissions(StoreInfo storeInfo, out string message)
+        public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message)
         {
-            if (!TryCheckStoreInfo(storeInfo, out var key, out var path, out message) ||
+            if (!TryCheckRequest(request, out var key, out var path, out message) ||
                 !TryCheckPath(path, out var parts, out message) ||
                 !TryGetProductByKey(key, out var product, out message) ||
                 !GetAccessKeyModel(key).NotExpiredAndHasPermission(KeyPermissions.CanReadSensorData, out message))
@@ -284,34 +285,6 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public BaseSensorModel GetSensor(StoreInfo info)
-        {
-            (string key, string path, _) = info;
-
-            if (TryGetProductByKey(key, out var product, out _))
-            {
-                path = GetPathWithoutStartSeparator(path);
-                var pathParts = path.Split(CommonConstants.SensorPathSeparator);
-
-                for (int i = 0; i < pathParts.Length; i++)
-                {
-                    var expectedName = pathParts[i];
-
-                    if (i != pathParts.Length - 1)
-                    {
-                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
-
-                        if (product == null)
-                            return null;
-                    }
-                    else
-                        return product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
-                }
-            }
-
-            return null;
-        }
-
         public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
@@ -351,6 +324,16 @@ namespace HSMServer.Core.Cache
                 _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
 
             return values;
+        }
+
+        public List<BaseValue> GetSensorValues(HistoryRequestModel request)
+        {
+            var sensor = GetSensor(request.Key, request.Path);
+            var historyValues = request.To.HasValue
+                ? GetSensorValues(sensor.Id, request.From, request.To.Value)
+                : GetSensorValues(sensor.Id, request.Count.Value);
+
+            return historyValues;
         }
 
         public void UpdatePolicy(TransactionType type, Policy policy)
@@ -686,9 +669,9 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private bool TryCheckStoreInfo(StoreInfo info, out string key, out string path, out string message)
+        private bool TryCheckRequest(BaseRequestModel request, out string key, out string path, out string message)
         {
-            (key, path, _) = info;
+            (key, path) = request;
             message = string.Empty;
 
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
@@ -829,6 +812,32 @@ namespace HSMServer.Core.Cache
                 sensor.BuildProductNameAndPath(product);
 
             return sensor;
+        }
+
+        private BaseSensorModel GetSensor(string key, string path)
+        {
+            if (TryGetProductByKey(key, out var product, out _))
+            {
+                path = GetPathWithoutStartSeparator(path);
+                var pathParts = path.Split(CommonConstants.SensorPathSeparator);
+
+                for (int i = 0; i < pathParts.Length; i++)
+                {
+                    var expectedName = pathParts[i];
+
+                    if (i != pathParts.Length - 1)
+                    {
+                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
+
+                        if (product == null)
+                            return null;
+                    }
+                    else
+                        return product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+                }
+            }
+
+            return null;
         }
 
         private AccessKeyModel GetAccessKeyModel(string key) =>

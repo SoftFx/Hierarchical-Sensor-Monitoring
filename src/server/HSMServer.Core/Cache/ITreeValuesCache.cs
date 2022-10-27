@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Cache.UpdateEntitites;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 
@@ -37,8 +37,8 @@ namespace HSMServer.Core.Cache
         string GetProductNameById(string id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
 
-        bool TryCheckKeyWritePermissions(StoreInfo storeInfo, out string message);
-        bool TryCheckKeyReadPermissions(StoreInfo storeInfo, out string message);
+        bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
+        bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         void RemoveAccessKey(Guid id);
@@ -50,11 +50,11 @@ namespace HSMServer.Core.Cache
         void RemoveSensorsData(string product);
         void RemoveSensorData(Guid sensorId);
         BaseSensorModel GetSensor(Guid sensorId);
-        BaseSensorModel GetSensor(StoreInfo info);
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+        List<BaseValue> GetSensorValues(HistoryRequestModel request);
 
         void UpdatePolicy(TransactionType type, Policy policy);
     }
