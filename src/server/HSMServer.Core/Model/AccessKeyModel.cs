@@ -111,13 +111,19 @@ namespace HSMServer.Core.Model
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
 
-        internal bool IsHasPermission(KeyPermissions permisssion, out string message)
+        internal bool IsHasPermissions(KeyPermissions permisssions, out string message)
         {
             message = string.Empty;
-            if (!Permissions.HasFlag(permisssion))
+
+            foreach (var value in Enum.GetValues(typeof(KeyPermissions)))
             {
-                message = $"AccessKey doesn't have {permisssion}.";
-                return false;
+                var permission = (KeyPermissions)value;
+
+                if (permisssions.HasFlag(permission) && !Permissions.HasFlag(permission))
+                {
+                    message = $"AccessKey doesn't have {permission}.";
+                    return false;
+                }
             }
 
             return true;
@@ -138,10 +144,6 @@ namespace HSMServer.Core.Model
         }
 
         internal bool NotExpiredAndHasPermission(KeyPermissions permissions, out string message) =>
-            !IsExpired(out message) && IsHasPermission(permissions, out message);
-
-        internal bool HasPermissionCreateProductBranch(out string message) =>
-            IsHasPermission(KeyPermissions.CanAddNodes, out message) &&
-            IsHasPermission(KeyPermissions.CanAddSensors, out message);
+            !IsExpired(out message) && IsHasPermissions(permissions, out message);
     }
 }

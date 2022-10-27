@@ -24,7 +24,7 @@ namespace HSMServer.Core.Cache
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
-        private const string NotExistingSensor = "Sensor with your path does not exists";
+        private const string NotExistingSensor = "Sensor with your path does not exist.";
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -175,19 +175,23 @@ namespace HSMServer.Core.Cache
             //if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
             //    return true;
 
-            return IsValidSensorPath(parts, product, accessKey, out message);
-        }
+            var sensorChecking = TryGetSensor(parts, product, accessKey, out var sensor, out message);
 
-        public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message)
-        {
-            if (!TryCheckRequest(request, out var key, out var path, out message) ||
-                !TryCheckPath(path, out var parts, out message) ||
-                !TryGetProductByKey(key, out var product, out message) ||
-                !GetAccessKeyModel(key).NotExpiredAndHasPermission(KeyPermissions.CanReadSensorData, out message))
+            if (sensor?.State == SensorState.Blocked)
+            {
+                message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
                 return false;
+            }
 
-            return IsValidSensorPath(parts, product, out message);
+            return sensorChecking;
         }
+
+        public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
+            TryCheckRequest(request, out var key, out var path, out message) &&
+            TryCheckPath(path, out var parts, out message) &&
+            TryGetProductByKey(key, out var product, out message) &&
+            GetAccessKeyModel(key).NotExpiredAndHasPermission(KeyPermissions.CanReadSensorData, out message) &&
+            TryGetSensor(parts, product, null, out _, out message);
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
@@ -719,10 +723,11 @@ namespace HSMServer.Core.Cache
             return hasProduct;
         }
 
-        private static bool IsValidSensorPath(string[] parts, ProductModel product,
-            AccessKeyModel accessKey, out string message)
+        private static bool TryGetSensor(string[] parts, ProductModel product,
+            AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
         {
             message = string.Empty;
+            sensor = null;
 
             for (int i = 0; i < parts.Length; i++)
             {
@@ -730,53 +735,34 @@ namespace HSMServer.Core.Cache
 
                 if (i != parts.Length - 1)
                 {
-                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
-                    if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
+                    if (product == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
                 else
                 {
-                    var sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+                    sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
-                    if (sensor == null && !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                    if (sensor == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
                         return false;
-
-                    if (sensor?.State == SensorState.Blocked)
-                    {
-                        message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
-                        return false;
-                    }
                 }
             }
 
             return true;
         }
 
-        private static bool IsValidSensorPath(string[] parts, ProductModel product, out string message)
+        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions, out string message)
         {
-            message = string.Empty;
-
-            for (int i = 0; i < parts.Length; i++)
+            if (accessKey == null)
             {
-                var expectedName = parts[i];
-
-                if (i != parts.Length - 1)
-                {
-                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName.Equals(expectedName)).Value;
-
-                    if (product == null)
-                    {
-                        message = NotExistingSensor;
-                        return false;
-                    }
-                }
-                else if (product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value == null)
-                {
-                    message = NotExistingSensor;
-                    return false;
-                }
+                message = NotExistingSensor;
+                return false;
             }
+            else if (!accessKey.IsHasPermissions(permissions, out message))
+                return false;
 
             return true;
         }
@@ -821,20 +807,9 @@ namespace HSMServer.Core.Cache
                 path = GetPathWithoutStartSeparator(path);
                 var pathParts = path.Split(CommonConstants.SensorPathSeparator);
 
-                for (int i = 0; i < pathParts.Length; i++)
-                {
-                    var expectedName = pathParts[i];
+                TryGetSensor(pathParts, product, null, out var sensor, out _);
 
-                    if (i != pathParts.Length - 1)
-                    {
-                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
-
-                        if (product == null)
-                            return null;
-                    }
-                    else
-                        return product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
-                }
+                return sensor;
             }
 
             return null;
