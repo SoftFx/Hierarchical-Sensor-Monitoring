@@ -10,7 +10,7 @@ using ObjectsSensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.ApiObjectsConverters
 {
-    public static class ApiConverter
+    public static class ApiConverters
     {
         public static BooleanValue Convert(this BoolSensorValue value) =>
             new()
@@ -182,55 +182,45 @@ namespace HSMServer.ApiObjectsConverters
 
 
 
-        public static BoolSensorValue Convert(this BooleanValue value, string key, string path) =>
+        public static BoolSensorValue Convert(this BooleanValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
 
-        public static IntSensorValue Convert(this IntegerValue value, string key, string path) =>
+        public static IntSensorValue Convert(this IntegerValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
 
-        public static DoubleSensorValue Convert(this DoubleValue value, string key, string path) =>
+        public static DoubleSensorValue Convert(this DoubleValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
 
-        public static StringSensorValue Convert(this StringValue value, string key, string path) =>
+        public static StringSensorValue Convert(this StringValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
 
-        public static FileSensorBytesValue Convert(this FileValue value, string key, string path) =>
+        public static FileSensorBytesValue Convert(this FileValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
@@ -239,11 +229,9 @@ namespace HSMServer.ApiObjectsConverters
                 Extension = value.Extension
             };
 
-        public static IntBarSensorValue Convert(this IntegerBarValue value, string key, string path) =>
+        public static IntBarSensorValue Convert(this IntegerBarValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
@@ -257,11 +245,9 @@ namespace HSMServer.ApiObjectsConverters
                 Percentiles = value.Percentiles?.Select(p => new PercentileValueInt { Percentile = p.Key, Value = p.Value }).ToList() ?? new(),
             };
 
-        public static DoubleBarSensorValue Convert(this DoubleBarValue value, string key, string path) =>
+        public static DoubleBarSensorValue Convert(this DoubleBarValue value) =>
             new()
             {
-                Key = key,
-                Path = path,
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
@@ -275,26 +261,26 @@ namespace HSMServer.ApiObjectsConverters
                 Percentiles = value.Percentiles?.Select(p => new PercentileValueDouble { Percentile = p.Key, Value = p.Value }).ToList() ?? new(),
             };
 
-        public static object Convert(this BaseValue value, string key, string path) =>
+        public static object Convert(this BaseValue value) =>
             value switch
             {
-                BooleanValue sv => sv.Convert(key, path),
-                IntegerValue sv => sv.Convert(key, path),
-                DoubleValue sv => sv.Convert(key, path),
-                StringValue sv => sv.Convert(key, path),
-                IntegerBarValue sv => sv.Convert(key, path),
-                DoubleBarValue sv => sv.Convert(key, path),
-                FileValue sv => sv.Convert(key, path),
+                BooleanValue sv => sv.Convert(),
+                IntegerValue sv => sv.Convert(),
+                DoubleValue sv => sv.Convert(),
+                StringValue sv => sv.Convert(),
+                IntegerBarValue sv => sv.Convert(),
+                DoubleBarValue sv => sv.Convert(),
+                FileValue sv => sv.Convert(),
                 _ => null,
             };
 
-        public static List<object> Convert(this List<BaseValue> values, string key, string path)
+        public static List<object> Convert(this List<BaseValue> values)
         {
             var apiValues = new List<object>(values.Count);
 
             foreach (var value in values)
             {
-                var apiValue = value.Convert(key, path);
+                var apiValue = value.Convert();
                 if (apiValue != null)
                     apiValues.Add(apiValue);
             }

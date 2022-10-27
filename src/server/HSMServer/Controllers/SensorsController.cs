@@ -380,7 +380,40 @@ namespace HSMServer.Controllers
                 if (_cache.TryCheckKeyReadPermissions(requestModel, out message))
                 {
                     var historyValues = _cache.GetSensorValues(requestModel);
-                    var response = JsonSerializer.Serialize(historyValues.Convert(request.Key, request.Path));
+                    var response = JsonSerializer.Serialize(historyValues.Convert());
+
+                    return Ok(response);
+                }
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to get history!");
+                return BadRequest(request);
+            }
+        }
+
+        /// <summary>
+        /// Get file (csv or txt) history [from, to] or [from - count] for some sensor
+        /// </summary>
+        [HttpPost("historyFile")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<string> Get([FromBody] FileHistoryRequest request)
+        {
+            try
+            {
+                if (!request.TryValidate(out var message))
+                    return BadRequest(message);
+
+                var requestModel = request.Convert();
+                if (_cache.TryCheckKeyReadPermissions(requestModel, out message))
+                {
+                    var historyValues = _cache.GetSensorValues(requestModel);
+                    var response = historyValues.ConvertToCsv();
 
                     return Ok(response);
                 }
