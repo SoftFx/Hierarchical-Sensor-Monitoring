@@ -10,6 +10,6 @@ namespace HSMSensorDataObjects.HistoryRequests
         public string Format { get; set; }
 
         [DataMember]
-        public bool IsArchive { get; set; }
+        public bool IsZipArchive { get; set; }
     }
 }

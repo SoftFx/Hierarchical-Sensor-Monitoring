@@ -4,6 +4,7 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.UpdateEntitites;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Requests;
@@ -21,8 +22,6 @@ namespace HSMServer.Core.Cache
     {
         private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
-        private const string ErrorInvalidPath = "Path has an invalid format.";
-        private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
 
@@ -152,8 +151,8 @@ namespace HSMServer.Core.Cache
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
-            if (!TryCheckRequest(request, out var key, out var path, out message) ||
-                !TryCheckPath(path, out var parts, out message) ||
+            if (!TryCheckRequest(request, out var key, out message) ||
+                !request.TryCheckPath(out var parts, out message) ||
                 !TryGetProductByKey(key, out var product, out message))
                 return false;
 
@@ -168,7 +167,7 @@ namespace HSMServer.Core.Cache
             }
 
             var accessKey = GetAccessKeyModel(key);
-            if (!accessKey.NotExpiredAndHasPermission(KeyPermissions.CanSendSensorData, out message))
+            if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
             // TODO: this optimization interferes with checking sensor Blocked state
@@ -187,10 +186,10 @@ namespace HSMServer.Core.Cache
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
-            TryCheckRequest(request, out var key, out var path, out message) &&
-            TryCheckPath(path, out var parts, out message) &&
+            TryCheckRequest(request, out var key, out message) &&
+            request.TryCheckPath(out var parts, out message) &&
             TryGetProductByKey(key, out var product, out message) &&
-            GetAccessKeyModel(key).NotExpiredAndHasPermission(KeyPermissions.CanReadSensorData, out message) &&
+            GetAccessKeyModel(key).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(parts, product, null, out _, out message);
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
@@ -590,9 +589,8 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
         {
-            sensorPath = GetPathWithoutStartSeparator(sensorPath);
+            var pathParts = sensorPath.GetParts();
 
-            var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
                 var subProductName = pathParts[i];
@@ -673,12 +671,12 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private bool TryCheckRequest(BaseRequestModel request, out string key, out string path, out string message)
+        private bool TryCheckRequest(BaseRequestModel request, out string key, out string message)
         {
-            (key, path) = request;
+            (key, _) = request;
             message = string.Empty;
 
-            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
+            if (request.IsEmpty)
             {
                 message = ErrorPathKey;
                 return false;
@@ -687,26 +685,6 @@ namespace HSMServer.Core.Cache
             if (!IsInitialized)
             {
                 message = NotInitializedCacheError;
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool TryCheckPath(string path, out string[] parts, out string message)
-        {
-            path = GetPathWithoutStartSeparator(path);
-            parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
-            message = string.Empty;
-
-            if (parts.Contains(string.Empty) || path.Contains('\\'))
-            {
-                message = ErrorInvalidPath;
-                return false;
-            }
-            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
-            {
-                message = ErrorTooLongPath;
                 return false;
             }
 
@@ -802,15 +780,9 @@ namespace HSMServer.Core.Cache
 
         private BaseSensorModel GetSensor(string key, string path)
         {
-            if (TryGetProductByKey(key, out var product, out _))
-            {
-                path = GetPathWithoutStartSeparator(path);
-                var pathParts = path.Split(CommonConstants.SensorPathSeparator);
-
-                TryGetSensor(pathParts, product, null, out var sensor, out _);
-
+            if (TryGetProductByKey(key, out var product, out _) &&
+                TryGetSensor(path.GetParts(), product, null, out var sensor, out _))
                 return sensor;
-            }
 
             return null;
         }
@@ -842,8 +814,5 @@ namespace HSMServer.Core.Cache
 
             return policies;
         }
-
-        private static string GetPathWithoutStartSeparator(string path) =>
-            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }

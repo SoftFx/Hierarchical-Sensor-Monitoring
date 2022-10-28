@@ -6,28 +6,17 @@ namespace HSMServer.Validation
     {
         internal static bool TryValidate(this HistoryRequest request, out string message)
         {
-            const string errorMsgFormat = "Request {0} contain a non-null field 'To' or 'Count'";
+            var hasTo = request.To.HasValue;
+            var hasCount = request.Count.HasValue;
 
-            message = string.Empty;
-
-            if (request.To.HasValue)
+            if (hasTo ^ hasCount)
             {
-                if (request.Count.HasValue)
-                {
-                    message = string.Format(errorMsgFormat, "may");
-                    return false;
-                }
-
+                message = string.Empty;
                 return true;
             }
 
-            if (!request.Count.HasValue)
-            {
-                message = string.Format(errorMsgFormat, "should");
-                return false;
-            }
-
-            return true;
+            message = $"Request {(hasTo && hasCount ? "may" : "should")} contain a non-null field 'To' or 'Count'";
+            return false;
         }
     }
 }
