@@ -22,11 +22,11 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class AccessKeyModel
+    public class AccessKeyModel
     {
         private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
 
-        internal static AccessKeyModel InvalidKey { get; } = new();
+        internal static InvalidAccessKey InvalidKey { get; } = new();
 
 
         public Guid Id { get; }
@@ -67,7 +67,7 @@ namespace HSMServer.Core.Model
             ProductId = productId;
         }
 
-        private AccessKeyModel()
+        protected AccessKeyModel()
         {
             Id = Guid.NewGuid();
             CreationTime = DateTime.UtcNow;
@@ -143,15 +143,16 @@ namespace HSMServer.Core.Model
             return false;
         }
 
-        internal bool IsValid(KeyPermissions permissions, out string message)
-        {
-            if (this == InvalidKey)
-            {
-                message = "Key is invalid.";
-                return false;
-            }
+        internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
+            !IsExpired(out message) && IsHasPermissions(permissions, out message);
+    }
 
-            return !IsExpired(out message) && IsHasPermissions(permissions, out message);
+    public class InvalidAccessKey : AccessKeyModel
+    {
+        internal override bool IsValid(KeyPermissions permissions, out string message)
+        {
+            message = "Key is invalid.";
+            return false;
         }
     }
 }
