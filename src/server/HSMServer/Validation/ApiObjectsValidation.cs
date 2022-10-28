@@ -6,16 +6,13 @@ namespace HSMServer.Validation
     {
         internal static bool TryValidate(this HistoryRequest request, out string message)
         {
-            var hasTo = request.To.HasValue;
-            var hasCount = request.Count.HasValue;
-
-            if (hasTo ^ hasCount)
+            if (request.To.HasValue ^ request.Count.HasValue)
             {
                 message = string.Empty;
                 return true;
             }
 
-            message = $"Request {(hasTo && hasCount ? "may" : "should")} contain a non-null field 'To' or 'Count'";
+            message = $"Request should contain only '{nameof(request.To)}' or '{nameof(request.Count)}'";
             return false;
         }
     }

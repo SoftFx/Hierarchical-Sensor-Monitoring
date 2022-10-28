@@ -6,6 +6,7 @@ using HSMSensorDataObjects.Swagger;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -373,11 +374,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (!request.TryValidate(out var message))
-                    return BadRequest(message);
-
-                var requestModel = request.Convert();
-                if (_cache.TryCheckKeyReadPermissions(requestModel, out message))
+                if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
                     var historyValues = _cache.GetSensorValues(requestModel);
                     var response = JsonSerializer.Serialize(historyValues.Convert());
@@ -406,11 +403,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (!request.TryValidate(out var message))
-                    return BadRequest(message);
-
-                var requestModel = request.Convert();
-                if (_cache.TryCheckKeyReadPermissions(requestModel, out message))
+                if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
                     var historyValues = _cache.GetSensorValues(requestModel);
                     var response = historyValues.ConvertToCsv();
@@ -430,13 +423,23 @@ namespace HSMServer.Controllers
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
-            if (_cache.TryCheckKeyWritePermissions(storeInfo, out message))
+            if (storeInfo.TryCheckRequest(out message) &&
+                _cache.TryCheckKeyWritePermissions(storeInfo, out message))
             {
                 _updatesQueue.AddItem(storeInfo);
                 return true;
             }
 
             return false;
+        }
+
+        private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
+        {
+            requestModel = request.Convert();
+
+            return request.TryValidate(out message) &&
+                   requestModel.TryCheckRequest(out message) &&
+                   _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
         private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)

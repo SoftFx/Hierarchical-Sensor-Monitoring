@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model
     {
         private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
 
+        internal static AccessKeyModel InvalidKey { get; } = new();
+
 
         public Guid Id { get; }
 
@@ -141,7 +143,15 @@ namespace HSMServer.Core.Model
             return false;
         }
 
-        internal bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsExpired(out message) && IsHasPermissions(permissions, out message);
+        internal bool IsValid(KeyPermissions permissions, out string message)
+        {
+            if (this == InvalidKey)
+            {
+                message = "Key is invalid.";
+                return false;
+            }
+
+            return !IsExpired(out message) && IsHasPermissions(permissions, out message);
+        }
     }
 }

@@ -211,7 +211,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var info = new StoreInfo();
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorPathKey, message);
         }
 
@@ -225,7 +225,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Path = InvalidTooLongPath
             };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorTooLongPath, message);
         }
 
@@ -249,7 +249,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Path = path
             };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorInvalidPath, message);
         }
 

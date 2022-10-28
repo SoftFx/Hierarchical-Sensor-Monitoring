@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Extensions;
 using System;
 using System.Linq;
 
@@ -7,6 +6,7 @@ namespace HSMServer.Core.Model.Requests
 {
     public abstract class BaseRequestModel
     {
+        private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
 
@@ -16,20 +16,21 @@ namespace HSMServer.Core.Model.Requests
         public string Path { get; init; }
 
 
-        internal bool IsEmpty => string.IsNullOrEmpty(Key) || string.IsNullOrEmpty(Path);
-
-
         internal void Deconstruct(out string key, out string path)
         {
             key = Key;
             path = Path;
         }
 
-        internal bool TryCheckPath(out string[] parts, out string message)
+        public bool TryCheckRequest(out string message)
         {
-            parts = Path.GetParts();
-            message = string.Empty;
+            if (string.IsNullOrEmpty(Key) || string.IsNullOrEmpty(Path))
+            {
+                message = ErrorPathKey;
+                return false;
+            }
 
+            var parts = GetPathParts();
             if (parts.Contains(string.Empty) || Path.Contains('\\'))
             {
                 message = ErrorInvalidPath;
@@ -41,7 +42,18 @@ namespace HSMServer.Core.Model.Requests
                 return false;
             }
 
+            message = string.Empty;
             return true;
         }
+
+        internal string[] GetPathParts()
+        {
+            var path = GetPathWithoutStartSeparator(Path);
+
+            return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
+        }
+
+        private static string GetPathWithoutStartSeparator(string path) =>
+            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }
