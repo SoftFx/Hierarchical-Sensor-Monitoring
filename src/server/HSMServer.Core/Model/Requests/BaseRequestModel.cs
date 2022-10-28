@@ -11,16 +11,26 @@ namespace HSMServer.Core.Model.Requests
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
 
 
-        public string Key { get; init; }
+        public string Key { get; }
 
-        public string Path { get; init; }
+        public string Path { get; }
+
+        public Guid KeyGuid { get; }
+
+        public string[] PathParts { get; }
 
 
-        internal void Deconstruct(out string key, out string path)
+        public BaseRequestModel(string key, string path)
         {
-            key = Key;
-            path = Path;
+            Key = key;
+            Path = path;
+
+            if (Guid.TryParse(Key, out var guid))
+                KeyGuid = guid;
+
+            PathParts = GetPathParts(Path);
         }
+
 
         public bool TryCheckRequest(out string message)
         {
@@ -30,13 +40,12 @@ namespace HSMServer.Core.Model.Requests
                 return false;
             }
 
-            var parts = GetPathParts();
-            if (parts.Contains(string.Empty) || Path.Contains('\\'))
+            if (PathParts.Contains(string.Empty) || Path.Contains('\\'))
             {
                 message = ErrorInvalidPath;
                 return false;
             }
-            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
+            else if (PathParts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
             {
                 message = ErrorTooLongPath;
                 return false;
@@ -46,14 +55,11 @@ namespace HSMServer.Core.Model.Requests
             return true;
         }
 
-        internal string[] GetPathParts()
+        private static string[] GetPathParts(string path)
         {
-            var path = GetPathWithoutStartSeparator(Path);
+            path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
             return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
         }
-
-        private static string GetPathWithoutStartSeparator(string path) =>
-            path[0] == CommonConstants.SensorPathSeparator ? path.Remove(0, 1) : path;
     }
 }

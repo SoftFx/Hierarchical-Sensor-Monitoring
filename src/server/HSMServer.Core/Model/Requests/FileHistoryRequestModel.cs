@@ -5,5 +5,8 @@
         public string Format { get; set; }
 
         public bool IsArchive { get; set; }
+
+
+        public FileHistoryRequestModel(string key, string path) : base(key, path) { }
     }
 }

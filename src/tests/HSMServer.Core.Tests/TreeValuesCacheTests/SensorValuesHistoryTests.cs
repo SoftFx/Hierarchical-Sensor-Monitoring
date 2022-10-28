@@ -128,10 +128,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var storeInfo = new StoreInfo()
+                var storeInfo = new StoreInfo(CommonConstants.SelfMonitoringProductKey, sensorInfo.Path)
                 {
-                    Key = CommonConstants.SelfMonitoringProductKey,
-                    Path = sensorInfo.Path,
                     BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
                 };
 

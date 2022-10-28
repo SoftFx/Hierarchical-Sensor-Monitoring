@@ -342,10 +342,8 @@ namespace HSMServer.Controllers
                         SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
                         _ => null
                     };
-                    var storeInfo = new StoreInfo
+                    var storeInfo = new StoreInfo(value.Key, value.Path)
                     {
-                        Key = value.Key,
-                        Path = value.Path,
                         BaseValue = convertedValue
                     };
 
@@ -442,14 +440,7 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
-        {
-            return new StoreInfo
-            {
-                Key = valueBase.Key,
-                Path = valueBase.Path,
-                BaseValue = baseValue
-            };
-        }
+        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
+            new(valueBase.Key, valueBase.Path) { BaseValue = baseValue };
     }
 }

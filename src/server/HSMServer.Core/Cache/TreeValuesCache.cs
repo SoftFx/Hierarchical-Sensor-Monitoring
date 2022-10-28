@@ -153,9 +153,7 @@ namespace HSMServer.Core.Cache
                 !TryGetProductByKey(request, out var product, out message))
                 return false;
 
-            (var key, _) = request;
-
-            if (product.Id == key)
+            if (product.Id == request.Key)
                 return true;
 
             // TODO: remove after refactoring sensors data storing
@@ -165,15 +163,11 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            var accessKey = GetAccessKeyModel(key);
+            var accessKey = GetAccessKeyModel(request);
             if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
-            // TODO: this optimization interferes with checking sensor Blocked state
-            //if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
-            //    return true;
-
-            var sensorChecking = TryGetSensor(request.GetPathParts(), product, accessKey, out var sensor, out message);
+            var sensorChecking = TryGetSensor(request, product, accessKey, out var sensor, out message);
 
             if (sensor?.State == SensorState.Blocked)
             {
@@ -187,8 +181,8 @@ namespace HSMServer.Core.Cache
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
             TryCheckCacheInitialization(out message) &&
             TryGetProductByKey(request, out var product, out message) &&
-            GetAccessKeyModel(request.Key).IsValid(KeyPermissions.CanReadSensorData, out message) &&
-            TryGetSensor(request.GetPathParts(), product, null, out _, out message);
+            GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
+            TryGetSensor(request, product, null, out _, out message);
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
@@ -587,7 +581,7 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
-            var pathParts = request.GetPathParts();
+            var pathParts = request.PathParts;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -678,7 +672,7 @@ namespace HSMServer.Core.Cache
 
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
-            var keyModel = GetAccessKeyModel(request.Key);
+            var keyModel = GetAccessKeyModel(request);
             var productId = keyModel == AccessKeyModel.InvalidKey ? request.Key : keyModel.ProductId;
 
             var hasProduct = _tree.TryGetValue(productId, out product);
@@ -687,11 +681,12 @@ namespace HSMServer.Core.Cache
             return hasProduct;
         }
 
-        private static bool TryGetSensor(string[] parts, ProductModel product,
+        private static bool TryGetSensor(BaseRequestModel request, ProductModel product,
             AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
         {
             message = string.Empty;
             sensor = null;
+            var parts = request.PathParts;
 
             for (int i = 0; i < parts.Length; i++)
             {
@@ -725,10 +720,8 @@ namespace HSMServer.Core.Cache
                 message = NotExistingSensor;
                 return false;
             }
-            else if (!accessKey.IsHasPermissions(permissions, out message))
-                return false;
 
-            return true;
+            return accessKey.IsHasPermissions(permissions, out message);
         }
 
         private List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
@@ -767,14 +760,14 @@ namespace HSMServer.Core.Cache
         private BaseSensorModel GetSensor(BaseRequestModel request)
         {
             if (TryGetProductByKey(request, out var product, out _) &&
-                TryGetSensor(request.GetPathParts(), product, null, out var sensor, out _))
+                TryGetSensor(request, product, null, out var sensor, out _))
                 return sensor;
 
             return null;
         }
 
-        private AccessKeyModel GetAccessKeyModel(string key) =>
-            Guid.TryParse(key, out var guid) && _keys.TryGetValue(guid, out var keyModel)
+        private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
+            _keys.TryGetValue(request.KeyGuid, out var keyModel)
                 ? keyModel
                 : AccessKeyModel.InvalidKey;
 

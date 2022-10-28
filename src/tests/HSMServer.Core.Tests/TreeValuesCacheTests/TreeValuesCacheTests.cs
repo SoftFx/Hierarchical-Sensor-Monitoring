@@ -683,10 +683,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private static StoreInfo BuildSensorStoreInfo(string key, string path, SensorType type) =>
-            new()
+            new(key, path)
             {
-                Key = key,
-                Path = path,
                 BaseValue = SensorValuesFactory.BuildSensorValue(type)
             };
 

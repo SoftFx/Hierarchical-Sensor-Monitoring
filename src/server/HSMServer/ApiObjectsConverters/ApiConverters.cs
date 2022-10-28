@@ -248,10 +248,8 @@ namespace HSMServer.ApiObjectsConverters
 
 
         public static HistoryRequestModel Convert(this HistoryRequest request) =>
-            new()
+            new(request.Key, request.Path)
             {
-                Key = request.Key,
-                Path = request.Path,
                 From = request.From,
                 To = request.To,
                 Count = request.Count

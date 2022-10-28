@@ -9,5 +9,8 @@ namespace HSMServer.Core.Model.Requests
         public DateTime? To { get; set; }
 
         public int? Count { get; set; }
+
+
+        public HistoryRequestModel(string key, string path) : base(key, path) { }
     }
 }
