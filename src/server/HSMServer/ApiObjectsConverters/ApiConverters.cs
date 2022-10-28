@@ -2,11 +2,12 @@
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Requests;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using ObjectsSensorStatus = HSMSensorDataObjects.SensorStatus;
+using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.ApiObjectsConverters
 {
@@ -182,83 +183,40 @@ namespace HSMServer.ApiObjectsConverters
 
 
 
-        public static BoolSensorValue Convert(this BooleanValue value) =>
+        public static SimpleSensorHistory Convert<T>(this BaseValue<T> value) =>
             new()
             {
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = value.Value
+                Status = value.Status.ToString(),
+                Value = value.Value.ToString(),
             };
 
-        public static IntSensorValue Convert(this IntegerValue value) =>
+        public static FileSensorHistory Convert(this FileValue value) =>
             new()
             {
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = value.Value
-            };
-
-        public static DoubleSensorValue Convert(this DoubleValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = value.Value
-            };
-
-        public static StringSensorValue Convert(this StringValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = value.Value
-            };
-
-        public static FileSensorBytesValue Convert(this FileValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
+                Status = value.Status.ToString(),
                 Value = value.Value,
                 FileName = value.Name,
                 Extension = value.Extension
             };
 
-        public static IntBarSensorValue Convert(this IntegerBarValue value) =>
+        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : struct =>
             new()
             {
                 Comment = value.Comment,
                 Time = value.Time,
-                Status = value.Status.Convert(),
+                Status = value.Status.ToString(),
                 Count = value.Count,
                 OpenTime = value.OpenTime,
                 CloseTime = value.CloseTime,
-                Min = value.Min,
-                Max = value.Max,
-                Mean = value.Mean,
-                LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.Select(p => new PercentileValueInt { Percentile = p.Key, Value = p.Value }).ToList() ?? new(),
-            };
-
-        public static DoubleBarSensorValue Convert(this DoubleBarValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Count = value.Count,
-                OpenTime = value.OpenTime,
-                CloseTime = value.CloseTime,
-                Min = value.Min,
-                Max = value.Max,
-                Mean = value.Mean,
-                LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.Select(p => new PercentileValueDouble { Percentile = p.Key, Value = p.Value }).ToList() ?? new(),
+                Min = value.Min.ToString(),
+                Max = value.Max.ToString(),
+                Mean = value.Mean.ToString(),
+                LastValue = value.LastValue.ToString(),
+                Percentiles = value.Percentiles?.Select(p => new PercentileValue { Percentile = p.Key, Value = p.Value.ToString() }).ToList() ?? new(),
             };
 
         public static object Convert(this BaseValue value) =>
@@ -300,24 +258,14 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        private static SensorStatus Convert(this ObjectsSensorStatus status) =>
+        private static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch
             {
-                ObjectsSensorStatus.Ok => SensorStatus.Ok,
-                ObjectsSensorStatus.Unknown => SensorStatus.Unknown,
-                ObjectsSensorStatus.Error => SensorStatus.Error,
-                ObjectsSensorStatus.Warning => SensorStatus.Warning,
+                ApiSensorStatus.Ok => SensorStatus.Ok,
+                ApiSensorStatus.Unknown => SensorStatus.Unknown,
+                ApiSensorStatus.Error => SensorStatus.Error,
+                ApiSensorStatus.Warning => SensorStatus.Warning,
                 _ => SensorStatus.Unknown
-            };
-
-        private static ObjectsSensorStatus Convert(this SensorStatus status) =>
-            status switch
-            {
-                SensorStatus.Ok => ObjectsSensorStatus.Ok,
-                SensorStatus.Unknown => ObjectsSensorStatus.Unknown,
-                SensorStatus.Error => ObjectsSensorStatus.Error,
-                SensorStatus.Warning => ObjectsSensorStatus.Warning,
-                _ => ObjectsSensorStatus.Unknown
             };
     }
 }
