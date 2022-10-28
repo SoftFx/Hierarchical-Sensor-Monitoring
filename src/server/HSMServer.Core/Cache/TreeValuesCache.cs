@@ -678,7 +678,8 @@ namespace HSMServer.Core.Cache
 
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
-            var productId = GetAccessKeyModel(request.Key)?.ProductId ?? request.Key;
+            var keyModel = GetAccessKeyModel(request.Key);
+            var productId = keyModel == AccessKeyModel.InvalidKey ? request.Key : keyModel.ProductId;
 
             var hasProduct = _tree.TryGetValue(productId, out product);
             message = hasProduct ? string.Empty : ErrorKeyNotFound;
@@ -773,7 +774,9 @@ namespace HSMServer.Core.Cache
         }
 
         private AccessKeyModel GetAccessKeyModel(string key) =>
-            Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
+            Guid.TryParse(key, out var guid) && _keys.TryGetValue(guid, out var keyModel)
+                ? keyModel
+                : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {
