@@ -89,31 +89,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<byte[]> GetValuesTo(string sensorId, byte[] from, byte[] to, int count)
-        {
-            IEnumerable<byte[]> TakeValues(List<byte[]> values, int valuesCount) =>
-                values.Take(valuesCount);
-
-            return GetValues(sensorId, from, to, count, TakeValues);
-        }
-
-        public List<byte[]> GetValuesFrom(string sensorId, byte[] from, byte[] to, int count)
-        {
-            IEnumerable<byte[]> TakeValues(List<byte[]> values, int valuesCount) =>
-                values.TakeLast(valuesCount);
-
-            return GetValues(sensorId, from, to, count, TakeValues);
-        }
-
-        private List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count,
-            Func<List<byte[]>, int, IEnumerable<byte[]>> takeFunc)
+        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
         {
             try
             {
                 var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
                 result.Reverse();
 
-                return takeFunc?.Invoke(result, count).ToList();
+                return result.Take(count).ToList();
             }
             catch (Exception e)
             {

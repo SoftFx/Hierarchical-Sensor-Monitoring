@@ -17,8 +17,6 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> GetValues(int count);
 
         internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
-
-        internal abstract List<BaseValue> GetValues(DateTime from, DateTime to, int count);
     }
 
 
@@ -49,19 +47,9 @@ namespace HSMServer.Core.Model
         internal override void Clear() => _cachedValues.Clear();
 
         internal override List<BaseValue> GetValues(int count) =>
-            GetBaseValues(_cachedValues.TakeLast(count));
+            _cachedValues.Take(count).Select(v => (BaseValue)v).ToList();
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
-            GetBaseValues(GetValuesPeriod(from, to));
-
-        internal override List<BaseValue> GetValues(DateTime from, DateTime to, int count) =>
-            GetBaseValues(GetValuesPeriod(from, to).Take(count));
-
-
-        private IEnumerable<T> GetValuesPeriod(DateTime from, DateTime to) =>
-            _cachedValues.Where(v => v.ReceivingTime >= from && v.ReceivingTime <= to);
-
-        private static List<BaseValue> GetBaseValues(IEnumerable<T> values) =>
-            values.Select(v => (BaseValue)v).ToList();
+            _cachedValues.Where(v => v.ReceivingTime >= from && v.ReceivingTime <= to).Select(v => (BaseValue)v).ToList();
     }
 }

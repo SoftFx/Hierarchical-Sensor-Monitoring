@@ -169,8 +169,6 @@ namespace HSMServer.Core.Model
 
         internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
 
-        internal List<BaseValue> GetValues(DateTime from, DateTime to, int count) => Storage.GetValues(from, to, count);
-
 
         internal virtual void AddPolicy(Policy policy)
         {

@@ -40,17 +40,7 @@ namespace HSMServer.Core.Model
         {
             var values = base.GetValues(from, to);
 
-            if (LocalLastValue != null && IsLocalValueInPeriod(from, to))
-                values.Add(LocalLastValue);
-
-            return values;
-        }
-
-        internal override List<BaseValue> GetValues(DateTime from, DateTime to, int count)
-        {
-            var values = base.GetValues(from, to, count);
-
-            if (LocalLastValue != null && IsLocalValueInPeriod(from, to) && values.Count < count)
+            if (LocalLastValue != null && LocalLastValue.ReceivingTime >= from && LocalLastValue.ReceivingTime <= to)
                 values.Add(LocalLastValue);
 
             return values;
@@ -62,9 +52,5 @@ namespace HSMServer.Core.Model
 
             LocalLastValue = null;
         }
-
-
-        private bool IsLocalValueInPeriod(DateTime from, DateTime to) =>
-            LocalLastValue.ReceivingTime >= from && LocalLastValue.ReceivingTime <= to;
     }
 }

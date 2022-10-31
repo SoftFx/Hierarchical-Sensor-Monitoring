@@ -21,8 +21,6 @@ namespace HSMDatabase.AccessManager
 
         List<byte[]> GetValues(string sensorId, byte[] to, int count);
 
-        List<byte[]> GetValuesTo(string sensorId, byte[] from, byte[] to, int count);
-
-        List<byte[]> GetValuesFrom(string sensorId, byte[] from, byte[] to, int count);
+        List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count);
     }
 }

@@ -28,9 +28,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             _logger = LogManager.GetCurrentClassLogger();
         }
 
-
-        public void Dispose() => _database.Dispose();
-
         public long GetSensorSize(string productName, string path)
         {
             var stringKey = PrefixConstants.GetSensorReadValueKey(productName, path);
@@ -73,6 +70,25 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to, int count)
+        {
+            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, from));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
+            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
+
+            try
+            {
+                var result = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
+                result.Reverse();
+
+                return result.Take(count).ToList();
+            }
+            catch (Exception)
+            { }
+
+            return new();
+        }
+
         public List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count)
         {
             var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
@@ -88,40 +104,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return new();
         }
 
-        public List<byte[]> GetSensorValuesBytesBetweenTo(string productName, string path, DateTime from, DateTime to, int count)
-        {
-            IEnumerable<byte[]> TakeValues(List<byte[]> values, int valuesCount) =>
-                values.Take(valuesCount);
-
-            return GetSensorValuesBytesBetween(productName, path, from, to, count, TakeValues);
-        }
-
-        public List<byte[]> GetSensorValuesBytesBetweenFrom(string productName, string path, DateTime from, DateTime to, int count)
-        {
-            IEnumerable<byte[]> TakeValues(List<byte[]> values, int valuesCount) =>
-                values.TakeLast(valuesCount);
-
-            return GetSensorValuesBytesBetween(productName, path, from, to, count, TakeValues);
-        }
-
-        private List<byte[]> GetSensorValuesBytesBetween(string productName, string path, DateTime from, DateTime to, int count,
-            Func<List<byte[]>, int, IEnumerable<byte[]>> takeFunc)
-        {
-            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, from));
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorWriteValueKey(productName, path, to));
-            var startWithBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(productName, path));
-
-            try
-            {
-                var result = _database.GetStartingWithRange(fromBytes, toBytes, startWithBytes);
-                result.Reverse();
-
-                return takeFunc?.Invoke(result, count).ToList();
-            }
-            catch (Exception)
-            { }
-
-            return new();
-        }
+        public void Dispose() => _database.Dispose();
     }
 }
