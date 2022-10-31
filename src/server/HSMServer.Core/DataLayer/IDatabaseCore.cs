@@ -47,7 +47,7 @@ namespace HSMServer.Core.DataLayer
 
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
         List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
-        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count = 1000);
+        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
 

@@ -9,13 +9,5 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
 
         public StoreInfo(string key, string path) : base(key, path) { }
-
-
-        public void Deconstruct(out string key, out string path, out BaseValue baseValue)
-        {
-            key = Key;
-            path = Path;
-            baseValue = BaseValue;
-        }
     }
 }

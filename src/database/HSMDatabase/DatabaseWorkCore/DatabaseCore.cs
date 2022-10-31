@@ -18,7 +18,7 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int _maxHistoryCount = 1000;
+        private const int MaxHistoryCount = 1000;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -224,7 +224,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count = _maxHistoryCount)
+        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count = MaxHistoryCount)
         {
             var result = GetSensorValues(sensorId, from, to, count);
             if (result.Count < count)
@@ -281,7 +281,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count)
         {
-            var result = new List<byte[]>(Math.Min(_maxHistoryCount, count));
+            var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
 
             var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
             var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
@@ -302,7 +302,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private List<byte[]> GetSensorValues(string productName, string path, DateTime from, DateTime to, int count)
         {
-            var result = new List<byte[]>(Math.Min(_maxHistoryCount, count));
+            var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
 
             var databases = _sensorsDatabases.GetSortedDatabases();
             foreach (var database in databases)

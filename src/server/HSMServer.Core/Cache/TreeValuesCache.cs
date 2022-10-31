@@ -369,14 +369,13 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            (_, string path, BaseValue value) = storeInfo;
-
             if (!TryGetProductByKey(storeInfo, out var product, out _))
                 return;
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
 
-            var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
+            var value = storeInfo.BaseValue;
+            var sensorName = storeInfo.PathParts[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
