@@ -224,11 +224,34 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to)
         {
+            List<byte[]> GetNewValues(ISensorValuesDatabase db, byte[] fromBytes, byte[] toBytes, int valuesCount) =>
+                db.GetValuesTo(sensorId, fromBytes, toBytes, valuesCount);
+
+            List<byte[]> GetOldValues(ISensorsDatabase db, int valuesCount) =>
+                db.GetSensorValuesBytesBetweenTo(productName, path, from, to, valuesCount);
+
+
             const int maxSensorValues = 1000;
 
-            var result = GetSensorValues(sensorId, from, to, maxSensorValues);
+            var result = GetSensorValues(sensorId, from, to, maxSensorValues, GetNewValues);
             if (result.Count < maxSensorValues)
-                result.AddRange(GetSensorValues(productName, path, from, to, maxSensorValues - result.Count));
+                result.AddRange(GetSensorValues(from, to, maxSensorValues - result.Count, GetOldValues));
+
+            return result;
+        }
+
+        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count)
+        {
+            List<byte[]> GetNewValues(ISensorValuesDatabase db, byte[] fromBytes, byte[] toBytes, int valuesCount) =>
+                db.GetValuesFrom(sensorId, fromBytes, toBytes, valuesCount);
+
+            List<byte[]> GetOldValues(ISensorsDatabase db, int valuesCount) =>
+                db.GetSensorValuesBytesBetweenFrom(productName, path, from, to, valuesCount);
+
+
+            var result = GetSensorValues(sensorId, from, to, count, GetNewValues);
+            if (result.Count < count)
+                result.AddRange(GetSensorValues(from, to, count - result.Count, GetOldValues));
 
             return result;
         }
@@ -279,7 +302,8 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count)
+        private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count,
+            Func<ISensorValuesDatabase, byte[], byte[], int, List<byte[]>> getValues)
         {
             var result = new List<byte[]>(count);
 
@@ -291,7 +315,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (database.To < from.Ticks || database.From > to.Ticks)
                     continue;
 
-                result.AddRange(database.GetValues(sensorId, fromBytes, toBytes, count - result.Count));
+                result.AddRange(getValues(database, fromBytes, toBytes, count - result.Count));
 
                 if (count == result.Count)
                     break;
@@ -300,7 +324,8 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        private List<byte[]> GetSensorValues(string productName, string path, DateTime from, DateTime to, int count)
+        private List<byte[]> GetSensorValues(DateTime from, DateTime to, int count,
+            Func<ISensorsDatabase, int, List<byte[]>> getValues)
         {
             var result = new List<byte[]>(count);
 
@@ -310,7 +335,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (database.DatabaseMaxTicks < from.Ticks || database.DatabaseMinTicks > to.Ticks)
                     continue;
 
-                result.AddRange(database.GetSensorValuesBytesBetween(productName, path, from, to, count - result.Count));
+                result.AddRange(getValues(database, count - result.Count));
 
                 if (count == result.Count)
                     break;

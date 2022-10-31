@@ -321,12 +321,30 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
+        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count)
+        {
+            List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to, count);
+
+            (var sensor, var values) = GetCachedValues(sensorId, GetValues);
+            if (sensor == null)
+                return values;
+
+            var remainingCount = count - values.Count;
+            var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
+
+            if (remainingCount > 0 && oldestValueTime > from)
+                values.AddRange(sensor.ConvertValues(
+                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime, remainingCount)));
+
+            return values;
+        }
+
         public List<BaseValue> GetSensorValues(HistoryRequestModel request)
         {
             var sensor = GetSensor(request);
             var historyValues = request.To.HasValue
                 ? GetSensorValues(sensor.Id, request.From, request.To.Value)
-                : GetSensorValues(sensor.Id, request.Count.Value);
+                : GetSensorValues(sensor.Id, request.From, DateTime.UtcNow.AddDays(1), request.Count.Value);
 
             return historyValues;
         }
