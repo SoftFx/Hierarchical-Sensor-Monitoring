@@ -6,7 +6,7 @@ namespace HSMSensorDataObjects.HistoryRequests
     public class HistoryRequest : BaseRequest
     {
         [DataMember]
-        public DateTime From { get; set; } // TODO: From is nullable?? 
+        public DateTime From { get; set; }
 
         [DataMember]
         public DateTime? To { get; set; }

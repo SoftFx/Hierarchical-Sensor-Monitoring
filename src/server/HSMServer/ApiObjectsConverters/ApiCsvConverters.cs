@@ -15,34 +15,34 @@ namespace HSMServer.ApiObjectsConverters
 
         private static readonly List<string> _simpleSensorHeader = new()
         {
-            nameof(SensorValueBase.Comment),
             nameof(SensorValueBase.Time),
-            nameof(SensorValueBase.Status),
             nameof(BoolSensorValue.Value),
+            nameof(SensorValueBase.Status),
+            nameof(SensorValueBase.Comment),
         };
 
         private static readonly List<string> _barSensorHeader = new()
         {
-            nameof(SensorValueBase.Comment),
             nameof(SensorValueBase.Time),
-            nameof(SensorValueBase.Status),
             nameof(IntBarSensorValue.OpenTime),
             nameof(IntBarSensorValue.CloseTime),
-            nameof(IntBarSensorValue.Count),
             nameof(IntBarSensorValue.Min),
             nameof(IntBarSensorValue.Max),
             nameof(IntBarSensorValue.Mean),
+            nameof(IntBarSensorValue.Count),
             nameof(IntBarSensorValue.LastValue),
+            nameof(SensorValueBase.Status),
+            nameof(SensorValueBase.Comment),
         };
 
         private static readonly List<string> _fileSensorHeader = new()
         {
-            nameof(SensorValueBase.Comment),
             nameof(SensorValueBase.Time),
-            nameof(SensorValueBase.Status),
-            nameof(BoolSensorValue.Value),
-            nameof(FileSensorBytesValue.Extension),
+            nameof(FileSensorBytesValue.Value),
             nameof(FileSensorBytesValue.FileName),
+            nameof(FileSensorBytesValue.Extension),
+            nameof(SensorValueBase.Status),
+            nameof(SensorValueBase.Comment),
         };
 
 
@@ -60,17 +60,18 @@ namespace HSMServer.ApiObjectsConverters
             var content = new StringBuilder(1 << 7);
             var header = values.GetHeader();
 
-            content.AppendLine(header.GetRow());
+            content.AppendLine(header.BuildRow());
 
+            var rowValues = new List<string>(header.Count);
             foreach (var value in values)
             {
-                var rowValues = new List<string>(header.Count);
-                var properties = JsonSerializer.SerializeToElement((object)value, _serializerOptions);
+                var properties = JsonSerializer.SerializeToElement<object>(value, _serializerOptions);
 
                 foreach (var column in header)
                     rowValues.Add(properties.GetProperty(column).ToString());
 
-                content.AppendLine(rowValues.GetRow());
+                content.AppendLine(rowValues.BuildRow());
+                rowValues.Clear();
             }
 
             return content.ToString();
@@ -79,16 +80,12 @@ namespace HSMServer.ApiObjectsConverters
         private static List<string> GetHeader(this List<BaseValue> values) =>
             values[0] switch
             {
-                BooleanValue => _simpleSensorHeader,
-                IntegerValue => _simpleSensorHeader,
-                DoubleValue => _simpleSensorHeader,
-                StringValue => _simpleSensorHeader,
-                IntegerBarValue => _barSensorHeader,
-                DoubleBarValue => _barSensorHeader,
+                BooleanValue or IntegerValue or DoubleValue or StringValue => _simpleSensorHeader,
+                IntegerBarValue or DoubleBarValue => _barSensorHeader,
                 FileValue => _fileSensorHeader,
                 _ => new(),
             };
 
-        private static string GetRow(this List<string> values) => string.Join(_columnSeparator, values);
+        private static string BuildRow(this List<string> values) => string.Join(_columnSeparator, values);
     }
 }
