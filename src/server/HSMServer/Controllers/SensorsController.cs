@@ -361,7 +361,7 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Get history [from, to] or [from - count] for some sensor
+        /// Get history [from, to] or [count] for some sensor
         /// </summary>
         [HttpPost("history")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -390,7 +390,7 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Get file (csv or txt) history [from, to] or [from - count] for some sensor
+        /// Get file (csv or txt) history [from, to] or [count] for some sensor
         /// </summary>
         [HttpPost("historyFile")]
         [Consumes(MediaTypeNames.Application.Json)]
