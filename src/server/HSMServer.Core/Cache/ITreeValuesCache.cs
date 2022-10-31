@@ -53,7 +53,7 @@ namespace HSMServer.Core.Cache
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
-        List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+        List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 1000);
         List<BaseValue> GetSensorValues(HistoryRequestModel request);
 
         void UpdatePolicy(TransactionType type, Policy policy);

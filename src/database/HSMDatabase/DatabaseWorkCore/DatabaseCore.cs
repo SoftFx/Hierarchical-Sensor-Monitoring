@@ -18,6 +18,8 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
+        private const int _maxHistoryCount = 1000;
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IEnvironmentDatabase _environmentDatabase;
@@ -222,13 +224,11 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to)
+        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count = _maxHistoryCount)
         {
-            const int maxSensorValues = 1000;
-
-            var result = GetSensorValues(sensorId, from, to, maxSensorValues);
-            if (result.Count < maxSensorValues)
-                result.AddRange(GetSensorValues(productName, path, from, to, maxSensorValues - result.Count));
+            var result = GetSensorValues(sensorId, from, to, count);
+            if (result.Count < count)
+                result.AddRange(GetSensorValues(productName, path, from, to, count - result.Count));
 
             return result;
         }
@@ -281,7 +281,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count)
         {
-            var result = new List<byte[]>(count);
+            var result = new List<byte[]>(Math.Min(_maxHistoryCount, count));
 
             var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
             var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
@@ -302,7 +302,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private List<byte[]> GetSensorValues(string productName, string path, DateTime from, DateTime to, int count)
         {
-            var result = new List<byte[]>(count);
+            var result = new List<byte[]>(Math.Min(_maxHistoryCount, count));
 
             var databases = _sensorsDatabases.GetSortedDatabases();
             foreach (var database in databases)
