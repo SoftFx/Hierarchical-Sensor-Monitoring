@@ -42,7 +42,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
 
         internal static AccessKeyEntity BuildAccessKeyEntity(string id = null, string name = null, string productId = null,
-            KeyPermissions permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors) =>
+            KeyPermissions permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanReadSensorData) =>
             new()
             {
                 Id = id ?? Guid.NewGuid().ToString(),

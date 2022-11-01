@@ -14,6 +14,14 @@
 * Status column has been added to sensor history table
 * Original bar sensor data is displayed in sensor history table
 
+### Access keys
+
+* New permission CanReadSensorData has been added
+
+### REST API
+
+* New methods (history and historyFile) have been added (to get sensor history you need an access key with new permission CanReadSensorData)
+
 ## Other
 
 * Bugfixing & optimization

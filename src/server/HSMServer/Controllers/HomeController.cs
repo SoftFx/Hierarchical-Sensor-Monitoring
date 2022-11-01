@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntitites;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
+using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.History;
@@ -11,7 +12,6 @@ using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -301,7 +301,7 @@ namespace HSMServer.Controllers
             var csv = HistoryProcessorFactory.BuildProcessor(type).GetCsvHistory(values);
             var content = Encoding.UTF8.GetBytes(csv);
 
-            return File(content, GetFileTypeByExtension(fileName), fileName);
+            return File(content, fileName.GetContentType(), fileName);
         }
 
 
@@ -364,7 +364,7 @@ namespace HSMServer.Controllers
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
-            return File(value.Value, GetFileTypeByExtension(fileName), fileName);
+            return File(value.Value, fileName.GetContentType(), fileName);
         }
 
         [HttpPost]
@@ -379,22 +379,11 @@ namespace HSMServer.Controllers
             var fileContentsStream = new MemoryStream(value.Value);
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
-            return File(fileContentsStream, GetFileTypeByExtension(fileName), fileName);
+            return File(fileContentsStream, fileName.GetContentType(), fileName);
         }
 
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
-
-        private static string GetFileTypeByExtension(string fileName)
-        {
-            var provider = new FileExtensionContentTypeProvider();
-            if (!provider.TryGetContentType(fileName, out var contentType))
-            {
-                contentType = System.Net.Mime.MediaTypeNames.Application.Octet;
-            }
-
-            return contentType;
-        }
 
         #endregion
 

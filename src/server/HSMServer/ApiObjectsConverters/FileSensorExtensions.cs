@@ -1,7 +1,7 @@
 ﻿using HSMSensorDataObjects.FullDataObject;
 using System.Text;
 
-namespace HSMServer.Core.Converters
+namespace HSMServer.ApiObjectsConverters
 {
     public static class FileSensorExtensions
     {

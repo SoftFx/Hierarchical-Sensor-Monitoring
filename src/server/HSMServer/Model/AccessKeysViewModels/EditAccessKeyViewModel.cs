@@ -46,6 +46,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanAddSensors { get; set; }
 
+        public bool CanReadSensorData { get; set; }
+
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
 
@@ -63,6 +65,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
             CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
+            CanReadSensorData = key.Permissions.HasFlag(KeyPermissions.CanReadSensorData);
         }
 
 
@@ -94,6 +97,8 @@ namespace HSMServer.Model.AccessKeysViewModels
                 perm |= KeyPermissions.CanAddNodes;
             if (CanAddSensors)
                 perm |= KeyPermissions.CanAddSensors;
+            if (CanReadSensorData)
+                perm |= KeyPermissions.CanReadSensorData;
 
             return perm;
         }
