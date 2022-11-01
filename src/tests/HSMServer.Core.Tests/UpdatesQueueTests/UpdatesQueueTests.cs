@@ -5,92 +5,124 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Telegram.Bot.Requests;
 using Xunit;
 
 namespace HSMServer.Core.Tests.UpdatesQueueTests
 {
     public class UpdatesQueueTests
     {
+        private const int DelayTime = 100;
+
         [Fact]
-        [Trait("UnitTest", "UnitTest")]
-        public async void AddItemTest()
+        [Trait("Category", "AddItem(s)")]
+        public async Task AddItemTest()
         {
             StoreInfo receivedInfo = default;
-            void getItem(List<StoreInfo> storeInfo)
+            void GetItem(List<StoreInfo> items)
             {
-                receivedInfo = storeInfo[0];
+                receivedInfo = items[0];
             }
-            StoreInfo storeInfo = new() { Key = "", Path = "/", BaseValue = new IntegerValue() { Value = 5} };
-            var UpdatesQueue = new UpdatesQueue();
-            UpdatesQueue.AddItem(storeInfo);
-            UpdatesQueue.NewItemsEvent += getItem;
-            await Task.Delay(100);
+
+            StoreInfo storeInfo = BuildStoreInfo(0);
+            var updatesQueue = new UpdatesQueue();
+            updatesQueue.AddItem(storeInfo);
+            updatesQueue.NewItemsEvent += GetItem;
+
+            await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
         }
 
         [Fact]
-        [Trait("UnitTest", "UnitTest")]
-        public async void AddEmptyItemTest()
+        [Trait("Category", "AddItem(s)")]
+        public async Task AddEmptyItemTest()
         {
             StoreInfo receivedInfo = default;
-            void getItem(List<StoreInfo> storeInfo)
+            void GetItem(List<StoreInfo> items)
             {
-                receivedInfo = storeInfo[0];
+                receivedInfo = items[0];
             }
+
             StoreInfo storeInfo = new();
-            var UpdatesQueue = new UpdatesQueue();
-            UpdatesQueue.AddItem(storeInfo);
-            UpdatesQueue.NewItemsEvent += getItem;
-            await Task.Delay(100);
+            var updatesQueue = new UpdatesQueue();
+            updatesQueue.AddItem(storeInfo);
+            updatesQueue.NewItemsEvent += GetItem;
+
+            await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
         }
 
-        [Fact]
-        [Trait("UnitTest", "UnitTest")]
-        public async void AddItemsTest()
+        [Theory]
+        [InlineData(5)]
+        [InlineData(10)]
+        [InlineData(100)]
+        [Trait("Category", "AddItem(s)")]
+        public async Task AddItemsTest(int count)
         {
             List<StoreInfo> receivedInfo = default;
-            void getItem(List<StoreInfo> storeInfo)
+            void GetItem(List<StoreInfo> items)
             {
-                receivedInfo = storeInfo;
+                receivedInfo = items;
             }
 
-            List<StoreInfo> items = new();
-            for (int i = 0; i < 10; i++) 
-            {
-                StoreInfo storeInfo = new() { Key = "", Path = "/", BaseValue = new IntegerValue() { Value = i } };
-                items.Add(storeInfo);
-            }
+            List<StoreInfo> items = AddItemsToList(count);
 
-            var UpdatesQueue = new UpdatesQueue();
-            UpdatesQueue.AddItems(items);
-            UpdatesQueue.NewItemsEvent += getItem;
-            await Task.Delay(100);
-            Assert.Equal(items, receivedInfo);
+            var updatesQueue = new UpdatesQueue();
+            updatesQueue.AddItems(items);
+            updatesQueue.NewItemsEvent += GetItem;
+
+            await Task.Delay(DelayTime);
+            Assert.Equal(items.Count, receivedInfo.Count);
+            for (int i = 0; i < items.Count; i++)
+               Assert.Equal(items[i], receivedInfo[i]);
         }
 
-        [Fact]
-        [Trait("UnitTest", "UnitTest")]
-        public async void AddEmptyItemsTest()
+        [Theory]
+        [InlineData(5)]
+        [InlineData(10)]
+        [InlineData(100)]
+        [Trait("Category", "AddItem(s)")]
+        public async Task AddEmptyItemsTest(int count)
         {
-            List<StoreInfo> receivedInfo = default;
-            void getItem(List<StoreInfo> storeInfo)
+            List<StoreInfo> receivedInfo = new();
+            void GetItem(List<StoreInfo> storeInfo)
             {
-                receivedInfo = storeInfo;
+                receivedInfo.AddRange(storeInfo);
             }
 
             List<StoreInfo> items = new();
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < count; i++)
             {
                 StoreInfo storeInfo = new();
                 items.Add(storeInfo);
             }
 
-            var UpdatesQueue = new UpdatesQueue();
-            UpdatesQueue.AddItems(items);
-            UpdatesQueue.NewItemsEvent += getItem;
-            await Task.Delay(100);
-            Assert.Equal(items, receivedInfo);
+            var updatesQueue = new UpdatesQueue();
+            updatesQueue.AddItems(items);
+            updatesQueue.NewItemsEvent += GetItem;
+
+            await Task.Delay(DelayTime);
+            Assert.Equal(items.Count, receivedInfo.Count);
+            for (int i = 0; i < items.Count; i++)
+                Assert.Equal(items[i], receivedInfo[i]);
+        }
+
+        private static List<StoreInfo> AddItemsToList(int count)
+        {
+            List<StoreInfo> items = new();
+
+            for (int i = 0; i < count; i++)
+            {
+                StoreInfo storeInfo = BuildStoreInfo(count);
+                items.Add(storeInfo);
+            }
+
+            return items;
+        }
+
+        private static StoreInfo BuildStoreInfo(int value)
+        {
+            return new() { Key = "", Path = "/", BaseValue = new IntegerValue() { Value = value } };
         }
     }
 }
