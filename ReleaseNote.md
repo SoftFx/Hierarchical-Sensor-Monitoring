@@ -20,7 +20,7 @@
 
 ### REST API
 
-* New methods (history and historyFile) have been added
+* New methods (history and historyFile) have been added (to get sensor history you need an access key with new permission CanReadSensorData)
 
 ## Other
 
