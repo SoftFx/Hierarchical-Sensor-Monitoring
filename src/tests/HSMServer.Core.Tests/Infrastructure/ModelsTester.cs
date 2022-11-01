@@ -120,10 +120,12 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestAccessKeyModel(ProductModel expected, AccessKeyModel actual)
         {
+            var fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
+
             Assert.NotNull(actual);
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.Id, actual.ProductId);
-            Assert.Equal(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData, actual.Permissions);
+            Assert.Equal(fullPermissions, actual.Permissions);
             Assert.Equal(CommonConstants.DefaultAccessKey, actual.DisplayName);
             Assert.Equal(DateTime.MaxValue, actual.ExpirationTime);
         }

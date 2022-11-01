@@ -10,7 +10,8 @@ namespace HSMServer.Core.Model
     {
         CanSendSensorData = 1,
         CanAddNodes = 2,
-        CanAddSensors = 4
+        CanAddSensors = 4,
+        CanReadSensorData = 8,
     }
 
     public enum KeyState : byte
@@ -21,8 +22,13 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class AccessKeyModel
+    public class AccessKeyModel
     {
+        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
+
+        internal static InvalidAccessKey InvalidKey { get; } = new();
+
+
         public Guid Id { get; }
 
         public string AuthorId { get; }
@@ -61,7 +67,7 @@ namespace HSMServer.Core.Model
             ProductId = productId;
         }
 
-        private AccessKeyModel()
+        protected AccessKeyModel()
         {
             Id = Guid.NewGuid();
             CreationTime = DateTime.UtcNow;
@@ -72,7 +78,7 @@ namespace HSMServer.Core.Model
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanSendSensorData;
+            Permissions = _fullPermissions;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
@@ -107,16 +113,20 @@ namespace HSMServer.Core.Model
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
 
-        internal bool IsHasPermission(KeyPermissions permisssion, out string message)
+        internal bool IsHasPermissions(KeyPermissions expectedPermissions, out string message)
         {
-            message = string.Empty;
-            if (!Permissions.HasFlag(permisssion))
+            var common = expectedPermissions & Permissions;
+
+            if (common == expectedPermissions)
             {
-                message = $"AccessKey doesn't have {permisssion}.";
+                message = string.Empty;
+                return true;
+            }
+            else
+            {
+                message = $"AccessKey doesn't have {expectedPermissions & ~common}.";
                 return false;
             }
-
-            return true;
         }
 
         internal bool IsExpired(out string message)
@@ -133,11 +143,16 @@ namespace HSMServer.Core.Model
             return false;
         }
 
-        internal bool HasPermissionForSendData(out string message)
-            => !IsExpired(out message) && IsHasPermission(KeyPermissions.CanSendSensorData, out message);
+        internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
+            !IsExpired(out message) && IsHasPermissions(permissions, out message);
+    }
 
-        internal bool HasPermissionCreateProductBranch(out string message)
-            => IsHasPermission(KeyPermissions.CanAddNodes, out message)
-            && IsHasPermission(KeyPermissions.CanAddSensors, out message);
+    public class InvalidAccessKey : AccessKeyModel
+    {
+        internal override bool IsValid(KeyPermissions permissions, out string message)
+        {
+            message = "Key is invalid.";
+            return false;
+        }
     }
 }

@@ -209,9 +209,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "EmptyPathOrKey")]
         public void EmptyPathOrKeyValidationTest()
         {
-            var info = new StoreInfo();
+            var info = new StoreInfo(string.Empty, string.Empty);
 
-            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorPathKey, message);
         }
 
@@ -219,13 +219,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "TooLongPath")]
         public void TooLongPathValidationTest()
         {
-            var info = new StoreInfo
-            {
-                Key = Guid.NewGuid().ToString(),
-                Path = InvalidTooLongPath
-            };
+            var info = new StoreInfo(Guid.NewGuid().ToString(), InvalidTooLongPath);
 
-            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorTooLongPath, message);
         }
 
@@ -243,13 +239,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidPath")]
         public void InvalidPathValidationTest(string path)
         {
-            var info = new StoreInfo
-            {
-                Key = Guid.NewGuid().ToString(),
-                Path = path
-            };
+            var info = new StoreInfo(Guid.NewGuid().ToString(), path);
 
-            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorInvalidPath, message);
         }
 
@@ -257,13 +249,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidKey")]
         public void InvalidKeyValidationTest()
         {
-            var info = new StoreInfo
-            {
-                Key = Guid.NewGuid().ToString(),
-                Path = ValidPath
-            };
+            var info = new StoreInfo(Guid.NewGuid().ToString(), ValidPath);
 
-            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
             Assert.Equal(ErrorKeyNotFound, message);
         }
 
@@ -278,13 +266,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.AddAccessKey(accessKey);
 
-            var info = new StoreInfo
-            {
-                Key = accessKey.Id.ToString(),
-                Path = ValidPath
-            };
+            var info = new StoreInfo(accessKey.Id.ToString(), ValidPath);
 
-            Assert.False(_valuesCache.TryCheckKeyPermissions(info, out var message));
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
             Assert.Equal(ErrorHaventRule, message);
         }
 
