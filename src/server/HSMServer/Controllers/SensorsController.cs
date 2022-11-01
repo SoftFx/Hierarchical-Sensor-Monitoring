@@ -5,9 +5,11 @@ using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.Swagger;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Extensions;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -361,7 +363,7 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Get history [from, to] or [count] for some sensor
+        /// Get history [from, to] or [from - count] for some sensor
         /// </summary>
         [HttpPost("history")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -390,14 +392,14 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Get file (csv or txt) history [from, to] or [count] for some sensor
+        /// Get file (csv or txt) history [from, to] or [from - count] for some sensor
         /// </summary>
         [HttpPost("historyFile")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<string> Get([FromBody] FileHistoryRequest request)
+        public IActionResult Get([FromBody] FileHistoryRequest request)
         {
             try
             {
@@ -406,7 +408,9 @@ namespace HSMServer.Controllers
                     var historyValues = _cache.GetSensorValues(requestModel);
                     var response = historyValues.ConvertToCsv();
 
-                    return Ok(response);
+                    return request.IsZipArchive
+                        ? File(response.CompressToZip(request.FileName, request.Extension), $"{request.FileName}.zip".GetContentType())
+                        : File(Encoding.UTF8.GetBytes(response), $"{request.FileName}.{request.Extension}".GetContentType());
                 }
 
                 return StatusCode(406, message);
