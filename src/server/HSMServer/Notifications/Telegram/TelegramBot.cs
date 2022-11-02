@@ -29,7 +29,7 @@ namespace HSMServer.Notifications
         private readonly IConfigurationProvider _configurationProvider;
         private readonly TelegramUpdateHandler _updateHandler;
 
-        private CancellationToken _token = CancellationToken.None;
+        private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
 
         private bool IsBotRunning => _bot is not null;
@@ -67,7 +67,7 @@ namespace HSMServer.Notifications
 
         public async Task<string> GetChatLink(long chatId)
         {
-            var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _token);
+            var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
             return link.InviteLink;
         }
@@ -98,7 +98,7 @@ namespace HSMServer.Notifications
             if (!IsValidBotConfigurations())
                 return ConfigurationsError;
 
-            _token = new CancellationToken();
+            _tokenSource = new CancellationTokenSource();
             _bot = new TelegramBotClient(BotToken)
             {
                 Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
@@ -106,7 +106,7 @@ namespace HSMServer.Notifications
 
             try
             {
-                await _bot.GetMeAsync(_token);
+                await _bot.GetMeAsync(_tokenSource.Token);
             }
             catch (ApiRequestException exc)
             {
@@ -114,25 +114,25 @@ namespace HSMServer.Notifications
                 return exc.Message;
             }
 
-            await _bot.SetMyCommandsAsync(TelegramBotCommands.Commands, cancellationToken: _token);
+            await _bot.SetMyCommandsAsync(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
 
-            _bot.StartReceiving(_updateHandler, _options, _token);
-            ThreadPool.QueueUserWorkItem(MessageReceiver);
+            _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
+            ThreadPool.QueueUserWorkItem(async _ => await MessageReceiver());
 
             return string.Empty;
         }
 
         public async Task<string> StopBot()
         {
-            if (_token != default)
-                _token.ThrowIfCancellationRequested();
+            _tokenSource.Cancel();
 
             var bot = _bot;
             _bot = null;
 
             try
             {
-                await bot?.CloseAsync(_token);
+                await bot?.DeleteWebhookAsync();
+                await bot?.CloseAsync();
             }
             catch (Exception exc)
             {
@@ -176,7 +176,7 @@ namespace HSMServer.Notifications
                 }
         }
 
-        private async void MessageReceiver(object _)
+        private async Task MessageReceiver()
         {
             while (IsBotRunning)
             {
@@ -193,12 +193,15 @@ namespace HSMServer.Notifications
                         }
                 }
 
-                await Task.Delay(500, _token);
+                if (_tokenSource.IsCancellationRequested)
+                    break;
+
+                await Task.Delay(500, _tokenSource.Token);
             }
         }
 
         private void SendMessageAsync(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, cancellationToken: _token);
+            _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
