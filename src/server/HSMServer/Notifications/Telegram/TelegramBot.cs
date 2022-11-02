@@ -59,34 +59,41 @@ namespace HSMServer.Notifications
         }
 
 
-        public string GetInvitationLink(User user) =>
+        public async ValueTask DisposeAsync()
+        {
+            _userManager.RemoveUserEvent -= RemoveUserEventHandler;
+
+            await StopBot();
+        }
+
+        internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
-        public string GetStartCommandForGroup(ProductModel product) =>
+        internal string GetStartCommandForGroup(ProductModel product) =>
             $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
-        public async Task<string> GetChatLink(long chatId)
+        internal async Task<string> GetChatLink(long chatId)
         {
             var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
             return link.InviteLink;
         }
 
-        public void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
+        internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
-        public void RemoveChat(INotificatable entity, long chatId)
+        internal void RemoveChat(INotificatable entity, long chatId)
         {
             _addressBook.RemoveChat(entity, new ChatId(chatId));
             entity.UpdateEntity(_userManager, _cache);
         }
 
-        public void SendTestMessage(long chatId, string message)
+        internal void SendTestMessage(long chatId, string message)
         {
             if (IsBotRunning)
                 SendMessageAsync(chatId, message);
         }
 
-        public async Task<string> StartBot()
+        internal async Task<string> StartBot()
         {
             if (IsBotRunning)
             {
@@ -122,7 +129,7 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        public async Task<string> StopBot()
+        internal async Task<string> StopBot()
         {
             _tokenSource.Cancel();
 
@@ -140,13 +147,6 @@ namespace HSMServer.Notifications
             }
 
             return string.Empty;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            _userManager.RemoveUserEvent -= RemoveUserEventHandler;
-
-            await StopBot();
         }
 
         private void FillAddressBook()
@@ -196,7 +196,11 @@ namespace HSMServer.Notifications
                 if (_tokenSource.IsCancellationRequested)
                     break;
 
-                await Task.Delay(500, _tokenSource.Token);
+                try
+                {
+                    await Task.Delay(500, _tokenSource.Token);
+                }
+                catch { }
             }
         }
 
