@@ -4,21 +4,120 @@
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 @{
     var user = User as User;
+    var productName = Model.Parent?.Name ?? Model.Name;
     var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
 
     if (Model.Sensors != null)
         foreach (var (_, sensor) in Model.Sensors)
             if (user.IsSensorVisible(sensor))
                 visibleSensors.Add(sensor);
+
+    var listDivId = $"list_{Model.EncodedId}";
+    var gridDivId = $"grid_{Model.EncodedId}";
 }
 
 
-@if (visibleSensors.Count > 0)
-{
-    <div>
-        @foreach (var sensor in visibleSensors)
-            @await Html.PartialAsync("_SensorAccordion", sensor)
+<div class="mx-1">
+    <h5>@(productName)@(Model.Path)</h5>
+
+    <table class='table table-borderless'>
+        <tbody>
+            <tr>
+                <td class="w-25">Product</td>
+                <td>@productName</td>
+            </tr>
+            @if (Model.Parent != null)
+            {
+                <tr>
+                    <td class="w-25">Path</td>
+                    <td>@Model.Path</td>
+                </tr>
+            }
+            <tr>
+                <td class="w-25">Expected update interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
+                <td id="expectedUpdateInterval_@(Model.EncodedId)">
+                    <form>
+                        <div class="input-group row">
+                            <div class="col-5">
+                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                            </div>
+                            <div class="col-auto">
+                                <button type='button' class='btn btn-secondary' onclick="editInfoButtonClick()"
+                                        data-bs-toggle='tooltip' title='edit meta info'>
+                                    <i class='fas fa-edit'></i>
+                                </button>
+                                <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary'
+                                        data-bs-toggle='tooltip' title='save meta info' disabled>
+                                    <i class='fas fa-check'></i>
+                                </button>
+                                <button id='revertInfo_@(Model.EncodedId)' type='button' class='btn btn-secondary' onclick="revertInfoClick()"
+                                        data-bs-toggle='tooltip' title='revert changes' disabled>
+                                    <i class='fas fa-times'></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+
+    <ul class='nav nav-tabs' role="tablist">
+        <li class='nav-item'>
+            <a class='nav-link active' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+        </li>
+        <li class='nav-item'>
+            <a class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+        </li>
+    </ul>
+    <div class='tab-content'>
+        <div class='tab-pane fade show active' id=@listDivId role="tabpanel">
+            @if (Model.Nodes.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Nodes</h6>
+
+                <div>
+                    @foreach (var (_, node) in Model.Nodes)
+                    {
+                        <div class='accordion' id='nodeData_@node.EncodedId'>
+                            <div class='accordion-item'>
+                                <div class='accordion-collapse' data-bs-parent='#nodeData_@node.EncodedId'>
+                                    <div class='accordion-body'>
+                                        <div class="w-100">
+                                            <div class='row justify-content-between'>
+                                                <div class='row col-md-auto'>
+                                                    <div class='col-md-auto sensor-icon-without-padding'>
+                                                        <li id='status_@node.EncodedId' class='@node.Status.ToIcon() sensor-icon-with-margin' title='Status: @node.Status'></li>
+                                                    </div>
+                                                    @node.Name
+                                                </div>
+                                                <div class='col-md-auto time-ago-div me-1' id='update_@Model.EncodedId'>updated @*@Model.GetTimeAgo(time)*@</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (visibleSensors.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Sensors</h6>
+
+                <div>
+                    @foreach (var sensor in visibleSensors)
+                        @await Html.PartialAsync("_SensorAccordion", sensor)
+                </div>
+            }
+        </div>
+        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
+        </div>
     </div>
-}
+</div>
