@@ -22,5 +22,14 @@ namespace HSMServer.Extensions
                 SensorState.Blocked => "blockedSensor-span",
                 _ => string.Empty,
             };
+
+        public static string ToCssGridCellClass(this SensorStatus status) =>
+            status switch
+            {
+                SensorStatus.Ok => "grid-cell-ok",
+                SensorStatus.Warning => "grid-cell-warning",
+                SensorStatus.Error => "grid-cell-error",
+                _ => "grid-cell-unknown",
+            };
     }
 }

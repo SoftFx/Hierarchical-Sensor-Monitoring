@@ -82,3 +82,32 @@
 .blockedSensor-span {
     text-decoration: line-through;
 }
+
+.grid-cell {
+    text-align: center;
+    border-radius: 0.25rem;
+}
+
+.grid-cell-unknown {
+    color: #212529;
+    background-color: #f8f9fa;
+    border-color: #f8f9fa;
+}
+
+.grid-cell-ok {
+    color: #fff;
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.grid-cell-warning {
+    color: #212529;
+    background-color: #ffc107;
+    border-color: #ffc107;
+}
+
+.grid-cell-error {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
