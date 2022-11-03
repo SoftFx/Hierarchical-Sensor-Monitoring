@@ -83,6 +83,13 @@
     text-decoration: line-through;
 }
 
+.container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 100px);
+    grid-gap: 5px;
+    padding: 0px;
+}
+
 .grid-cell {
     text-align: center;
     border-radius: 0.25rem;

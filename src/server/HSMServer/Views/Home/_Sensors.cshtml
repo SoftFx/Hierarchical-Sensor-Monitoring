@@ -122,10 +122,14 @@
             {
                 <h6 class="fw-bold mt-2">Nodes</h6>
 
-                <div class="d-grid" style="grid-template-columns:repeat(10, 1fr);">
+                <div class="container mw-100">
                     @foreach (var (_, node) in Model.Nodes)
                     {
-                        <div class="@node.Status.ToCssGridCellClass() m-1 p-1 grid-cell">@node.Name</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
                     }
                 </div>
             }
@@ -134,28 +138,13 @@
             {
                 <h6 class="fw-bold mt-2">Sensors</h6>
 
-                <div class="d-grid" style="grid-template-columns:repeat(10, 1fr);">
+                <div class="container mw-100">
                     @foreach (var sensor in visibleSensors)
                     {
-                        <div class="@sensor.Status.ToCssGridCellClass() m-1 p-1 grid-cell">@sensor.Name</div>
+                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell">@sensor.Name</div>
                     }
                 </div>
             }
-            @*<div>One</div>
-            <div>Two</div>
-            <div>Three</div>
-            <div>Four</div>
-            <div>Five</div>
-            <div>One</div>
-            <div>Two</div>
-            <div>Three</div>
-            <div>Four</div>
-            <div>Five</div>
-            <div>One</div>
-            <div>Two</div>
-            <div>Three</div>
-            <div>Four</div>
-            <div>Five</div>*@
         </div>
     </div>
 </div>
