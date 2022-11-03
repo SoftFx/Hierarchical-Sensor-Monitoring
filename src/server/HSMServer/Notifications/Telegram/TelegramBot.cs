@@ -118,7 +118,7 @@ namespace HSMServer.Notifications
             catch (ApiRequestException exc)
             {
                 _bot = null;
-                return exc.Message;
+                return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
             await _bot.SetMyCommandsAsync(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
@@ -143,7 +143,7 @@ namespace HSMServer.Notifications
             }
             catch (Exception exc)
             {
-                return exc.Message;
+                return $"An error ({exc.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
             }
 
             return string.Empty;
