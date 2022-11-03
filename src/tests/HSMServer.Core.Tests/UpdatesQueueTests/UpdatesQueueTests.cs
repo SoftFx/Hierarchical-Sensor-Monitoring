@@ -15,7 +15,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         private const int DelayTime = 100;
 
         [Fact]
-        [Trait("Category", "AddItem(s)")]
+        [Trait("Category", "Add Item(s)")]
         public async Task AddItemTest()
         {
             StoreInfo receivedInfo = default;
@@ -34,7 +34,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         }
 
         [Fact]
-        [Trait("Category", "AddItem(s)")]
+        [Trait("Category", "Add Item(s)")]
         public async Task AddEmptyItemTest()
         {
             StoreInfo receivedInfo = default;
@@ -56,13 +56,13 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [InlineData(5)]
         [InlineData(10)]
         [InlineData(100)]
-        [Trait("Category", "AddItem(s)")]
+        [Trait("Category", "Add Item(s)")]
         public async Task AddItemsTest(int count)
         {
-            List<StoreInfo> receivedInfo = default;
+            List<StoreInfo> receivedInfo = new(count);
             void GetItem(List<StoreInfo> items)
             {
-                receivedInfo = items;
+                receivedInfo.AddRange(items);
             }
 
             List<StoreInfo> items = AddItemsToList(count);
@@ -81,16 +81,16 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [InlineData(5)]
         [InlineData(10)]
         [InlineData(100)]
-        [Trait("Category", "AddItem(s)")]
+        [Trait("Category", "Add Item(s)")]
         public async Task AddEmptyItemsTest(int count)
         {
-            List<StoreInfo> receivedInfo = new();
+            List<StoreInfo> receivedInfo = new(count);
             void GetItem(List<StoreInfo> storeInfo)
             {
                 receivedInfo.AddRange(storeInfo);
             }
 
-            List<StoreInfo> items = new();
+            List<StoreInfo> items = new(count);
             for (int i = 0; i < count; i++)
             {
                 StoreInfo storeInfo = new();
@@ -109,11 +109,11 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
         private static List<StoreInfo> AddItemsToList(int count)
         {
-            List<StoreInfo> items = new();
+            List<StoreInfo> items = new(count);
 
             for (int i = 0; i < count; i++)
             {
-                StoreInfo storeInfo = BuildStoreInfo(count);
+                StoreInfo storeInfo = BuildStoreInfo(i);
                 items.Add(storeInfo);
             }
 
