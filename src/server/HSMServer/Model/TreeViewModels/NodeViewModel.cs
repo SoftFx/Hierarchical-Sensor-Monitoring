@@ -6,10 +6,6 @@ namespace HSMServer.Model.TreeViewModels
 {
     public abstract class NodeViewModel
     {
-        private const int NodeNameMaxLength = 35;
-        private const int CellNameMaxLength = 10;
-
-
         public string Name { get; protected set; }
 
         public DateTime UpdateTime { get; protected set; }
@@ -25,12 +21,5 @@ namespace HSMServer.Model.TreeViewModels
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
-
-
-        public string GetShortNodeName(string name) =>
-            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
-
-        public string GetShortCellName(string name) =>
-            name.Length > CellNameMaxLength ? $"{name[..CellNameMaxLength]}..." : name;
     }
 }

@@ -18,7 +18,7 @@
 @if (!isEmptyProduct || user.IsEmptyProductVisible(Model))
 {
     <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
-        <span>@Html.Raw(Model.GetShortNodeName(Model.Name)) </span>
+        <span>@Html.Raw(Model.Name.GetShortNodeName()) </span>
 
         @if (Model.Nodes != null)
             @foreach (var (_, child) in Model.Nodes)
@@ -45,7 +45,7 @@
                         continue;
 
                     <li id='@sensor.EncodedId' title='@sensor.Tooltip' data-jstree='{"title" : "@sensor.Title", "icon" : "@sensor.Status.ToIcon()", "time" : "@sensor.UpdateTime.ToDefaultFormat()"}'>
-                        <span class="@sensor.State.ToCssClass()">@Html.Raw(@Model.GetShortNodeName(sensor.Name))</span>
+                        <span class="@sensor.State.ToCssClass()">@Html.Raw(sensor.Name.GetShortNodeName())</span>
 
                         @if (isSensorNotificationsIgnored)
                         {

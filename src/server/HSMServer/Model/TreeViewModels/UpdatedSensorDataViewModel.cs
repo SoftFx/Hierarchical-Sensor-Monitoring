@@ -1,5 +1,4 @@
 ﻿using HSMServer.Extensions;
-using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -24,9 +23,7 @@ namespace HSMServer.Model.TreeViewModels
             Value = sensor.ShortStringValue;
             Status = sensor.Status.ToString();
             StatusColorClass = sensor.Status.ToCssIconClass();
-            UpdatedTimeStr = sensor.UpdateTime != DateTime.MinValue
-                ? $"updated {sensor.GetTimeAgo(DateTime.UtcNow - sensor.UpdateTime)}"
-                : "updated - no data";
+            UpdatedTimeStr = $"updated {sensor.GetTimeAgo()}";
             ValidationError = sensor.ValidationError;
         }
     }

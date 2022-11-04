@@ -69,14 +69,40 @@
 
     <ul class='nav nav-tabs' role="tablist">
         <li class='nav-item'>
-            <a class='nav-link active' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+            <a class='nav-link active' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
         </li>
         <li class='nav-item'>
-            <a class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+            <a class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
         </li>
     </ul>
     <div class='tab-content'>
-        <div class='tab-pane fade show active' id=@listDivId role="tabpanel">
+        <div class='tab-pane fade show active' id=@gridDivId role="tabpanel">
+            @if (Model.Nodes.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Nodes</h6>
+
+                <div class="container mw-100">
+                    @foreach (var (_, node) in Model.Nodes)
+                    {
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Tooltip">@node.Name.GetShortCellName()</div>
+                    }
+                </div>
+            }
+
+            @if (visibleSensors.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Sensors</h6>
+
+                <div class="container mw-100">
+                    @foreach (var sensor in visibleSensors)
+                    {
+                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell" title="@sensor.Tooltip">@sensor.Name.GetShortCellName()</div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class='tab-pane fade' id=@listDivId role="tabpanel">
             @if (Model.Nodes.Count > 0)
             {
                 <h6 class="fw-bold mt-2">Nodes</h6>
@@ -96,7 +122,7 @@
                                                     </div>
                                                     @node.Name
                                                 </div>
-                                                <div class='col-md-auto time-ago-div me-1' id='update_@Model.EncodedId'>updated @*@Model.GetTimeAgo(time)*@</div>
+                                                <div class='col-md-auto time-ago-div me-1' id='update_@Model.EncodedId'>updated @node.GetTimeAgo()</div>
                                             </div>
                                         </div>
                                     </div>
@@ -114,35 +140,6 @@
                 <div>
                     @foreach (var sensor in visibleSensors)
                         @await Html.PartialAsync("_SensorAccordion", sensor)
-                </div>
-            }
-        </div>
-        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-            @if (Model.Nodes.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Nodes</h6>
-
-                <div class="container mw-100">
-                    @foreach (var (_, node) in Model.Nodes)
-                    {
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Name">@node.GetShortCellName(node.Name)</div>
-                    }
-                </div>
-            }
-
-            @if (visibleSensors.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Sensors</h6>
-
-                <div class="container mw-100">
-                    @foreach (var sensor in visibleSensors)
-                    {
-                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell">@sensor.Name</div>
-                    }
                 </div>
             }
         </div>
