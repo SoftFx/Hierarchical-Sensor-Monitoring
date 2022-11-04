@@ -95,6 +95,10 @@
     border-radius: 0.25rem;
 }
 
+.clickable-node {
+    cursor: pointer;
+}
+
 .grid-cell-unknown {
     color: #212529;
     background-color: #f8f9fa;

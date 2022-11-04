@@ -8,6 +8,7 @@
 
 @{
     var user = User as User;
+    var nodeId = Model.EncodedId;
     var productName = Model.Parent?.Name ?? Model.Name;
     var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
 
@@ -16,8 +17,8 @@
             if (user.IsSensorVisible(sensor))
                 visibleSensors.Add(sensor);
 
-    var listDivId = $"list_{Model.EncodedId}";
-    var gridDivId = $"grid_{Model.EncodedId}";
+    var listDivId = $"list_{nodeId}";
+    var gridDivId = $"grid_{nodeId}";
 }
 
 
@@ -39,7 +40,7 @@
             }
             <tr>
                 <td class="w-25">Expected update interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
-                <td id="expectedUpdateInterval_@(Model.EncodedId)">
+                <td id="expectedUpdateInterval_@(nodeId)">
                     <form>
                         <div class="input-group row">
                             <div class="col-5">
@@ -50,11 +51,11 @@
                                         data-bs-toggle='tooltip' title='edit meta info'>
                                     <i class='fas fa-edit'></i>
                                 </button>
-                                <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary'
+                                <button id='saveInfo_@(nodeId)' type='submit' class='btn btn-secondary'
                                         data-bs-toggle='tooltip' title='save meta info' disabled>
                                     <i class='fas fa-check'></i>
                                 </button>
-                                <button id='revertInfo_@(Model.EncodedId)' type='button' class='btn btn-secondary' onclick="revertInfoClick()"
+                                <button id='revertInfo_@(nodeId)' type='button' class='btn btn-secondary' onclick="revertInfoClick()"
                                         data-bs-toggle='tooltip' title='revert changes' disabled>
                                     <i class='fas fa-times'></i>
                                 </button>
@@ -69,14 +70,14 @@
 
     <ul class='nav nav-tabs' role="tablist">
         <li class='nav-item'>
-            <a class='nav-link active' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+            <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
         </li>
         <li class='nav-item'>
-            <a class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+            <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
         </li>
     </ul>
     <div class='tab-content'>
-        <div class='tab-pane fade show active' id=@gridDivId role="tabpanel">
+        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
             @if (Model.Nodes.Count > 0)
             {
                 <h6 class="fw-bold mt-2">Nodes</h6>
@@ -84,7 +85,9 @@
                 <div class="container mw-100">
                     @foreach (var (_, node) in Model.Nodes)
                     {
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell" title="@node.Tooltip">@node.Name.GetShortCellName()</div>
+                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@node.Tooltip" onclick="activateNode('@nodeId', '@node.EncodedId')">
+                            @node.Name.GetShortCellName()
+                        </div>
                     }
                 </div>
             }
@@ -96,7 +99,9 @@
                 <div class="container mw-100">
                     @foreach (var sensor in visibleSensors)
                     {
-                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell" title="@sensor.Tooltip">@sensor.Name.GetShortCellName()</div>
+                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@sensor.Tooltip" onclick="activateNode('@nodeId', '@sensor.EncodedId')">
+                            @sensor.Name.GetShortCellName()
+                        </div>
                     }
                 </div>
             }
@@ -110,7 +115,7 @@
                 <div>
                     @foreach (var (_, node) in Model.Nodes)
                     {
-                        <div class='accordion' id='nodeData_@node.EncodedId'>
+                        <div class='accordion clickable-node' id='nodeData_@node.EncodedId' onclick="activateNode('@nodeId', '@node.EncodedId')">
                             <div class='accordion-item'>
                                 <div class='accordion-collapse' data-bs-parent='#nodeData_@node.EncodedId'>
                                     <div class='accordion-body'>
@@ -122,7 +127,7 @@
                                                     </div>
                                                     @node.Name
                                                 </div>
-                                                <div class='col-md-auto time-ago-div me-1' id='update_@Model.EncodedId'>updated @node.GetTimeAgo()</div>
+                                                <div class='col-md-auto time-ago-div me-1' id='update_@node.EncodedId'>updated @node.GetTimeAgo()</div>
                                             </div>
                                         </div>
                                     </div>
