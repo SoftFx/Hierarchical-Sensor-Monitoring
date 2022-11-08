@@ -200,10 +200,13 @@ namespace HSMServer.Controllers
                 return Json(string.Empty);
 
             var decodedId = SensorPathHelper.Decode(selectedId);
-            var updatedSensorsData = new List<UpdatedSensorDataViewModel>();
+            var updatedSensorsData = new List<object>();
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
+                foreach (var (_, childNode) in node.Nodes)
+                    updatedSensorsData.Add(new UpdatedNodeDataViewModel(childNode));
+
                 foreach (var (_, sensor) in node.Sensors)
                     updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
             }

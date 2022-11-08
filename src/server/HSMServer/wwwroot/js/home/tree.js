@@ -66,7 +66,7 @@ function selectNodeAjax(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
-            $("#listSensors").html(viewData);
+            $("#nodeDataPanel").html(viewData);
         }
     }).done(function () {
         initialize();

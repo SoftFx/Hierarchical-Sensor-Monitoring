@@ -2,28 +2,37 @@
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public record UpdatedSensorDataViewModel
+    public record UpdatedNodeDataViewModel
     {
         public string Id { get; }
 
-        public string Value { get; }
-
         public string Status { get; }
-
-        public string UpdatedTimeStr { get; }
-
-        public string ValidationError { get; }
 
         public string StatusColorClass { get; }
 
+        public string UpdatedTimeStr { get; }
 
-        public UpdatedSensorDataViewModel(SensorNodeViewModel sensor)
+
+        internal UpdatedNodeDataViewModel(NodeViewModel node)
         {
-            Id = sensor.EncodedId;
+            Id = node.EncodedId;
+            Status = node.Status.ToString();
+            StatusColorClass = node.Status.ToCssIconClass();
+            UpdatedTimeStr = $"updated {node.GetTimeAgo()}";
+        }
+    }
+
+
+    public record UpdatedSensorDataViewModel : UpdatedNodeDataViewModel
+    {
+        public string Value { get; }
+
+        public string ValidationError { get; }
+
+
+        public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
+        {
             Value = sensor.ShortStringValue;
-            Status = sensor.Status.ToString();
-            StatusColorClass = sensor.Status.ToCssIconClass();
-            UpdatedTimeStr = $"updated {sensor.GetTimeAgo()}";
             ValidationError = sensor.ValidationError;
         }
     }

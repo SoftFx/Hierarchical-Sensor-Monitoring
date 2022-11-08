@@ -16,8 +16,6 @@ namespace HSMServer.Model.TreeViewModels
     {
         public string Id { get; }
 
-        public string EncodedId { get; }
-
         public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
@@ -31,10 +29,9 @@ namespace HSMServer.Model.TreeViewModels
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
 
-        public ProductNodeViewModel(ProductModel model)
+        public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
-            EncodedId = SensorPathHelper.Encode(Id);
             Name = model.DisplayName;
             Path = CommonConstants.SensorPathSeparator.ToString();
             TelegramSettings = new(model.Notifications.Telegram);

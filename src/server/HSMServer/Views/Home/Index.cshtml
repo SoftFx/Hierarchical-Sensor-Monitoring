@@ -121,7 +121,7 @@
             </div>
 
         </div>
-        <div id="listSensors" class="flex-grow-1">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
+        <div id="nodeDataPanel" class="flex-grow-1">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
     </div>
 </div>
 
@@ -153,15 +153,20 @@
         return selectedNodeId;
     }
 
-    function updateSelectedSensor(dataObject) {
+    function updateNodeData(dataObject) {
+        var id = dataObject.id;
+
+        $('#update_' + id).empty().append(dataObject.updatedTimeStr);
+
+        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error');
+        $('#status_' + id).addClass(dataObject.statusColorClass);
+        $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
+    }
+
+    function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
 
         $('#value_' + id).empty().append(dataObject.value);
-        $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-
-        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error tree-icon-unknown');
-        $('#status_' + id).addClass(dataObject.statusColorClass);
-        $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
 
         $('#validation_' + id).empty();
         if (dataObject.validationError != null && dataObject.validationError != "") {
@@ -192,7 +197,7 @@
         });
     }
 
-    function updateSelectedSensors() {
+    function updateSelectedNodeData() {
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
 
@@ -206,12 +211,19 @@
                 async: true
             }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
-                for (let i = 0; i < array.length; i++) {
-                    updateSelectedSensor(array[i]);
 
-                    let selectedRadio = $('input[id$=' + array[i].id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
+                for (let i = 0; i < array.length; i++) {
+                    let dataObject = array[i];
+
+                    updateNodeData(dataObject);
+
+                    if (dataObject.hasOwnProperty('value')) {
+                        updateSpecificSensorData(dataObject);
+
+                        let selectedRadio = $('input[id$=' + dataObject.id + ']:checked');
+                        if (selectedRadio !== undefined) {
+                            selectedRadio.click();
+                        }
                     }
                 }
 
@@ -227,5 +239,5 @@
 
     var interval = $("#treeInterval").val() * 1000;
     setInterval(updateTreeTimer, interval);
-    setInterval(updateSelectedSensors, interval);
+    setInterval(updateSelectedNodeData, interval);
 </script>

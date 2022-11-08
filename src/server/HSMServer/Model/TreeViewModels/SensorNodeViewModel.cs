@@ -13,8 +13,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public Guid Id { get; }
 
-        public string EncodedId { get; }
-
         public SensorType SensorType { get; private set; }
 
         public string Description { get; private set; }
@@ -40,10 +38,9 @@ namespace HSMServer.Model.TreeViewModels
         public string ValidationError { get; private set; }
 
 
-        public SensorNodeViewModel(BaseSensorModel model)
+        public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
         {
             Id = model.Id;
-            EncodedId = SensorPathHelper.EncodeGuid(Id);
 
             Update(model);
         }

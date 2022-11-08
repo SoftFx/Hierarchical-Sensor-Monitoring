@@ -6,6 +6,8 @@ namespace HSMServer.Model.TreeViewModels
 {
     public abstract class NodeViewModel
     {
+        public string EncodedId { get; }
+
         public string Name { get; protected set; }
 
         public DateTime UpdateTime { get; protected set; }
@@ -21,5 +23,11 @@ namespace HSMServer.Model.TreeViewModels
             $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
+
+
+        internal NodeViewModel(string encodedId)
+        {
+            EncodedId = encodedId;
+        }
     }
 }
