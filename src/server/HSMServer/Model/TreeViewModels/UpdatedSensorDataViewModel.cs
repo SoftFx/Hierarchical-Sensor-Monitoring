@@ -8,17 +8,23 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Status { get; }
 
-        public string StatusColorClass { get; }
+        public string StatusIconColorClass { get; }
+
+        public string GridCellColorClass { get; }
 
         public string UpdatedTimeStr { get; }
+
+        public string Tooltip { get; }
 
 
         internal UpdatedNodeDataViewModel(NodeViewModel node)
         {
             Id = node.EncodedId;
             Status = node.Status.ToString();
-            StatusColorClass = node.Status.ToCssIconClass();
+            StatusIconColorClass = node.Status.ToCssIconClass();
+            GridCellColorClass = node.Status.ToCssGridCellClass();
             UpdatedTimeStr = $"updated {node.GetTimeAgo()}";
+            Tooltip = node.Tooltip;
         }
     }
 

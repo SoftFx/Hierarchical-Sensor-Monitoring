@@ -87,7 +87,7 @@
                 <div class="container mw-100">
                     @foreach (var (_, node) in Model.Nodes)
                     {
-                        <div class="@node.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@node.Tooltip" onclick="activateNode('@nodeId', '@node.EncodedId')">
+                        <div id="gridCell_@node.EncodedId" class="@node.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@node.Tooltip" onclick="activateNode('@nodeId', '@node.EncodedId')">
                             @node.Name.GetShortCellName()
                         </div>
                     }
@@ -101,7 +101,7 @@
                 <div class="container mw-100">
                     @foreach (var sensor in visibleSensors)
                     {
-                        <div class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@sensor.Tooltip" onclick="activateNode('@nodeId', '@sensor.EncodedId')">
+                        <div id="gridCell_@sensor.EncodedId" class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@sensor.Tooltip" onclick="activateNode('@nodeId', '@sensor.EncodedId')">
                             @sensor.Name.GetShortCellName()
                         </div>
                     }

@@ -153,13 +153,21 @@
         return selectedNodeId;
     }
 
+    function updateGridCell(dataObject) {
+        var id = dataObject.id;
+
+        $('#gridCell_' + id).removeClass('grid-cell-unknown grid-cell-ok grid-cell-warning grid-cell-error');
+        $('#gridCell_' + id).addClass(dataObject.gridCellColorClass);
+        $('#gridCell_' + id).prop('title', dataObject.tooltip);
+    }
+
     function updateNodeData(dataObject) {
         var id = dataObject.id;
 
         $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
         $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error');
-        $('#status_' + id).addClass(dataObject.statusColorClass);
+        $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
     }
 
@@ -215,6 +223,7 @@
                 for (let i = 0; i < array.length; i++) {
                     let dataObject = array[i];
 
+                    updateGridCell(dataObject);
                     updateNodeData(dataObject);
 
                     if (dataObject.hasOwnProperty('value')) {
