@@ -10,6 +10,8 @@ function initializeUserRights(userIsAdmin, userProducts) {
 }
 
 function initializeTree() {
+    var sortingType = $("input[name='TreeSortType']:checked");
+
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
@@ -23,7 +25,7 @@ function initializeTree() {
         },
         "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
         "sort": function (a, b) {
-            var isTimeSort = $("input[name='TreeSortType']:checked").val() == "1";
+            let isTimeSort = sortingType.val() == "1";
 
             if (isTimeSort) {
                 nodeA = this.get_node(a);
