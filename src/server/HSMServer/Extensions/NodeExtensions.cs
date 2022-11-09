@@ -39,13 +39,6 @@ namespace HSMServer.Extensions
             };
 
 
-        internal static string GetShortNodeName(this string name) =>
-            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
-
-        internal static string GetShortCellName(this string name) =>
-            name.Length > CellNameMaxLength ? $"{name[..CellNameMaxLength]}..." : name;
-
-
         internal static string GetTimeAgo(this NodeViewModel node)
         {
             string UnitsToString(double value, string unit)
@@ -72,5 +65,13 @@ namespace HSMServer.Extensions
 
             return "no info";
         }
+
+
+        internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
+
+        internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);
+
+        private static string Cut(this string str, int stringLength) =>
+            str.Length > stringLength ? $"{str[..stringLength]}..." : str;
     }
 }
