@@ -1,6 +1,8 @@
 ﻿var isCurrentUserAdmin = false;
 var currentUserProducts = [];
 
+var needToActivateListTab = false;
+
 
 function initializeUserRights(userIsAdmin, userProducts) {
     isCurrentUserAdmin = userIsAdmin;
@@ -64,7 +66,7 @@ function selectNodeAjax(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
-            $("#listSensors").html(viewData);
+            $("#nodeDataPanel").html(viewData);
         }
     }).done(function () {
         initialize();
@@ -72,7 +74,29 @@ function selectNodeAjax(selectedId) {
         var selectedAccordionId = '#accordion_' + selectedId;
         if ($(selectedAccordionId).attr('aria-expanded') == 'false')
             $(selectedAccordionId).click();
+
+        if (needToActivateListTab) {
+            selectNodeInfoTab("list", selectedId);
+
+            needToActivateListTab = false;
+        }
+        else {
+            selectNodeInfoTab("grid", selectedId);
+        }
     });
+}
+
+function selectNodeInfoTab(tab, selectedId) {
+    let tabLink = document.getElementById(`${tab}Link_${selectedId}`);
+
+    if (tabLink != null)
+        tabLink.click();
+}
+
+function activateNode(currentNodeId, nodeIdToActivate) {
+    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
+
+    $('#jstree').jstree('activate_node', nodeIdToActivate);
 }
 
 function timeSorting(a, b) {

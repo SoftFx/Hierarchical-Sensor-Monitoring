@@ -18,7 +18,6 @@
     const string allShortPeriod = "All";
 
     var sensorId = Model.EncodedId;
-    var time = Model.UpdateTime != DateTime.MinValue ? DateTime.UtcNow - Model.UpdateTime : TimeSpan.MinValue;
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
@@ -49,7 +48,7 @@
                                 @Model.Name
                             </div>
                             <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none' />
-                            <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.GetTimeAgo(time)</div>
+                            <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.GetTimeAgo()</div>
                         </div>
 
                         @Model.ShortStringValue
@@ -94,7 +93,7 @@
                             </div>
                             <div class='col-md-auto'>
                                 <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none' />
-                                <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.GetTimeAgo(time)</div>
+                                <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.GetTimeAgo()</div>
                             </div>
                         </div>
                         <div id='value_@sensorId'>@Model.ShortStringValue</div>

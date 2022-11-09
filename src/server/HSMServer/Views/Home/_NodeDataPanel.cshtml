@@ -12,7 +12,7 @@
         </div>
     }
     else if (Model is ProductNodeViewModel productVM)
-        @await Html.PartialAsync("_Sensors", productVM)
+        @await Html.PartialAsync("_Node", productVM)
     else if (Model is SensorNodeViewModel sensorVM)
         @await Html.PartialAsync("_Sensor", sensorVM)
 </div>

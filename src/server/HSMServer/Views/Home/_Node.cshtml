@@ -1,0 +1,134 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Model.Authentication
+
+@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var user = User as User;
+    var nodeId = Model.EncodedId;
+    var productName = Model.Parent?.Name ?? Model.Name;
+    var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
+
+    if (Model.Sensors != null)
+        foreach (var (_, sensor) in Model.Sensors)
+            if (user.IsSensorVisible(sensor))
+                visibleSensors.Add(sensor);
+
+    var listDivId = $"list_{nodeId}";
+    var gridDivId = $"grid_{nodeId}";
+
+    ViewBag.ParentId = nodeId;
+}
+
+
+<div class="mx-1">
+    <h5>@(productName)@(Model.Path)</h5>
+
+    <table class='table table-borderless'>
+        <tbody>
+            <tr>
+                <td class="w-25">Product</td>
+                <td>@productName</td>
+            </tr>
+            @if (Model.Parent != null)
+            {
+                <tr>
+                    <td class="w-25">Path</td>
+                    <td>@Model.Path</td>
+                </tr>
+            }
+            <tr>
+                <td class="w-25">Expected update interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
+                <td id="expectedUpdateInterval_@(nodeId)">
+                    <form>
+                        <div class="input-group row">
+                            <div class="col-5">
+                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                            </div>
+                            <div class="col-auto">
+                                <button type='button' class='btn btn-secondary' onclick="editInfoButtonClick()"
+                                        data-bs-toggle='tooltip' title='edit meta info'>
+                                    <i class='fas fa-edit'></i>
+                                </button>
+                                <button id='saveInfo_@(nodeId)' type='submit' class='btn btn-secondary'
+                                        data-bs-toggle='tooltip' title='save meta info' disabled>
+                                    <i class='fas fa-check'></i>
+                                </button>
+                                <button id='revertInfo_@(nodeId)' type='button' class='btn btn-secondary' onclick="revertInfoClick()"
+                                        data-bs-toggle='tooltip' title='revert changes' disabled>
+                                    <i class='fas fa-times'></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+
+    <ul class='nav nav-tabs' role="tablist">
+        <li class='nav-item'>
+            <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+        </li>
+        <li class='nav-item'>
+            <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+        </li>
+    </ul>
+    <div class='tab-content'>
+        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
+            @if (Model.Nodes.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Nodes</h6>
+
+                <div class="container mw-100">
+                    @foreach (var (_, node) in Model.Nodes)
+                    {
+                        <div id="gridCell_@node.EncodedId" class="@node.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@node.Tooltip" onclick="activateNode('@nodeId', '@node.EncodedId')">
+                            @node.Name.GetShortCellName()
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (visibleSensors.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Sensors</h6>
+
+                <div class="container mw-100">
+                    @foreach (var sensor in visibleSensors)
+                    {
+                        <div id="gridCell_@sensor.EncodedId" class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@sensor.Tooltip" onclick="activateNode('@nodeId', '@sensor.EncodedId')">
+                            @sensor.Name.GetShortCellName()
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class='tab-pane fade' id=@listDivId role="tabpanel">
+            @if (Model.Nodes.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Nodes</h6>
+
+                <div>
+                    @foreach (var (_, node) in Model.Nodes)
+                        @await Html.PartialAsync("_NodeAccordion", node)
+                </div>
+            }
+
+            @if (visibleSensors.Count > 0)
+            {
+                <h6 class="fw-bold mt-2">Sensors</h6>
+
+                <div>
+                    @foreach (var sensor in visibleSensors)
+                        @await Html.PartialAsync("_SensorAccordion", sensor)
+                </div>
+            }
+        </div>
+    </div>
+</div>
