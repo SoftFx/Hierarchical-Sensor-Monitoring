@@ -21,11 +21,11 @@
 }
 
 .tree-icon-warning {
-    color: yellow;
+    color: #ffc107;
 }
 
 .tree-icon-error {
-    color: red;
+    color: #dc3545;
 }
 
 .sensor-icon-with-margin {
@@ -100,25 +100,21 @@
 }
 
 .grid-cell-unknown {
-    color: #212529;
+    color: gray;
     background-color: #f2f2f2;
-    border-color: #f8f9fa;
 }
 
 .grid-cell-ok {
-    color: #006100;
+    color: green;
     background-color: #c6efce;
-    border-color: #28a745;
 }
 
 .grid-cell-warning {
     color: #212529;
     background-color: #ffc107;
-    border-color: #ffc107;
 }
 
 .grid-cell-error {
     color: #fff;
     background-color: #dc3545;
-    border-color: #dc3545;
 }
