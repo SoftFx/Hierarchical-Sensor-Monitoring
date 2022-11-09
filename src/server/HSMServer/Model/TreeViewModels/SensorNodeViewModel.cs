@@ -13,8 +13,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public Guid Id { get; }
 
-        public string EncodedId { get; }
-
         public SensorType SensorType { get; private set; }
 
         public string Description { get; private set; }
@@ -40,37 +38,13 @@ namespace HSMServer.Model.TreeViewModels
         public string ValidationError { get; private set; }
 
 
-        public SensorNodeViewModel(BaseSensorModel model)
+        public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
         {
             Id = model.Id;
-            EncodedId = SensorPathHelper.EncodeGuid(Id);
 
             Update(model);
         }
 
-
-        public string GetTimeAgo(TimeSpan time)
-        {
-            if (time == TimeSpan.MinValue)
-                return " - no data";
-
-            if (time.TotalDays > 30)
-                return "> a month ago";
-
-            if (time.TotalDays >= 1)
-                return $"> {UnitsToString(time.TotalDays, "day")} ago";
-
-            if (time.TotalHours >= 1)
-                return $"> {UnitsToString(time.TotalHours, "hour")} ago";
-
-            if (time.TotalMinutes >= 1)
-                return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
-
-            if (time.TotalSeconds < 60)
-                return "< 1 minute ago";
-
-            return "no info";
-        }
 
         internal void Update(BaseSensorModel model)
         {
@@ -93,12 +67,6 @@ namespace HSMServer.Model.TreeViewModels
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
-        }
-
-        private static string UnitsToString(double value, string unit)
-        {
-            int intValue = Convert.ToInt32(value);
-            return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
         }
 
         private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.String;

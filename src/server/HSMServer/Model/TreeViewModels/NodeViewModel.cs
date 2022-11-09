@@ -6,8 +6,7 @@ namespace HSMServer.Model.TreeViewModels
 {
     public abstract class NodeViewModel
     {
-        private const int NodeNameMaxLength = 35;
-
+        public string EncodedId { get; }
 
         public string Name { get; protected set; }
 
@@ -26,7 +25,9 @@ namespace HSMServer.Model.TreeViewModels
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
 
-        public string GetShortName(string name) =>
-            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
+        internal NodeViewModel(string encodedId)
+        {
+            EncodedId = encodedId;
+        }
     }
 }

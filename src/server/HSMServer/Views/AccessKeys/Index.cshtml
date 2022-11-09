@@ -62,7 +62,6 @@
         //let isAllProducts = element.checked;
 
         let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
-        console.log('index', isAllProducts);
         $.ajax({
             type: 'GET',
             url: getAvailableAccessKeys + "?AllProducts=" + isAllProducts,

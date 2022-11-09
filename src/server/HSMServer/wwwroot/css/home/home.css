@@ -21,11 +21,11 @@
 }
 
 .tree-icon-warning {
-    color: yellow;
+    color: #ffc107;
 }
 
 .tree-icon-error {
-    color: red;
+    color: #dc3545;
 }
 
 .sensor-icon-with-margin {
@@ -81,4 +81,40 @@
 
 .blockedSensor-span {
     text-decoration: line-through;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 100px);
+    grid-gap: 5px;
+    padding: 0px;
+}
+
+.grid-cell {
+    text-align: center;
+    border-radius: 0.25rem;
+}
+
+.clickable-node {
+    cursor: pointer;
+}
+
+.grid-cell-unknown {
+    color: gray;
+    background-color: #f2f2f2;
+}
+
+.grid-cell-ok {
+    color: green;
+    background-color: #c6efce;
+}
+
+.grid-cell-warning {
+    color: #212529;
+    background-color: #ffc107;
+}
+
+.grid-cell-error {
+    color: #fff;
+    background-color: #dc3545;
 }
