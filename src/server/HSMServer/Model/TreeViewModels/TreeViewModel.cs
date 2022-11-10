@@ -196,9 +196,16 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, viewModel);
         }
 
-        private string GetAccessKeyAuthorName(AccessKeyModel key) =>
-            Guid.TryParse(key.AuthorId, out var authorId)
-                ? _userManager.GetUser(authorId)?.UserName
-                : key.AuthorId;
+        private string GetAccessKeyAuthorName(AccessKeyModel key)
+        {
+            if (key.AuthorId.HasValue)
+            {
+                var user = _userManager.GetUser(key.AuthorId.Value);
+                if (user != null)
+                    return user.UserName;
+            }
+
+            return key.AuthorId?.ToString();
+        }
     }
 }

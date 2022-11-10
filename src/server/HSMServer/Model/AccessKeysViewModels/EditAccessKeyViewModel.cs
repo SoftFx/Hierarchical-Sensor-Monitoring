@@ -71,7 +71,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId.ToString(), SensorPathHelper.Decode(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, SensorPathHelper.Decode(EncodedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };

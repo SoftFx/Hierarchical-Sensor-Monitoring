@@ -442,10 +442,16 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            var productEntities = RequestProducts();
-            ApplyProducts(productEntities);
+            var policyEntities = RequestPolicies();
 
-            ApplySensors(productEntities, RequestSensors(), RequestPolicies());
+            _logger.Info($"{nameof(policyEntities)} are deserializing");
+            var policies = GetPolicyModels(policyEntities);
+            _logger.Info($"{nameof(policyEntities)} deserialized");
+
+            var productEntities = RequestProducts();
+            ApplyProducts(productEntities, policies);
+
+            ApplySensors(productEntities, RequestSensors(), policies);
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
@@ -487,12 +493,14 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<Guid, Policy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
+                product.ApplyPolicies(productEntity.Policies, policies);
+
                 _tree.TryAdd(product.Id, product);
             }
             _logger.Info($"{nameof(productEntities)} applied");
@@ -515,12 +523,8 @@ namespace HSMServer.Core.Cache
                 AddSelfMonitoringProduct();
         }
 
-        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<byte[]> policyEntities)
+        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, Dictionary<Guid, Policy> policies)
         {
-            _logger.Info($"{nameof(policyEntities)} are deserializing");
-            var policies = GetPolicyModels(policyEntities);
-            _logger.Info($"{nameof(policyEntities)} deserialized");
-
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
@@ -550,12 +554,9 @@ namespace HSMServer.Core.Cache
                 try
                 {
                     var sensor = GetSensorModel(entity);
-                    _sensors.TryAdd(sensor.Id, sensor);
+                    sensor.ApplyPolicies(entity.Policies, policies);
 
-                    if (entity.Policies != null)
-                        foreach (var policyId in entity.Policies)
-                            if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                                sensor.AddPolicy(policy);
+                    _sensors.TryAdd(sensor.Id, sensor);
                 }
                 catch (Exception ex)
                 {

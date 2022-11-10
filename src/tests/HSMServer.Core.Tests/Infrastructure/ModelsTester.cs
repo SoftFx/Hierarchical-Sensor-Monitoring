@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.AuthorId, actual.AuthorId.ToString());
             Assert.Equal(expected.ProductId, actual.ProductId);
             Assert.Equal(expected.State, (byte)actual.State);
             Assert.Equal(expected.Permissions, (long)actual.Permissions);
@@ -130,7 +130,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(DateTime.MaxValue, actual.ExpirationTime);
         }
 
-        internal static void TestAccessKeyModel(string authorId, string productId, AccessKeyModel actual)
+        internal static void TestAccessKeyModel(Guid authorId, string productId, AccessKeyModel actual)
         {
             Assert.NotNull(actual);
             Assert.Equal(authorId, actual.AuthorId);

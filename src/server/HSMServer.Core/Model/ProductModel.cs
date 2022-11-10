@@ -13,19 +13,11 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : INotificatable
+    public sealed class ProductModel : NodeModel, INotificatable
     {
         public string Id { get; }
 
-        public string AuthorId { get; }
-
-        public string DisplayName { get; }
-
-        public string Description { get; }
-
         public ProductState State { get; }
-
-        public DateTime CreationDate { get; }
 
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
 
@@ -57,7 +49,7 @@ namespace HSMServer.Core.Model
         public ProductModel(ProductEntity entity) : this()
         {
             Id = entity.Id;
-            AuthorId = entity.AuthorId;
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -94,7 +86,7 @@ namespace HSMServer.Core.Model
             new()
             {
                 Id = Id,
-                AuthorId = AuthorId,
+                AuthorId = AuthorId.ToString(),
                 ParentProductId = ParentProduct?.Id,
                 State = (int)State,
                 DisplayName = DisplayName,
@@ -103,6 +95,7 @@ namespace HSMServer.Core.Model
                 SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
                 SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
+                Policies = GetPolicyIds(),
             };
     }
 }

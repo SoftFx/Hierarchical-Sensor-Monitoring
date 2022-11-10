@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel
+    public abstract class BaseSensorModel : NodeModel
     {
         protected abstract ValuesStorage Storage { get; }
 
@@ -29,24 +29,14 @@ namespace HSMServer.Core.Model
 
         public Guid Id { get; private set; }
 
-        public Guid? AuthorId { get; private set; }
-
-        public DateTime CreationDate { get; private set; }
-
         /// <summary>
         /// Sensor parent product ID
         /// </summary>
         public string ParentProductId { get; private set; }
 
-        public string DisplayName { get; private set; }
-
-        public string Description { get; private set; }
-
         public SensorState State { get; private set; }
 
         public string Unit { get; private set; }
-
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
 
         public string ProductName { get; private set; }
 
@@ -168,14 +158,5 @@ namespace HSMServer.Core.Model
         internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
 
         internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
-
-
-        internal virtual void AddPolicy(Policy policy)
-        {
-            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-        protected abstract List<string> GetPolicyIds();
     }
 }
