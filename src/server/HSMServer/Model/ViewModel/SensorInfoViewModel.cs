@@ -8,17 +8,7 @@ namespace HSMServer.Model.ViewModel
 {
     public class SensorInfoViewModel
     {
-        private readonly List<TimeInterval> _predefinedIntervals =
-            new()
-            {
-                TimeInterval.None,
-                TimeInterval.TenMinutes,
-                TimeInterval.Hour,
-                TimeInterval.Day,
-                TimeInterval.Week,
-                TimeInterval.Month,
-                TimeInterval.Custom
-            };
+        private readonly List<TimeInterval> _predefinedIntervals;
 
 
         public string Path { get; }
@@ -41,6 +31,8 @@ namespace HSMServer.Model.ViewModel
 
         public SensorInfoViewModel(SensorNodeViewModel sensor)
         {
+            _predefinedIntervals = sensor.ExpectedUpdateTimeInternals;
+
             EncodedId = SensorPathHelper.EncodeGuid(sensor.Id);
             Path = sensor.Path;
             ProductName = sensor.Product;

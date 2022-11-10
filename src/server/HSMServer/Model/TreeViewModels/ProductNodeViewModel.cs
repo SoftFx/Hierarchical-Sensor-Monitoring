@@ -26,7 +26,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
@@ -35,6 +35,7 @@ namespace HSMServer.Model.TreeViewModels
             Name = model.DisplayName;
             Path = CommonConstants.SensorPathSeparator.ToString();
             TelegramSettings = new(model.Notifications.Telegram);
+            ExpectedUpdateInterval = new(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval(), ExpectedUpdateTimeInternals);
         }
 
 
@@ -55,6 +56,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             Name = model.DisplayName;
             TelegramSettings.Update(model.Notifications.Telegram);
+            ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
