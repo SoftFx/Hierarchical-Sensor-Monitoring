@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Constants;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -14,7 +15,39 @@ namespace HSMServer.Core.Model
 
         public DateTime CreationDate { get; protected set; }
 
+
+        /// <summary>
+        /// Product ID that is parent for this node and doesn't have parent product (top level product)
+        /// </summary>
+        public string ProductId { get; protected set; }
+
+        public string ProductName { get; protected set; }
+
+        public string Path { get; protected set; }
+
+
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
+
+
+        internal void BuildProductNameAndPath(ProductModel parentProduct)
+        {
+            if (parentProduct == null)
+                return;
+
+            var pathParts = new List<string>(1 << 2) { DisplayName };
+
+            while (parentProduct.ParentProduct != null)
+            {
+                pathParts.Add(parentProduct.DisplayName);
+                parentProduct = parentProduct.ParentProduct;
+            }
+
+            pathParts.Reverse();
+
+            ProductId = parentProduct.Id;
+            ProductName = parentProduct.DisplayName;
+            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
+        }
 
 
         internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)

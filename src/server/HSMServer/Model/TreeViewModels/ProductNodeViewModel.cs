@@ -33,7 +33,10 @@ namespace HSMServer.Model.TreeViewModels
         {
             Id = model.Id;
             Name = model.DisplayName;
-            Path = CommonConstants.SensorPathSeparator.ToString();
+            Product = model.ProductName;
+            Path = model.ParentProduct == null
+                ? $"{CommonConstants.SensorPathSeparator}"
+                : $"{CommonConstants.SensorPathSeparator}{model.Path}{CommonConstants.SensorPathSeparator}";
             TelegramSettings = new(model.Notifications.Telegram);
             ExpectedUpdateInterval = new(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval(), ExpectedUpdateTimeInternals);
         }
@@ -93,7 +96,6 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.Path = $"{node.Parent.Path}{node.Name}{CommonConstants.SensorPathSeparator}";
                     node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;

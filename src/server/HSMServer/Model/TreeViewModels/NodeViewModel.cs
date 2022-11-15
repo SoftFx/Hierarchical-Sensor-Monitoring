@@ -28,9 +28,11 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorStatus Status { get; protected set; }
 
-        public NodeViewModel Parent { get; internal set; }
+        public string Product { get; protected set; }
 
-        public string Path { get; internal set; }
+        public string Path { get; protected set; }
+
+        public NodeViewModel Parent { get; internal set; }
 
 
         public string Tooltip =>

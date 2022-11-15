@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntitites;
 using System;
 using System.Collections.Generic;
@@ -38,15 +37,6 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        public string ProductName { get; private set; }
-
-        /// <summary>
-        /// Product ID that is parent for this sensor and doesn't have parent product (top level product)
-        /// </summary>
-        public string ProductId { get; private set; }
-
-        public string Path { get; private set; }
-
         public ValidationResult ValidationResult { get; protected set; }
 
 
@@ -82,23 +72,6 @@ namespace HSMServer.Core.Model
             ExpectedUpdateIntervalPolicy = null;
         }
 
-
-        internal void BuildProductNameAndPath(ProductModel parentProduct)
-        {
-            var pathParts = new List<string>() { DisplayName };
-
-            while (parentProduct.ParentProduct != null)
-            {
-                pathParts.Add(parentProduct.DisplayName);
-                parentProduct = parentProduct.ParentProduct;
-            }
-
-            pathParts.Reverse();
-
-            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
-            ProductName = parentProduct.DisplayName;
-            ProductId = parentProduct.Id;
-        }
 
         internal void Update(SensorUpdate sensor)
         {

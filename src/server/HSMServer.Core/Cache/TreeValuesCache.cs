@@ -515,6 +515,8 @@ namespace HSMServer.Core.Cache
                             if (_tree.TryGetValue(subProductId, out var subProduct))
                                 product.AddSubProduct(subProduct);
                         }
+
+                    product.BuildProductNameAndPath(product.ParentProduct);
                 }
             _logger.Info("Links between products are built");
 
@@ -615,6 +617,8 @@ namespace HSMServer.Core.Cache
 
         private void AddProduct(ProductModel product)
         {
+            product.BuildProductNameAndPath(product.ParentProduct);
+
             _tree.TryAdd(product.Id, product);
             _databaseCore.AddProduct(product.ToProductEntity());
 
