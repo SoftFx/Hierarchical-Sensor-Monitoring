@@ -120,7 +120,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestAccessKeyModel(ProductModel expected, AccessKeyModel actual)
         {
-            var fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
+            var fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
             Assert.NotNull(actual);
             Assert.Equal(expected.AuthorId, actual.AuthorId);
