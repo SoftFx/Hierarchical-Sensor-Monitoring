@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model
 
     public class AccessKeyModel
     {
-        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length);
+        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
         internal static InvalidAccessKey InvalidKey { get; } = new();
 

@@ -10,8 +10,9 @@
     var user = User as User;
     var nodeId = Model.EncodedId;
     var productName = Model.Parent?.Name ?? Model.Name;
-    var visibleSensors = new List<SensorNodeViewModel>(Model.Sensors.Count);
+    var visibleNodes = Model.Nodes.Select(n => (NodeViewModel)n.Value).ToList();
 
+    var visibleSensors = new List<NodeViewModel>(Model.Sensors.Count);
     if (Model.Sensors != null)
         foreach (var (_, sensor) in Model.Sensors)
             if (user.IsSensorVisible(sensor))
@@ -80,55 +81,16 @@
     </ul>
     <div class='tab-content'>
         <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-            @if (Model.Nodes.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Nodes</h6>
-
-                <div class="container mw-100">
-                    @foreach (var (_, node) in Model.Nodes)
-                    {
-                        <div id="gridCell_@node.EncodedId" class="@node.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@node.Tooltip" onclick="activateNode('@nodeId', '@node.EncodedId')">
-                            @node.Name.GetShortCellName()
-                        </div>
-                    }
-                </div>
-            }
-
-            @if (visibleSensors.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Sensors</h6>
-
-                <div class="container mw-100">
-                    @foreach (var sensor in visibleSensors)
-                    {
-                        <div id="gridCell_@sensor.EncodedId" class="@sensor.Status.ToCssGridCellClass() p-1 grid-cell clickable-node" title="@sensor.Tooltip" onclick="activateNode('@nodeId', '@sensor.EncodedId')">
-                            @sensor.Name.GetShortCellName()
-                        </div>
-                    }
-                </div>
-            }
+            @await Html.PartialAsync("_GridAccordion", visibleNodes)
+            @await Html.PartialAsync("_GridAccordion", visibleSensors)
         </div>
 
         <div class='tab-pane fade' id=@listDivId role="tabpanel">
-            @if (Model.Nodes.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Nodes</h6>
+            @{ ViewBag.Accordion = "_NodeAccordion"; }
+            @await Html.PartialAsync("_ListAccordion", visibleNodes)
 
-                <div>
-                    @foreach (var (_, node) in Model.Nodes)
-                        @await Html.PartialAsync("_NodeAccordion", node)
-                </div>
-            }
-
-            @if (visibleSensors.Count > 0)
-            {
-                <h6 class="fw-bold mt-2">Sensors</h6>
-
-                <div>
-                    @foreach (var sensor in visibleSensors)
-                        @await Html.PartialAsync("_SensorAccordion", sensor)
-                </div>
-            }
+            @{ ViewBag.Accordion = "_SensorAccordion"; }
+            @await Html.PartialAsync("_ListAccordion", visibleSensors)
         </div>
     </div>
 </div>
