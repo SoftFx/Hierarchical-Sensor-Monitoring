@@ -85,7 +85,7 @@
 
 .container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 100px);
+    grid-template-columns: repeat(auto-fill, 105px);
     grid-gap: 5px;
     padding: 0px;
 }
@@ -117,4 +117,40 @@
 .grid-cell-error {
     color: #fff;
     background-color: #dc3545;
+}
+
+#custom_accordion_header .accordion-button.collapsed::before {
+    content: "\f151";
+    font-weight: 400;
+    font-family: "Font Awesome 5 Free";
+    padding-right: 1rem;
+}
+
+#custom_accordion_header .accordion-button:not(.collapsed)::before {
+    content: "\f150";
+    font-weight: 400;
+    font-family: "Font Awesome 5 Free";
+    padding-right: 1rem;
+}
+
+#custom_accordion_header .accordion-button.collapsed::after {
+    content: unset;
+}
+
+#custom_accordion_header .accordion-button:not(.collapsed)::after {
+    content: unset;
+}
+
+.custom-accordion-item {
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0
+}
+
+.custom-accordion-item:first-child {
+    border-top: 0
+}
+
+.custom-accordion-item:last-child {
+    border-bottom: 0
 }

@@ -73,6 +73,9 @@ function selectNodeAjax(selectedId) {
     }).done(function () {
         initialize();
 
+        openAccordions('[id^="grid-accordion_"]');
+        openAccordions('[id^="list-accordion_"]');
+
         var selectedAccordionId = '#accordion_' + selectedId;
         if ($(selectedAccordionId).attr('aria-expanded') == 'false')
             $(selectedAccordionId).click();
@@ -84,6 +87,16 @@ function selectNodeAjax(selectedId) {
         }
         else {
             selectNodeInfoTab("grid", selectedId);
+        }
+    });
+}
+
+function openAccordions(accordionsId) {
+    let accordions = document.querySelectorAll(accordionsId);
+
+    accordions.forEach(element => {
+        if (element.getAttribute('aria-expanded') == 'false') {
+            element.click();
         }
     });
 }
