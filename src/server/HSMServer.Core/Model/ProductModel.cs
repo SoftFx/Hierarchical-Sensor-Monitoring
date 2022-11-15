@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : NodeModel, INotificatable
+    public sealed class ProductModel : NodeBaseModel, INotificatable
     {
         public string Id { get; }
 

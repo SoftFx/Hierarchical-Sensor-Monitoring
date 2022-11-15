@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel : NodeModel
+    public abstract class BaseSensorModel : NodeBaseModel
     {
         protected abstract ValuesStorage Storage { get; }
 

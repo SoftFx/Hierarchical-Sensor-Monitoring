@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class NodeModel
+    public abstract class NodeBaseModel
     {
         public Guid? AuthorId { get; protected set; }
 
@@ -19,9 +20,8 @@ namespace HSMServer.Core.Model
         internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)
         {
             if (entityPolicies != null)
-                foreach (var policyId in entityPolicies)
-                    if (allPolicies.TryGetValue(Guid.Parse(policyId), out var policy))
-                        AddPolicy(policy);
+                foreach (var (_, policy) in allPolicies.IntersectBy(entityPolicies, k => k.Key.ToString()))
+                    AddPolicy(policy);
         }
 
         internal virtual void AddPolicy(Policy policy)
