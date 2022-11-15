@@ -1,0 +1,39 @@
+﻿using HSMServer.Model.TreeViewModels;
+using System.Collections.Generic;
+
+namespace HSMServer.Model.ViewModel
+{
+    public abstract class NodeInfoBaseViewModel
+    {
+        protected readonly List<TimeInterval> _predefinedIntervals =
+            new()
+            {
+                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
+
+        public string Path { get; }
+
+        public string ProductName { get; }
+
+        public string EncodedId { get; set; }
+
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+
+
+        public NodeInfoBaseViewModel() { }
+
+        internal NodeInfoBaseViewModel(NodeViewModel model)
+        {
+            Path = model.Path;
+            ProductName = model.Product;
+            EncodedId = model.EncodedId;
+        }
+    }
+}

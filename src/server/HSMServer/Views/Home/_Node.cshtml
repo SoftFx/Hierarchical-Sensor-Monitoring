@@ -1,15 +1,14 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Core.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
 @{
     var user = User as User;
     var nodeId = Model.EncodedId;
-    var productName = Model.Parent?.Name ?? Model.Name;
+    var productName = Model.Product ?? Model.Name;
     var visibleNodes = Model.Nodes.Select(n => (NodeViewModel)n.Value).ToList();
 
     var visibleSensors = new List<NodeViewModel>(Model.Sensors.Count);
@@ -28,47 +27,9 @@
 <div class="mx-1">
     <h5>@(productName)@(Model.Path)</h5>
 
-    <table class='table table-borderless'>
-        <tbody>
-            <tr>
-                <td class="w-25">Product</td>
-                <td>@productName</td>
-            </tr>
-            @if (Model.Parent != null)
-            {
-                <tr>
-                    <td class="w-25">Path</td>
-                    <td>@Model.Path</td>
-                </tr>
-            }
-            <tr>
-                <td class="w-25">Expected update interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i></td>
-                <td id="expectedUpdateInterval_@(nodeId)">
-                    <form>
-                        <div class="input-group row">
-                            <div class="col-5">
-                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
-                            </div>
-                            <div class="col-auto">
-                                <button type='button' class='btn btn-secondary' onclick="editInfoButtonClick()"
-                                        data-bs-toggle='tooltip' title='edit meta info'>
-                                    <i class='fas fa-edit'></i>
-                                </button>
-                                <button id='saveInfo_@(nodeId)' type='submit' class='btn btn-secondary'
-                                        data-bs-toggle='tooltip' title='save meta info' disabled>
-                                    <i class='fas fa-check'></i>
-                                </button>
-                                <button id='revertInfo_@(nodeId)' type='button' class='btn btn-secondary' onclick="revertInfoClick()"
-                                        data-bs-toggle='tooltip' title='revert changes' disabled>
-                                    <i class='fas fa-times'></i>
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <div id='product_info_@Model.EncodedId'>
+        @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
+    </div>
 
 
     <ul class='nav nav-tabs' role="tablist">

@@ -26,7 +26,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
@@ -38,7 +38,6 @@ namespace HSMServer.Model.TreeViewModels
                 ? $"{CommonConstants.SensorPathSeparator}"
                 : $"{CommonConstants.SensorPathSeparator}{model.Path}{CommonConstants.SensorPathSeparator}";
             TelegramSettings = new(model.Notifications.Telegram);
-            ExpectedUpdateInterval = new(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval(), ExpectedUpdateTimeInternals);
         }
 
 

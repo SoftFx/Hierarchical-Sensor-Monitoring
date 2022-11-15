@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using System;
 
-namespace HSMServer.Core.Cache.UpdateEntitites
+namespace HSMServer.Core.Cache.UpdateEntities
 {
     /// <summary>
     /// If properties are null - there's no updates for that properties

@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -91,6 +91,11 @@ namespace HSMServer.Core.Cache
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
+        }
+
+        public void UpdateProduct(ProductUpdate product)
+        {
+
         }
 
         public void RemoveProduct(string productId)

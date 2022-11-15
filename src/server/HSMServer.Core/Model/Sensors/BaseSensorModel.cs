@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 

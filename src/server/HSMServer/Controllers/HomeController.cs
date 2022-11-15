@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
@@ -421,6 +421,23 @@ namespace HSMServer.Controllers
         }
 
         #endregion
+
+        [HttpPost]
+        public IActionResult UpdateProductInfo(ProductInfoViewModel updatedModel)
+        {
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(updatedModel.EncodedId), out var product))
+                return _emptyResult;
+
+            var productUpdate = new ProductUpdate
+            {
+                Id = product.Id,
+                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+            };
+
+            _treeValuesCache.UpdateProduct(productUpdate);
+
+            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product).Update(productUpdate));
+        }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)
         {
