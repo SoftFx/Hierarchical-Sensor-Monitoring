@@ -55,8 +55,8 @@
 </form>
 
 
-@*<script>
-    disableExpectedUpdateIntervalControl();
+<script>
+    disableProductExpectedUpdateInterval();
 
     $(document).on("submit", "#editProductMetaInfo_form", function (event) {
         event.preventDefault();
@@ -90,14 +90,14 @@
 
     function revertProductInfoClick() {
         // TODO: add reverting expected update interval input value
-        disableExpectedUpdateIntervalControl();
+        disableProductExpectedUpdateInterval();
     }
 
-    function disableExpectedUpdateIntervalControl() {
+    function disableProductExpectedUpdateInterval() {
         let productId = $('#productMetaInfo_encodedId').val();
 
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.setAttribute('disabled', true);
         } );
     }
-</script>*@
+</script>
