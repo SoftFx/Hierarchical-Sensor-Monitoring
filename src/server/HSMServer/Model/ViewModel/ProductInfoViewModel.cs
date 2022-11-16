@@ -10,14 +10,12 @@ namespace HSMServer.Model.ViewModel
         public NodeViewModel Parent { get; }
 
 
-        public ProductInfoViewModel() { }
+        public ProductInfoViewModel() : base() { }
 
         internal ProductInfoViewModel(ProductNodeViewModel product) : base(product)
         {
             Name = product.Name;
             Parent = product.Parent;
-
-            ExpectedUpdateInterval = new(product.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
         }
 
 

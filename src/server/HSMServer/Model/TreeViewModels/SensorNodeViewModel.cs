@@ -27,8 +27,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsPlottingSupported { get; private set; }
 
-        internal TimeIntervalViewModel ExpectedUpdateInterval { get; private set; } = new();
-
         internal string Unit { get; private set; }
 
         internal BaseValue LastValue { get; private set; }

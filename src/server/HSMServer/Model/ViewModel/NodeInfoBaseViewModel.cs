@@ -34,6 +34,8 @@ namespace HSMServer.Model.ViewModel
             Path = model.Path;
             ProductName = model.Product;
             EncodedId = model.EncodedId;
+
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
         }
     }
 }

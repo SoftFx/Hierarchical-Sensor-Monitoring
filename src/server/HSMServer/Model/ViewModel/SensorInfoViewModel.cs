@@ -20,7 +20,6 @@ namespace HSMServer.Model.ViewModel
         {
             SensorType = sensor.SensorType;
 
-            ExpectedUpdateInterval = new(sensor.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
             Description = sensor.Description;
             Unit = sensor.Unit;
         }

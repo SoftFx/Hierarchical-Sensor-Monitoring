@@ -26,8 +26,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
-
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
