@@ -422,6 +422,15 @@ namespace HSMServer.Controllers
 
         #endregion
 
+        [HttpGet]
+        public IActionResult GetProductInfo([FromQuery(Name = "Id")] string encodedId)
+        {
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(encodedId), out var product))
+                return _emptyResult;
+
+            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
+        }
+
         [HttpPost]
         public IActionResult UpdateProductInfo(ProductInfoViewModel updatedModel)
         {

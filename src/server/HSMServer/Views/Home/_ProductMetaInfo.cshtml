@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Constants
 @using HSMServer.Model.ViewModel
 
 @model ProductInfoViewModel
@@ -89,8 +90,20 @@
     }
 
     function revertProductInfoClick() {
-        // TODO: add reverting expected update interval input value
-        disableProductExpectedUpdateInterval();
+        let id = $('#productMetaInfo_encodedId').val();
+
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController))?Id=${id}`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (viewData) {
+            $('#product_info_' + id).html(viewData);
+
+            disableProductExpectedUpdateInterval();
+        });
     }
 
     function disableProductExpectedUpdateInterval() {
