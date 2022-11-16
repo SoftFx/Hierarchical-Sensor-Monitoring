@@ -5,7 +5,7 @@ namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        protected readonly List<TimeInterval> _predefinedIntervals =
+        protected static readonly List<TimeInterval> _predefinedIntervals =
             new()
             {
                 TimeInterval.None,
