@@ -251,7 +251,7 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            if (_tree.TryGetValue(sensor.ParentProductId, out var parent))
+            if (_tree.TryGetValue(sensor.ParentProduct.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
@@ -520,10 +520,13 @@ namespace HSMServer.Core.Cache
                             if (_tree.TryGetValue(subProductId, out var subProduct))
                                 product.AddSubProduct(subProduct);
                         }
-
-                    product.BuildProductNameAndPath(product.ParentProduct);
                 }
             _logger.Info("Links between products are built");
+
+            _logger.Info("Path and ProductName properties are building for products");
+            foreach (var (_, product) in _tree)
+                product.BuildProductNameAndPath();
+            _logger.Info("Path and ProductName properties are built for products");
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
@@ -544,7 +547,10 @@ namespace HSMServer.Core.Cache
                         foreach (var sensorId in productEntity.SensorsIds)
                         {
                             if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
+                            {
                                 product.AddSensor(sensor);
+                                sensor.BuildProductNameAndPath();
+                            }
                         }
                 }
             _logger.Info("Links between products and their sensors are built");
@@ -560,7 +566,7 @@ namespace HSMServer.Core.Cache
             {
                 try
                 {
-                    var sensor = GetSensorModel(entity);
+                    var sensor = SensorModelFactory.Build(entity);
                     sensor.ApplyPolicies(entity.Policies, policies);
 
                     _sensors.TryAdd(sensor.Id, sensor);
@@ -622,7 +628,7 @@ namespace HSMServer.Core.Cache
 
         private void AddProduct(ProductModel product)
         {
-            product.BuildProductNameAndPath(product.ParentProduct);
+            product.BuildProductNameAndPath();
 
             _tree.TryAdd(product.Id, product);
             _databaseCore.AddProduct(product.ToProductEntity());
@@ -638,8 +644,7 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor)
         {
-            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
-                sensor.BuildProductNameAndPath(product);
+            sensor.BuildProductNameAndPath();
 
             if (sensor is StringSensorModel)
                 AddStringValueLengthPolicy(sensor);
@@ -733,7 +738,7 @@ namespace HSMServer.Core.Cache
             return accessKey.IsHasPermissions(permissions, out message);
         }
 
-        private List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
+        private static List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
         {
             var productsWithTheirSubProducts = new Dictionary<string, ProductModel>(products.Count);
             foreach (var product in products)
@@ -745,7 +750,7 @@ namespace HSMServer.Core.Cache
             return productsWithTheirSubProducts.Values.ToList();
         }
 
-        private void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
+        private static void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
         {
             foreach (var (subProductId, subProduct) in product.SubProducts)
             {
@@ -754,16 +759,6 @@ namespace HSMServer.Core.Cache
 
                 GetAllProductSubProducts(subProduct, allSubProducts);
             }
-        }
-
-        private BaseSensorModel GetSensorModel(SensorEntity entity)
-        {
-            var sensor = SensorModelFactory.Build(entity);
-
-            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
-                sensor.BuildProductNameAndPath(product);
-
-            return sensor;
         }
 
         private BaseSensorModel GetSensor(BaseRequestModel request)

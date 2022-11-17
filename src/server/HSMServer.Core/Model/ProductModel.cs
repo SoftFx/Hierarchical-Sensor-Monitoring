@@ -25,8 +25,6 @@ namespace HSMServer.Core.Model
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
 
-        public ProductModel ParentProduct { get; private set; }
-
         public ProductNotificationSettings Notifications { get; }
 
 
@@ -79,8 +77,12 @@ namespace HSMServer.Core.Model
             SubProducts.TryAdd(product.Id, product);
         }
 
-        internal void AddSensor(BaseSensorModel sensor) =>
+        internal void AddSensor(BaseSensorModel sensor)
+        {
+            sensor.ParentProduct = this;
+
             Sensors.TryAdd(sensor.Id, sensor);
+        }
 
         internal ProductEntity ToProductEntity() =>
             new()

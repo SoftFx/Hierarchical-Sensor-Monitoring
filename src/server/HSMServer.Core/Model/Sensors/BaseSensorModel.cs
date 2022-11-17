@@ -28,11 +28,6 @@ namespace HSMServer.Core.Model
 
         public Guid Id { get; private set; }
 
-        /// <summary>
-        /// Sensor parent product ID
-        /// </summary>
-        public string ParentProductId { get; private set; }
-
         public SensorState State { get; private set; }
 
         public string Unit { get; private set; }
@@ -66,10 +61,11 @@ namespace HSMServer.Core.Model
             return ValidationResult != oldValidationResult;
         }
 
-        internal void RemoveExpectedUpdateInterval()
+        internal override void RemoveExpectedUpdateInterval()
         {
             ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
-            ExpectedUpdateIntervalPolicy = null;
+
+            base.RemoveExpectedUpdateInterval();
         }
 
 
@@ -89,7 +85,6 @@ namespace HSMServer.Core.Model
                 CreationDate = new DateTime(entity.CreationDate);
 
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ParentProductId = entity.ProductId;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
             State = (SensorState)entity.State;
@@ -105,7 +100,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ParentProductId,
+                ProductId = ParentProduct.Id,
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,

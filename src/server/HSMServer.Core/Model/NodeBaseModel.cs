@@ -7,6 +7,9 @@ namespace HSMServer.Core.Model
 {
     public abstract class NodeBaseModel
     {
+        private ExpectedUpdateIntervalPolicy _expectedUpdateIntervalPolicy;
+
+
         public Guid? AuthorId { get; protected set; }
 
         public string DisplayName { get; protected set; }
@@ -14,6 +17,8 @@ namespace HSMServer.Core.Model
         public string Description { get; protected set; }
 
         public DateTime CreationDate { get; protected set; }
+
+        public ProductModel ParentProduct { get; internal set; }
 
 
         /// <summary>
@@ -26,11 +31,16 @@ namespace HSMServer.Core.Model
         public string Path { get; protected set; }
 
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
-
-
-        internal void BuildProductNameAndPath(ProductModel parentProduct)
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy
         {
+            get => _expectedUpdateIntervalPolicy ?? ParentProduct?.ExpectedUpdateIntervalPolicy;
+            set => _expectedUpdateIntervalPolicy = value;
+        }
+
+
+        internal void BuildProductNameAndPath()
+        {
+            var parentProduct = ParentProduct;
             if (parentProduct == null)
                 return;
 
@@ -61,6 +71,11 @@ namespace HSMServer.Core.Model
         {
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
+        }
+
+        internal virtual void RemoveExpectedUpdateInterval()
+        {
+            ExpectedUpdateIntervalPolicy = null;
         }
 
         protected virtual List<string> GetPolicyIds()

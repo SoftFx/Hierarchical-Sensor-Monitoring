@@ -157,7 +157,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: CommonConstants.SelfMonitoringProductKey, type: (byte)type);
 
                 var sensor = Infrastructure.SensorModelFactory.Build(sensorEntity);
-                sensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensorEntity.ProductId));
+                sensor.ParentProduct = _valuesCache.GetProduct(sensorEntity.ProductId);
+                sensor.BuildProductNameAndPath();
 
                 var info = new SensorModelInfo()
                 {
