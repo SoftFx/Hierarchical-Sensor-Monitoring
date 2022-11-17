@@ -56,6 +56,7 @@ namespace HSMServer.Model.TreeViewModels
             Unit = model.Unit;
 
             ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
+            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
 
             LastValue = model.LastValue;
             HasData = model.HasData;

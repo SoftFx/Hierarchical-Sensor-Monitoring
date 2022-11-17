@@ -22,6 +22,8 @@ namespace HSMServer.Model.ViewModel
 
         public string ProductName { get; }
 
+        public bool IsOwnExpectedUpdateInterval { get; }
+
         public string EncodedId { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
@@ -36,6 +38,7 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
+            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
         }
     }
 }

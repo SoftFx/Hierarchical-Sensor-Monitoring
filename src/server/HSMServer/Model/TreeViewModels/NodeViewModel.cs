@@ -18,6 +18,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public string Path { get; protected set; }
 
+        public bool IsOwnExpectedUpdateInterval { get; protected set; }
+
         public NodeViewModel Parent { get; internal set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();

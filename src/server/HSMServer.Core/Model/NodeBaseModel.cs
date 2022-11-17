@@ -37,6 +37,9 @@ namespace HSMServer.Core.Model
             set => _expectedUpdateIntervalPolicy = value;
         }
 
+        public bool IsOwnExpectedUpdateInterval =>
+            _expectedUpdateIntervalPolicy != null || ParentProduct?.ExpectedUpdateIntervalPolicy == null;
+
 
         internal void BuildProductNameAndPath()
         {
