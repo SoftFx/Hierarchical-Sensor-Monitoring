@@ -93,9 +93,18 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, TransactionType.Update);
         }
 
-        public void UpdateProduct(ProductUpdate product)
+        public void UpdateProduct(ProductUpdate updatedProduct)
         {
+            if (!_tree.TryGetValue(updatedProduct.Id, out var product))
+                return;
 
+            var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
+            GetProductSensorsStatuses(product, sensorsOldStatuses);
+
+            UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
+
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+            NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
         public void RemoveProduct(string productId)
@@ -239,11 +248,13 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
                 return;
 
+            var oldStatus = sensor.ValidationResult;
+
             sensor.Update(updatedSensor);
             UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            NotifyAboutChanges(sensor, oldStatus);
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -409,17 +420,17 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor, oldStatus);
         }
 
-        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, BaseSensorModel sensor)
+        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, NodeBaseModel node)
         {
             if (newInterval == null)
                 return;
 
-            var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
+            var oldPolicy = node.ExpectedUpdateIntervalPolicy;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
             {
                 var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.TimeInterval);
-                sensor.ExpectedUpdateIntervalPolicy = newPolicy;
+                node.ExpectedUpdateIntervalPolicy = newPolicy;
 
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
@@ -427,10 +438,7 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    var oldStatus = sensor.ValidationResult;
-
-                    sensor.RemoveExpectedUpdateInterval();
-                    NotifyAboutChanges(sensor, oldStatus);
+                    node.RemoveExpectedUpdateInterval();
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
@@ -441,6 +449,20 @@ namespace HSMServer.Core.Cache
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
             }
+        }
+
+        private void NotifyAllProductChildrenAboutUpdate(ProductModel product, Dictionary<Guid, ValidationResult> sensorsOldStatuses)
+        {
+            ChangeProductEvent(product, TransactionType.Update);
+
+            foreach (var (_, sensor) in product.Sensors)
+                if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
+                    NotifyAboutChanges(sensor, oldStatus);
+                else
+                    ChangeSensorEvent(sensor, TransactionType.Update);
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);
         }
 
         private void Initialize()
@@ -759,6 +781,15 @@ namespace HSMServer.Core.Cache
 
                 GetAllProductSubProducts(subProduct, allSubProducts);
             }
+        }
+
+        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, ValidationResult> sensorsStatuses)
+        {
+            foreach (var (sensorId, sensor) in product.Sensors)
+                sensorsStatuses.Add(sensorId, sensor.ValidationResult);
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                GetProductSensorsStatuses(subProduct, sensorsStatuses);
         }
 
         private BaseSensorModel GetSensor(BaseRequestModel request)

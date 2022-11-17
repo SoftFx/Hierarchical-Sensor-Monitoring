@@ -56,7 +56,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             Name = model.DisplayName;
             TelegramSettings.Update(model.Notifications.Telegram);
-            ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
             IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
         }
 

@@ -99,5 +99,22 @@ namespace HSMServer.Core.Model
                 NotificationSettings = Notifications.ToEntity(),
                 Policies = GetPolicyIds(),
             };
+
+        internal override void RemoveExpectedUpdateInterval()
+        {
+            UpdateChildSensorsValidationResult(this);
+
+            base.RemoveExpectedUpdateInterval();
+        }
+
+        private static void UpdateChildSensorsValidationResult(ProductModel product)
+        {
+            foreach (var (_, sensor) in product.Sensors)
+                if (sensor.ExpectedUpdateIntervalPolicy == null)
+                    sensor.RemoveExpectedUpdateIntervalError();
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                UpdateChildSensorsValidationResult(subProduct);
+        }
     }
 }

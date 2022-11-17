@@ -7,9 +7,6 @@ namespace HSMServer.Core.Model
 {
     public abstract class NodeBaseModel
     {
-        private ExpectedUpdateIntervalPolicy _expectedUpdateIntervalPolicy;
-
-
         public Guid? AuthorId { get; protected set; }
 
         public string DisplayName { get; protected set; }
@@ -31,14 +28,13 @@ namespace HSMServer.Core.Model
         public string Path { get; protected set; }
 
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy
-        {
-            get => _expectedUpdateIntervalPolicy ?? ParentProduct?.ExpectedUpdateIntervalPolicy;
-            set => _expectedUpdateIntervalPolicy = value;
-        }
+        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateIntervalPolicy =>
+            ExpectedUpdateIntervalPolicy ?? ParentProduct?.UsedExpectedUpdateIntervalPolicy;
+
+        internal ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
 
         public bool IsOwnExpectedUpdateInterval =>
-            _expectedUpdateIntervalPolicy != null || ParentProduct?.ExpectedUpdateIntervalPolicy == null;
+            ExpectedUpdateIntervalPolicy != null || ParentProduct?.UsedExpectedUpdateIntervalPolicy == null;
 
 
         internal void BuildProductNameAndPath()

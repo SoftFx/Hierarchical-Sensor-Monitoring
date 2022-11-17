@@ -55,7 +55,7 @@ namespace HSMServer.Model.TreeViewModels
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
 
-            ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
             IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
 
             LastValue = model.LastValue;
