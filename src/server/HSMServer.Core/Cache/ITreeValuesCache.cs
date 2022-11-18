@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Cache.UpdateEntitites;
+﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Requests;
@@ -32,6 +32,7 @@ namespace HSMServer.Core.Cache
 
         ProductModel AddProduct(string productName);
         void UpdateProduct(ProductModel product);
+        void UpdateProduct(ProductUpdate product);
         void RemoveProduct(string id);
         ProductModel GetProduct(string id);
         string GetProductNameById(string id);

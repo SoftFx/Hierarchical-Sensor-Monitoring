@@ -1,6 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -96,7 +96,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.AuthorId, actual.AuthorId);
+            Assert.Equal(expected.AuthorId, actual.AuthorId.ToString());
             Assert.Equal(expected.ProductId, actual.ProductId);
             Assert.Equal(expected.State, (byte)actual.State);
             Assert.Equal(expected.Permissions, (long)actual.Permissions);
@@ -130,7 +130,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(DateTime.MaxValue, actual.ExpirationTime);
         }
 
-        internal static void TestAccessKeyModel(string authorId, string productId, AccessKeyModel actual)
+        internal static void TestAccessKeyModel(Guid authorId, string productId, AccessKeyModel actual)
         {
             Assert.NotNull(actual);
             Assert.Equal(authorId, actual.AuthorId);
@@ -150,7 +150,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModelWithoutUpdatedMetadata(SensorEntity expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.ProductId, actual.ParentProductId);
+            Assert.Equal(expected.ProductId, actual.ParentProduct?.Id);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
         }
@@ -223,11 +223,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             if (parentProduct == null)
             {
-                Assert.Null(actual.ParentProductId);
+                Assert.Null(actual.ParentProduct);
                 Assert.Null(actual.ProductName);
             }
             else
-                Assert.Equal(parentProduct.Id, actual.ParentProductId);
+                Assert.Equal(parentProduct.Id, actual.ParentProduct.Id);
 
             AssertModels(expected.BaseValue, actual.LastValue);
         }
@@ -312,7 +312,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expected.Path);
 
             Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.ParentProductId, actual.ParentProductId);
+            Assert.Equal(expected.ParentProduct.Id, actual.ParentProduct.Id);
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.CreationDate, actual.CreationDate);
             Assert.Equal(expected.DisplayName, actual.DisplayName);

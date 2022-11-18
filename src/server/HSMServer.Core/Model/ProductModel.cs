@@ -13,27 +13,17 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : INotificatable
+    public sealed class ProductModel : NodeBaseModel, INotificatable
     {
         public string Id { get; }
 
-        public string AuthorId { get; }
-
-        public string DisplayName { get; }
-
-        public string Description { get; }
-
         public ProductState State { get; }
-
-        public DateTime CreationDate { get; }
 
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
 
         public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
-
-        public ProductModel ParentProduct { get; private set; }
 
         public ProductNotificationSettings Notifications { get; }
 
@@ -57,7 +47,7 @@ namespace HSMServer.Core.Model
         public ProductModel(ProductEntity entity) : this()
         {
             Id = entity.Id;
-            AuthorId = entity.AuthorId;
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -87,14 +77,18 @@ namespace HSMServer.Core.Model
             SubProducts.TryAdd(product.Id, product);
         }
 
-        internal void AddSensor(BaseSensorModel sensor) =>
+        internal void AddSensor(BaseSensorModel sensor)
+        {
+            sensor.ParentProduct = this;
+
             Sensors.TryAdd(sensor.Id, sensor);
+        }
 
         internal ProductEntity ToProductEntity() =>
             new()
             {
                 Id = Id,
-                AuthorId = AuthorId,
+                AuthorId = AuthorId.ToString(),
                 ParentProductId = ParentProduct?.Id,
                 State = (int)State,
                 DisplayName = DisplayName,
@@ -103,6 +97,25 @@ namespace HSMServer.Core.Model
                 SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
                 SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
+                Policies = GetPolicyIds(),
             };
+
+        internal override void RemoveExpectedUpdateInterval()
+        {
+            UpdateChildSensorsValidationResult(this);
+
+            base.RemoveExpectedUpdateInterval();
+        }
+
+        private static void UpdateChildSensorsValidationResult(ProductModel product)
+        {
+            foreach (var (_, sensor) in product.Sensors)
+                if (sensor.ExpectedUpdateIntervalPolicy == null)
+                    sensor.RemoveExpectedUpdateIntervalError();
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                if (subProduct.ExpectedUpdateIntervalPolicy == null)
+                    UpdateChildSensorsValidationResult(subProduct);
+        }
     }
 }

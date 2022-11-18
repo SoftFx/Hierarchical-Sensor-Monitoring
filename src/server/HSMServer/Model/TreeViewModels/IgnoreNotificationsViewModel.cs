@@ -7,7 +7,7 @@ namespace HSMServer.Model
 {
     public class IgnoreNotificationsViewModel
     {
-        private readonly List<TimeInterval> _predefinedIntervals =
+        private static readonly List<TimeInterval> _predefinedIntervals =
             new()
             {
                 TimeInterval.FiveMinutes,

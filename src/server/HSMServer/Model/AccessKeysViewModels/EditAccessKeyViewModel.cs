@@ -1,5 +1,5 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
@@ -71,7 +71,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId.ToString(), SensorPathHelper.Decode(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, SensorPathHelper.Decode(EncodedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };

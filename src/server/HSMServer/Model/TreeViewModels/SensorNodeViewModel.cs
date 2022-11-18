@@ -23,13 +23,9 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ShortStringValue { get; private set; }
 
-        public string Product { get; private set; }
-
         public string FileNameString { get; private set; }
 
         public bool IsPlottingSupported { get; private set; }
-
-        internal TimeIntervalViewModel ExpectedUpdateInterval { get; private set; } = new();
 
         internal string Unit { get; private set; }
 
@@ -48,7 +44,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(BaseSensorModel model)
         {
-            Name = model.DisplayName;
+            base.Update(model);
+
             SensorType = model.Type;
             Description = model.Description;
             State = model.State;
@@ -58,8 +55,6 @@ namespace HSMServer.Model.TreeViewModels
             Product = model.ProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
-
-            ExpectedUpdateInterval.Update(model.ExpectedUpdateIntervalPolicy?.ToTimeInterval());
 
             LastValue = model.LastValue;
             HasData = model.HasData;

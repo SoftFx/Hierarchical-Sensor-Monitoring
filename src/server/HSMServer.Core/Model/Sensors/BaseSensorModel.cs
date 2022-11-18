@@ -1,6 +1,5 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntitites;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 
@@ -20,7 +19,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel
+    public abstract class BaseSensorModel : NodeBaseModel
     {
         protected abstract ValuesStorage Storage { get; }
 
@@ -29,33 +28,9 @@ namespace HSMServer.Core.Model
 
         public Guid Id { get; private set; }
 
-        public Guid? AuthorId { get; private set; }
-
-        public DateTime CreationDate { get; private set; }
-
-        /// <summary>
-        /// Sensor parent product ID
-        /// </summary>
-        public string ParentProductId { get; private set; }
-
-        public string DisplayName { get; private set; }
-
-        public string Description { get; private set; }
-
         public SensorState State { get; private set; }
 
         public string Unit { get; private set; }
-
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
-
-        public string ProductName { get; private set; }
-
-        /// <summary>
-        /// Product ID that is parent for this sensor and doesn't have parent product (top level product)
-        /// </summary>
-        public string ProductId { get; private set; }
-
-        public string Path { get; private set; }
 
         public ValidationResult ValidationResult { get; protected set; }
 
@@ -76,39 +51,26 @@ namespace HSMServer.Core.Model
 
         public bool CheckExpectedUpdateInterval()
         {
-            if (ExpectedUpdateIntervalPolicy == null || !HasData)
+            if (UsedExpectedUpdateIntervalPolicy == null || !HasData)
                 return false;
 
             var oldValidationResult = ValidationResult;
 
-            ValidationResult += ExpectedUpdateIntervalPolicy.Validate(LastValue);
+            ValidationResult += UsedExpectedUpdateIntervalPolicy.Validate(LastValue);
 
             return ValidationResult != oldValidationResult;
         }
 
-        internal void RemoveExpectedUpdateInterval()
-        {
+        internal void RemoveExpectedUpdateIntervalError() =>
             ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
-            ExpectedUpdateIntervalPolicy = null;
-        }
 
-
-        internal void BuildProductNameAndPath(ProductModel parentProduct)
+        internal override void RemoveExpectedUpdateInterval()
         {
-            var pathParts = new List<string>() { DisplayName };
+            RemoveExpectedUpdateIntervalError();
 
-            while (parentProduct.ParentProduct != null)
-            {
-                pathParts.Add(parentProduct.DisplayName);
-                parentProduct = parentProduct.ParentProduct;
-            }
-
-            pathParts.Reverse();
-
-            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
-            ProductName = parentProduct.DisplayName;
-            ProductId = parentProduct.Id;
+            base.RemoveExpectedUpdateInterval();
         }
+
 
         internal void Update(SensorUpdate sensor)
         {
@@ -126,7 +88,6 @@ namespace HSMServer.Core.Model
                 CreationDate = new DateTime(entity.CreationDate);
 
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ParentProductId = entity.ProductId;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
             State = (SensorState)entity.State;
@@ -142,7 +103,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ParentProductId,
+                ProductId = ParentProduct.Id,
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,
@@ -168,14 +129,5 @@ namespace HSMServer.Core.Model
         internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
 
         internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
-
-
-        internal virtual void AddPolicy(Policy policy)
-        {
-            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-        protected abstract List<string> GetPolicyIds();
     }
 }

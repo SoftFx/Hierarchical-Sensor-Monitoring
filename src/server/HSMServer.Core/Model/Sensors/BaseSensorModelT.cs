@@ -46,10 +46,9 @@ namespace HSMServer.Core.Model
 
         protected override List<string> GetPolicyIds()
         {
-            var policies = _policies.Select(p => p.Id.ToString()).ToList();
+            var policies = base.GetPolicyIds();
 
-            if (ExpectedUpdateIntervalPolicy != null)
-                policies.Add(ExpectedUpdateIntervalPolicy.Id.ToString());
+            policies.AddRange(_policies.Select(p => p.Id.ToString()));
 
             return policies;
         }

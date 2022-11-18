@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
@@ -618,7 +618,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
-            clonedSensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensor.ParentProductId));
+            clonedSensor.ParentProduct = _valuesCache.GetProduct(sensor.ParentProduct.Id);
+            clonedSensor.BuildProductNameAndPath();
 
             clonedSensor.TryAddValue(sensor.LastValue, out _);
 

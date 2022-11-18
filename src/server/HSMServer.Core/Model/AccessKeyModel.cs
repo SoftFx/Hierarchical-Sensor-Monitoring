@@ -1,6 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntitites;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 
 namespace HSMServer.Core.Model
@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model
 
         public Guid Id { get; }
 
-        public string AuthorId { get; }
+        public Guid? AuthorId { get; }
 
         public string ProductId { get; }
 
@@ -52,7 +52,7 @@ namespace HSMServer.Core.Model
         public AccessKeyModel(AccessKeyEntity entity)
         {
             Id = Guid.Parse(entity.Id);
-            AuthorId = entity.AuthorId;
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             ProductId = entity.ProductId;
             State = (KeyState)entity.State;
             Permissions = (KeyPermissions)entity.Permissions;
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
-        public AccessKeyModel(string authorId, string productId) : this()
+        public AccessKeyModel(Guid authorId, string productId) : this()
         {
             AuthorId = authorId;
             ProductId = productId;
@@ -102,7 +102,7 @@ namespace HSMServer.Core.Model
             new()
             {
                 Id = Id.ToString(),
-                AuthorId = AuthorId,
+                AuthorId = AuthorId.ToString(),
                 ProductId = ProductId,
                 State = (byte)State,
                 Permissions = (long)Permissions,

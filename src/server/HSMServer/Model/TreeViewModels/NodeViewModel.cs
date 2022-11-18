@@ -14,9 +14,15 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorStatus Status { get; protected set; }
 
+        public string Product { get; protected set; }
+
+        public string Path { get; protected set; }
+
+        public bool IsOwnExpectedUpdateInterval { get; protected set; }
+
         public NodeViewModel Parent { get; internal set; }
 
-        public string Path { get; internal set; }
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
 
         public string Tooltip =>
@@ -28,6 +34,14 @@ namespace HSMServer.Model.TreeViewModels
         internal NodeViewModel(string encodedId)
         {
             EncodedId = encodedId;
+        }
+
+        internal void Update(NodeBaseModel model)
+        {
+            Name = model.DisplayName;
+
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
+            IsOwnExpectedUpdateInterval = model.ExpectedUpdateIntervalPolicy != null || model.ParentProduct == null;
         }
     }
 }

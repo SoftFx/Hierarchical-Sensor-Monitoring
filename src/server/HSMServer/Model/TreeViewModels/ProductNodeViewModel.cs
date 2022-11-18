@@ -22,19 +22,20 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public TelegramSettingsViewModel TelegramSettings { get; }
+        public TelegramSettingsViewModel TelegramSettings { get; } = new();
 
         public int AllSensorsCount { get; private set; }
-
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
-            Name = model.DisplayName;
-            Path = CommonConstants.SensorPathSeparator.ToString();
-            TelegramSettings = new(model.Notifications.Telegram);
+            Product = model.ProductName;
+            Path = model.ParentProduct == null
+                ? $"{CommonConstants.SensorPathSeparator}"
+                : $"{CommonConstants.SensorPathSeparator}{model.Path}{CommonConstants.SensorPathSeparator}";
+
+            Update(model);
         }
 
 
@@ -53,7 +54,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(ProductModel model)
         {
-            Name = model.DisplayName;
+            base.Update(model);
+
             TelegramSettings.Update(model.Notifications.Telegram);
         }
 
@@ -91,7 +93,6 @@ namespace HSMServer.Model.TreeViewModels
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.Path = $"{node.Parent.Path}{node.Name}{CommonConstants.SensorPathSeparator}";
                     node.RecalculateCharacteristics();
 
                     allSensorsCount += node.AllSensorsCount;
