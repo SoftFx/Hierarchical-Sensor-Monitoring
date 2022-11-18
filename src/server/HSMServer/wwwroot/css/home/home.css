@@ -93,6 +93,7 @@
 .grid-cell {
     text-align: center;
     border-radius: 0.25rem;
+    white-space: nowrap;
 }
 
 .clickable-node {
