@@ -2,6 +2,7 @@
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModels
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Core.Model.UserFilters
 
 @model HSMServer.Model.TreeViewModels.ProductNodeViewModel
 
@@ -9,18 +10,19 @@
     var user = User as User;
     var nodeId = Model.EncodedId;
     var productName = Model.Product ?? Model.Name;
-    var visibleNodes = Model.Nodes.Select(n => (NodeViewModel)n.Value).ToList();
 
-    var visibleSensors = new List<NodeViewModel>(Model.Sensors.Count);
-    if (Model.Sensors != null)
-        foreach (var (_, sensor) in Model.Sensors)
-            if (user.IsSensorVisible(sensor))
-                visibleSensors.Add(sensor);
+    var visibleNodes = GetSortedNodes(Model.Nodes.Values.Cast<NodeViewModel>());
+    var visibleSensors = GetSortedNodes(Model.Sensors.Values.Cast<NodeViewModel>());
 
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
     ViewBag.ParentId = nodeId;
+
+    List<NodeViewModel> GetSortedNodes(IEnumerable<NodeViewModel> nodes) =>
+        user.TreeFilter.TreeSortType == TreeSortType.ByName
+            ? nodes.OrderBy(n => n.Name).ToList()
+            : nodes.OrderByDescending(n => n.UpdateTime).ToList();
 }
 
 
