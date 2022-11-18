@@ -31,10 +31,7 @@ namespace HSMServer.Core.Model
         public ExpectedUpdateIntervalPolicy UsedExpectedUpdateIntervalPolicy =>
             ExpectedUpdateIntervalPolicy ?? ParentProduct?.UsedExpectedUpdateIntervalPolicy;
 
-        public bool IsOwnExpectedUpdateInterval =>
-            ExpectedUpdateIntervalPolicy != null || ParentProduct?.UsedExpectedUpdateIntervalPolicy == null;
-
-        internal ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; set; }
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; internal set; }
 
 
         internal void BuildProductNameAndPath()

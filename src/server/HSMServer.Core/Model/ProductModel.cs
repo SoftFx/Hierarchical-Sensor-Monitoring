@@ -114,7 +114,8 @@ namespace HSMServer.Core.Model
                     sensor.RemoveExpectedUpdateIntervalError();
 
             foreach (var (_, subProduct) in product.SubProducts)
-                UpdateChildSensorsValidationResult(subProduct);
+                if (subProduct.ExpectedUpdateIntervalPolicy == null)
+                    UpdateChildSensorsValidationResult(subProduct);
         }
     }
 }

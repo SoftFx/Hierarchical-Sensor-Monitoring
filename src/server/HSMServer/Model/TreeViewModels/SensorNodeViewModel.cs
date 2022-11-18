@@ -44,7 +44,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(BaseSensorModel model)
         {
-            Name = model.DisplayName;
+            base.Update(model);
+
             SensorType = model.Type;
             Description = model.Description;
             State = model.State;
@@ -54,9 +55,6 @@ namespace HSMServer.Model.TreeViewModels
             Product = model.ProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
-
-            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
-            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
 
             LastValue = model.LastValue;
             HasData = model.HasData;

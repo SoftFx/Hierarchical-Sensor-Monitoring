@@ -54,10 +54,9 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void Update(ProductModel model)
         {
-            Name = model.DisplayName;
+            base.Update(model);
+
             TelegramSettings.Update(model.Notifications.Telegram);
-            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
-            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
