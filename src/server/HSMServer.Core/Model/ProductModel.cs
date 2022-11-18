@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -33,7 +34,7 @@ namespace HSMServer.Core.Model
         NotificationSettings INotificatable.Notifications => Notifications;
 
         bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled && sensor.ProductId == Id;
+            Notifications.Telegram.MessagesAreEnabled && sensor.RootProductId == Id;
 
 
         public ProductModel()
@@ -99,6 +100,29 @@ namespace HSMServer.Core.Model
                 NotificationSettings = Notifications.ToEntity(),
                 Policies = GetPolicyIds(),
             };
+
+
+        internal override void BuildProductNameAndPath()
+        {
+            if (ParentProduct == null)
+            {
+                RootProductId = Id;
+                RootProductName = DisplayName;
+            }
+            else
+            {
+                base.BuildProductNameAndPath();
+
+                Path = $"{ParentProduct.Path}{DisplayName}{CommonConstants.SensorPathSeparator}";
+            }
+
+            foreach (var (_, sensor) in Sensors)
+                sensor.BuildProductNameAndPath();
+
+            foreach (var (_, subProduct) in SubProducts)
+                subProduct.BuildProductNameAndPath();
+        }
+
 
         internal override void RemoveExpectedUpdateInterval()
         {

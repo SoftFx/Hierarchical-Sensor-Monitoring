@@ -36,7 +36,7 @@ namespace HSMServer.Model.TreeViewModels
             EncodedId = encodedId;
         }
 
-        internal void Update(NodeBaseModel model)
+        protected void Update(NodeBaseModel model)
         {
             Name = model.DisplayName;
 

@@ -72,6 +72,14 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal override void BuildProductNameAndPath()
+        {
+            base.BuildProductNameAndPath();
+
+            Path = $"{ParentProduct.Path}{DisplayName}";
+        }
+
+
         internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description ?? Description;

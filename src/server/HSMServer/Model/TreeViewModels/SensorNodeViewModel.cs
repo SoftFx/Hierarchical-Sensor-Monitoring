@@ -52,7 +52,7 @@ namespace HSMServer.Model.TreeViewModels
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result;
             ValidationError = model.ValidationResult.Message;
-            Product = model.ProductName;
+            Product = model.RootProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
             Unit = model.Unit;
 

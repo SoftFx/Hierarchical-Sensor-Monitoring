@@ -185,7 +185,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor?.State == SensorState.Blocked)
             {
-                message = $"Sensor {CommonConstants.BuildPath(sensor.ProductName, sensor.Path)} is blocked.";
+                message = $"Sensor {CommonConstants.BuildPath(sensor.RootProductName, sensor.Path)} is blocked.";
                 return false;
             }
 
@@ -265,7 +265,7 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.ParentProduct.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
-            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
+            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.RootProductName, sensor.Path);
             _userManager.RemoveSensorFromUsers(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
@@ -289,7 +289,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearValues();
-            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
+            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.RootProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -316,7 +316,7 @@ namespace HSMServer.Core.Cache
             {
                 var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
                 values.AddRange(sensor.ConvertValues(
-                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, oldestValueTime, remainingCount)));
+                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, oldestValueTime, remainingCount)));
             }
 
             return values;
@@ -332,7 +332,7 @@ namespace HSMServer.Core.Cache
 
             var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
             values.AddRange(sensor.ConvertValues(
-                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime, count)));
+                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, from, oldestValueTime, count)));
 
             return values;
         }
@@ -480,6 +480,8 @@ namespace HSMServer.Core.Cache
 
             ApplySensors(productEntities, RequestSensors(), policies);
 
+            BuildNodesProductNameAndPath();
+
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
@@ -491,6 +493,17 @@ namespace HSMServer.Core.Cache
             IsInitialized = true;
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
+        }
+
+        private void BuildNodesProductNameAndPath()
+        {
+            _logger.Info("Path and ProductName properties are building for nodes");
+
+            foreach (var (_, product) in _tree)
+                if (product.ParentProduct == null)
+                    product.BuildProductNameAndPath();
+
+            _logger.Info("Path and ProductName properties are built for nodes");
         }
 
         private List<ProductEntity> RequestProducts()
@@ -545,11 +558,6 @@ namespace HSMServer.Core.Cache
                 }
             _logger.Info("Links between products are built");
 
-            _logger.Info("Path and ProductName properties are building for products");
-            foreach (var (_, product) in _tree)
-                product.BuildProductNameAndPath();
-            _logger.Info("Path and ProductName properties are built for products");
-
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
             if (productEntities.Count == 0 || monitoringProduct == null)
                 AddSelfMonitoringProduct();
@@ -567,13 +575,8 @@ namespace HSMServer.Core.Cache
                 {
                     if (productEntity.SensorsIds != null)
                         foreach (var sensorId in productEntity.SensorsIds)
-                        {
                             if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
-                            {
                                 product.AddSensor(sensor);
-                                sensor.BuildProductNameAndPath();
-                            }
-                        }
                 }
             _logger.Info("Links between products and their sensors are built");
 
@@ -652,16 +655,18 @@ namespace HSMServer.Core.Cache
         {
             product.BuildProductNameAndPath();
 
-            _tree.TryAdd(product.Id, product);
-            _databaseCore.AddProduct(product.ToProductEntity());
+            if (_tree.TryAdd(product.Id, product))
+            {
+                _databaseCore.AddProduct(product.ToProductEntity());
 
-            ChangeProductEvent?.Invoke(product, TransactionType.Add);
+                ChangeProductEvent?.Invoke(product, TransactionType.Add);
 
-            foreach (var (_, key) in product.AccessKeys)
-                AddAccessKey(key);
+                foreach (var (_, key) in product.AccessKeys)
+                    AddAccessKey(key);
 
-            if (product.AccessKeys.IsEmpty)
-                AddAccessKey(AccessKeyModel.BuildDefault(product));
+                if (product.AccessKeys.IsEmpty)
+                    AddAccessKey(AccessKeyModel.BuildDefault(product));
+            }
         }
 
         private void AddSensor(BaseSensorModel sensor)

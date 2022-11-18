@@ -21,9 +21,9 @@ namespace HSMServer.Core.Model
         /// <summary>
         /// Product ID that is parent for this node and doesn't have parent product (top level product)
         /// </summary>
-        public string ProductId { get; protected set; }
+        public string RootProductId { get; protected set; }
 
-        public string ProductName { get; protected set; }
+        public string RootProductName { get; protected set; }
 
         public string Path { get; protected set; }
 
@@ -34,25 +34,10 @@ namespace HSMServer.Core.Model
         public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; internal set; }
 
 
-        internal void BuildProductNameAndPath()
+        internal virtual void BuildProductNameAndPath()
         {
-            var parentProduct = ParentProduct;
-            if (parentProduct == null)
-                return;
-
-            var pathParts = new List<string>(1 << 2) { DisplayName };
-
-            while (parentProduct.ParentProduct != null)
-            {
-                pathParts.Add(parentProduct.DisplayName);
-                parentProduct = parentProduct.ParentProduct;
-            }
-
-            pathParts.Reverse();
-
-            ProductId = parentProduct.Id;
-            ProductName = parentProduct.DisplayName;
-            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
+            RootProductId = ParentProduct.RootProductId;
+            RootProductName = ParentProduct.RootProductName;
         }
 
 
