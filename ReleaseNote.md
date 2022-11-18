@@ -2,25 +2,12 @@
 
 ## New features:
 
-### Telegram
-
-* Ability to receive messages from telegram bot in telegram group has been added (groups can be customized for a specific product)
-* New telegram commands /info and /status have been added
-
 ### Site
 
-* Telegram tab has been updated
-* Edit product page has been updated
-* Status column has been added to sensor history table
-* Original bar sensor data is displayed in sensor history table
-
-### Access keys
-
-* New permission CanReadSensorData has been added
-
-### REST API
-
-* New methods (history and historyFile) have been added (to get sensor history you need an access key with new permission CanReadSensorData)
+* Grid view has been added for nodes and sensors
+* List view has been added for nodes
+* Meta info view has been added for products and nodes
+* Expected update interval has been added for products and nodes (sensor expected update interval is inherited from parent if it doesn't set)
 
 ## Other
 
