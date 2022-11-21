@@ -8,7 +8,6 @@
     {
         var title = Model.FirstOrDefault() is ProductNodeViewModel ? "Nodes" : "Sensors";
         var accordionId = $"list{title}";
-        var a = ViewBag.Accordion;
 
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
@@ -20,7 +19,7 @@
                 <div class="accordion-body">
                     <div>
                         @foreach (var element in Model)
-                            @await Html.PartialAsync($"{ViewBag.Accordion}", element)
+                            @await Html.PartialAsync("_NodeAccordion", element)
                     </div>
                 </div>
             </div>
