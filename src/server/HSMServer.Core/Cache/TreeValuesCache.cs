@@ -438,7 +438,7 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    node.RemoveExpectedUpdateInterval();
+                    node.ExpectedUpdateIntervalPolicy = null;
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
@@ -449,6 +449,8 @@ namespace HSMServer.Core.Cache
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
             }
+
+            node.UpdateExpectedUpdateIntervalError();
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product, Dictionary<Guid, ValidationResult> sensorsOldStatuses)

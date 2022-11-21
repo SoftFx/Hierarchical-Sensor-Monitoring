@@ -61,14 +61,11 @@ namespace HSMServer.Core.Model
             return ValidationResult != oldValidationResult;
         }
 
-        internal void RemoveExpectedUpdateIntervalError() =>
+        internal override void UpdateExpectedUpdateIntervalError()
+        {
             ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
 
-        internal override void RemoveExpectedUpdateInterval()
-        {
-            RemoveExpectedUpdateIntervalError();
-
-            base.RemoveExpectedUpdateInterval();
+            CheckExpectedUpdateInterval();
         }
 
 

@@ -124,18 +124,14 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override void RemoveExpectedUpdateInterval()
-        {
+        internal override void UpdateExpectedUpdateIntervalError() =>
             UpdateChildSensorsValidationResult(this);
-
-            base.RemoveExpectedUpdateInterval();
-        }
 
         private static void UpdateChildSensorsValidationResult(ProductModel product)
         {
             foreach (var (_, sensor) in product.Sensors)
                 if (sensor.ExpectedUpdateIntervalPolicy == null)
-                    sensor.RemoveExpectedUpdateIntervalError();
+                    sensor.UpdateExpectedUpdateIntervalError();
 
             foreach (var (_, subProduct) in product.SubProducts)
                 if (subProduct.ExpectedUpdateIntervalPolicy == null)

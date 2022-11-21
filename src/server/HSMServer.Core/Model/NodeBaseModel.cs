@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -41,6 +40,9 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal abstract void UpdateExpectedUpdateIntervalError();
+
+
         internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)
         {
             if (entityPolicies != null)
@@ -52,11 +54,6 @@ namespace HSMServer.Core.Model
         {
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
                 ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-        internal virtual void RemoveExpectedUpdateInterval()
-        {
-            ExpectedUpdateIntervalPolicy = null;
         }
 
         protected virtual List<string> GetPolicyIds()
