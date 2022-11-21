@@ -228,11 +228,6 @@
 
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
-
-                        let selectedRadio = $('input[id$=' + dataObject.id + ']:checked');
-                        if (selectedRadio !== undefined) {
-                            selectedRadio.click();
-                        }
                     }
                 }
 
