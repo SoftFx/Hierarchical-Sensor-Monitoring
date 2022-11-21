@@ -124,17 +124,17 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override void UpdateExpectedUpdateIntervalError() =>
+        internal override void RefreshOutdatedError() =>
             UpdateChildSensorsValidationResult(this);
 
         private static void UpdateChildSensorsValidationResult(ProductModel product)
         {
             foreach (var (_, sensor) in product.Sensors)
-                if (sensor.ExpectedUpdateIntervalPolicy == null)
-                    sensor.UpdateExpectedUpdateIntervalError();
+                if (sensor.ExpectedUpdateInterval == null)
+                    sensor.RefreshOutdatedError();
 
             foreach (var (_, subProduct) in product.SubProducts)
-                if (subProduct.ExpectedUpdateIntervalPolicy == null)
+                if (subProduct.ExpectedUpdateInterval == null)
                     UpdateChildSensorsValidationResult(subProduct);
         }
     }

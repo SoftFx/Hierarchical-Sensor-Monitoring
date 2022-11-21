@@ -27,10 +27,10 @@ namespace HSMServer.Core.Model
         public string Path { get; protected set; }
 
 
-        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateIntervalPolicy =>
-            ExpectedUpdateIntervalPolicy ?? ParentProduct?.UsedExpectedUpdateIntervalPolicy;
+        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateInterval =>
+            ExpectedUpdateInterval ?? ParentProduct?.UsedExpectedUpdateInterval;
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; internal set; }
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateInterval { get; internal set; }
 
 
         internal virtual void BuildProductNameAndPath()
@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract void UpdateExpectedUpdateIntervalError();
+        internal abstract void RefreshOutdatedError();
 
 
         internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)
@@ -53,15 +53,15 @@ namespace HSMServer.Core.Model
         internal virtual void AddPolicy(Policy policy)
         {
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
+                ExpectedUpdateInterval = expectedUpdateIntervalPolicy;
         }
 
         protected virtual List<string> GetPolicyIds()
         {
             var policies = new List<string>(1 << 2);
 
-            if (ExpectedUpdateIntervalPolicy != null)
-                policies.Add(ExpectedUpdateIntervalPolicy.Id.ToString());
+            if (ExpectedUpdateInterval != null)
+                policies.Add(ExpectedUpdateInterval.Id.ToString());
 
             return policies;
         }

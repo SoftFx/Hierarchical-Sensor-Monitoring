@@ -40,8 +40,8 @@ namespace HSMServer.Model.TreeViewModels
         {
             Name = model.DisplayName;
 
-            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
-            IsOwnExpectedUpdateInterval = model.ExpectedUpdateIntervalPolicy != null || model.ParentProduct == null;
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateInterval?.ToTimeInterval());
+            IsOwnExpectedUpdateInterval = model.ExpectedUpdateInterval != null || model.ParentProduct == null;
         }
     }
 }

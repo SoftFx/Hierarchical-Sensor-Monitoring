@@ -51,17 +51,17 @@ namespace HSMServer.Core.Model
 
         public bool CheckExpectedUpdateInterval()
         {
-            if (UsedExpectedUpdateIntervalPolicy == null || !HasData)
+            if (UsedExpectedUpdateInterval == null || !HasData)
                 return false;
 
             var oldValidationResult = ValidationResult;
 
-            ValidationResult += UsedExpectedUpdateIntervalPolicy.Validate(LastValue);
+            ValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
 
             return ValidationResult != oldValidationResult;
         }
 
-        internal override void UpdateExpectedUpdateIntervalError()
+        internal override void RefreshOutdatedError()
         {
             ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
 

@@ -11,18 +11,22 @@
     var nodeId = Model.EncodedId;
     var productName = Model.Product ?? Model.Name;
 
-    var visibleNodes = GetSortedNodes(Model.Nodes.Values.Cast<NodeViewModel>());
-    var visibleSensors = GetSortedNodes(Model.Sensors.Values.Cast<NodeViewModel>());
+    var visibleNodes = GetSortedNodes(Model.Nodes.Values);
+    var visibleSensors = GetSortedNodes(Model.Sensors.Values);
 
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
     ViewBag.ParentId = nodeId;
 
-    List<NodeViewModel> GetSortedNodes(IEnumerable<NodeViewModel> nodes) =>
-        user.TreeFilter.TreeSortType == TreeSortType.ByName
-            ? nodes.OrderBy(n => n.Name).ToList()
-            : nodes.OrderByDescending(n => n.UpdateTime).ToList();
+    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T: NodeViewModel
+    {
+        var sortedNodes = user.TreeFilter.TreeSortType == TreeSortType.ByName
+            ? nodes.OrderBy(n => n.Name)
+            : nodes.OrderByDescending(n => n.UpdateTime);
+            
+        return sortedNodes.Cast<NodeViewModel>().ToList();
+    }
 }
 
 

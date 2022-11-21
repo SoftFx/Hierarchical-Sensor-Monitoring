@@ -425,12 +425,12 @@ namespace HSMServer.Core.Cache
             if (newInterval == null)
                 return;
 
-            var oldPolicy = node.ExpectedUpdateIntervalPolicy;
+            var oldPolicy = node.ExpectedUpdateInterval;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
             {
                 var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.TimeInterval);
-                node.ExpectedUpdateIntervalPolicy = newPolicy;
+                node.ExpectedUpdateInterval = newPolicy;
 
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
@@ -438,7 +438,7 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    node.ExpectedUpdateIntervalPolicy = null;
+                    node.ExpectedUpdateInterval = null;
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
@@ -450,7 +450,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            node.UpdateExpectedUpdateIntervalError();
+            node.RefreshOutdatedError();
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product, Dictionary<Guid, ValidationResult> sensorsOldStatuses)
