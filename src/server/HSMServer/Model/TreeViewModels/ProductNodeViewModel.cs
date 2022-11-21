@@ -30,10 +30,8 @@ namespace HSMServer.Model.TreeViewModels
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
-            Product = model.ProductName;
-            Path = model.ParentProduct == null
-                ? $"{CommonConstants.SensorPathSeparator}"
-                : $"{CommonConstants.SensorPathSeparator}{model.Path}{CommonConstants.SensorPathSeparator}";
+            Product = model.RootProductName;
+            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
 
             Update(model);
         }

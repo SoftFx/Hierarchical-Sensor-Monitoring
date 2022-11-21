@@ -159,7 +159,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (latestValues[sensor.Id] != null)
                     continue;
 
-                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
+                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.RootProductName, sensor.Path));
                 (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
 
                 remainingResult.Add(key, value);

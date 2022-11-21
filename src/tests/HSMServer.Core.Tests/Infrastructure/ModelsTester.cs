@@ -210,7 +210,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ExpectedUpdateIntervalPolicy, actual.ExpectedUpdateIntervalPolicy);
+            Assert.Equal(expected.ExpectedUpdateInterval, actual.ExpectedUpdateInterval);
             Assert.Equal(expected.Unit, actual.Unit);
         }
 
@@ -224,7 +224,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             if (parentProduct == null)
             {
                 Assert.Null(actual.ParentProduct);
-                Assert.Null(actual.ProductName);
+                Assert.Null(actual.RootProductName);
             }
             else
                 Assert.Equal(parentProduct.Id, actual.ParentProduct.Id);
@@ -306,9 +306,9 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         private static void TestImmutableSensorData(BaseSensorModel expected, BaseSensorModel actual)
         {
-            Assert.NotNull(actual.ProductName);
+            Assert.NotNull(actual.RootProductName);
             Assert.NotNull(actual.Path);
-            Assert.NotNull(expected.ProductName);
+            Assert.NotNull(expected.RootProductName);
             Assert.NotNull(expected.Path);
 
             Assert.Equal(expected.Id, actual.Id);
@@ -316,7 +316,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.CreationDate, actual.CreationDate);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
-            Assert.Equal(expected.ProductName, actual.ProductName);
+            Assert.Equal(expected.RootProductName, actual.RootProductName);
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(expected.Type, actual.Type);
             AssertModels(expected.ValidationResult, actual.ValidationResult);

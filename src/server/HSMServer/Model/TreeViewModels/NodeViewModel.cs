@@ -36,12 +36,12 @@ namespace HSMServer.Model.TreeViewModels
             EncodedId = encodedId;
         }
 
-        internal void Update(NodeBaseModel model)
+        protected void Update(NodeBaseModel model)
         {
             Name = model.DisplayName;
 
-            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateIntervalPolicy?.ToTimeInterval());
-            IsOwnExpectedUpdateInterval = model.ExpectedUpdateIntervalPolicy != null || model.ParentProduct == null;
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateInterval?.ToTimeInterval());
+            IsOwnExpectedUpdateInterval = model.ExpectedUpdateInterval != null || model.ParentProduct == null;
         }
     }
 }

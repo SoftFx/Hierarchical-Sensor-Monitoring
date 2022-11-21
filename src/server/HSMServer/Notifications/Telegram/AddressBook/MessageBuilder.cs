@@ -19,7 +19,7 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-            var productId = sensor.ProductId;
+            var productId = sensor.RootProductId;
 
             if (!_messages.ContainsKey(productId))
                 _messages[productId] = new Dictionary<string, MessagesQueue>();
@@ -88,7 +88,7 @@ namespace HSMServer.Notifications
             {
                 SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
                 SensorPath = sensor.Path,
-                ProductName = sensor.ProductName,
+                ProductName = sensor.RootProductName,
                 Message = builder.ToString(),
             };
         }

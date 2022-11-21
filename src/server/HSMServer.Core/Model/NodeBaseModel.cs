@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -21,39 +20,27 @@ namespace HSMServer.Core.Model
         /// <summary>
         /// Product ID that is parent for this node and doesn't have parent product (top level product)
         /// </summary>
-        public string ProductId { get; protected set; }
+        public string RootProductId { get; protected set; }
 
-        public string ProductName { get; protected set; }
+        public string RootProductName { get; protected set; }
 
         public string Path { get; protected set; }
 
 
-        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateIntervalPolicy =>
-            ExpectedUpdateIntervalPolicy ?? ParentProduct?.UsedExpectedUpdateIntervalPolicy;
+        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateInterval =>
+            ExpectedUpdateInterval ?? ParentProduct?.UsedExpectedUpdateInterval;
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateIntervalPolicy { get; internal set; }
+        public ExpectedUpdateIntervalPolicy ExpectedUpdateInterval { get; internal set; }
 
 
-        internal void BuildProductNameAndPath()
+        internal virtual void BuildProductNameAndPath()
         {
-            var parentProduct = ParentProduct;
-            if (parentProduct == null)
-                return;
-
-            var pathParts = new List<string>(1 << 2) { DisplayName };
-
-            while (parentProduct.ParentProduct != null)
-            {
-                pathParts.Add(parentProduct.DisplayName);
-                parentProduct = parentProduct.ParentProduct;
-            }
-
-            pathParts.Reverse();
-
-            ProductId = parentProduct.Id;
-            ProductName = parentProduct.DisplayName;
-            Path = string.Join(CommonConstants.SensorPathSeparator, pathParts);
+            RootProductId = ParentProduct.RootProductId;
+            RootProductName = ParentProduct.RootProductName;
         }
+
+
+        internal abstract void RefreshOutdatedError();
 
 
         internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)
@@ -66,20 +53,15 @@ namespace HSMServer.Core.Model
         internal virtual void AddPolicy(Policy policy)
         {
             if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateIntervalPolicy = expectedUpdateIntervalPolicy;
-        }
-
-        internal virtual void RemoveExpectedUpdateInterval()
-        {
-            ExpectedUpdateIntervalPolicy = null;
+                ExpectedUpdateInterval = expectedUpdateIntervalPolicy;
         }
 
         protected virtual List<string> GetPolicyIds()
         {
             var policies = new List<string>(1 << 2);
 
-            if (ExpectedUpdateIntervalPolicy != null)
-                policies.Add(ExpectedUpdateIntervalPolicy.Id.ToString());
+            if (ExpectedUpdateInterval != null)
+                policies.Add(ExpectedUpdateInterval.Id.ToString());
 
             return policies;
         }
