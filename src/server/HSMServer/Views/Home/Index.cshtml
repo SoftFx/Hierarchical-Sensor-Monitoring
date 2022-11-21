@@ -215,7 +215,7 @@
                 url: updateSelectedNode + '?Selected=' + selectedNodeId,
                 dataType: 'html',
                 contentType: 'application/json',
-                cache: false,
+                cache: true,
                 async: true
             }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
