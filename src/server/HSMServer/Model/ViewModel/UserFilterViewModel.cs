@@ -7,7 +7,7 @@ namespace HSMServer.Model.ViewModel
         public bool HasOkStatus { get; set; }
         public bool HasWarningStatus { get; set; }
         public bool HasErrorStatus { get; set; }
-        public bool HasUnknownStatus { get; set; }
+        public bool HasOffTimeStatus { get; set; }
 
         public bool IsEmptyHistory { get; set; }
 
@@ -28,7 +28,7 @@ namespace HSMServer.Model.ViewModel
             HasOkStatus = filter.ByStatus.Ok.Value;
             HasWarningStatus = filter.ByStatus.Warning.Value;
             HasErrorStatus = filter.ByStatus.Error.Value;
-            HasUnknownStatus = filter.ByStatus.Unknown.Value;
+            HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
             IsEmptyHistory = filter.ByHistory.Empty.Value;
 
@@ -53,7 +53,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByStatus.Ok.Value = HasOkStatus;
             filter.ByStatus.Warning.Value = HasWarningStatus;
             filter.ByStatus.Error.Value = HasErrorStatus;
-            filter.ByStatus.Unknown.Value = HasUnknownStatus;
+            filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
             filter.ByHistory.Empty.Value = IsEmptyHistory;
 

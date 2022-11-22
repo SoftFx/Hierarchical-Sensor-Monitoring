@@ -16,7 +16,7 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "tree-icon-ok",
                 SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
-                _ => "tree-icon-unknown",
+                _ => "tree-icon-offTime",
             };
 
         internal static string ToIcon(this SensorStatus status) =>
@@ -35,7 +35,7 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "grid-cell-ok",
                 SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
-                _ => "grid-cell-unknown",
+                _ => "grid-cell-offTime",
             };
 
 

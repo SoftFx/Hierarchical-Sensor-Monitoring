@@ -156,7 +156,7 @@
     function updateGridCell(dataObject) {
         var id = dataObject.id;
 
-        $('#gridCell_' + id).removeClass('grid-cell-unknown grid-cell-ok grid-cell-warning grid-cell-error');
+        $('#gridCell_' + id).removeClass('grid-cell-offTime grid-cell-ok grid-cell-warning grid-cell-error');
         $('#gridCell_' + id).addClass(dataObject.gridCellColorClass);
         $('#gridCell_' + id).prop('title', dataObject.tooltip);
     }
@@ -166,7 +166,7 @@
 
         $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
-        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error');
+        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
         $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
     }
