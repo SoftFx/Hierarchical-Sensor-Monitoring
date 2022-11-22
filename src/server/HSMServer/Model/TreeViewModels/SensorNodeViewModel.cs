@@ -33,6 +33,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ValidationError { get; private set; }
 
+        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
+
 
         public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
         {
