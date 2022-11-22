@@ -13,7 +13,7 @@
 
         public FilterProperty Error { get; init; } = new();
 
-        public FilterProperty Unknown { get; init; } = new();
+        public FilterProperty Unknown { get; init; } = new(); // TODO: rename!!
 
         public GroupByStatus() { }
 
@@ -24,7 +24,7 @@
                 SensorStatus.Ok => Ok.Value,
                 SensorStatus.Warning => Warning.Value,
                 SensorStatus.Error => Error.Value,
-                SensorStatus.Unknown => Unknown.Value,
+                SensorStatus.OffTime => Unknown.Value,
                 _ => false
             };
 

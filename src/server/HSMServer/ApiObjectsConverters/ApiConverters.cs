@@ -260,10 +260,10 @@ namespace HSMServer.ApiObjectsConverters
             status switch
             {
                 ApiSensorStatus.Ok => SensorStatus.Ok,
-                ApiSensorStatus.Unknown => SensorStatus.Unknown,
+                ApiSensorStatus.OffTime => SensorStatus.OffTime,
                 ApiSensorStatus.Error => SensorStatus.Error,
                 ApiSensorStatus.Warning => SensorStatus.Warning,
-                _ => SensorStatus.Unknown
+                _ => SensorStatus.Ok
             };
     }
 }

@@ -102,7 +102,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Theory]
-        [InlineData(SensorStatus.Unknown)]
+        [InlineData(SensorStatus.OffTime)]
         [InlineData(SensorStatus.Error)]
         [InlineData(SensorStatus.Warning)]
         [Trait("Category", "InvalidStatus")]
@@ -154,7 +154,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Theory]
-        [InlineData(SensorStatus.Unknown)]
+        [InlineData(SensorStatus.OffTime)]
         [InlineData(SensorStatus.Error)]
         [InlineData(SensorStatus.Warning)]
         [Trait("Category", "CombinatedStatusWithTooLongLength")]
@@ -178,7 +178,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Theory]
-        [InlineData(SensorStatus.Unknown)]
+        [InlineData(SensorStatus.OffTime)]
         [InlineData(SensorStatus.Error)]
         [InlineData(SensorStatus.Warning)]
         [Trait("Cetagory", "CombinatedStatusWithInterval")]

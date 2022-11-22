@@ -172,10 +172,10 @@ namespace HSMServer.Core.Tests.Infrastructure
           status switch
           {
               HSMSensorDataObjects.SensorStatus.Ok => SensorStatus.Ok,
-              HSMSensorDataObjects.SensorStatus.Unknown => SensorStatus.Unknown,
+              HSMSensorDataObjects.SensorStatus.OffTime => SensorStatus.OffTime,
               HSMSensorDataObjects.SensorStatus.Error => SensorStatus.Error,
               HSMSensorDataObjects.SensorStatus.Warning => SensorStatus.Warning,
-              _ => SensorStatus.Unknown
+              _ => SensorStatus.Ok
           };
     }
 }
