@@ -9,6 +9,24 @@
 * Meta info view has been added for products and nodes
 * Expected update interval has been added for products and nodes (sensor expected update interval is inherited from parent if it doesn't set)
 
+### Sensor statuses
+
+* New OffTime status has been added (the status indicates that the sensor is off by schedule)
+* Unknown status has been replaced by OffTime status
+* OffTime status has minimal priority for tree and telegram notifications
+
 ## Other
 
 * Bugfixing & optimization
+
+# HSM DataObjects
+
+* Nuget package has been updated to v.2.1.36
+* OffTime sensor status has been added
+* Unknown sensor status has been removed
+
+# HSM Datacollector
+
+* Nuget package has been updated to v.2.1.42
+* HSM DataObjests package has been updated to v.2.1.36
+* Unknown sensor status using has been removed
