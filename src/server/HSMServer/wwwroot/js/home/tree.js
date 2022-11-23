@@ -48,9 +48,6 @@ function initializeTree() {
         selectNodeAjax($(this).jstree('get_selected'));
     });
 
-    $('#updateTime').empty();
-    $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-
     initializeActivateNodeTree();
 }
 
