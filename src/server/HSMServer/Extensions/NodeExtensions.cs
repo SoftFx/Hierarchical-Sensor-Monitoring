@@ -10,16 +10,16 @@ namespace HSMServer.Extensions
         private const int CellNameMaxLength = 10;
 
 
-        internal static string ToCssIconClass(this SensorStatus status) =>
+        internal static string ToCssIconClass(this SensorStatusWeb status) =>
             status switch
             {
-                SensorStatus.Ok => "tree-icon-ok",
-                SensorStatus.Warning => "tree-icon-warning",
-                SensorStatus.Error => "tree-icon-error",
+                SensorStatusWeb.Ok => "tree-icon-ok",
+                SensorStatusWeb.Warning => "tree-icon-warning",
+                SensorStatusWeb.Error => "tree-icon-error",
                 _ => "tree-icon-offTime",
             };
 
-        internal static string ToIcon(this SensorStatus status) =>
+        internal static string ToIcon(this SensorStatusWeb status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
         internal static string ToCssClass(this SensorState state) =>
@@ -29,12 +29,12 @@ namespace HSMServer.Extensions
                 _ => string.Empty,
             };
 
-        internal static string ToCssGridCellClass(this SensorStatus status) =>
+        internal static string ToCssGridCellClass(this SensorStatusWeb status) =>
             status switch
             {
-                SensorStatus.Ok => "grid-cell-ok",
-                SensorStatus.Warning => "grid-cell-warning",
-                SensorStatus.Error => "grid-cell-error",
+                SensorStatusWeb.Ok => "grid-cell-ok",
+                SensorStatusWeb.Warning => "grid-cell-warning",
+                SensorStatusWeb.Error => "grid-cell-error",
                 _ => "grid-cell-offTime",
             };
 

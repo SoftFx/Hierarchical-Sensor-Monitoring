@@ -25,7 +25,7 @@ namespace HSMServer.Extensions
                     IsNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
                     IsNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
                     HasData = sensor.HasData,
-                    Status = sensor.Status,
+                    Status = sensor.Status.ToCoreStatus(),
                     State = sensor.State,
                 };
 
@@ -45,7 +45,7 @@ namespace HSMServer.Extensions
                 bool isProductVisible = filterMask.HasFlag(FilterGroupType.ByHistory);
 
                 if (filterMask.HasFlag(FilterGroupType.ByStatus))
-                    isProductVisible &= filter.ByStatus.IsStatusSuitable(product.Status);
+                    isProductVisible &= filter.ByStatus.IsStatusSuitable(product.Status.ToCoreStatus());
 
                 return isProductVisible;
             }

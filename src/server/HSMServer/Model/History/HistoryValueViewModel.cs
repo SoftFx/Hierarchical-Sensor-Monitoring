@@ -1,4 +1,6 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModels;
 using System;
 
 namespace HSMServer.Model.History
@@ -9,7 +11,7 @@ namespace HSMServer.Model.History
 
         public string Comment { get; init; }
 
-        public SensorStatus Status { get; init; }
+        public SensorStatusWeb Status { get; init; }
 
 
         internal static HistoryValueViewModel Create(BaseValue value, int sensorType) =>
@@ -29,7 +31,7 @@ namespace HSMServer.Model.History
             {
                 Value = value.Value.ToString(),
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.ToWebStatus(),
                 Comment = value.Comment,
             };
 
@@ -41,7 +43,7 @@ namespace HSMServer.Model.History
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.ToWebStatus(),
                 Comment = value.Comment,
             };
     }

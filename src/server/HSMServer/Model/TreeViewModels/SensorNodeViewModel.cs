@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using HSMServer.Helpers;
 using System;
 
@@ -33,7 +34,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ValidationError { get; private set; }
 
-        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
+        public bool IsValidationErrorVisible =>
+            !string.IsNullOrEmpty(ValidationError) && Status != SensorStatusWeb.OffTime;
 
 
         public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
@@ -52,7 +54,7 @@ namespace HSMServer.Model.TreeViewModels
             Description = model.Description;
             State = model.State;
             UpdateTime = model.LastUpdateTime;
-            Status = model.ValidationResult.Result;
+            Status = model.ValidationResult.Result.ToWebStatus();
             ValidationError = model.ValidationResult.Message;
             Product = model.RootProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
