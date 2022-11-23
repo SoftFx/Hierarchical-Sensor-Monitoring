@@ -18,7 +18,7 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int MaxHistoryCount = 1000;
+        private const int MaxHistoryCount = 50000;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
