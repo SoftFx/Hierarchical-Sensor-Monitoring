@@ -101,6 +101,7 @@ namespace HSMServer.Model.TreeViewModels
 
             ModifyUpdateTime();
             ModifyStatus();
+            ModifyHasData();
         }
 
         private void ModifyUpdateTime()
@@ -118,5 +119,8 @@ namespace HSMServer.Model.TreeViewModels
 
             Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
+
+        private void ModifyHasData() =>
+            HasData = Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
     }
 }

@@ -21,9 +21,10 @@
 
     List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T: NodeViewModel
     {
+        var visibleNodes = nodes.Where(n => n.HasData);
         var sortedNodes = user.TreeFilter.TreeSortType == TreeSortType.ByName
-            ? nodes.OrderBy(n => n.Name)
-            : nodes.OrderByDescending(n => n.UpdateTime);
+            ? visibleNodes.OrderBy(n => n.Name)
+            : visibleNodes.OrderByDescending(n => n.UpdateTime);
             
         return sortedNodes.Cast<NodeViewModel>().ToList();
     }

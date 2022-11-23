@@ -14,6 +14,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorStatus Status { get; protected set; }
 
+        public bool HasData { get; protected set; }
+
         public string Product { get; protected set; }
 
         public string Path { get; protected set; }
