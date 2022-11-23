@@ -161,24 +161,25 @@ function customMenu(node) {
                 }
             }
         },
-        "BlockSensor": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Block sensor",
-            "icon": "fa-solid fa-ban",
-            "action": function (obj) {
-                changeSensorBlockedState(node, true);
-            }
-        },
-        "UnblockSensor": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Unblock sensor",
-            "icon": "fa-solid fa-ban",
-            "action": function (obj) {
-                changeSensorBlockedState(node, false);
-            }
-        }, "CleanHistory": {
+        //"BlockSensor": {
+        //    "separator_before": false,
+        //    "separator_after": false,
+        //    "label": "Block sensor",
+        //    "icon": "fa-solid fa-ban",
+        //    "action": function (obj) {
+        //        changeSensorBlockedState(node, true);
+        //    }
+        //},
+        //"UnblockSensor": {
+        //    "separator_before": false,
+        //    "separator_after": false,
+        //    "label": "Unblock sensor",
+        //    "icon": "fa-solid fa-ban",
+        //    "action": function (obj) {
+        //        changeSensorBlockedState(node, false);
+        //    }
+        //},
+        "CleanHistory": {
             "separator_before": false,
             "separator_after": true,
             "label": "Clean history",
@@ -277,17 +278,18 @@ function customMenu(node) {
         }
     }
 
-    if (!hasUserNodeRights(node) || node.children.length != 0 || node.parents.length == 1) {
-        delete items.BlockSensor;
-        delete items.UnblockSensor;
-    }
+    // TODO : if you remove Block sensor logic, also remove changeSensorBlockedState, hasUserNodeRights, initializeUserRights functions
+    //if (!hasUserNodeRights(node) || node.children.length != 0 || node.parents.length == 1) {
+    //    delete items.BlockSensor;
+    //    delete items.UnblockSensor;
+    //}
 
-    if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
-        delete items.UnblockSensor;
-    }
-    else {
-        delete items.BlockSensor;
-    }
+    //if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
+    //    delete items.UnblockSensor;
+    //}
+    //else {
+    //    delete items.BlockSensor;
+    //}
 
     if (document.getElementById(`${node.id}_ignoreNotifications`)) {
         delete items.Notifications.submenu.EnableNotifications;
