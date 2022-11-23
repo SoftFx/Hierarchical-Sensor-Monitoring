@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModels;
 using System;
 
 namespace HSMServer.Extensions
@@ -10,31 +9,31 @@ namespace HSMServer.Extensions
         private const int CellNameMaxLength = 10;
 
 
-        internal static string ToCssIconClass(this SensorStatusWeb status) =>
+        internal static string ToCssIconClass(this SensorStatus status) =>
             status switch
             {
-                SensorStatusWeb.Ok => "tree-icon-ok",
-                SensorStatusWeb.Warning => "tree-icon-warning",
-                SensorStatusWeb.Error => "tree-icon-error",
+                SensorStatus.Ok => "tree-icon-ok",
+                SensorStatus.Warning => "tree-icon-warning",
+                SensorStatus.Error => "tree-icon-error",
                 _ => "tree-icon-offTime",
             };
 
-        internal static string ToIcon(this SensorStatusWeb status) =>
+        internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
-        internal static string ToCssClass(this SensorState state) =>
+        internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
             {
-                SensorState.Blocked => "blockedSensor-span",
+                Core.Model.SensorState.Blocked => "blockedSensor-span",
                 _ => string.Empty,
             };
 
-        internal static string ToCssGridCellClass(this SensorStatusWeb status) =>
+        internal static string ToCssGridCellClass(this SensorStatus status) =>
             status switch
             {
-                SensorStatusWeb.Ok => "grid-cell-ok",
-                SensorStatusWeb.Warning => "grid-cell-warning",
-                SensorStatusWeb.Error => "grid-cell-error",
+                SensorStatus.Ok => "grid-cell-ok",
+                SensorStatus.Warning => "grid-cell-warning",
+                SensorStatus.Error => "grid-cell-error",
                 _ => "grid-cell-offTime",
             };
 

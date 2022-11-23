@@ -1,28 +1,28 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModels;
+﻿using ClientSensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
+using CoreSensorStatus = HSMServer.Core.Model.SensorStatus;
 
 namespace HSMServer.Extensions
 {
     internal static class StatusExtensions
     {
-        internal static SensorStatusWeb ToWebStatus(this SensorStatus status) =>
+        internal static ClientSensorStatus ToClient(this CoreSensorStatus status) =>
             status switch
             {
-                SensorStatus.Ok => SensorStatusWeb.Ok,
-                SensorStatus.Warning => SensorStatusWeb.Warning,
-                SensorStatus.Error => SensorStatusWeb.Error,
-                SensorStatus.OffTime => SensorStatusWeb.OffTime,
-                _ => SensorStatusWeb.Ok,
+                CoreSensorStatus.Ok => ClientSensorStatus.Ok,
+                CoreSensorStatus.Warning => ClientSensorStatus.Warning,
+                CoreSensorStatus.Error => ClientSensorStatus.Error,
+                CoreSensorStatus.OffTime => ClientSensorStatus.OffTime,
+                _ => ClientSensorStatus.Ok,
             };
 
-        internal static SensorStatus ToCoreStatus(this SensorStatusWeb status) =>
+        internal static CoreSensorStatus ToCore(this ClientSensorStatus status) =>
             status switch
             {
-                SensorStatusWeb.Ok => SensorStatus.Ok,
-                SensorStatusWeb.Warning => SensorStatus.Warning,
-                SensorStatusWeb.Error => SensorStatus.Error,
-                SensorStatusWeb.OffTime => SensorStatus.OffTime,
-                _ => SensorStatus.Ok,
+                ClientSensorStatus.Ok => CoreSensorStatus.Ok,
+                ClientSensorStatus.Warning => CoreSensorStatus.Warning,
+                ClientSensorStatus.Error => CoreSensorStatus.Error,
+                ClientSensorStatus.OffTime => CoreSensorStatus.OffTime,
+                _ => CoreSensorStatus.Ok,
             };
     }
 }

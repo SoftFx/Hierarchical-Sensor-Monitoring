@@ -164,11 +164,11 @@ namespace HSMServer.Notifications
         private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
         {
             var newStatus = sensor.ValidationResult;
-            var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToWebStatus();
+            var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
             return entity.AreNotificationsEnabled(sensor) &&
                    newStatus != oldStatus &&
-                   (newStatus.Result.ToWebStatus() >= minWebStatus || oldStatus.Result.ToWebStatus() >= minWebStatus);
+                   (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
         }
 
         private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)

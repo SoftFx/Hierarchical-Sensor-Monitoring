@@ -11,8 +11,7 @@
 
 ### Sensor statuses
 
-* New OffTime status has been added (the status indicates that the sensor is off by schedule)
-* Unknown status has been replaced by OffTime status
+* Unknown status has been replaced by OffTime status (the status indicates that the sensor is off by schedule)
 * OffTime status has minimal priority for tree and telegram notifications
 
 ## Other
@@ -22,11 +21,9 @@
 # HSM DataObjects
 
 * Nuget package has been updated to v.2.1.36
-* OffTime sensor status has been added
-* Unknown sensor status has been removed
+* Unknown status has been replaced by OffTime status
 
 # HSM Datacollector
 
 * Nuget package has been updated to v.2.1.42
-* HSM DataObjests package has been updated to v.2.1.36
 * Unknown sensor status using has been removed

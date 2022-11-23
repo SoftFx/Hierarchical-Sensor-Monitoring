@@ -4,7 +4,7 @@ using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
-    public enum SensorStatusWeb
+    public enum SensorStatus
     {
         OffTime,
         Ok,
@@ -21,7 +21,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public DateTime UpdateTime { get; protected set; }
 
-        public SensorStatusWeb Status { get; protected set; }
+        public SensorStatus Status { get; protected set; }
 
         public string Product { get; protected set; }
 
