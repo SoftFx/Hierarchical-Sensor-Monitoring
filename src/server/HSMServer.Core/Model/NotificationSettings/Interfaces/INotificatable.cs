@@ -14,16 +14,6 @@ namespace HSMServer.Core.Model
             Notifications?.Telegram.Chats ?? new();
 
 
-        public bool WhetherSendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
-        {
-            var newStatus = sensor.ValidationResult;
-            var minStatus = Notifications.Telegram.MessagesMinStatus;
-
-            return AreNotificationsEnabled(sensor) &&
-                   newStatus != oldStatus &&
-                   (newStatus.Result >= minStatus || oldStatus.Result >= minStatus);
-        }
-
-        internal bool AreNotificationsEnabled(BaseSensorModel sensor);
+        public bool AreNotificationsEnabled(BaseSensorModel sensor);
     }
 }
