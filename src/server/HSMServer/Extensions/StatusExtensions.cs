@@ -1,28 +1,28 @@
-﻿using ClientSensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
-using CoreSensorStatus = HSMServer.Core.Model.SensorStatus;
+﻿using Client = HSMServer.Model.TreeViewModels;
+using Server = HSMServer.Core.Model;
 
 namespace HSMServer.Extensions
 {
     internal static class StatusExtensions
     {
-        internal static ClientSensorStatus ToClient(this CoreSensorStatus status) =>
+        internal static Client.SensorStatus ToClient(this Server.SensorStatus status) =>
             status switch
             {
-                CoreSensorStatus.Ok => ClientSensorStatus.Ok,
-                CoreSensorStatus.Warning => ClientSensorStatus.Warning,
-                CoreSensorStatus.Error => ClientSensorStatus.Error,
-                CoreSensorStatus.OffTime => ClientSensorStatus.OffTime,
-                _ => ClientSensorStatus.Ok,
+                Server.SensorStatus.Ok => Client.SensorStatus.Ok,
+                Server.SensorStatus.Warning => Client.SensorStatus.Warning,
+                Server.SensorStatus.Error => Client.SensorStatus.Error,
+                Server.SensorStatus.OffTime => Client.SensorStatus.OffTime,
+                _ => Client.SensorStatus.Ok,
             };
 
-        internal static CoreSensorStatus ToCore(this ClientSensorStatus status) =>
+        internal static Server.SensorStatus ToCore(this Client.SensorStatus status) =>
             status switch
             {
-                ClientSensorStatus.Ok => CoreSensorStatus.Ok,
-                ClientSensorStatus.Warning => CoreSensorStatus.Warning,
-                ClientSensorStatus.Error => CoreSensorStatus.Error,
-                ClientSensorStatus.OffTime => CoreSensorStatus.OffTime,
-                _ => CoreSensorStatus.Ok,
+                Client.SensorStatus.Ok => Server.SensorStatus.Ok,
+                Client.SensorStatus.Warning => Server.SensorStatus.Warning,
+                Client.SensorStatus.Error => Server.SensorStatus.Error,
+                Client.SensorStatus.OffTime => Server.SensorStatus.OffTime,
+                _ => Server.SensorStatus.Ok,
             };
     }
 }
