@@ -1,8 +1,10 @@
 ﻿using HSMCommon.Constants;
 using Microsoft.AspNetCore.Http;
 using NLog;
+using Org.BouncyCastle.Ocsp;
 using System;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
 
@@ -22,16 +24,15 @@ namespace HSMServer.Middleware
         {
             try
             {
-                if (context.Request.ContentLength > 10_000_000)
+                if (context.Request.ContentLength > 10_000)
                 {
-                    context.Request.EnableBuffering();
+                    using var reader = new StreamReader(context.Request.Body;
+                    
+                    var bodyStr = reader.ReadToEnd();
 
-                    using var sw = new StreamWriter(context.Request.Body);
+                    _logger.Error(bodyStr);
 
-                    using var fileStream = File.Create(Path.Combine(Environment.CurrentDirectory, "Logs", DateTime.UtcNow.ToString()));
-
-                    context.Request.Body.Seek(0, SeekOrigin.Begin);
-                    context.Request.Body.CopyTo(fileStream);
+                    context.Request.Body.Position = 0;
                 }
 
                 await _next(context);
