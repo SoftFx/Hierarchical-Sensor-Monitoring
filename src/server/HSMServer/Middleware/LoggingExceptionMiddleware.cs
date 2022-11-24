@@ -1,9 +1,14 @@
 ﻿using HSMCommon.Constants;
 using Microsoft.AspNetCore.Http;
 using NLog;
+<<<<<<< HEAD
 using Org.BouncyCastle.Utilities.Encoders;
 using System;
 using System.Text;
+=======
+using System;
+using System.IO;
+>>>>>>> c331861eb5dcb13a3ed9b83d6e1677f25541711c
 using System.Threading.Tasks;
 
 
