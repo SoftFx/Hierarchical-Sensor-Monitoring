@@ -16,6 +16,9 @@ namespace HSMServer.Model.TreeViewModels
     {
         public string Id { get; }
 
+        public override bool HasData =>
+            Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
+
         public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();

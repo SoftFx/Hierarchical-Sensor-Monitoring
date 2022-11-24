@@ -6,7 +6,7 @@ namespace HSMServer.Extensions
     public static class NodeExtensions
     {
         private const int NodeNameMaxLength = 35;
-        private const int CellNameMaxLength = 10;
+        private const int CellNameMaxLength = 13;
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>

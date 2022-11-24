@@ -20,8 +20,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorState State { get; private set; }
 
-        public bool HasData { get; private set; }
-
         public string ShortStringValue { get; private set; }
 
         public string FileNameString { get; private set; }

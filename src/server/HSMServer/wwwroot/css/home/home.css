@@ -94,6 +94,7 @@
     text-align: center;
     border-radius: 0.25rem;
     white-space: nowrap;
+    font-size: smaller;
 }
 
 .clickable-node {
