@@ -27,3 +27,7 @@
 
 * Nuget package has been updated to v.2.1.42
 * Unknown sensor status using has been removed
+
+# HSM Cpp Wrapper
+
+* Unknown status has been replaced by OffTime status
