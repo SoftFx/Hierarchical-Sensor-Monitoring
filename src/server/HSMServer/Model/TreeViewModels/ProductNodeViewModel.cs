@@ -16,6 +16,9 @@ namespace HSMServer.Model.TreeViewModels
     {
         public string Id { get; }
 
+        public override bool HasData =>
+            Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
+
         public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
@@ -101,7 +104,6 @@ namespace HSMServer.Model.TreeViewModels
 
             ModifyUpdateTime();
             ModifyStatus();
-            ModifyHasData();
         }
 
         private void ModifyUpdateTime()
@@ -119,8 +121,5 @@ namespace HSMServer.Model.TreeViewModels
 
             Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
-
-        private void ModifyHasData() =>
-            HasData = Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
     }
 }
