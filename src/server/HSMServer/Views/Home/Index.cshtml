@@ -168,7 +168,7 @@
         $('#value_' + id).empty().append(dataObject.value);
 
         $('#validation_' + id).empty();
-        if (dataObject.isValidationErrorVisible == true) {
+        if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
         }
     }
