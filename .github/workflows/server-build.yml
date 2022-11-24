@@ -35,8 +35,8 @@ jobs:
     - name: Build Solution
       run: dotnet build ${{ env.SolutionPath }} -c Release --no-restore
 
-    - name: Test Solution
-      run: dotnet test ${{ env.SolutionPath }}
+    # - name: Test Solution
+    #   run: dotnet test ${{ env.SolutionPath }}
 
     - name: Build HSMServer
       run: dotnet build ${{ env.ServerPath }} -c Release -o ${{ env.OUTPUT_FOLDER }}
