@@ -20,7 +20,7 @@
                                 @if (Model is SensorNodeViewModel sensor)
                                 {
                                     <span id='validation_@nodeId'>
-                                        @if (!string.IsNullOrEmpty(sensor.ValidationError))
+                                        @if (sensor.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@nodeId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@sensor.ValidationError'></li>
                                         }

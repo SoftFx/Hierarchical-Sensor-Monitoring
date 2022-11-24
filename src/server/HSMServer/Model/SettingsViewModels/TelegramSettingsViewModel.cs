@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model
 {
@@ -32,7 +33,7 @@ namespace HSMServer.Model
         internal void Update(TelegramSettings settings)
         {
             EnableMessages = settings.MessagesAreEnabled;
-            MinStatusLevel = settings.MessagesMinStatus;
+            MinStatusLevel = settings.MessagesMinStatus.ToClient();
             MessagesDelay = settings.MessagesDelay;
 
             Chats.Clear();
@@ -43,7 +44,7 @@ namespace HSMServer.Model
         internal TelegramMessagesSettingsUpdate GetUpdateModel() =>
             new()
             {
-                MinStatus = MinStatusLevel,
+                MinStatus = MinStatusLevel.ToCore(),
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };

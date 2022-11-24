@@ -1,5 +1,7 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
+using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model.History
 {
@@ -29,7 +31,7 @@ namespace HSMServer.Model.History
             {
                 Value = value.Value.ToString(),
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.ToClient(),
                 Comment = value.Comment,
             };
 
@@ -41,7 +43,7 @@ namespace HSMServer.Model.History
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
                 Time = value.Time,
-                Status = value.Status,
+                Status = value.Status.ToClient(),
                 Comment = value.Comment,
             };
     }

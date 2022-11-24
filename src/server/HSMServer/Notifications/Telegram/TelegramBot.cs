@@ -3,6 +3,7 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -160,12 +161,22 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
+        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
+        {
+            var newStatus = sensor.ValidationResult;
+            var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
+
+            return entity.AreNotificationsEnabled(sensor) &&
+                   newStatus != oldStatus &&
+                   (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
+        }
+
         private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             if (IsBotRunning && AreBotMessagesEnabled)
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    if (entity.WhetherSendMessage(sensor, oldStatus))
+                    if (WhetherSendMessage(entity, sensor, oldStatus))
                         foreach (var (_, chat) in chats)
                         {
                             if (entity.Notifications.Telegram.MessagesDelay > 0)

@@ -87,9 +87,9 @@
 
 <div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
     <div>
-        <div class="d-flex">
+        <div class="d-flex my-1">
             <div class="d-flex me-auto">
-                <button id="show" type="button" class="btn btn-sm btn-secondary mt-1 ms-4">
+                <button id="show" type="button" class="btn btn-sm btn-secondary ms-4">
                     <i class="fa-solid fa-filter"></i> Filters (@(user.TreeFilter.EnabledFiltersCount))
                 </button>
 
@@ -147,7 +147,7 @@
     function updateGridCell(dataObject) {
         var id = dataObject.id;
 
-        $('#gridCell_' + id).removeClass('grid-cell-unknown grid-cell-ok grid-cell-warning grid-cell-error');
+        $('#gridCell_' + id).removeClass('grid-cell-offTime grid-cell-ok grid-cell-warning grid-cell-error');
         $('#gridCell_' + id).addClass(dataObject.gridCellColorClass);
         $('#gridCell_' + id).prop('title', dataObject.tooltip);
     }
@@ -157,7 +157,7 @@
 
         $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
-        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error');
+        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
         $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
     }
@@ -168,7 +168,7 @@
         $('#value_' + id).empty().append(dataObject.value);
 
         $('#validation_' + id).empty();
-        if (dataObject.validationError != null && dataObject.validationError != "") {
+        if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
         }
     }

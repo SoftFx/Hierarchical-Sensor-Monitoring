@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModels;
 using System;
 
 namespace HSMServer.Extensions
@@ -16,16 +15,16 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "tree-icon-ok",
                 SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
-                _ => "tree-icon-unknown",
+                _ => "tree-icon-offTime",
             };
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
-        internal static string ToCssClass(this SensorState state) =>
+        internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
             {
-                SensorState.Blocked => "blockedSensor-span",
+                Core.Model.SensorState.Blocked => "blockedSensor-span",
                 _ => string.Empty,
             };
 
@@ -35,7 +34,7 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "grid-cell-ok",
                 SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
-                _ => "grid-cell-unknown",
+                _ => "grid-cell-offTime",
             };
 
 

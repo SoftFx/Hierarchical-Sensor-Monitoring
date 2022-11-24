@@ -2,7 +2,7 @@
 {
     public sealed class GroupByStatus : UserFilterGroupBase
     {
-        protected override FilterProperty[] Properties => new[] { Ok, Warning, Error, Unknown };
+        protected override FilterProperty[] Properties => new[] { Ok, Warning, Error, OffTime };
 
         internal override FilterGroupType Type => FilterGroupType.ByStatus;
 
@@ -13,7 +13,7 @@
 
         public FilterProperty Error { get; init; } = new();
 
-        public FilterProperty Unknown { get; init; } = new();
+        public FilterProperty OffTime { get; init; } = new();
 
         public GroupByStatus() { }
 
@@ -24,7 +24,7 @@
                 SensorStatus.Ok => Ok.Value,
                 SensorStatus.Warning => Warning.Value,
                 SensorStatus.Error => Error.Value,
-                SensorStatus.Unknown => Unknown.Value,
+                SensorStatus.OffTime => OffTime.Value,
                 _ => false
             };
 

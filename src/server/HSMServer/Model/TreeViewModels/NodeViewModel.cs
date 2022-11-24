@@ -4,6 +4,15 @@ using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
+    public enum SensorStatus
+    {
+        OffTime,
+        Ok,
+        Warning,
+        Error,
+    }
+
+
     public abstract class NodeViewModel
     {
         public string EncodedId { get; }

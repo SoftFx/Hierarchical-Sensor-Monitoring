@@ -39,7 +39,7 @@
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                         title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
-                                        @if (!string.IsNullOrEmpty(Model.ValidationError))
+                                        @if (Model.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
                                         }
@@ -83,7 +83,7 @@
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
                                     <span id='validation_@sensorId'>
-                                        @if (!string.IsNullOrEmpty(Model.ValidationError))
+                                        @if (Model.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
                                         }
