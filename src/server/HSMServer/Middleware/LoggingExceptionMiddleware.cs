@@ -26,7 +26,7 @@ namespace HSMServer.Middleware
             {
                 if (context.Request.ContentLength > 10_000)
                 {
-                    using var reader = new StreamReader(context.Request.Body;
+                    using var reader = new StreamReader(context.Request.Body);
                     
                     var bodyStr = reader.ReadToEnd();
 
