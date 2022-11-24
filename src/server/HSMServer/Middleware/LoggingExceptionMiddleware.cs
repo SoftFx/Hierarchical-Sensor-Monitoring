@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using NLog;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 
@@ -21,6 +22,16 @@ namespace HSMServer.Middleware
         {
             try
             {
+                if (context.Request.ContentLength > 10_000_000)
+                {
+                    using var sw = new StreamWriter(context.Request.Body);
+
+                    using var fileStream = File.Create(Path.Combine(Environment.CurrentDirectory, "Logs", DateTime.UtcNow.ToString()));
+
+                    context.Request.Body.Seek(0, SeekOrigin.Begin);
+                    context.Request.Body.CopyTo(fileStream);
+                }
+
                 await _next(context);
             }
             catch (Exception ex)
