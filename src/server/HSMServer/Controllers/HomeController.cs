@@ -321,7 +321,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(encodedId))
                 return new();
 
-            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime());
+            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), 1000);
         }
 
         private List<BaseValue> GetAllSensorValues(string encodedId)
@@ -332,7 +332,7 @@ namespace HSMServer.Controllers
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
-            var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to);
+            var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to, 1000);
 
             return HistoryProcessorFactory.BuildProcessor().Processing(values);
         }
