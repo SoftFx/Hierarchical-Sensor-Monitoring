@@ -31,7 +31,7 @@ namespace HSMServer.Middleware
                 {
                     var request = context.Request;
 
-                    _logger.Error($"Path {request.Path}, remote port: {context.Connection.RemotePort}, content size = {request.Body.Length}");
+                    _logger.Error($"Path {request.Path}, remote port: {context.Connection.RemotePort}");
 
 
                     //var arr = new byte[1000];

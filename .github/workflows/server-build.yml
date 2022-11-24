@@ -29,11 +29,11 @@ jobs:
       with:
         dotnet-version: 6.0.x
 
-    - name: Install dependencies
-      run: dotnet restore ${{ env.SolutionPath }}
+    # - name: Install dependencies
+    #   run: dotnet restore ${{ env.SolutionPath }}
 
-    - name: Build Solution
-      run: dotnet build ${{ env.SolutionPath }} -c Release --no-restore
+    # - name: Build Solution
+    #   run: dotnet build ${{ env.SolutionPath }} -c Release --no-restore
 
     # - name: Test Solution
     #   run: dotnet test ${{ env.SolutionPath }}
