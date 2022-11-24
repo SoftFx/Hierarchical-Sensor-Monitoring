@@ -24,6 +24,8 @@ namespace HSMServer.Middleware
             {
                 if (context.Request.ContentLength > 10_000_000)
                 {
+                    context.Request.EnableBuffering();
+
                     using var sw = new StreamWriter(context.Request.Body);
 
                     using var fileStream = File.Create(Path.Combine(Environment.CurrentDirectory, "Logs", DateTime.UtcNow.ToString()));
