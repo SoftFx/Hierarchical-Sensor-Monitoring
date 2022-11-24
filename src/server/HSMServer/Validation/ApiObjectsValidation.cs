@@ -6,7 +6,7 @@ namespace HSMServer.Validation
     {
         internal static bool TryValidate(this HistoryRequest request, out string message)
         {
-            if (request.To.HasValue ^ request.Count.HasValue)
+            if (request.To.HasValue ^ request.Count.HasValue || (request.To.HasValue && request.Count == 0))
             {
                 message = string.Empty;
                 return true;

@@ -322,7 +322,7 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
-        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 1000)
+        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000)
         {
             List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
 
