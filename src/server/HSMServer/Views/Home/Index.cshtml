@@ -125,7 +125,14 @@
     initializeUserRights('@(user.IsAdmin)',
                          '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.Encode)))');
     initialize();
+    
+
+    var interval = $("#treeInterval").val() * 1000;
+    
     updateTreeTimer();
+    setTimeout(updateSelectedNodeData, interval);
+    setTimeout(updateHistory, interval);
+
 
     $("#show").click(function () {
         if (!$("#filter").is(":visible"))
@@ -183,6 +190,8 @@
 
             $('#jstree').jstree(true).settings.core.data = jHtml_treeData.html();
             $('#jstree').jstree(true).refresh(true);
+
+            setTimeout(updateTreeTimer, interval);
         });
     }
 
@@ -211,6 +220,8 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
+
+                setTimeout(updateSelectedNodeData, interval);
             });
 
         $('#updateTime').empty();
@@ -227,10 +238,7 @@
                 selectedRadio.click();
             }
         }
-    }
 
-    var interval = $("#treeInterval").val() * 1000;
-    setInterval(updateTreeTimer, interval);
-    setInterval(updateSelectedNodeData, interval);
-    setInterval(updateHistory, interval);
+        setTimeout(updateHistory, interval);
+    }
 </script>
