@@ -25,7 +25,7 @@ namespace HSMServer.Controllers
     public class HomeController : Controller
     {
         private const int DefaultRequestedCount = 40;
-        private const int MaxHistoryCount = 50000;
+        private const int MaxExportHistoryCount = 50000;
         private const int MaxUIHistoryCount = 1000;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
@@ -285,7 +285,7 @@ namespace HSMServer.Controllers
             string fileName = $"{productName}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = GetSensorValues(encodedId, fromUTC, toUTC);
+            var values = GetSensorValues(encodedId, fromUTC, toUTC, MaxExportHistoryCount);
 
             return GetExportHistory(values, type, fileName);
         }
@@ -295,7 +295,7 @@ namespace HSMServer.Controllers
             var (productName, path) = GetSensorProductAndPath(encodedId);
             string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
 
-            return GetExportHistory(GetAllTableValues(encodedId), type, fileName);
+            return GetExportHistory(GetAllTableValues(encodedId, MaxExportHistoryCount), type, fileName);
         }
 
         private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
@@ -318,7 +318,7 @@ namespace HSMServer.Controllers
             return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), count);
         }
 
-        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to, int maxCount = MaxHistoryCount)
+        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to, int maxCount)
         {
             if (string.IsNullOrEmpty(encodedId))
                 return new();
@@ -326,7 +326,7 @@ namespace HSMServer.Controllers
             return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), maxCount);
         }
 
-        private List<BaseValue> GetAllSensorValues(string encodedId, int maxCount = MaxHistoryCount)
+        private List<BaseValue> GetAllSensorValues(string encodedId, int maxCount)
         {
             if (string.IsNullOrEmpty(encodedId))
                 return new();
@@ -339,7 +339,7 @@ namespace HSMServer.Controllers
             return HistoryProcessorFactory.BuildProcessor().Processing(values);
         }
 
-        private List<BaseValue> GetAllTableValues(string encodedId, int maxCount = MaxHistoryCount) =>
+        private List<BaseValue> GetAllTableValues(string encodedId, int maxCount) =>
             GetReversedValues(GetAllSensorValues(encodedId, maxCount));
 
         private static List<BaseValue> GetReversedValues(List<BaseValue> values)
