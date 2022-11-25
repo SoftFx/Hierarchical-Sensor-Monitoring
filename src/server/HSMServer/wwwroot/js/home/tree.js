@@ -3,6 +3,8 @@ var currentUserProducts = [];
 
 var needToActivateListTab = false;
 
+var currentSelectedNodeId;
+
 
 function initializeUserRights(userIsAdmin, userProducts) {
     isCurrentUserAdmin = userIsAdmin;
@@ -58,6 +60,9 @@ function initializeActivateNodeTree() {
 }
 
 function selectNodeAjax(selectedId) {
+    if (currentSelectedNodeId == selectedId)
+        return;
+
     $.ajax({
         type: 'post',
         url: selectNode + '?Selected=' + selectedId,
@@ -85,7 +90,19 @@ function selectNodeAjax(selectedId) {
         else {
             selectNodeInfoTab("grid", selectedId);
         }
+
+        currentSelectedNodeId = selectedId;
     });
+}
+
+function getSelectedNodeId(selectedNode) {
+    let selectedNodeId = "";
+
+    if (selectedNode != undefined) {
+        selectedNodeId = selectedNode.id;
+    }
+
+    return selectedNodeId;
 }
 
 function openAccordions(accordionsId) {
