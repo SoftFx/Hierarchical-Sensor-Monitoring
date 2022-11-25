@@ -95,16 +95,6 @@ function selectNodeAjax(selectedId) {
     });
 }
 
-function getSelectedNodeId(selectedNode) {
-    let selectedNodeId = "";
-
-    if (selectedNode != undefined) {
-        selectedNodeId = selectedNode.id;
-    }
-
-    return selectedNodeId;
-}
-
 function openAccordions(accordionsId) {
     let accordions = document.querySelectorAll(accordionsId);
 

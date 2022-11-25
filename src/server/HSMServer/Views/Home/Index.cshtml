@@ -141,6 +141,16 @@
             $("#filter").css("display", "none");
     });
 
+    function getSelectedNodeId(selectedNode) {
+        let selectedNodeId = "";
+
+        if (selectedNode != undefined) {
+            selectedNodeId = selectedNode.id;
+        }
+
+        return selectedNodeId;
+    }
+
     function updateGridCell(dataObject) {
         var id = dataObject.id;
 
