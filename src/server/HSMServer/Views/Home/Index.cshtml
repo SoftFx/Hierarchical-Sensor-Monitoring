@@ -221,15 +221,26 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
-
-                initialize();
             });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
 
+    function updateHistory() {
+        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+        var selectedNodeId = getSelectedNodeId(selectedNode);
+
+        if (selectedNodeId != "" && selectedNode.children.length == 0) {
+            let selectedRadio = $('input[id$=' + selectedNodeId + ']:checked');
+            if (selectedRadio !== undefined) {
+                selectedRadio.click();
+            }
+        }
+    }
+
     var interval = $("#treeInterval").val() * 1000;
     setInterval(updateTreeTimer, interval);
     setInterval(updateSelectedNodeData, interval);
+    setInterval(updateHistory, interval);
 </script>
