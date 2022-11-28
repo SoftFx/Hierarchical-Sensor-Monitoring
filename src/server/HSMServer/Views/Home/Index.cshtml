@@ -85,7 +85,11 @@
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
-<div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1">
+<div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status">
+    <span class="sr-only">Loading...</span>
+</div>
+
+<div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1 hidden_element">
     <div>
         <div class="d-flex my-1">
             <div class="d-flex me-auto">
@@ -99,16 +103,14 @@
             </div>
         </div>
 
-        <div class="d-flex">
+        <div class="d-flex justify-content-center">
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="scrollableBlock col-auto ms-2">
-                        <div id="treeContainer">
-                            <div class="col-md-auto">
-                                <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
-                            </div>
+                        <div class="col-md-auto">
+                            <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
                         </div>
                     </div>
                 </div>
@@ -116,7 +118,17 @@
         </div>
     </div>
 
-    <div id="nodeDataPanel" class="flex-grow-1 my-1 me-1">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
+    <div class="flex-grow-1 my-1 me-1">
+        <div id="nodeDataSpinner" style="display:none">
+            <div class="d-flex justify-content-center align-items-center center_relative_spinner">
+                <div class="spinner-border normal_spinner text-secondary" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="nodeDataPanel" class="hidden_element">"@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
+    </div>
 </div>
 
 
@@ -202,6 +214,9 @@
             $('#jstree').jstree(true).refresh(true);
 
             setTimeout(updateTreeTimer, interval);
+
+            $("#mainSpinner").css("display", "none");
+            $('#mainContainer').removeClass('hidden_element');
         });
     }
 

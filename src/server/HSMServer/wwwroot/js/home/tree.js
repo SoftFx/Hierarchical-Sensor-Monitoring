@@ -63,6 +63,12 @@ function selectNodeAjax(selectedId) {
     if (currentSelectedNodeId == selectedId)
         return;
 
+    var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+    if (selectedNode.children.length > 20 || selectedNode.children.length == 0) {
+        $("#nodeDataSpinner").css("display", "block");
+        $('#nodeDataPanel').addClass('hidden_element');
+    }
+
     $.ajax({
         type: 'post',
         url: selectNode + '?Selected=' + selectedId,
@@ -92,6 +98,9 @@ function selectNodeAjax(selectedId) {
         }
 
         currentSelectedNodeId = selectedId;
+
+        $("#nodeDataSpinner").css("display", "none");
+        $('#nodeDataPanel').removeClass('hidden_element');
     });
 }
 
