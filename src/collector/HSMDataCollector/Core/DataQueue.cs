@@ -9,8 +9,8 @@ namespace HSMDataCollector.Core
     {
         private readonly Queue<UnitedSensorValue> _valuesQueue;
         private readonly List<UnitedSensorValue> _failedList;
-        private const int MAX_VALUES_MESSAGE_CAPACITY = 10000;
-        private const int MAX_QUEUE_CAPACITY = 100000;
+        private const int MAX_VALUES_MESSAGE_CAPACITY = 1000;
+        private const int MAX_QUEUE_CAPACITY = 10000;
         private int _internalCount = 0;
         private readonly object _lockObj;
         private readonly object _listLock;
