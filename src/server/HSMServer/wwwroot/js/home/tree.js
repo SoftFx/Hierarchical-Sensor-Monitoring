@@ -63,6 +63,7 @@ function selectNodeAjax(selectedId) {
     if (currentSelectedNodeId == selectedId)
         return;
 
+    // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
     var selectedNode = $('#jstree').jstree().get_selected(true)[0];
     if (selectedNode.children.length > 20 || selectedNode.children.length == 0) {
         $("#nodeDataSpinner").css("display", "block");
