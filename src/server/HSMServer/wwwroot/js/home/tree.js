@@ -3,6 +3,8 @@ var currentUserProducts = [];
 
 var needToActivateListTab = false;
 
+var currentSelectedNodeId;
+
 
 function initializeUserRights(userIsAdmin, userProducts) {
     isCurrentUserAdmin = userIsAdmin;
@@ -58,6 +60,16 @@ function initializeActivateNodeTree() {
 }
 
 function selectNodeAjax(selectedId) {
+    if (currentSelectedNodeId == selectedId)
+        return;
+
+    // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
+    var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+    if (selectedNode.children.length > 20 || selectedNode.children.length == 0) {
+        $("#nodeDataSpinner").css("display", "block");
+        $('#nodeDataPanel').addClass('hidden_element');
+    }
+
     $.ajax({
         type: 'post',
         url: selectNode + '?Selected=' + selectedId,
@@ -85,6 +97,11 @@ function selectNodeAjax(selectedId) {
         else {
             selectNodeInfoTab("grid", selectedId);
         }
+
+        currentSelectedNodeId = selectedId;
+
+        $("#nodeDataSpinner").css("display", "none");
+        $('#nodeDataPanel').removeClass('hidden_element');
     });
 }
 

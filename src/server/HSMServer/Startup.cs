@@ -88,6 +88,8 @@ namespace HSMServer
 
             app.UseAuthentication();
             app.CountRequestStatistics();
+            app.UseMiddleware<LoggingExceptionMiddleware>();
+
             app.UseSwagger(c => c.SerializeAsV2 = true);
 
             app.UseSwaggerUI(c =>
