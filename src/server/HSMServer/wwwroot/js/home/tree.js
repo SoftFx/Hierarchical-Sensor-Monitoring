@@ -63,8 +63,11 @@ function selectNodeAjax(selectedId) {
     if (currentSelectedNodeId == selectedId)
         return;
 
+    if (currentSelectedNodeId == undefined)
+        currentSelectedNodeId = selectedId;
+
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
-    var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+    var selectedNode = $('#jstree').jstree().get_node(selectedId);
     if (selectedNode.children.length > 20 || selectedNode.children.length == 0) {
         $("#nodeDataSpinner").css("display", "block");
         $('#nodeDataPanel').addClass('hidden_element');
