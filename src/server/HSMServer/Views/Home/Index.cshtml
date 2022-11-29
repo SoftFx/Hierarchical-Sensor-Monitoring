@@ -188,7 +188,10 @@
         }
     }
 
+    var refreshTreeTimeoutId;
     function updateTreeTimer() {
+        clearTimeout(refreshTreeTimeoutId);
+
         $.ajax({
             type: 'POST',
             url: refreshTree,
@@ -209,14 +212,17 @@
             $('#jstree').jstree(true).settings.core.data = jHtml_treeData.html();
             $('#jstree').jstree(true).refresh(true);
 
-            setTimeout(updateTreeTimer, interval);
+            refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
 
             $("#mainSpinner").css("display", "none");
             $('#mainContainer').removeClass('hidden_element');
         });
     }
 
+    var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
+        clearTimeout(updateSelectedNodeDataTimeoutId);
+
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
 
@@ -242,14 +248,17 @@
                     }
                 }
 
-                setTimeout(updateSelectedNodeData, interval);
+                updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
             });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
 
+    var updateHistoryTimeoutId;
     function updateHistory() {
+        clearTimeout(updateHistoryTimeoutId);
+
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
 
@@ -260,6 +269,6 @@
             }
         }
 
-        setTimeout(updateHistory, interval);
+        updateHistoryTimeoutId = setTimeout(updateHistory, interval);
     }
 </script>
