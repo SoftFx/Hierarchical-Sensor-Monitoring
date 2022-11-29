@@ -3,7 +3,7 @@ var currentUserProducts = [];
 
 var needToActivateListTab = false;
 
-var currentSelectedNodeId;
+var currentSelectedNodeId = "";
 
 
 function initializeUserRights(userIsAdmin, userProducts) {
@@ -63,8 +63,7 @@ function selectNodeAjax(selectedId) {
     if (currentSelectedNodeId == selectedId)
         return;
 
-    if (currentSelectedNodeId == undefined)
-        currentSelectedNodeId = selectedId;
+    currentSelectedNodeId = selectedId;
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
     var selectedNode = $('#jstree').jstree().get_node(selectedId);
@@ -100,8 +99,6 @@ function selectNodeAjax(selectedId) {
         else {
             selectNodeInfoTab("grid", selectedId);
         }
-
-        currentSelectedNodeId = selectedId;
 
         $("#nodeDataSpinner").css("display", "none");
         $('#nodeDataPanel').removeClass('hidden_element');
