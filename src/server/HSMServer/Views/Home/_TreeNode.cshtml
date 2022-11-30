@@ -12,7 +12,31 @@
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status", "time" : "@data.UpdateTime"}'>
-    <span>@Html.Raw(data.Name.GetShortNodeName()) </span>
+    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.GetSensorsCountString()</span>
+
+    @if (!isEmptyProduct)
+    {
+        @if (Model.IsAllNotificationsIgnored)
+        {
+            <span>
+                <i id="@(data.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+            </span>
+        }
+        else if (Model.IsAnyNotificationsEnabled)
+        {
+            <span>
+                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+                <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none' />
+            </span>
+        }
+            
+        @if (data.HasGroupNotifications)
+        {
+            <span>
+                <i class="fa-solid fa-people-group"></i>
+            </span>
+        }
+    }
 
     @if (Model.Nodes != null)
         @foreach (var child in Model.Nodes)
@@ -43,33 +67,5 @@
                 </li>
             }
         </ul>
-    }
-     
-    @*Touch this span with inline text carefully!*@
-    @*Span with class 'nodeSensorsCount-span' is using for removing <li> with 0 visible sensors after refreshing tree (text in this span must be inline)*@
-    <span class="nodeSensorsCount-span">@Model.GetSensorsCountString()</span>
-
-    @if (!isEmptyProduct)
-    {
-        @if (Model.IsAllNotificationsIgnored)
-        {
-            <span>
-                <i id="@(data.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
-            </span>
-        }
-        else if (Model.IsAnyNotificationsEnabled)
-        {
-            <span>
-                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-                <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none' />
-            </span>
-        }
-            
-        @if (data.HasGroupNotifications)
-        {
-            <span>
-                <i class="fa-solid fa-people-group"></i>
-            </span>
-        }
     }
 </li>

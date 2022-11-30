@@ -37,6 +37,21 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
+        public List<TreeNodeStateViewModel> GetFilteredTree(User user)
+        {
+            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+
+            foreach (var (_, product) in Nodes)
+                if (product.Parent == null)
+                {
+                    var filteredNode = FilterNodes(user, product);
+                    if (filteredNode.FilteredSensorsCount > 0 || (product.AllSensorsCount == 0 && user.IsEmptyProductVisible(product)))
+                        tree.Add(filteredNode);
+                }
+
+            return tree;
+        }
+
         internal void RecalculateNodesCharacteristics()
         {
             foreach (var (_, node) in Nodes)
@@ -68,20 +83,6 @@ namespace HSMServer.Model.TreeViewModels
             }
 
             return sensors;
-        }
-
-        public List<TreeNodeStateViewModel> GetFilteredTree(User user)
-        {
-            var tree = new List<TreeNodeStateViewModel>(1 << 4);
-            foreach (var (_, product) in Nodes)
-                if (product.Parent == null)
-                {
-                    var filteredNode = FilterNodes(user, product);
-                    if (filteredNode.FilteredSensorsCount > 0 || (product.AllSensorsCount == 0 && user.IsEmptyProductVisible(product)))
-                        tree.Add(filteredNode);
-                }
-
-            return tree;
         }
 
         private static TreeNodeStateViewModel FilterNodes(User user, ProductNodeViewModel node)
