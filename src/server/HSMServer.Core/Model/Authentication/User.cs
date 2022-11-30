@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.UserFilters;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -28,9 +27,6 @@ namespace HSMServer.Core.Model.Authentication
         public UserNotificationSettings Notifications { get; internal set; }
 
         public TreeUserFilter TreeFilter { get; set; }
-
-
-        public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
 
 
         string INotificatable.Id => Id.ToString();
@@ -128,13 +124,5 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<string> GetManagerProducts() =>
             ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
-
-        public void InitNodeStates(string nodeId)
-        {
-            if (!NodeStates.ContainsKey(nodeId))
-                NodeStates.TryAdd(nodeId, new NodeStateViewModel());
-
-            NodeStates[nodeId].Reset();
-        }
     }
 }
