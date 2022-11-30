@@ -1,7 +1,10 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -65,6 +68,48 @@ namespace HSMServer.Model.TreeViewModels
             }
 
             return sensors;
+        }
+
+        public List<TreeNodeStateViewModel> GetFilteredTree(User user)
+        {
+            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+            foreach (var (_, product) in Nodes)
+                if (product.Parent == null)
+                {
+                    var filteredNode = FilterNodes(user, product);
+                    if (filteredNode.FilteredSensorsCount > 0 || (product.AllSensorsCount == 0 && user.IsEmptyProductVisible(product)))
+                        tree.Add(filteredNode);
+                }
+
+            return tree;
+        }
+
+        private static TreeNodeStateViewModel FilterNodes(User user, ProductNodeViewModel node)
+        {
+            var filteredNode = new TreeNodeStateViewModel() { Data = node.TreeProduct };
+
+            foreach (var (_, childNode) in node.Nodes)
+            {
+                var filteredChild = FilterNodes(user, childNode);
+                filteredNode.AddChildState(filteredChild);
+
+                if (filteredNode.FilteredSensorsCount > 0 || (childNode.AllSensorsCount == 0 && user.IsEmptyProductVisible(childNode)))
+                    filteredNode.Nodes.Add(filteredChild);
+            }
+
+            foreach (var (_, sensor) in node.Sensors)
+            {
+                var isSensorVisible = user.IsSensorVisible(sensor);
+
+                filteredNode.ChangeSensorsCount(isSensorVisible ? 1 : 0);
+                filteredNode.ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
+                filteredNode.ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
+
+                if (isSensorVisible)
+                    filteredNode.Sensors.Add(sensor.TreeSensor);
+            }
+
+            return filteredNode;
         }
 
         private void BuildTree()

@@ -74,7 +74,7 @@ namespace HSMServer.Controllers
         {
             _treeViewModel.RecalculateNodesCharacteristics();
 
-            return PartialView("_Tree", _treeViewModel);
+            return PartialView("_Tree", _treeViewModel.GetFilteredTree(HttpContext.User as User));
         }
 
         [HttpPost]

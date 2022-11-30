@@ -29,12 +29,16 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
+        internal TreeProductViewModel TreeProduct { get; private set; }
+
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
             Product = model.RootProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
+
+            TreeProduct = new(EncodedId);
 
             Update(model);
         }
@@ -43,21 +47,13 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
-        public string GetSensorsCountString(NodeStateViewModel nodeState)
-        {
-            var sensorsCount = nodeState.FilteredSensorsCount == AllSensorsCount
-                ? $"{AllSensorsCount}"
-                : $"{nodeState.FilteredSensorsCount}/{AllSensorsCount}";
-
-            return $"({sensorsCount} sensors)";
-        }
-
 
         internal void Update(ProductModel model)
         {
             base.Update(model);
 
             TelegramSettings.Update(model.Notifications.Telegram);
+            TreeProduct.Update(this);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -104,6 +100,8 @@ namespace HSMServer.Model.TreeViewModels
 
             ModifyUpdateTime();
             ModifyStatus();
+
+            TreeProduct.Update(this);
         }
 
         private void ModifyUpdateTime()

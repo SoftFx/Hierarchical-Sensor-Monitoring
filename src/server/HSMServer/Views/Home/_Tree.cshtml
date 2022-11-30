@@ -1,10 +1,11 @@
-﻿@using HSMServer.Core.Model.Authentication
+﻿@using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Model.Authentication
 
-@model HSMServer.Model.TreeViewModels.TreeViewModel
+@model List<TreeNodeStateViewModel>
 
 
 <ul>
-    @foreach (var (nodeId, node) in Model.Nodes)
-        @if (node.Parent == null && (User as User).IsProductAvailable(nodeId))
-            @await Html.PartialAsync("_TreeNode", node)
+    @foreach (var product in Model)
+        @if ((User as User).IsProductAvailable((product.Data as TreeProductViewModel).Id))
+            @await Html.PartialAsync("_TreeNode", product)
 </ul>
