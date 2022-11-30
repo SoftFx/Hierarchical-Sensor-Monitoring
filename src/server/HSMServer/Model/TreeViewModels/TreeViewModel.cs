@@ -4,7 +4,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
-using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
