@@ -55,7 +55,9 @@ function initializeTree() {
 
 function initializeActivateNodeTree() {
     $('#jstree').on('activate_node.jstree', function (e, data) {
-        selectNodeAjax(data.node.id)
+        if (data.node.id != undefined) {
+            selectNodeAjax(data.node.id);
+        }
     });
 }
 
@@ -67,7 +69,7 @@ function selectNodeAjax(selectedId) {
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
     var selectedNode = $('#jstree').jstree().get_node(selectedId);
-    if (selectedNode.children.length > 20 || selectedNode.children.length == 0) {
+    if (!selectedNode || selectedNode.children.length > 20 || selectedNode.children.length == 0) {
         $("#nodeDataSpinner").css("display", "block");
         $('#nodeDataPanel').addClass('hidden_element');
     }
@@ -126,6 +128,10 @@ function activateNode(currentNodeId, nodeIdToActivate) {
     needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
+
+    if (currentSelectedNodeId != nodeIdToActivate) {
+        selectNodeAjax(nodeIdToActivate);
+    }
 }
 
 function timeSorting(a, b) {
