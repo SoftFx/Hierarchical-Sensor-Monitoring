@@ -38,14 +38,28 @@ namespace HSMServer.Model.TreeViewModels
 
         public List<TreeNodeStateViewModel> GetUserTree(User user)
         {
+            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
+            {
+                var node = new TreeNodeStateViewModel(product);
+
+                foreach (var (_, childNode) in product.Nodes)
+                    node.AddChild(FilterNodes(childNode), user);
+
+                foreach (var (_, sensor) in product.Sensors)
+                    node.AddChild(sensor, user);
+
+                return node;
+            }
+
+
             var tree = new List<TreeNodeStateViewModel>(1 << 4);
 
             foreach (var (_, product) in Nodes)
                 if (product.Parent == null && user.IsProductAvailable(product.Id))
                 {
-                    var filteredNode = FilterNodes(user, product);
-                    if (filteredNode.FilteredSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                        tree.Add(filteredNode);
+                    var node = FilterNodes(product);
+                    if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
+                        tree.Add(node);
                 }
 
             return tree;
@@ -82,25 +96,6 @@ namespace HSMServer.Model.TreeViewModels
             }
 
             return sensors;
-        }
-
-        private static TreeNodeStateViewModel FilterNodes(User user, ProductNodeViewModel node)
-        {
-            var filteredNode = new TreeNodeStateViewModel(node);
-
-            foreach (var (_, childNode) in node.Nodes)
-            {
-                var filteredChild = FilterNodes(user, childNode);
-                filteredNode.AddChildState(filteredChild);
-
-                if (filteredNode.FilteredSensorsCount > 0 || user.IsEmptyProductVisible(childNode))
-                    filteredNode.Nodes.Add(filteredChild);
-            }
-
-            foreach (var (_, sensor) in node.Sensors)
-                filteredNode.AddSensorState(user, sensor);
-
-            return filteredNode;
         }
 
         private void BuildTree()

@@ -18,15 +18,15 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsAllNotificationsIgnored { get; private set; } = true;
 
-        public int FilteredSensorsCount { get; private set; }
+        public int VisibleSensorsCount { get; private set; }
 
         public string SensorsCountString
         {
             get
             {
-                var sensorsCount = FilteredSensorsCount == Data.AllSensorsCount
+                var sensorsCount = VisibleSensorsCount == Data.AllSensorsCount
                     ? $"{Data.AllSensorsCount}"
-                    : $"{FilteredSensorsCount}/{Data.AllSensorsCount}";
+                    : $"{VisibleSensorsCount}/{Data.AllSensorsCount}";
 
                 return $"({sensorsCount} sensors)";
             }
@@ -39,35 +39,36 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void AddSensorState(User user, SensorNodeViewModel sensor)
+        internal void AddChild(SensorNodeViewModel sensor, User user)
         {
-            var isSensorVisible = user.IsSensorVisible(sensor);
-
-            ChangeSensorsCount(isSensorVisible ? 1 : 0);
             ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
 
-            if (isSensorVisible)
+            if (user.IsSensorVisible(sensor))
+            {
+                VisibleSensorsCount++;
                 Sensors.Add(sensor);
+            }
         }
 
-        internal void AddChildState(TreeNodeStateViewModel childState)
+        internal void AddChild(TreeNodeStateViewModel node, User user)
         {
-            ChangeSensorsCount(childState.FilteredSensorsCount);
-            ChangeEnableState(childState.IsAnyNotificationsEnabled);
-            ChangeIgnoreState(childState.IsAllNotificationsIgnored);
+            ChangeEnableState(node.IsAnyNotificationsEnabled);
+            ChangeIgnoreState(node.IsAllNotificationsIgnored);
+
+            VisibleSensorsCount += node.VisibleSensorsCount;
+
+            if (VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
+                Nodes.Add(node);
         }
 
-        private void ChangeEnableState(bool isNotificationsEnabled)
+        private void ChangeEnableState(bool isEnabled)
         {
-            IsAnyNotificationsEnabled |= isNotificationsEnabled;
-            IsAllNotificationsEnabled &= isNotificationsEnabled;
+            IsAnyNotificationsEnabled |= isEnabled;
+            IsAllNotificationsEnabled &= isEnabled;
         }
 
-        private void ChangeIgnoreState(bool isNotificationsIgnored) =>
-            IsAllNotificationsIgnored &= isNotificationsIgnored;
-
-        private void ChangeSensorsCount(int visibleSensors) =>
-            FilteredSensorsCount += visibleSensors;
+        private void ChangeIgnoreState(bool isIgnored) =>
+            IsAllNotificationsIgnored &= isIgnored;
     }
 }
