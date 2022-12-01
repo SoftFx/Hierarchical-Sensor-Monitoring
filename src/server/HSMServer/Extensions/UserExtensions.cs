@@ -37,6 +37,9 @@ namespace HSMServer.Extensions
 
         public static bool IsEmptyProductVisible(this User user, ProductNodeViewModel product)
         {
+            if (!product.IsEmpty)
+                return false;
+
             var filter = user.TreeFilter;
             var filterMask = filter.ToMask();
 
