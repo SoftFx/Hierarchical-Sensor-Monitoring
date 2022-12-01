@@ -1,5 +1,7 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
+@using HSMServer.Core.Helpers
+@using HSMServer.Core.Model.Authentication
 @using HSMServer.HtmlHelpers
 @model List<ProductViewModel>
 
@@ -15,8 +17,8 @@
 
 <div class="container">
     <div class="row justify-content-center">
-        @ViewHelper.CreateProductList(Context.User, Model)
-
+        @await Html.PartialAsync("ProductList", Model);
+        
         <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
         if (errorText !== undefined) {
