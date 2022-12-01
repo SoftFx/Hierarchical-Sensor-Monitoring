@@ -1,5 +1,8 @@
-﻿@using HSMServer.Model.ViewModel
+﻿@using System.Drawing.Printing
+@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
+@using HSMServer.Core.Helpers
+@using HSMServer.Core.Model.Authentication
 @using HSMServer.HtmlHelpers
 @model List<UserViewModel>
 
@@ -18,8 +21,101 @@
         {
             <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
-
-        @ViewHelper.CreateUserList(Context.User, Model, TempData[TextConstants.TempDataProductsText])
+        <div style='margin: 10px'>
+            <div class='row justify-content-start'>
+                <div class='col-2'>
+                    <h5 style='margin: 10px 20px 10px;'>Users</h5>
+                </div>
+            </div>
+        </div>
+        <div class='col-xxl'>
+            <table class='table table-striped'>
+                <thead>
+                <tr>
+                <th scope='col'>#</th>
+                <th scope='col'>Username</th>
+                <th scope='col'>Password</th>
+                <th dcope='col'>IsAdmin</th>
+                <th scope='col'>Products</th>
+                <th scope='col'>Action</th>
+                <tbody>
+                @if (Model is {Count: > 0 })
+                {
+                    <tr>
+                        <th>0</th>
+                        <th>
+                            <input id='createName' type='text' class='form-control'/>
+                        </th>
+                        <th>
+                            <input id='createPassword' type='password' class='form-control'/>
+                        </th>
+                        <th>
+                            <input id='createIsAdmin' type='checkbox' class='form-check-input' style='margin-left: 0px'/>
+                        </th>
+                        <th>---</th>
+                        <th>
+                            <button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>
+                                <i class='fas fa-plus'></i>
+                            </button>
+                        </th>
+                    </tr>
+                    int index = 1;
+                    foreach (var userItem in Model)
+                    {
+                        <tr>
+                            <th scope='row'>@index</th>
+                            <td>@userItem.Username</td>
+                            <td>**************</td>
+                            <td>
+                                <input id='isAdmin_@userItem.Username' @(userItem.IsAdmin ? "checked" : "") type='checkbox' class='form-check-input'
+                                       disabled value='@userItem.IsAdmin' style='margin-left: 0px'/>
+                            </td>
+                            <td>
+                                @{
+                                    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<string, string>;
+                                    if (userItem.ProductsRoles == null || !userItem.ProductsRoles.Any())
+                                    {
+                                        <span>---</span>
+                                    }
+                                    else
+                                    {
+                                        foreach (var right in userItem.ProductsRoles)
+                                        {
+                                            var name = products?.FirstOrDefault(p => p.Key.Equals(right.Key)).Value;
+                                            <span>@(name ?? right.Key) (@right.Key)</span>
+                                            <br>
+                                        }
+                                    }
+                                }
+                            </td>
+                            <td style='width: 25%'>
+                                @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+                                {
+                                    <button style='margin-left: 5px' id='delete_@userItem.Username'
+                                            type='button' class='btn btn-secondary' title='delete'>
+                                        <i class='fas fa-trash-alt'></i>
+                                    </button>
+                                }
+                                <button style='margin-left: 5px' id='change_@userItem.Username'
+                                        type='button' class='btn btn-secondary' title='change'>
+                                    <i class='fas fa-user-edit'></i>
+                                </button>
+                                <button disabled style='margin-left: 5px' id='ok_@userItem.Username'
+                                        type='button' class='btn btn-secondary' title='ok'>
+                                    <i class='fas fa-check'></i>
+                                </button>
+                                <button disabled style='margin-left: 5px' id='cancel_{userItem.Username}'
+                                        type='button' class='btn btn-secondary' title='cancel'>
+                                    <i class='fas fa-times'></i>
+                                </button>
+                            </td>
+                        </tr>
+                        index++;
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
