@@ -35,14 +35,10 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsValidationErrorVisible =>
             !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
 
-        internal TreeSensorViewModel TreeSensor { get; private set; }
-
 
         public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
         {
             Id = model.Id;
-
-            TreeSensor = new(EncodedId);
 
             Update(model);
         }
@@ -68,8 +64,6 @@ namespace HSMServer.Model.TreeViewModels
 
             IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
-
-            TreeSensor.Update(this);
         }
 
         private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.String;

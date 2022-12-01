@@ -1,15 +1,15 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Core.Model.Authentication
 
-@model HSMServer.Model.TreeViewModels.TreeSensorViewModel
+@model HSMServer.Model.TreeViewModels.SensorNodeViewModel
 
 @{
     var userNotifications = (User as User).Notifications;
 }
 
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status", "time" : "@Model.UpdateTime"}'>
-    <span class="@Model.StateCssClass">@Html.Raw(Model.Name.GetShortNodeName())</span>
+<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
+    <span class="@Model.State.ToCssClass()">@Html.Raw(Model.Name.GetShortNodeName())</span>
 
     @if (userNotifications.IsSensorIgnored(Model.Id))
     {

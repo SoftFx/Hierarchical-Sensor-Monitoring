@@ -86,7 +86,7 @@ namespace HSMServer.Model.TreeViewModels
 
         private static TreeNodeStateViewModel FilterNodes(User user, ProductNodeViewModel node)
         {
-            var filteredNode = new TreeNodeStateViewModel() { Data = node.TreeProduct };
+            var filteredNode = new TreeNodeStateViewModel(node);
 
             foreach (var (_, childNode) in node.Nodes)
             {
@@ -106,7 +106,7 @@ namespace HSMServer.Model.TreeViewModels
                 filteredNode.ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
 
                 if (isSensorVisible)
-                    filteredNode.Sensors.Add(sensor.TreeSensor);
+                    filteredNode.Sensors.Add(sensor);
             }
 
             return filteredNode;

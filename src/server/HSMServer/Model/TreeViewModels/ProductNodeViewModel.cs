@@ -29,16 +29,12 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
-        internal TreeProductViewModel TreeProduct { get; private set; }
-
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
             Product = model.RootProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
-
-            TreeProduct = new(EncodedId);
 
             Update(model);
         }
@@ -53,7 +49,6 @@ namespace HSMServer.Model.TreeViewModels
             base.Update(model);
 
             TelegramSettings.Update(model.Notifications.Telegram);
-            TreeProduct.Update(this);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -100,8 +95,6 @@ namespace HSMServer.Model.TreeViewModels
 
             ModifyUpdateTime();
             ModifyStatus();
-
-            TreeProduct.Update(this);
         }
 
         private void ModifyUpdateTime()

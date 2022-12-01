@@ -6,6 +6,6 @@
 
 <ul>
     @foreach (var product in Model)
-        @if ((User as User).IsProductAvailable((product.Data as TreeProductViewModel).Id))
+        @if ((User as User).IsProductAvailable(product.Data.Id))
             @await Html.PartialAsync("_TreeNode", product)
 </ul>

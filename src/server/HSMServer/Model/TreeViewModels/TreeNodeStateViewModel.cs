@@ -6,29 +6,34 @@ namespace HSMServer.Model.TreeViewModels
     {
         public List<TreeNodeStateViewModel> Nodes { get; } = new(1 << 4);
 
-        public List<TreeSensorViewModel> Sensors { get; } = new(1 << 4);
+        public List<SensorNodeViewModel> Sensors { get; } = new(1 << 4);
 
-        public TreeProductViewModel Data { get; init; }
+        public ProductNodeViewModel Data { get; }
 
         public bool IsAnyNotificationsEnabled { get; private set; }
 
-        public bool IsAllNotificationsEnabled { get; private set; }
+        public bool IsAllNotificationsEnabled { get; private set; } = true;
 
-        public bool IsAllNotificationsIgnored { get; private set; }
+        public bool IsAllNotificationsIgnored { get; private set; } = true;
 
         public int FilteredSensorsCount { get; private set; }
 
-
-        public TreeNodeStateViewModel() => Reset();
-
-
-        public string GetSensorsCountString()
+        public string SensorsCountString
         {
-            var sensorsCount = FilteredSensorsCount == Data.AllSensorsCount
-                ? $"{Data.AllSensorsCount}"
-                : $"{FilteredSensorsCount}/{Data.AllSensorsCount}";
+            get
+            {
+                var sensorsCount = FilteredSensorsCount == Data.AllSensorsCount
+                    ? $"{Data.AllSensorsCount}"
+                    : $"{FilteredSensorsCount}/{Data.AllSensorsCount}";
 
-            return $"({sensorsCount} sensors)";
+                return $"({sensorsCount} sensors)";
+            }
+        }
+
+
+        internal TreeNodeStateViewModel(ProductNodeViewModel data)
+        {
+            Data = data;
         }
 
 
@@ -49,15 +54,6 @@ namespace HSMServer.Model.TreeViewModels
             ChangeSensorsCount(childState.FilteredSensorsCount);
             ChangeEnableState(childState.IsAnyNotificationsEnabled);
             ChangeIgnoreState(childState.IsAllNotificationsIgnored);
-        }
-
-        internal void Reset()
-        {
-            IsAnyNotificationsEnabled = false;
-            IsAllNotificationsEnabled = true;
-            IsAllNotificationsIgnored = true;
-
-            FilteredSensorsCount = 0;
         }
     }
 }

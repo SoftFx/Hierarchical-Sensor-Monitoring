@@ -8,8 +8,8 @@
 }
 
 
-<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status", "time" : "@data.UpdateTime"}'>
-    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.GetSensorsCountString()</span>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
+    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
     @if (!isEmptyProduct)
     {
@@ -28,7 +28,7 @@
         }
     }
 
-    @if (data.HasGroupNotifications)
+    @if (data.TelegramSettings.Chats.Count > 0)
     {
         <span>
             <i class="fa-solid fa-people-group"></i>
