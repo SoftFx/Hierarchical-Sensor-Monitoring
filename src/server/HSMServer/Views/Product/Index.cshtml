@@ -17,7 +17,7 @@
 
 <div class="container">
     <div class="row justify-content-center">
-        @await Html.PartialAsync("ProductList", Model);
+        @await Html.PartialAsync("ProductList", Model)
         
         <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
