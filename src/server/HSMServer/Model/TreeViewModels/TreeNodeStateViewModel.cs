@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using HSMServer.Core.Model.Authentication;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -37,23 +38,30 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public void ChangeEnableState(bool isNotificationsEnabled)
+        internal void AddSensorState(User user, SensorNodeViewModel sensor, bool isSensorVisible)
         {
-            IsAnyNotificationsEnabled |= isNotificationsEnabled;
-            IsAllNotificationsEnabled &= isNotificationsEnabled;
+            ChangeSensorsCount(isSensorVisible ? 1 : 0);
+            ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
+            ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
         }
 
-        public void ChangeIgnoreState(bool isNotificationsIgnored) =>
-            IsAllNotificationsIgnored &= isNotificationsIgnored;
-
-        public void ChangeSensorsCount(int visibleSensors) =>
-            FilteredSensorsCount += visibleSensors;
-
-        public void AddChildState(TreeNodeStateViewModel childState)
+        internal void AddChildState(TreeNodeStateViewModel childState)
         {
             ChangeSensorsCount(childState.FilteredSensorsCount);
             ChangeEnableState(childState.IsAnyNotificationsEnabled);
             ChangeIgnoreState(childState.IsAllNotificationsIgnored);
         }
+
+        private void ChangeEnableState(bool isNotificationsEnabled)
+        {
+            IsAnyNotificationsEnabled |= isNotificationsEnabled;
+            IsAllNotificationsEnabled &= isNotificationsEnabled;
+        }
+
+        private void ChangeIgnoreState(bool isNotificationsIgnored) =>
+            IsAllNotificationsIgnored &= isNotificationsIgnored;
+
+        private void ChangeSensorsCount(int visibleSensors) =>
+            FilteredSensorsCount += visibleSensors;
     }
 }

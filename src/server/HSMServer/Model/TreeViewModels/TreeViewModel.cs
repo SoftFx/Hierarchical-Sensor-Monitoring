@@ -36,12 +36,12 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public List<TreeNodeStateViewModel> GetFilteredTree(User user)
+        public List<TreeNodeStateViewModel> GetUserTree(User user)
         {
             var tree = new List<TreeNodeStateViewModel>(1 << 4);
 
             foreach (var (_, product) in Nodes)
-                if (product.Parent == null)
+                if (product.Parent == null && user.IsProductAvailable(product.Id))
                 {
                     var filteredNode = FilterNodes(user, product);
                     if (filteredNode.FilteredSensorsCount > 0 || (product.AllSensorsCount == 0 && user.IsEmptyProductVisible(product)))
@@ -101,9 +101,7 @@ namespace HSMServer.Model.TreeViewModels
             {
                 var isSensorVisible = user.IsSensorVisible(sensor);
 
-                filteredNode.ChangeSensorsCount(isSensorVisible ? 1 : 0);
-                filteredNode.ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
-                filteredNode.ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
+                filteredNode.AddSensorState(user, sensor, isSensorVisible);
 
                 if (isSensorVisible)
                     filteredNode.Sensors.Add(sensor);
