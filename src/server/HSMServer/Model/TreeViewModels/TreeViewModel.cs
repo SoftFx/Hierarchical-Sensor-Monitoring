@@ -44,7 +44,7 @@ namespace HSMServer.Model.TreeViewModels
                 if (product.Parent == null && user.IsProductAvailable(product.Id))
                 {
                     var filteredNode = FilterNodes(user, product);
-                    if (filteredNode.FilteredSensorsCount > 0 || (product.AllSensorsCount == 0 && user.IsEmptyProductVisible(product)))
+                    if (filteredNode.FilteredSensorsCount > 0 || (product.IsEmpty && user.IsEmptyProductVisible(product)))
                         tree.Add(filteredNode);
                 }
 
@@ -93,19 +93,12 @@ namespace HSMServer.Model.TreeViewModels
                 var filteredChild = FilterNodes(user, childNode);
                 filteredNode.AddChildState(filteredChild);
 
-                if (filteredNode.FilteredSensorsCount > 0 || (childNode.AllSensorsCount == 0 && user.IsEmptyProductVisible(childNode)))
+                if (filteredNode.FilteredSensorsCount > 0 || (childNode.IsEmpty && user.IsEmptyProductVisible(childNode)))
                     filteredNode.Nodes.Add(filteredChild);
             }
 
             foreach (var (_, sensor) in node.Sensors)
-            {
-                var isSensorVisible = user.IsSensorVisible(sensor);
-
-                filteredNode.AddSensorState(user, sensor, isSensorVisible);
-
-                if (isSensorVisible)
-                    filteredNode.Sensors.Add(sensor);
-            }
+                filteredNode.AddSensorState(user, sensor);
 
             return filteredNode;
         }

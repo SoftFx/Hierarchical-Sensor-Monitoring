@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels
@@ -38,11 +39,16 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void AddSensorState(User user, SensorNodeViewModel sensor, bool isSensorVisible)
+        internal void AddSensorState(User user, SensorNodeViewModel sensor)
         {
+            var isSensorVisible = user.IsSensorVisible(sensor);
+
             ChangeSensorsCount(isSensorVisible ? 1 : 0);
             ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
+
+            if (isSensorVisible)
+                Sensors.Add(sensor);
         }
 
         internal void AddChildState(TreeNodeStateViewModel childState)

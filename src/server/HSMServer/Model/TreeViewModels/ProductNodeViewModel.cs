@@ -29,6 +29,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
+        public bool IsEmpty => AllSensorsCount == 0;
+
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {

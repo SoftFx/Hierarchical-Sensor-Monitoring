@@ -4,14 +4,13 @@
 
 @{
     var data = Model.Data;
-    var isEmptyProduct = data.AllSensorsCount == 0;
 }
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
     <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
-    @if (!isEmptyProduct)
+    @if (!data.IsEmpty)
     {
         @if (Model.IsAllNotificationsIgnored)
         {
