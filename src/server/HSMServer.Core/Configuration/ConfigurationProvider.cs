@@ -57,7 +57,7 @@ namespace HSMServer.Core.Configuration
         }
 
         ///Use 'name' from ConfigurationConstants! 
-        public ConfigurationObject ReadOrDefaultConfigurationObject(string name)
+        public ConfigurationObject ReadOrDefault(string name)
         {
             var currentObject = _databaseCore.GetConfigurationObject(name);
             return currentObject ?? ConfigurationObject.CreateConfiguration(name,
@@ -69,7 +69,7 @@ namespace HSMServer.Core.Configuration
             List<ConfigurationObject> result = new List<ConfigurationObject>();
             foreach (var name in _configurationObjectNamesList)
             {
-                result.Add(ReadOrDefaultConfigurationObject(name));
+                result.Add(ReadOrDefault(name));
             }
 
             return result;

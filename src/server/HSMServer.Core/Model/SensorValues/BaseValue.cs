@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model
         Ok,
         Warning,
         Error,
-        Unknown = byte.MaxValue,
+        OffTime = byte.MaxValue,
     }
 
     public enum SensorType : byte

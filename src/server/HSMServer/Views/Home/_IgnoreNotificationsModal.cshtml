@@ -1,0 +1,144 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Extensions
+@using HSMServer.Model
+
+@model IgnoreNotificationsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model != null)
+{
+    <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
+        <input class="d-none" asp-for="EncodedId" />
+        <input class="d-none" asp-for="DateTimeNow" />
+
+        <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">Ignore notifications for @Model.TreeElement</h5>
+                            <h6 class="modal-title">@Model.Path</h6>
+                        </div>
+                    </div>
+
+                    <div class="modal-body">
+                        <p>Please, select how long you would like to ignore notifications</p>
+                            
+                        <partial name="_TimeIntervalSelect" for="IgnorePeriod" />
+
+                        <div class="row" id="interval_inputs">
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Days"></label>
+                                <input id="ignoreNotifications_days" class="form-control" type="number" asp-for="Days" min="0" />
+                            </div>
+
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Hours"></label>
+                                <input id="ignoreNotifications_hours" class="form-control" type="number" asp-for="Hours" min="0" max="23" />
+                            </div>
+
+                            <div class="form-group col-4">
+                                <label class="col-form-label" asp-for="Minutes"></label>
+                                <input id="ignoreNotifications_minutes" class="form-control" type="number" asp-for="Minutes" min="0" max="59" />
+                            </div>
+                        </div>
+
+                        <p id="ignoreNotifications_note" class="mt-3 mb-0" style="font-style:italic"></p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary col-2" type="submit">OK</button>
+                        <button class="btn btn-secondary col-2" type="button" onclick="hideIgnoreNotificationsModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+}
+
+
+<script>
+    calculateInputs();
+    updateNote();
+
+    $(document).on("submit", "#ignoreNotifications_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#ignoreNotifications_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            async: true
+        }).done(function () {
+            hideIgnoreNotificationsModal();
+            updateTreeTimer();
+        });
+    });
+
+    $("#ignoreNotifications_modal").on("hidden.bs.modal", function () {
+        $('#ignoreNotificatios_partial').empty();
+    });
+
+    $('#timeIntervalSelect').change(function () {
+        calculateInputs();
+        updateNote();
+    });
+
+    $('#interval_inputs :input').on('change', function () {
+        $(`#timeIntervalSelect option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
+        updateNote();
+    });
+
+    function hideIgnoreNotificationsModal() {
+        $('#ignoreNotifications_modal').modal('hide');
+    }
+
+    function calculateInputs() {
+        clearInputs();
+
+        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        let periods = selectedOptionText.split(' ');
+
+        if (periods.length % 2 != 0) {
+            return;
+        }
+
+        for (let i = 0; i < periods.length; i += 2) {
+            let value = periods[i];
+            let timeType = periods[i + 1];
+
+            if (timeType.includes("minute")) {
+                $('#ignoreNotifications_minutes').val(value);
+            }
+            else if (timeType.includes("hour")) {
+                $('#ignoreNotifications_hours').val(value);
+            }
+            else if (timeType.includes("day")) {
+                $('#ignoreNotifications_days').val(value);
+            }
+        }
+    }
+
+    function clearInputs() {
+        $('#interval_inputs :input').each(function () {
+            this.value = '0';
+        });
+    }
+
+    function updateNote() {
+        let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
+        let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
+                                           .add($('#ignoreNotifications_hours').val(), 'h')
+                                           .add($('#ignoreNotifications_days').val(), 'd');
+
+        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+        $('#ignoreNotifications_note').html(note);
+    }
+</script>

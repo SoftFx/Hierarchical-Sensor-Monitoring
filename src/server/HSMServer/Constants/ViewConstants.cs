@@ -11,6 +11,7 @@
         public const string ProductController = "Product";
         public const string ConfigurationController = "Configuration";
         public const string AccessKeysController = "AccessKeys";
+        public const string NotificationsController = "Notifications";
 
         public const string AuthenticateAction = "Authenticate";
         public const string LogoutAction = "Logout";
@@ -42,8 +43,6 @@
         public const string EditUserRoleAction = "EditUserRole";
         public const string RemoveUserRoleAction = "RemoveUserRole";
         public const string InviteAction = "Invite";
-
-        public const string NodeUpdateTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         #region Sensors history
 

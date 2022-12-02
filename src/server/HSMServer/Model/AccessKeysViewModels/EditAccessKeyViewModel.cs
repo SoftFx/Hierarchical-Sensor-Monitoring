@@ -1,5 +1,6 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -23,7 +24,7 @@ namespace HSMServer.Model.AccessKeysViewModels
     {
         public Guid Id { get; set; }
 
-        public string ExpirationTime { get; }
+        public string ExpirationTime { get; init; }
 
         public bool CloseModal { get; init; }
 
@@ -45,6 +46,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanAddSensors { get; set; }
 
+        public bool CanReadSensorData { get; set; }
+
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
 
@@ -62,12 +65,13 @@ namespace HSMServer.Model.AccessKeysViewModels
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
             CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
+            CanReadSensorData = key.Permissions.HasFlag(KeyPermissions.CanReadSensorData);
         }
 
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId.ToString(), SensorPathHelper.Decode(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, SensorPathHelper.Decode(EncodedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };
@@ -93,6 +97,8 @@ namespace HSMServer.Model.AccessKeysViewModels
                 perm |= KeyPermissions.CanAddNodes;
             if (CanAddSensors)
                 perm |= KeyPermissions.CanAddSensors;
+            if (CanReadSensorData)
+                perm |= KeyPermissions.CanReadSensorData;
 
             return perm;
         }

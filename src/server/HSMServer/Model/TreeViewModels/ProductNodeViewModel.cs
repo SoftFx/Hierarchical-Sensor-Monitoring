@@ -1,5 +1,8 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
@@ -13,7 +16,8 @@ namespace HSMServer.Model.TreeViewModels
     {
         public string Id { get; }
 
-        public string EncodedId { get; }
+        public override bool HasData =>
+            Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
         public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
 
@@ -21,30 +25,32 @@ namespace HSMServer.Model.TreeViewModels
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
-
-        public bool IsAvailableForUser { get; internal set; }
-
-        public bool IsAddingAccessKeysAvailable { get; internal set; }
+        public TelegramSettingsViewModel TelegramSettings { get; } = new();
 
         public int AllSensorsCount { get; private set; }
 
-        public int VisibleSensorsCount { get; private set; }
-
-        public int SensorsWithNotificationsCount { get; internal set; }
+        public bool IsEmpty => AllSensorsCount == 0;
 
 
-        public ProductNodeViewModel(ProductModel model)
+        public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
             Id = model.Id;
-            EncodedId = SensorPathHelper.Encode(Id);
-            Name = model.DisplayName;
+            Product = model.RootProductName;
+            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
+
+            Update(model);
         }
+
+
+        public bool IsChangingAccessKeysAvailable(User user) =>
+            user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
 
         internal void Update(ProductModel model)
         {
-            Name = model.DisplayName;
+            base.Update(model);
+
+            TelegramSettings.Update(model.Notifications.Telegram);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
@@ -62,62 +68,51 @@ namespace HSMServer.Model.TreeViewModels
         internal void AddAccessKey(AccessKeyViewModel key) =>
             AccessKeys.TryAdd(key.Id, key);
 
-        internal void Recursion()
+        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
+        internal List<AccessKeyViewModel> GetEditProductAccessKeys()
         {
-            int visibleSensorsCount = 0;
+            var accessKeys = GetAccessKeys().Select(k => k.Copy()).ToList();
+            accessKeys.ForEach(k => k.HasProductColumn = false);
+
+            return accessKeys;
+        }
+
+
+        internal void RecalculateCharacteristics()
+        {
             int allSensorsCount = 0;
 
             if (Nodes != null && !Nodes.IsEmpty)
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.Recursion();
+                    node.RecalculateCharacteristics();
 
-                    visibleSensorsCount += node.VisibleSensorsCount;
                     allSensorsCount += node.AllSensorsCount;
                 }
             }
 
-            VisibleSensorsCount = visibleSensorsCount + VisibleSensors.Count;
             AllSensorsCount = allSensorsCount + Sensors.Count;
 
             ModifyUpdateTime();
             ModifyStatus();
         }
 
-        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
-        {
-            if (Nodes != null && !Nodes.IsEmpty)
-                foreach (var (_, node) in Nodes)
-                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
-
-            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
-
-            foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
-        }
-
-        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
-
         private void ModifyUpdateTime()
         {
-            var sensorMaxTime = VisibleSensors.Count == 0 ? null : VisibleSensors?.Max(x => x.UpdateTime);
-            var nodeMaxTime = Nodes.Values.Count == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
+            var sensorMaxTime = Sensors.Values.MaxOrDefault(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.MaxOrDefault(x => x.UpdateTime);
 
-            if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
-                UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
-            else if (sensorMaxTime.HasValue)
-                UpdateTime = sensorMaxTime.Value;
-            else if (nodeMaxTime.HasValue)
-                UpdateTime = nodeMaxTime.Value;
+            UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
         }
 
         private void ModifyStatus()
         {
-            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Ok : VisibleSensors.Max(s => s.Status);
-            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
+            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
+            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
 
-            Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
+            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
     }
 }

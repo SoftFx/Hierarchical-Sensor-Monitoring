@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -29,7 +30,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
             : base(fixture, dbFixture, addTestProduct: true)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
 
             _productTransactionCount = (0, 0, 0);
             _keyTransactionCount = (0, 0, 0);

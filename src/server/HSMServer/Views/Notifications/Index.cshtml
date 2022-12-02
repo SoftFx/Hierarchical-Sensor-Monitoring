@@ -1,0 +1,73 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model;
+@using HSMServer.Model
+
+@model TelegramSettingsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Telegram";
+}
+
+<div class="container mt-3">
+    <div class="row">
+        <h4>Telegram <i class="fab fa-telegram"></i></h4>
+
+        <h5>Messages settings</h5>
+
+        <form class="mx-4 my-2" method="post" asp-action="@nameof(NotificationsController.UpdateTelegramSettings)">
+            @await Html.PartialAsync("_NotificationsSettings")
+        </form>
+
+        <div class="my-2">
+            <div class="row">
+                <h5 class="col-auto m-0">Accounts</h5>
+                @if (Model.Chats.Count == 0)
+                {
+                    <label class="col-auto p-0">(There are no authorized accounts)</label>
+                }
+            </div>
+
+            <div class="row mx-4 my-1">
+                <label class="col-auto p-0">If you want to start getting messages in telegram chat click</label>
+                <div class="col-auto">
+                    <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>
+                </div>
+            </div>
+            @if (Model.Chats.Count > 0)
+            {
+                <table class="table mx-4">
+                    <tr>
+                        <th>Username</th>
+                        <th>Authorized</th>
+                        <th style="text-align:center">Actions</th>
+                    </tr>
+                    @foreach (var chat in Model.Chats)
+                    {
+                        <tr>
+                            <td>@chat.Name</td>
+                            <td>@chat.AuthorizationTime</td>
+                            <td style="text-align:center">
+                                <div class="dropdown">
+                                    <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                                                 asp-route-chatId="@chat.ChatId">
+                                            Send test message
+                                        </a>
+                                        <a class="dropdown-item" asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                                                 asp-route-chatId="@chat.ChatId">
+                                            Remove authorization
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </table>
+            }
+        </div>
+    </div>
+</div>

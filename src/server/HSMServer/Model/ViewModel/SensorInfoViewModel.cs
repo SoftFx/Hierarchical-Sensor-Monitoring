@@ -1,21 +1,12 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Helpers;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class SensorInfoViewModel
+    public class SensorInfoViewModel : NodeInfoBaseViewModel
     {
-        public string Path { get; }
-
-        public string ProductName { get; }
-
         public SensorType SensorType { get; }
-
-        public string EncodedId { get; set; }
-
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
         public string Description { get; set; }
 
@@ -23,16 +14,12 @@ namespace HSMServer.Model.ViewModel
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
-        public SensorInfoViewModel() { }
+        public SensorInfoViewModel() : base() { }
 
-        public SensorInfoViewModel(SensorNodeViewModel sensor)
+        internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
-            EncodedId = SensorPathHelper.EncodeGuid(sensor.Id);
-            Path = $"/{sensor.Path}";
-            ProductName = sensor.Product;
             SensorType = sensor.SensorType;
 
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval;
             Description = sensor.Description;
             Unit = sensor.Unit;
         }
@@ -40,7 +27,7 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel Update(SensorUpdate updatedModel)
         {
-            ExpectedUpdateInterval = new TimeIntervalViewModel(updatedModel.ExpectedUpdateInterval);
+            ExpectedUpdateInterval = new(updatedModel.ExpectedUpdateInterval, _predefinedIntervals);
             Description = updatedModel.Description;
             Unit = updatedModel.Unit;
 

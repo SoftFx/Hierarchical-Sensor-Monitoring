@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using System;
 
@@ -35,7 +35,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 {
                     TimeInterval = TimeInterval.Custom,
                     CustomPeriod = TimeSpan.FromMinutes(10).Ticks,
-                }
+                },
+                State = SensorState.Blocked,
             };
     }
 }

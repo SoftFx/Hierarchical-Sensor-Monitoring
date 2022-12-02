@@ -11,15 +11,6 @@ namespace HSMServer.Core.Helpers
             return productsRights.FirstOrDefault(x => x.Value == ProductRoleEnum.ProductManager).Key != null;
         }
 
-        public static bool IsAvailable(string productKey,
-            List<KeyValuePair<string, ProductRoleEnum>> productsRights)
-        {
-            var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.Value.Key != null) return true;
-
-            return false;
-        }
-
         public static bool IsViewer(string productKey,
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {

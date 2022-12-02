@@ -9,6 +9,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
+using HSMServer.Helpers;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -84,16 +85,16 @@ namespace HSMServer.Controllers
 
         #region Edit Product
 
-        [ProductRoleFilterByProductId(ProductRoleEnum.ProductManager)]
-        public IActionResult EditProduct([FromQuery(Name = "Product")] string productId)
+        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
+        public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            _treeViewModel.UpdateAccessKeysCharacteristics(HttpContext.User as User);
-            _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
+            var decodedId = SensorPathHelper.Decode(encodedProductId);
+            _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
-            var users = _userManager.GetViewers(productId);
+            var users = _userManager.GetViewers(decodedId);
 
             var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
             if (users != null || users.Any())
@@ -137,7 +138,7 @@ namespace HSMServer.Controllers
             user.ProductsRoles.Remove(role);
 
             foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
-                user.Notifications.EnabledSensors.Remove(sensorId);
+                user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
         }
@@ -198,11 +199,11 @@ namespace HSMServer.Controllers
 
         private (string, string, string, string, string) GetMailConfiguration()
         {
-            var server = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPServer).Value;
-            var port = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPort).Value;
-            var login = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPLogin).Value;
-            var password = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPPassword).Value;
-            var fromEmail = _configurationProvider.ReadOrDefaultConfigurationObject(ConfigurationConstants.SMTPFromEmail).Value;
+            var server = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPServer).Value;
+            var port = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPort).Value;
+            var login = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPLogin).Value;
+            var password = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPassword).Value;
+            var fromEmail = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPFromEmail).Value;
 
             return (server, port, login, password, fromEmail);
         }

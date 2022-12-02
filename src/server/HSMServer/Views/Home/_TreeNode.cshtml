@@ -1,40 +1,49 @@
-﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
+﻿@using HSMServer.Extensions
 
-@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+@model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(Model.Name) (@Model.VisibleSensorsCount sensors)
-    @if (Model.SensorsWithNotificationsCount > 0)
+@{
+    var data = Model.Data;
+}
+
+
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
+    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
+
+    @if (!data.IsEmpty)
+    {
+        @if (Model.IsAllNotificationsIgnored)
+        {
+            <span>
+                <i id="@(data.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+            </span>
+        }
+        else if (Model.IsAnyNotificationsEnabled)
+        {
+            <span>
+                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+                <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none' />
+            </span>
+        }
+    }
+
+    @if (data.TelegramSettings.Chats.Count > 0)
     {
         <span>
-            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-            <input id='@(Model.EncodedId)_partialNotifications' value='@((Model.SensorsWithNotificationsCount < Model.AllSensorsCount).ToString())' style='display: none' />
+            <i class="fa-solid fa-people-group"></i>
         </span>
     }
 
-    @if (Model.Nodes != null)
-        @foreach (var (_, child) in Model.Nodes)
-        {
-            @if (child.VisibleSensorsCount != 0)
-            {
-                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
-            }
-        }
-
-    @if (Model.VisibleSensors != null && Model.VisibleSensors.Count != 0)
+    @foreach (var child in Model.Nodes)
+    {
+        <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+    }
+    
+    @if (Model.Sensors.Count > 0)
     {
         <ul>
-            @foreach (var sensor in Model.VisibleSensors)
-            {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)' data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>@Model.GetShortName(sensor.Name)
-                    @if (sensor.IsNotificationsEnabled)
-                    {
-                        <span>
-                            <i id="@(sensor.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-                        </span>
-                    }
-                </li>
-            }
+            @foreach (var sensor in Model.Sensors)
+                @await Html.PartialAsync("_TreeSensor", sensor)
         </ul>
     }
 </li>

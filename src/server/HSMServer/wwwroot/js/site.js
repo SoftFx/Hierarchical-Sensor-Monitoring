@@ -1,4 +1,10 @@
-﻿// Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification
-// for details on configuring this project to bundle and minify static web assets.
+﻿function copyToClipboard(text) {
+    const copyToClipboardAsync = str => {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(str);
+        }
+        return Promise.reject('The Clipboard API is not available.');
+    };
 
-// Write your JavaScript code.
+    copyToClipboardAsync(text);
+}

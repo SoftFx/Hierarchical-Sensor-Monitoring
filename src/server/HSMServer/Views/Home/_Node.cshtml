@@ -1,0 +1,61 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Model.Authentication
+@using HSMServer.Core.Model.UserFilters
+
+@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+
+@{
+    var user = User as User;
+    var nodeId = Model.EncodedId;
+    var productName = Model.Product ?? Model.Name;
+
+    var visibleNodes = GetSortedNodes(Model.Nodes.Values);
+    var visibleSensors = GetSortedNodes(Model.Sensors.Values);
+
+    var listDivId = $"list_{nodeId}";
+    var gridDivId = $"grid_{nodeId}";
+
+    ViewBag.ParentId = nodeId;
+
+    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T: NodeViewModel
+    {
+        var visibleNodes = nodes.Where(n => n.HasData);
+        var sortedNodes = user.TreeFilter.TreeSortType == TreeSortType.ByName
+            ? visibleNodes.OrderBy(n => n.Name)
+            : visibleNodes.OrderByDescending(n => n.UpdateTime);
+            
+        return sortedNodes.Cast<NodeViewModel>().ToList();
+    }
+}
+
+
+<div>
+    <h5>@(productName)@(Model.Path)</h5>
+
+    <div id='product_info_@Model.EncodedId'>
+        @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
+    </div>
+
+
+    <ul class='nav nav-tabs' role="tablist">
+        <li class='nav-item'>
+            <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+        </li>
+        <li class='nav-item'>
+            <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+        </li>
+    </ul>
+    <div class='tab-content'>
+        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
+            @await Html.PartialAsync("_GridAccordion", visibleNodes)
+            @await Html.PartialAsync("_GridAccordion", visibleSensors)
+        </div>
+
+        <div class='tab-pane fade' id=@listDivId role="tabpanel">
+            @await Html.PartialAsync("_ListAccordion", visibleNodes)
+            @await Html.PartialAsync("_ListAccordion", visibleSensors)
+        </div>
+    </div>
+</div>

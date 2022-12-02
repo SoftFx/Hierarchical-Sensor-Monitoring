@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model
             get
             {
                 if (Messages.Count != 0)
-                    return SensorStatus.Unknown;
+                    return SensorStatus.OffTime;
                 else if (Errors.Count != 0)
                     return SensorStatus.Error;
                 else if (Warnings.Count != 0)
@@ -53,6 +53,8 @@ namespace HSMServer.Core.Model
         public bool IsWarning => Warnings.Count > 0;
 
         public bool IsError => Errors.Count > 0;
+
+        public bool IsOffTime => Messages.Count > 0;
 
 
         public ValidationResult()

@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.TreeViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Model.Authentication
 
 @model ProductNodeViewModel
 
@@ -38,7 +39,7 @@
 </table>
 
 <div align="right">
-    @if (Model.IsAddingAccessKeysAvailable)
+    @if (Model.IsChangingAccessKeysAvailable(User as User))
     {
         <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
     }

@@ -1,0 +1,123 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.ViewModel
+
+@model ProductInfoViewModel
+
+@{
+    var productName = Model.ProductName ?? Model.Name;
+}
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
+    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+
+    <table class='table table-borderless'>
+        <tbody>
+            <tr>
+                <td class="w-25">Product</td>
+                <td>@productName</td>
+            </tr>
+            @if (Model.Parent != null)
+            {
+                <tr>
+                    <td class="w-25">Path</td>
+                    <td>@Model.Path</td>
+                </tr>
+            }
+            <tr>
+                <td class="w-25">
+                    Expected update interval
+                    @if (!Model.IsOwnExpectedUpdateInterval)
+                    {
+                        <span>(from parent)</span>
+                    }
+                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
+                </td>
+                <td>
+                    <div class="input-group row">
+                        <div id="productExpectedUpdateInterval_@(Model.EncodedId)" class="col-5">
+                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                        </div>
+                        <div class="col-auto">
+                            <button type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
+                                    data-bs-toggle='tooltip' title='edit meta info'>
+                                <i class='fas fa-edit'></i>
+                            </button>
+                            <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary'
+                                    data-bs-toggle='tooltip' title='save meta info' disabled>
+                                <i class='fas fa-check'></i>
+                            </button>
+                            <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary' onclick="revertProductInfoClick()"
+                                    data-bs-toggle='tooltip' title='revert changes' disabled>
+                                <i class='fas fa-times'></i>
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</form>
+
+
+<script>
+    disableProductExpectedUpdateInterval();
+
+    $(document).on("submit", "#editProductMetaInfo_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#editProductMetaInfo_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $('#product_info_' + $('#productMetaInfo_encodedId').val()).html(viewData);
+            }
+        });
+    });
+
+    function editProductInfoButtonClick() {
+        let productId = $('#productMetaInfo_encodedId').val();
+
+        $('#saveInfo_' + productId).removeAttr("disabled");
+        $('#revertInfo_' + productId).removeAttr("disabled");
+
+        $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
+            this.removeAttribute('disabled');
+        });
+    }
+
+    function revertProductInfoClick() {
+        let id = $('#productMetaInfo_encodedId').val();
+
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController))?Id=${id}`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (viewData) {
+            $('#product_info_' + id).html(viewData);
+
+            disableProductExpectedUpdateInterval();
+        });
+    }
+
+    function disableProductExpectedUpdateInterval() {
+        let productId = $('#productMetaInfo_encodedId').val();
+
+        $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
+            this.setAttribute('disabled', true);
+        } );
+    }
+</script>

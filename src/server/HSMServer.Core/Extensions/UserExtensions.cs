@@ -14,6 +14,7 @@ namespace HSMServer.Core.Extensions
             copy.IsAdmin = user.IsAdmin;
             copy.ProductsRoles = user.ProductsRoles;
             copy.Notifications = new(user.Notifications.ToEntity());
+            copy.TreeFilter = user.TreeFilter;
 
             return copy;
         }

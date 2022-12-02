@@ -13,6 +13,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string CertificateFileName { get; set; }
         public List<KeyValuePair<string, byte>> ProductsRoles { get; set; }
 
-        public NotificationSettingsEntity NotificationSettings { get; set; }
+        public UserNotificationSettingsEntity NotificationSettings { get; set; }
+
+        public object TreeFilter { get; set; }
     }
 }

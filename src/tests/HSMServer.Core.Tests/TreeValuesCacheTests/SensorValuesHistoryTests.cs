@@ -20,7 +20,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public SensorValuesHistoryTests(SensorValuesHistoryFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
 
 
@@ -128,10 +128,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var storeInfo = new StoreInfo()
+                var storeInfo = new StoreInfo(CommonConstants.SelfMonitoringProductKey, sensorInfo.Path)
                 {
-                    Key = CommonConstants.SelfMonitoringProductKey,
-                    Path = sensorInfo.Path,
                     BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
                 };
 
@@ -159,7 +157,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: CommonConstants.SelfMonitoringProductKey, type: (byte)type);
 
                 var sensor = Infrastructure.SensorModelFactory.Build(sensorEntity);
-                sensor.BuildProductNameAndPath(_valuesCache.GetProduct(sensorEntity.ProductId));
+                sensor.ParentProduct = _valuesCache.GetProduct(sensorEntity.ProductId);
+                sensor.BuildProductNameAndPath();
 
                 var info = new SensorModelInfo()
                 {

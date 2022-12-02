@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
@@ -23,8 +23,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         public KeyState State { get; private set; }
 
         public string NodePath { get; private set; }
-
-        public bool IsChangeAvailable { get; internal set; }
 
         public bool HasProductColumn { get; internal set; } = true;
 

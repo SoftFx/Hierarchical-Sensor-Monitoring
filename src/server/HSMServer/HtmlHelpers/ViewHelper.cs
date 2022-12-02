@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Html;
 using System;
@@ -52,23 +51,6 @@ namespace HSMServer.HtmlHelpers
             var productsDict = products as Dictionary<string, string>;
 
             return new HtmlString(TableHelper.CreateTable(user, users, productsDict));
-        }
-
-        public static string GetStatusHeaderColorClass(SensorStatus status)
-        {
-            switch (status)
-            {
-                case SensorStatus.Unknown:
-                    return "tree-icon-unknown";
-                case SensorStatus.Ok:
-                    return "tree-icon-ok";
-                case SensorStatus.Warning:
-                    return "tree-icon-warning";
-                case SensorStatus.Error:
-                    return "tree-icon-error";
-                default:
-                    return "tree-icon-unknown";
-            }
         }
     }
 }

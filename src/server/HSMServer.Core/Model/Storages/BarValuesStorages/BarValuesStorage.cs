@@ -45,5 +45,12 @@ namespace HSMServer.Core.Model
 
             return values;
         }
+
+        internal override void Clear()
+        {
+            base.Clear();
+
+            LocalLastValue = null;
+        }
     }
 }

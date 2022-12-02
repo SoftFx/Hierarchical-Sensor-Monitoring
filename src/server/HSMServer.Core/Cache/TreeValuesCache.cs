@@ -1,13 +1,12 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Authentication;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Notifications;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
 using System;
@@ -20,18 +19,15 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
-        private const string ErrorPathKey = "Path or key is empty.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
-        private const string ErrorInvalidPath = "Path has an invalid format.";
-        private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
+        private const string NotExistingSensor = "Sensor with your path does not exist.";
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
-        private readonly TelegramBot _telegramBot;
 
         private readonly ConcurrentDictionary<string, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
@@ -43,13 +39,13 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
 
+        public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager,
-            IUpdatesQueue updatesQueue, INotificationsCenter notificationsCenter)
+
+        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
-            _telegramBot = notificationsCenter.TelegramBot;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -90,6 +86,27 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
+        public void UpdateProduct(ProductModel product)
+        {
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+
+            ChangeProductEvent?.Invoke(product, TransactionType.Update);
+        }
+
+        public void UpdateProduct(ProductUpdate updatedProduct)
+        {
+            if (!_tree.TryGetValue(updatedProduct.Id, out var product))
+                return;
+
+            var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
+            GetProductSensorsStatuses(product, sensorsOldStatuses);
+
+            UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
+
+            _databaseCore.UpdateProduct(product.ToProductEntity());
+            NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
+        }
+
         public void RemoveProduct(string productId)
         {
             void RemoveProduct(string productId)
@@ -127,19 +144,6 @@ namespace HSMServer.Core.Cache
 
         public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
 
-        public bool TryGetProductByKey(string key, out ProductModel product, out string message)
-        {
-            key = GetAccessKeyModel(key)?.ProductId ?? key;
-
-            var hasProduct = _tree.TryGetValue(key, out product);
-            message = hasProduct ? string.Empty : ErrorKeyNotFound;
-
-            return hasProduct;
-        }
-
-        private AccessKeyModel GetAccessKeyModel(string key) =>
-            Guid.TryParse(key, out var guid) ? _keys.GetValueOrDefault(guid) : null;
-
         public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
         {
             var products = _tree.Values.ToList();
@@ -152,42 +156,18 @@ namespace HSMServer.Core.Cache
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return new List<ProductModel>();
 
-            var availableProducts = products.Where(p => ProductRoleHelper.IsAvailable(p.Id, user.ProductsRoles)).ToList();
+            var availableProducts = products.Where(p => user.IsProductAvailable(p.Id)).ToList();
 
             return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
         }
 
-        public bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message)
+        public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
-            (string key, string path, _) = storeInfo;
+            if (!TryCheckCacheInitialization(out message) ||
+                !TryGetProductByKey(request, out var product, out message))
+                return false;
 
-            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
-            {
-                message = ErrorPathKey;
-                return false;
-            }
-
-            if (!IsInitialized)
-            {
-                message = NotInitializedCacheError;
-                return false;
-            }
-
-            var parts = path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
-            if (parts.Contains(string.Empty))
-            {
-                message = ErrorInvalidPath;
-                return false;
-            }
-            else if (parts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
-            {
-                message = ErrorTooLongPath;
-                return false;
-            }
-
-            if (!TryGetProductByKey(key, out var product, out message))
-                return false;
-            else if (product.Id == key)
+            if (product.Id == request.Key)
                 return true;
 
             // TODO: remove after refactoring sensors data storing
@@ -197,16 +177,26 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            var accessKey = GetAccessKeyModel(key);
-            if (!accessKey.HasPermissionForSendData(out message))
+            var accessKey = GetAccessKeyModel(request);
+            if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
-            if (accessKey.Permissions.HasFlag(KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors))
-                return true;
+            var sensorChecking = TryGetSensor(request, product, accessKey, out var sensor, out message);
 
-            return IsValidKeyForPath(parts, product, accessKey, out message);
+            if (sensor?.State == SensorState.Blocked)
+            {
+                message = $"Sensor {CommonConstants.BuildPath(sensor.RootProductName, sensor.Path)} is blocked.";
+                return false;
+            }
+
+            return sensorChecking;
         }
 
+        public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
+            TryCheckCacheInitialization(out message) &&
+            TryGetProductByKey(request, out var product, out message) &&
+            GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
+            TryGetSensor(request, product, null, out _, out message);
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
@@ -258,11 +248,13 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
                 return;
 
+            var oldStatus = sensor.ValidationResult;
+
             sensor.Update(updatedSensor);
             UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            NotifyAboutChanges(sensor, oldStatus);
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -270,10 +262,10 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            if (_tree.TryGetValue(sensor.ParentProductId, out var parent))
+            if (_tree.TryGetValue(sensor.ParentProduct.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
-            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.ProductName, sensor.Path);
+            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.RootProductName, sensor.Path);
             _userManager.RemoveSensorFromUsers(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
@@ -297,7 +289,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearValues();
-            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.ProductName, sensor.Path);
+            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.RootProductName, sensor.Path);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -306,8 +298,7 @@ namespace HSMServer.Core.Cache
 
         public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
         {
-            _telegramBot.SendMessage(sensor, oldStatus);
-
+            NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
 
@@ -325,13 +316,13 @@ namespace HSMServer.Core.Cache
             {
                 var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
                 values.AddRange(sensor.ConvertValues(
-                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, oldestValueTime, remainingCount)));
+                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, oldestValueTime, remainingCount)));
             }
 
             return values;
         }
 
-        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to)
+        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000)
         {
             List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
 
@@ -341,9 +332,19 @@ namespace HSMServer.Core.Cache
 
             var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
             values.AddRange(sensor.ConvertValues(
-                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.ProductName, sensor.Path, from, oldestValueTime)));
+                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, from, oldestValueTime, count)));
 
             return values;
+        }
+
+        public List<BaseValue> GetSensorValues(HistoryRequestModel request)
+        {
+            var sensor = GetSensor(request);
+            var historyValues = request.To.HasValue
+                ? GetSensorValues(sensor.Id, request.From, request.To.Value)
+                : GetSensorValues(sensor.Id, request.From, DateTime.UtcNow.AddDays(1), int.MaxValue).TakeLast(request.Count.Value).ToList();
+
+            return historyValues;
         }
 
         public void UpdatePolicy(TransactionType type, Policy policy)
@@ -384,15 +385,15 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            (string key, string path, BaseValue value) = storeInfo;
-
-            if (!TryGetProductByKey(key, out var product, out _))
+            if (!TryGetProductByKey(storeInfo, out var product, out _))
                 return;
 
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, path);
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
 
-            var sensorName = path.Split(CommonConstants.SensorPathSeparator)[^1];
+            var value = storeInfo.BaseValue;
+            var sensorName = storeInfo.PathParts[^1];
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
+
             if (sensor == null)
             {
                 SensorEntity entity = new()
@@ -408,6 +409,8 @@ namespace HSMServer.Core.Cache
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
+            else if (sensor.State == SensorState.Blocked)
+                return;
 
             var oldStatus = sensor.ValidationResult;
 
@@ -417,14 +420,17 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor, oldStatus);
         }
 
-        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, BaseSensorModel sensor)
+        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, NodeBaseModel node)
         {
-            var oldPolicy = sensor.ExpectedUpdateIntervalPolicy;
+            if (newInterval == null)
+                return;
+
+            var oldPolicy = node.ExpectedUpdateInterval;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
             {
                 var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.TimeInterval);
-                sensor.ExpectedUpdateIntervalPolicy = newPolicy;
+                node.ExpectedUpdateInterval = newPolicy;
 
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
@@ -432,10 +438,7 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    var oldStatus = sensor.ValidationResult;
-
-                    sensor.RemoveExpectedUpdateInterval();
-                    NotifyAboutChanges(sensor, oldStatus);
+                    node.ExpectedUpdateInterval = null;
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
@@ -446,16 +449,40 @@ namespace HSMServer.Core.Cache
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
             }
+
+            node.RefreshOutdatedError();
+        }
+
+        private void NotifyAllProductChildrenAboutUpdate(ProductModel product, Dictionary<Guid, ValidationResult> sensorsOldStatuses)
+        {
+            ChangeProductEvent(product, TransactionType.Update);
+
+            foreach (var (_, sensor) in product.Sensors)
+                if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
+                    NotifyAboutChanges(sensor, oldStatus);
+                else
+                    ChangeSensorEvent(sensor, TransactionType.Update);
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);
         }
 
         private void Initialize()
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            var productEntities = RequestProducts();
-            ApplyProducts(productEntities);
+            var policyEntities = RequestPolicies();
 
-            ApplySensors(productEntities, RequestSensors(), RequestPolicies());
+            _logger.Info($"{nameof(policyEntities)} are deserializing");
+            var policies = GetPolicyModels(policyEntities);
+            _logger.Info($"{nameof(policyEntities)} deserialized");
+
+            var productEntities = RequestProducts();
+            ApplyProducts(productEntities, policies);
+
+            ApplySensors(productEntities, RequestSensors(), policies);
+
+            BuildNodesProductNameAndPath();
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
@@ -468,6 +495,17 @@ namespace HSMServer.Core.Cache
             IsInitialized = true;
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
+        }
+
+        private void BuildNodesProductNameAndPath()
+        {
+            _logger.Info("Path and ProductName properties are building for nodes");
+
+            foreach (var (_, product) in _tree)
+                if (product.ParentProduct == null)
+                    product.BuildProductNameAndPath();
+
+            _logger.Info("Path and ProductName properties are built for nodes");
         }
 
         private List<ProductEntity> RequestProducts()
@@ -497,12 +535,14 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<Guid, Policy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
+                product.ApplyPolicies(productEntity.Policies, policies);
+
                 _tree.TryAdd(product.Id, product);
             }
             _logger.Info($"{nameof(productEntities)} applied");
@@ -525,12 +565,8 @@ namespace HSMServer.Core.Cache
                 AddSelfMonitoringProduct();
         }
 
-        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, List<byte[]> policyEntities)
+        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, Dictionary<Guid, Policy> policies)
         {
-            _logger.Info($"{nameof(policyEntities)} are deserializing");
-            var policies = GetPolicyModels(policyEntities);
-            _logger.Info($"{nameof(policyEntities)} deserialized");
-
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
@@ -541,10 +577,8 @@ namespace HSMServer.Core.Cache
                 {
                     if (productEntity.SensorsIds != null)
                         foreach (var sensorId in productEntity.SensorsIds)
-                        {
                             if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
                                 product.AddSensor(sensor);
-                        }
                 }
             _logger.Info("Links between products and their sensors are built");
 
@@ -559,12 +593,10 @@ namespace HSMServer.Core.Cache
             {
                 try
                 {
-                    var sensor = GetSensorModel(entity);
-                    _sensors.TryAdd(sensor.Id, sensor);
+                    var sensor = SensorModelFactory.Build(entity);
+                    sensor.ApplyPolicies(entity.Policies, policies);
 
-                    foreach (var policyId in entity.Policies)
-                        if (policies.TryGetValue(Guid.Parse(policyId), out var policy))
-                            sensor.AddPolicy(policy);
+                    _sensors.TryAdd(sensor.Id, sensor);
                 }
                 catch (Exception ex)
                 {
@@ -587,9 +619,10 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, string sensorPath)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
-            var pathParts = sensorPath.Split(CommonConstants.SensorPathSeparator);
+            var pathParts = request.PathParts;
+
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
                 var subProductName = pathParts[i];
@@ -622,22 +655,25 @@ namespace HSMServer.Core.Cache
 
         private void AddProduct(ProductModel product)
         {
-            _tree.TryAdd(product.Id, product);
-            _databaseCore.AddProduct(product.ToProductEntity());
+            product.BuildProductNameAndPath();
 
-            ChangeProductEvent?.Invoke(product, TransactionType.Add);
+            if (_tree.TryAdd(product.Id, product))
+            {
+                _databaseCore.AddProduct(product.ToProductEntity());
 
-            foreach (var (_, key) in product.AccessKeys)
-                AddAccessKey(key);
+                ChangeProductEvent?.Invoke(product, TransactionType.Add);
 
-            if (product.AccessKeys.IsEmpty)
-                AddAccessKey(AccessKeyModel.BuildDefault(product));
+                foreach (var (_, key) in product.AccessKeys)
+                    AddAccessKey(key);
+
+                if (product.AccessKeys.IsEmpty)
+                    AddAccessKey(AccessKeyModel.BuildDefault(product));
+            }
         }
 
         private void AddSensor(BaseSensorModel sensor)
         {
-            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
-                sensor.BuildProductNameAndPath(product);
+            sensor.BuildProductNameAndPath();
 
             if (sensor is StringSensorModel)
                 AddStringValueLengthPolicy(sensor);
@@ -656,13 +692,6 @@ namespace HSMServer.Core.Cache
             _databaseCore.AddPolicy(policy.ToEntity());
         }
 
-        private void UpdateProduct(ProductModel product)
-        {
-            _databaseCore.UpdateProduct(product.ToProductEntity());
-
-            ChangeProductEvent?.Invoke(product, TransactionType.Update);
-        }
-
         private bool AddKeyToTree(AccessKeyModel key)
         {
             bool isSuccess = _keys.TryAdd(key.Id, key);
@@ -677,10 +706,30 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private static bool IsValidKeyForPath(string[] parts, ProductModel product,
-            AccessKeyModel accessKey, out string message)
+        private bool TryCheckCacheInitialization(out string message)
+        {
+            message = IsInitialized ? string.Empty : NotInitializedCacheError;
+
+            return string.IsNullOrEmpty(message);
+        }
+
+        private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
+        {
+            var keyModel = GetAccessKeyModel(request);
+            var productId = keyModel == AccessKeyModel.InvalidKey ? request.Key : keyModel.ProductId;
+
+            var hasProduct = _tree.TryGetValue(productId, out product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
+
+            return hasProduct;
+        }
+
+        private static bool TryGetSensor(BaseRequestModel request, ProductModel product,
+            AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
         {
             message = string.Empty;
+            sensor = null;
+            var parts = request.PathParts;
 
             for (int i = 0; i < parts.Length; i++)
             {
@@ -688,23 +737,37 @@ namespace HSMServer.Core.Cache
 
                 if (i != parts.Length - 1)
                 {
-                    product = product.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName
-                        .Equals(expectedName)).Value;
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
-                    if (product == null && !accessKey.HasPermissionCreateProductBranch(out message))
+                    if (product == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
                 else
                 {
-                    if (!product.Sensors.Any(s => s.Value.DisplayName == expectedName) &&
-                        !accessKey.IsHasPermission(KeyPermissions.CanAddSensors, out message))
+                    sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+
+                    if (sensor == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
             }
+
             return true;
         }
 
-        private List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
+        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions, out string message)
+        {
+            if (accessKey == null)
+            {
+                message = NotExistingSensor;
+                return false;
+            }
+
+            return accessKey.IsHasPermissions(permissions, out message);
+        }
+
+        private static List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
         {
             var productsWithTheirSubProducts = new Dictionary<string, ProductModel>(products.Count);
             foreach (var product in products)
@@ -716,7 +779,7 @@ namespace HSMServer.Core.Cache
             return productsWithTheirSubProducts.Values.ToList();
         }
 
-        private void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
+        private static void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
         {
             foreach (var (subProductId, subProduct) in product.SubProducts)
             {
@@ -727,22 +790,35 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private BaseSensorModel GetSensorModel(SensorEntity entity)
+        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, ValidationResult> sensorsStatuses)
         {
-            var sensor = SensorModelFactory.Build(entity);
+            foreach (var (sensorId, sensor) in product.Sensors)
+                sensorsStatuses.Add(sensorId, sensor.ValidationResult);
 
-            if (_tree.TryGetValue(sensor.ParentProductId, out var product))
-                sensor.BuildProductNameAndPath(product);
-
-            return sensor;
+            foreach (var (_, subProduct) in product.SubProducts)
+                GetProductSensorsStatuses(subProduct, sensorsStatuses);
         }
+
+        private BaseSensorModel GetSensor(BaseRequestModel request)
+        {
+            if (TryGetProductByKey(request, out var product, out _) &&
+                TryGetSensor(request, product, null, out var sensor, out _))
+                return sensor;
+
+            return null;
+        }
+
+        private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
+            _keys.TryGetValue(request.KeyGuid, out var keyModel)
+                ? keyModel
+                : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {
             var sensorValues = _databaseCore.GetLatestValues(GetSensors());
 
             foreach (var (sensorId, value) in sensorValues)
-                if (_sensors.TryGetValue(sensorId, out var sensor))
+                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                     sensor.AddValue(value);
         }
 

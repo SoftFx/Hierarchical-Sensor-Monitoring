@@ -56,7 +56,7 @@ namespace HSMDataCollector.InstantValue
             EnqueueValue(valueObject);
         }
         
-        public void AddValue(T value, SensorStatus status = SensorStatus.Unknown, string comment = "")
+        public void AddValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             UnitedSensorValue valueObject = new UnitedSensorValue();
             valueObject.Comment = comment;

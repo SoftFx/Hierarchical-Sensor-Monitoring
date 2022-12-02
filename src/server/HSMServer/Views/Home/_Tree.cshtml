@@ -1,9 +1,10 @@
-﻿@model HSMServer.Model.TreeViewModels.TreeViewModel
+﻿@using HSMServer.Model.TreeViewModels
+@using HSMServer.Core.Model.Authentication
+
+@model List<TreeNodeStateViewModel>
+
 
 <ul>
-    @foreach (var (_, node) in Model.Nodes)
-    {
-        @if (node.Parent == null && node.IsAvailableForUser && node.VisibleSensorsCount != 0)
-            @await Html.PartialAsync("_TreeNode", node)
-    }
+    @foreach (var product in Model)
+        @await Html.PartialAsync("_TreeNode", product)
 </ul>
