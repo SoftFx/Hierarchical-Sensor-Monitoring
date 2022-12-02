@@ -12,12 +12,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static ProductEntity BuildProduct() =>
             BuildProductEntity().AddSubProduct(Guid.NewGuid().ToString());
 
-        internal static ProductEntity BuildProductEntity(string name = null, string parent = "") =>
+        internal static ProductEntity BuildProductEntity(string name = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
                 AuthorId = Guid.NewGuid().ToString(),
-                ParentProductId = parent?.Length == 0 ? Guid.NewGuid().ToString() : parent,
                 State = (int)ProductState.FullAccess,
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),

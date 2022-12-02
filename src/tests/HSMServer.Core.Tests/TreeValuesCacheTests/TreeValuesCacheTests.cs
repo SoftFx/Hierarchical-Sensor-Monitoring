@@ -544,7 +544,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             await Task.Delay(100);
 
-            var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts().Where(p => p.ParentProductId == null).ToList();
+            var expectedProducts =
+                _databaseCoreManager.DatabaseCore.GetAllProducts()
+                                                 .Where(p => p.DisplayName.StartsWith("product") || p.DisplayName == CommonConstants.SelfMonitoringProductName)
+                                                 .ToList();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
@@ -711,11 +714,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             for (int i = 0; i < 2; ++i)
             {
-                var product = EntitiesFactory.BuildProductEntity($"product{i}", null);
+                var product = EntitiesFactory.BuildProductEntity($"product{i}");
 
                 for (int j = 0; j < 2; j++)
                 {
-                    var subProduct = EntitiesFactory.BuildProductEntity($"subProduct{j}_{product.DisplayName}", product.Id);
+                    var subProduct = EntitiesFactory.BuildProductEntity($"subProduct{j}_{product.DisplayName}");
 
                     var sensor = new SensorEntity()
                     {
@@ -740,7 +743,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     product.AddSubProduct(subProduct.Id);
                     product.AddSensor(sensor.Id);
 
-                    var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct", subProduct.Id);
+                    var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct");
 
                     subProduct.AddSubProduct(subSubProduct.Id);
 

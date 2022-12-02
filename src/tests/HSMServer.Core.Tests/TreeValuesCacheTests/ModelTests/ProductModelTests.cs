@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "ProductModel constructor")]
         public void ProductModelConstructor_ProductEntity_Test()
         {
-            var productEntity = EntitiesFactory.BuildProductEntity(parent: null);
+            var productEntity = EntitiesFactory.BuildProductEntity();
 
             var product = new ProductModel(productEntity);
 
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var subProductId = Guid.NewGuid().ToString();
             var sensor1Id = Guid.NewGuid().ToString();
             var sensor2Id = Guid.NewGuid().ToString();
-            var entity = EntitiesFactory.BuildProductEntity(parent: null)
+            var entity = EntitiesFactory.BuildProductEntity()
                                         .AddSubProduct(subProductId)
                                         .AddSensor(sensor1Id)
                                         .AddSensor(sensor2Id);

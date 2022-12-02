@@ -480,7 +480,6 @@ namespace HSMServer.Core.Tests
             Assert.NotNull(actualProduct);
             Assert.Equal(expectedProduct.Id, actualProduct.Id);
             Assert.Equal(expectedProduct.AuthorId, actualProduct.AuthorId);
-            Assert.Equal(expectedProduct.ParentProductId, actualProduct.ParentProductId);
             Assert.Equal(expectedProduct.DisplayName, actualProduct.DisplayName);
             Assert.Equal(expectedProduct.State, actualProduct.State);
             Assert.Equal(expectedProduct.Description, actualProduct.Description);
