@@ -77,8 +77,6 @@
     box-shadow: none !important;
 }
 
-.nodeSensorsCount-span { }
-
 .blockedSensor-span {
     text-decoration: line-through;
 }

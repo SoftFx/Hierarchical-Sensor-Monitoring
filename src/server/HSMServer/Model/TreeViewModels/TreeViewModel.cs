@@ -1,6 +1,8 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -33,6 +35,35 @@ namespace HSMServer.Model.TreeViewModels
             BuildTree();
         }
 
+
+        public List<TreeNodeStateViewModel> GetUserTree(User user)
+        {
+            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
+            {
+                var node = new TreeNodeStateViewModel(product);
+
+                foreach (var (_, childNode) in product.Nodes)
+                    node.AddChild(FilterNodes(childNode), user);
+
+                foreach (var (_, sensor) in product.Sensors)
+                    node.AddChild(sensor, user);
+
+                return node;
+            }
+
+
+            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+
+            foreach (var (_, product) in Nodes)
+                if (product.Parent == null && user.IsProductAvailable(product.Id))
+                {
+                    var node = FilterNodes(product);
+                    if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
+                        tree.Add(node);
+                }
+
+            return tree;
+        }
 
         internal void RecalculateNodesCharacteristics()
         {
