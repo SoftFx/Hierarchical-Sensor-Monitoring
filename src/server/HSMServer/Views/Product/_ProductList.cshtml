@@ -1,3 +1,4 @@
+@using System.Threading
 @using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.ViewModel
@@ -7,10 +8,10 @@
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
-<div style="margin: 10px">
+<div class="m-2">
     <div class="row" justify-content-start>
         <div class="col-2">
-            <h5 style="margin: 10px 20px 10px;">Products</h5>
+            <h5 class="mx-4 my-2">Products</h5>
         </div>
     </div>
 </div>
@@ -38,7 +39,7 @@
                 <th>0</th>
                 <th>
                     <input id='createName' type='text' class='form-control'/>
-                    <span style='display: none;' id='new_product_name_span'></span>
+                    <span class="d-none" id='new_product_name_span'></span>
                 </th>
                 <th>---</th>
                 <th></th>
@@ -46,27 +47,25 @@
                 <th>---</th>
                 <th>---</th>
                 <th>
-                    <button id='createButton' style='margin-left: 5px' type='button' class='btn btn-secondary' title='create'>
+                    <button id='createButton'  type='button' class='btn btn-secondary ms-1' title='create'>
                         <i class='fas fa-plus'></i>
                     </button>
                 </th>
                 <th></th>
             </tr>
         }
-        @{
-            int index = 1;
-        }
-        @foreach (var product in Model)
+        @for (var i = 0;i < Model.Count;i++)
         {
+            var product = Model[i];
             <tr>
-                <th scope='row'>@index</th>
+                <th scope='row'>@(i+1)</th>
                 <td>@product.Name</td>
                 <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
                 <td>
                     <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
                         <i class='far fa-copy'></i>
                     </button>
-                    <input style='display: none' type='text' id='inputName_@product.Id' value='@product.Name'/>
+                    <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
                 </td>
                 <td> </td>
                 <td>@product.CreationDate</td>
@@ -74,8 +73,8 @@
                 @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                 {
                     <td>
-                        <button style='margin-left: 5px' id='change_@product.EncodedId'
-                                type='button' class='btn btn-secondary' title='edit'>
+                        <button id='change_@product.EncodedId'
+                                type='button' class='btn btn-secondary ms-1' title='edit'>
                             <i class='fas fa-edit'></i>
                         </button>
                     </td>
@@ -83,14 +82,13 @@
                 @if (isProductCrudAllowed)
                 {
                     <td>
-                        <button id='delete_@product.Id' style='margin-left: 5px'
-                                type='button' class='btn btn-secondary' title='delete'>
+                        <button id='delete_@product.Id'
+                                type='button' class='btn btn-secondary ms-1' title='delete'>
                             <i class='fas fa-trash-alt'></i>
                         </button>
                     </td>
                 }
             </tr>
-            index++;
         }
         </tbody>
     </table>
