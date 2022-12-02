@@ -19,15 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                SensorsIds = new List<string>(2),
             };
-
-        internal static ProductEntity AddSensor(this ProductEntity product, string sensorId)
-        {
-            product.SensorsIds.Add(sensorId);
-
-            return product;
-        }
 
 
         internal static AccessKeyEntity BuildAccessKeyEntity(string id = null, string name = null, string productId = null,

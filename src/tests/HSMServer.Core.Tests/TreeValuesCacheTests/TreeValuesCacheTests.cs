@@ -738,8 +738,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Value = boolValue,
                     };
 
-                    product.AddSensor(sensor.Id);
-
                     var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct", subProduct.Id);
 
                     var sensorForSubSubProduct = new SensorEntity()
@@ -762,8 +760,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         ReceivingTime = intValue.ReceivingTime.Ticks,
                         Value = intValue,
                     };
-
-                    subSubProduct.AddSensor(sensorForSubSubProduct.Id);
 
                     products.Add(subProduct);
                     products.Add(subSubProduct);

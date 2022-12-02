@@ -24,10 +24,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.State, (int)actual.State);
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.CreationDate, actual.CreationDate.Ticks);
-
-            var expectedSensors = expected.SensorsIds;
-            var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
-            TestCollections(expectedSensors, actualSensors);
         }
 
         internal static void TestProductModel(ProductModel expected, ProductModel actual)

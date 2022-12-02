@@ -485,7 +485,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedProduct.State, actualProduct.State);
             Assert.Equal(expectedProduct.Description, actualProduct.Description);
             Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate);
-            Assert.Equal(expectedProduct.SensorsIds, actualProduct.SensorsIds);
         }
 
         private static void FullKeyTest(AccessKeyEntity expected, AccessKeyEntity actual)

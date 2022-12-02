@@ -50,9 +50,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var subProductId = Guid.NewGuid().ToString();
             var sensor1Id = Guid.NewGuid().ToString();
             var sensor2Id = Guid.NewGuid().ToString();
-            var entity = EntitiesFactory.BuildProductEntity(parent: null)
-                                        .AddSensor(sensor1Id)
-                                        .AddSensor(sensor2Id);
+            var entity = EntitiesFactory.BuildProductEntity(parent: null);
 
             var product = new ProductModel(entity);
             product.AddSubProduct(new ProductModel(subProductId, RandomGenerator.GetRandomString()));

@@ -567,14 +567,11 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(sensorEntities)} applied");
 
             _logger.Info("Links between products and their sensors are building");
-            foreach (var productEntity in productEntities)
-                if (_tree.TryGetValue(productEntity.Id, out var product))
-                {
-                    if (productEntity.SensorsIds != null)
-                        foreach (var sensorId in productEntity.SensorsIds)
-                            if (_sensors.TryGetValue(Guid.Parse(sensorId), out var sensor))
-                                product.AddSensor(sensor);
-                }
+            foreach (var sensorEntity in sensorEntities)
+                if (!string.IsNullOrEmpty(sensorEntity.ProductId) &&
+                    _tree.TryGetValue(sensorEntity.ProductId, out var parent) &&
+                    _sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
+                    parent.AddSensor(sensor);
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
