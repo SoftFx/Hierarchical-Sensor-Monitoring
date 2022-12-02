@@ -108,7 +108,6 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ParentProduct.Id,
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,

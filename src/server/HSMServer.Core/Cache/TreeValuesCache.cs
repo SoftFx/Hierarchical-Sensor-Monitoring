@@ -398,7 +398,6 @@ namespace HSMServer.Core.Cache
             {
                 SensorEntity entity = new()
                 {
-                    ProductId = parentProduct.Id,
                     DisplayName = sensorName,
                     Type = (byte)value.Type,
                 };

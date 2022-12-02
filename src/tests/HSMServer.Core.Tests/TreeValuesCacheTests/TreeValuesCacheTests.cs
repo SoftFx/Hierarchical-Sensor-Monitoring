@@ -720,7 +720,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     var sensor = new SensorEntity()
                     {
                         Id = Guid.NewGuid().ToString(),
-                        ProductId = product.Id,
                         DisplayName = $"sensor{j}",
                         Type = (byte)SensorType.Boolean,
                     };
@@ -748,7 +747,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     var sensorForSubSubProduct = new SensorEntity()
                     {
                         Id = Guid.NewGuid().ToString(),
-                        ProductId = subSubProduct.Id,
                         DisplayName = "sensor",
                         Type = (int)SensorType.Integer,
                     };

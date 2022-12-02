@@ -6,8 +6,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public string Id { get; init; }
 
-        public string ProductId { get; init; }
-
         public string AuthorId { get; init; }
 
         public string DisplayName { get; init; }

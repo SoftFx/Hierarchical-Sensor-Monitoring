@@ -56,11 +56,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static SensorEntity BuildSensorEntity(string name = null, string parent = "", byte? type = null) =>
+        internal static SensorEntity BuildSensorEntity(string name = null, byte? type = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
-                ProductId = parent?.Length == 0 ? Guid.NewGuid().ToString() : parent,
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Type = type ?? RandomGenerator.GetRandomByte(),

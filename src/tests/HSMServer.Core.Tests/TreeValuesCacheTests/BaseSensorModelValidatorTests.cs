@@ -278,7 +278,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var entity = new SensorEntity()
             {
                 Id = Guid.NewGuid().ToString(),
-                ProductId = Guid.NewGuid().ToString(),
                 DisplayName = RandomGenerator.GetRandomString(),
                 Type = (byte)type
             };
