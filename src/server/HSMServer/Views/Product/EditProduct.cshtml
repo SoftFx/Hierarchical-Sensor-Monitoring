@@ -2,7 +2,6 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model.Authentication
-@using HSMServer.HtmlHelpers
 @model EditProductViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -116,7 +115,7 @@
                     <select class='form-select' id='createProductRole'>
                         @foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
                         {
-                            <option value='@( (int) role )'>@role</option>
+                            <option value='@((int)role)'>@role</option>
                         }
                     </select>
                 </th>
@@ -140,18 +139,18 @@
                         </td>
                         <td>
                             <select class='form-select' disabled id='role_@userRight.Key.Username'>
-                            @foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
-                                        {
-                                            if (role == userRight.Value)
-                                            {
-                                                <option selected value='@( (int) role )'>@role</option>
-                                            }
-                                            else
-                                            {
-                                                <option value='@( (int) role )'>@role</option>
-                                            }
-                                                
-                                        }
+                                @foreach (ProductRoleEnum role in Enum.GetValues(typeof(ProductRoleEnum)))
+                                {
+                                    if (role == userRight.Value)
+                                    {
+                                        <option selected value='@((int)role)'>@role</option>
+                                    }
+                                    else
+                                    {
+                                        <option value='@((int)role)'>@role</option>
+                                    }
+
+                                }
                             </select>
                             {CreateProductRoleSelect(userRight.Key.Username, userRight.Value)}
                         </td>
