@@ -67,8 +67,8 @@
                             <td>@userItem.Username</td>
                             <td>**************</td>
                             <td>
-                                <input id='isAdmin_@userItem.Username' @(userItem.IsAdmin ? "checked" : "")  type='checkbox' class='form-check-input ms-0'
-                                       disabled value='@userItem.IsAdmin'/>
+                                <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
+                                       disabled value='@userItem.IsAdmin' @(userItem.IsAdmin ? "checked" : "")/>
                             </td>
                             <td>
                                 @{
@@ -81,7 +81,7 @@
                                     {
                                         foreach (var right in userItem.ProductsRoles)
                                         {
-                                            var name = string.Empty;
+                                            string name = string.Empty;
                                             products?.TryGetValue(right.Key, out name);
                                             <span>@(name ?? right.Key) (@right.Key)</span>
                                             <br>

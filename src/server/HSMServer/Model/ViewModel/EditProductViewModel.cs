@@ -36,10 +36,10 @@ namespace HSMServer.Model.ViewModel
 
         private void RemovedUsedUsers(List<User> users, IEnumerable<UserViewModel> usedUsers)
         {
-            if (users == null || !users.Any())
+            if (users == null || users.Count == 0)
                 return;
 
-            if (usedUsers == null || !usedUsers.Any())
+            if (usedUsers == null || Equals(usedUsers, Enumerable.Empty<UserViewModel>()))
                 return;
 
             foreach (var usedUser in usedUsers)
