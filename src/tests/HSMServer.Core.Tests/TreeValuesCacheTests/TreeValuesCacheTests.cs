@@ -738,12 +738,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         Value = boolValue,
                     };
 
-                    product.AddSubProduct(subProduct.Id);
                     product.AddSensor(sensor.Id);
 
                     var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct", subProduct.Id);
-
-                    subProduct.AddSubProduct(subSubProduct.Id);
 
                     var sensorForSubSubProduct = new SensorEntity()
                     {

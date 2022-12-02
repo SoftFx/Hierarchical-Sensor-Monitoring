@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProduct")]
         public void AddProductTest()
         {
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
             _databaseCore.AddProduct(product);
 
             FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
                 _databaseCore.AddProduct(product);
 
                 FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRemove")]
         public void RemoveProductTest()
         {
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
 
             _databaseCore.AddProduct(product);
             Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -81,7 +81,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
 
                 _databaseCore.AddProduct(product);
                 Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -258,7 +258,7 @@ namespace HSMServer.Core.Tests
         public void AddProductRoleTest()
         {
             var user = EntitiesFactory.BuildUser();
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
 
             _databaseCore.AddUser(user);
             user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
@@ -283,7 +283,7 @@ namespace HSMServer.Core.Tests
 
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
                 user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
@@ -485,7 +485,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedProduct.State, actualProduct.State);
             Assert.Equal(expectedProduct.Description, actualProduct.Description);
             Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate);
-            Assert.Equal(expectedProduct.SubProductsIds, actualProduct.SubProductsIds);
             Assert.Equal(expectedProduct.SensorsIds, actualProduct.SensorsIds);
         }
 

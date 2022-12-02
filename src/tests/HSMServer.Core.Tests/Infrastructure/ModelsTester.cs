@@ -25,10 +25,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.CreationDate, actual.CreationDate.Ticks);
 
-            var expectedSubProducts = expected.SubProductsIds;
-            var actualSubProducts = actual.SubProducts.Select(p => p.Key).ToList();
-            TestCollections(expectedSubProducts, actualSubProducts);
-
             var expectedSensors = expected.SensorsIds;
             var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
             TestCollections(expectedSensors, actualSensors);

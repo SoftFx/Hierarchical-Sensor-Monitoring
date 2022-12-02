@@ -549,15 +549,10 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Links between products are building");
             foreach (var productEntity in productEntities)
-                if (_tree.TryGetValue(productEntity.Id, out var product))
-                {
-                    if (productEntity.SubProductsIds != null)
-                        foreach (var subProductId in productEntity.SubProductsIds)
-                        {
-                            if (_tree.TryGetValue(subProductId, out var subProduct))
-                                product.AddSubProduct(subProduct);
-                        }
-                }
+                if (!string.IsNullOrEmpty(productEntity.ParentProductId) &&
+                    _tree.TryGetValue(productEntity.ParentProductId, out var parent) &&
+                    _tree.TryGetValue(productEntity.Id, out var product))
+                    parent.AddSubProduct(product);
             _logger.Info("Links between products are built");
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);

@@ -95,7 +95,6 @@ namespace HSMServer.Core.Model
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
                 SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 Policies = GetPolicyIds(),
