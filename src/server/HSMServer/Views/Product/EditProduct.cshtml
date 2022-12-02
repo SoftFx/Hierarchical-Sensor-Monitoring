@@ -38,6 +38,7 @@
 
 <input id="productKey" value="@Model.ProductId" style="display: none"/>
 <input id="encodedProductId" value="@Model.EncodedProductId" style="display: none"/>
+
 <div class="container">
     <div class="row justify-content-center">
             <h4 class="my-3">Edit product '@Model.ProductName'</h4>
@@ -69,10 +70,6 @@
                 </div>*@
     
             <div class="my-1">
-                @{
-                    var usedUsers = Model.UsersRights?.Select(ur => ur.Key)?.ToList();
-                    var notAdminUsers = TempData[TextConstants.TempDataNotAdminUsersText] as List<User>;
-                }
                 <div>
                     <div class='row justify-content-start'>
                         <h5 class='mt-1'>Members</h5>
@@ -92,13 +89,10 @@
                         <tr>
                             <th>0</th>
                             <th>
-                                @{
-                                    RemovedUsedUsers(notAdminUsers, usedUsers);
-                                }
-                                @if (notAdminUsers != null && notAdminUsers.Count != 0)
+                                @if (Model.NotAdminUsers != null && Model.NotAdminUsers.Count != 0)
                                 {
                                     <select class='form-select' id='createUser'>
-                                        @foreach (var user in notAdminUsers)
+                                        @foreach (var user in Model.NotAdminUsers)
                                         {
                                             <option value='@user.Id'>@user.UserName</option>
                                         }
@@ -278,23 +272,6 @@
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
-@{
-    static void RemovedUsedUsers(List<User> users, List<UserViewModel> usedUsers)
-    {
-        if (users == null || !users.Any())
-            return;
-
-        if (usedUsers == null || !usedUsers.Any())
-            return;
-
-        foreach (var usedUser in usedUsers)
-        {
-            var user = users.FirstOrDefault(u => u.UserName.Equals(usedUser.Username));
-            if (user != null)
-                users.Remove(user);
-        }
-    }
-}
 
 <script>
     let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';

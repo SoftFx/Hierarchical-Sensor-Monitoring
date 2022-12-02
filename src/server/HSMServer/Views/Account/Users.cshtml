@@ -19,6 +19,7 @@
         {
             <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
+        
         <div class="m-2">
             <div class='row justify-content-start'>
                 <div class='col-2'>
@@ -26,6 +27,7 @@
                 </div>
             </div>
         </div>
+        
         <div class='col-xxl'>
             <table class='table table-striped'>
                 <thead>
@@ -99,10 +101,12 @@
                                         type='button' class='btn btn-secondary ms-1' title='change'>
                                     <i class='fas fa-user-edit'></i>
                                 </button>
+                                
                                 <button disabled id='ok_@userItem.Username'
                                         type='button' class='btn btn-secondary ms-1' title='ok'>
                                     <i class='fas fa-check'></i>
                                 </button>
+                                
                                 <button disabled id='cancel_@userItem.Username'
                                         type='button' class='btn btn-secondary ms-1' title='cancel'>
                                     <i class='fas fa-times'></i>
@@ -116,7 +120,6 @@
         </div>
     </div>
 </div>
-
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

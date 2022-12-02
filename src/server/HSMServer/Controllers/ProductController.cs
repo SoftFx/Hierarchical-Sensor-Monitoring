@@ -88,9 +88,8 @@ namespace HSMServer.Controllers
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
-            // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
-            TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
-
+            var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();
+            
             var decodedId = SensorPathHelper.Decode(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
@@ -104,7 +103,7 @@ namespace HSMServer.Controllers
                         user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
                 }
 
-            return View(new EditProductViewModel(productNode, pairs));
+            return View(new EditProductViewModel(productNode, pairs, notAdminUsers));
         }
 
         [HttpPost]

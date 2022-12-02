@@ -14,9 +14,12 @@ namespace HSMServer.Model.ViewModel
         public List<KeyValuePair<UserViewModel, ProductRoleEnum>> UsersRights { get; set; }
         public List<AccessKeyViewModel> AccessKeys { get; set; }
         public TelegramSettingsViewModel Telegram { get; set; }
+        public List<User> NotAdminUsers { get; set; }
+        public IEnumerable<UserViewModel> UsedUsers { get; set; }
 
         public EditProductViewModel(ProductNodeViewModel product,
-            List<KeyValuePair<User, ProductRoleEnum>> usersRights)
+            List<KeyValuePair<User, ProductRoleEnum>> usersRights,
+            List<User> notAdminUsers)
         {
             ProductName = product.Name;
             ProductId = product.Id;
@@ -26,6 +29,25 @@ namespace HSMServer.Model.ViewModel
 
             AccessKeys = product.GetEditProductAccessKeys();
             Telegram = product.TelegramSettings;
+            UsedUsers = UsersRights != null ? UsersRights.Select(ur => ur.Key) : Enumerable.Empty<UserViewModel>();
+            NotAdminUsers = notAdminUsers;
+            RemovedUsedUsers(NotAdminUsers, UsedUsers);
+        }
+
+        private void RemovedUsedUsers(List<User> users, IEnumerable<UserViewModel> usedUsers)
+        {
+            if (users == null || !users.Any())
+                return;
+
+            if (usedUsers == null || !usedUsers.Any())
+                return;
+
+            foreach (var usedUser in usedUsers)
+            {
+                var user = users.FirstOrDefault(u => u.UserName.Equals(usedUser.Username));
+                if (user != null)
+                    users.Remove(user);
+            }
         }
     }
 }

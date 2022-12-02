@@ -1,13 +1,14 @@
-@using System.Threading
 @using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
+
 @{
     var user = Context.User as User;
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
+
 <div class="m-2">
     <div class="row" justify-content-start>
         <div class="col-2">
@@ -47,18 +48,18 @@
                 <th>---</th>
                 <th>---</th>
                 <th>
-                    <button id='createButton'  type='button' class='btn btn-secondary ms-1' title='create'>
+                    <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
                         <i class='fas fa-plus'></i>
                     </button>
                 </th>
                 <th></th>
             </tr>
         }
-        @for (var i = 0;i < Model.Count;i++)
+        @for (var i = 0; i < Model.Count; i++)
         {
             var product = Model[i];
             <tr>
-                <th scope='row'>@(i+1)</th>
+                <th scope='row'>@(i + 1)</th>
                 <td>@product.Name</td>
                 <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
                 <td>
