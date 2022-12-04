@@ -1,5 +1,6 @@
 @using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
 
@@ -69,7 +70,7 @@
                     <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
                 </td>
                 <td> </td>
-                <td>@product.CreationDate</td>
+                <td>@product.CreationDate.ToDefaultFormat()</td>
                 <td>@product.ManagerName</td>
                 @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                 {
