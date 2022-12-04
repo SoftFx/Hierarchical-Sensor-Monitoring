@@ -95,11 +95,11 @@ namespace HSMServer.Controllers
 
             var users = _userManager.GetViewers(decodedId);
 
-            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
+            var pairs = new List<(User, ProductRoleEnum)>();
             if (users != null || users.Any())
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
-                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
+                    pairs.Add(new(user,
                         user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
                 }
 

@@ -11,25 +11,23 @@ namespace HSMServer.Model.ViewModel
         public string ProductName { get; set; }
         public string ProductId { get; set; }
         public string EncodedProductId { get; set; }
-        public List<KeyValuePair<UserViewModel, ProductRoleEnum>> UsersRights { get; set; }
+        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; set; }
         public List<AccessKeyViewModel> AccessKeys { get; set; }
         public TelegramSettingsViewModel Telegram { get; set; }
         public List<User> NotAdminUsers { get; set; }
         public IEnumerable<UserViewModel> UsedUsers { get; set; }
 
         public EditProductViewModel(ProductNodeViewModel product,
-            List<KeyValuePair<User, ProductRoleEnum>> usersRights,
+            List<(User, ProductRoleEnum)> usersRights,
             List<User> notAdminUsers)
         {
             ProductName = product.Name;
             ProductId = product.Id;
             EncodedProductId = product.EncodedId;
-            UsersRights = usersRights.Select(x =>
-                new KeyValuePair<UserViewModel, ProductRoleEnum>(new UserViewModel(x.Key), x.Value)).ToList();
-
+            UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetEditProductAccessKeys();
             Telegram = product.TelegramSettings;
-            UsedUsers = UsersRights != null ? UsersRights.Select(ur => ur.Key) : Enumerable.Empty<UserViewModel>();
+            UsedUsers = UsersRights.Select(ur => ur.Item1);
             NotAdminUsers = notAdminUsers;
             RemovedUsedUsers(NotAdminUsers, UsedUsers);
         }

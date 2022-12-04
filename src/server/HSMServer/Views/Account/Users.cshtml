@@ -83,7 +83,7 @@
                                         {
                                             string name = string.Empty;
                                             products?.TryGetValue(right.Key, out name);
-                                            <span>@(name ?? right.Key) (@right.Key)</span>
+                                            <span>@(name ?? right.Key) (@right.Value)</span>
                                             <br>
                                         }
                                     }

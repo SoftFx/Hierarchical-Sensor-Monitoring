@@ -89,7 +89,7 @@
                         <tr>
                             <th>0</th>
                             <th>
-                                @if (Model.NotAdminUsers != null && Model.NotAdminUsers.Count != 0)
+                                @if (Model.NotAdminUsers.Count != 0)
                                 {
                                     <select class='form-select' id='createUser'>
                                         @foreach (var user in Model.NotAdminUsers)
@@ -118,23 +118,20 @@
                                 </button>
                             </th>
                         </tr>
-    
-                        @if (Model.UsersRights != null && Model.UsersRights.Count > 0)
-                        {
-                            for(var i = 0;i < Model.UsersRights.Count; i++)
+                        @for(var i = 0;i < Model.UsersRights.Count; i++)
                             {
                                 var userRight = Model.UsersRights[i];
                                 <tr>
                                     <th scope='row'>@(i+1)</th>
                                     <td>
-                                        @userRight.Key.Username
-                                        <input id='userId_@userRight.Key.Username' class="d-none" value='@userRight.Key.UserId'/>
+                                        @userRight.Item1.Username
+                                        <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
                                     </td>
                                     <td>
-                                        <select class='form-select' disabled id='role_@userRight.Key.Username'>
+                                        <select class='form-select' disabled id='role_@userRight.Item1.Username'>
                                             @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
                                             {
-                                                if (role == userRight.Value)
+                                                if (role == userRight.Item2)
                                                 {
                                                     <option selected value='@((int)role)'>@role</option>
                                                 }
@@ -146,29 +143,28 @@
                                         </select>
                                     </td>
                                     <td>
-                                        <button id='change_@userRight.Key.Username'
+                                        <button id='change_@userRight.Item1.Username'
                                                 type='button' class='btn btn-secondary ms-1' title='edit'>
                                             <i class='fas fa-edit'></i>
                                         </button>
     
-                                        <button id='delete_@userRight.Key.Username'
+                                        <button id='delete_@userRight.Item1.Username'
                                                 type='button' class='btn btn-secondary ms-1' title='delete'>
                                             <i class='fas fa-trash-alt'></i>
                                         </button>
     
-                                        <button disabled id='ok_@userRight.Key.Username'
+                                        <button disabled id='ok_@userRight.Item1.Username'
                                                 type='button' class='btn btn-secondary ms-1' title='ok'>
                                             <i class='fas fa-check'></i>
                                         </button>
     
-                                        <button disabled id='cancel_@userRight.Key.Username'
+                                        <button disabled id='cancel_@userRight.Item1.Username'
                                                 type='button' class='btn btn-secondary ms-1' title='cancel'>
                                             <i class='fas fa-times'></i>
                                         </button>
                                     </td>
                                 </tr>
                             }
-                        }
                         </tbody>
                     </table>
                 </div>
