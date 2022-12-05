@@ -10,9 +10,13 @@ namespace HSMServer.Model.ViewModel
 {
     public class EditProductViewModel
     {
-        #region Get Properties
+        #region Fields
 
-        private IList<UserViewModel> _usedUsers { get; }
+        private readonly IList<UserViewModel> _usedUsers;
+
+        #endregion
+
+        #region Get Properties
 
         public string ProductName { get; }
 
