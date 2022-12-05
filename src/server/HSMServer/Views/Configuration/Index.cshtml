@@ -109,7 +109,7 @@
                     You can configure a Telegram bot. Please install it via Telegram and put configuration
                     parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
                     <b>Warning!</b> It will stop current bot.
-                    Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.
+                    Installation link <a href='https://core.telegram.org/bots/features#botfather' target='_blank'>Bot Installation</a>.
                 </div>
 
                 <div class="row ms-5 mt-1 mb-1">
@@ -218,7 +218,7 @@
                 else {
                     $("#message").empty();
                     $("#message").css("color", "red");
-                    $("#message").append("Something went wrong. Please check Bot configurations. Error message: " + data);
+                    $("#message").append(data);
                 }
             }
         });

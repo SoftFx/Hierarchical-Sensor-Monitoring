@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.Core.Converters;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
 

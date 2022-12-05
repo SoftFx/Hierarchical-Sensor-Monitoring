@@ -14,9 +14,13 @@ namespace HSMServer.Core.Helpers
                 dstream.Write(sensorValue.Value, 0, sensorValue.Value.Length);
             }
 
+            var compressedValue = output.ToArray();
+            if (compressedValue.Length >= sensorValue.Value.Length)
+                return sensorValue;
+
             return sensorValue with
             {
-                Value = output.ToArray()
+                Value = compressedValue,
             };
         }
 

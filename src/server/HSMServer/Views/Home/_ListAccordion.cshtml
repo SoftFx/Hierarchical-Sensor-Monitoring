@@ -1,0 +1,28 @@
+﻿@using HSMServer.Model.TreeViewModels
+
+@model List<NodeViewModel>
+
+
+<div class="accordion">
+    @if (Model.Count > 0)
+    {
+        var title = Model.FirstOrDefault() is ProductNodeViewModel ? "Nodes" : "Sensors";
+        var accordionId = $"list{title}";
+
+        <div class="accordion-item custom-accordion-item">
+            <h2 class="accordion-header" id="custom_accordion_header">
+                <button id='list-accordion_@accordionId' class="accordion-button collapsed fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='false'>
+                    @title
+                </button>
+            </h2>
+            <div id="flush-collapse_@accordionId" class="accordion-collapse collapse">
+                <div class="accordion-body">
+                    <div>
+                        @foreach (var element in Model)
+                            @await Html.PartialAsync("_NodeAccordion", element)
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

@@ -8,10 +8,10 @@ namespace HSMSensorDataObjects
     public enum SensorStatus
     {
         /// <summary>
-        /// Default status, which is given to every sensor value unless another is specified. Needs extra settings to be validated in client app
+        /// The status indicates that the sensor is off by schedule
         /// </summary>
         [EnumMember]
-        Unknown = 0,
+        OffTime = 0,
 
         /// <summary>
         /// The status indicates that the value is correct, and will be displayed and presented as valid.

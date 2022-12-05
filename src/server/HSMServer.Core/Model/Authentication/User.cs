@@ -1,12 +1,14 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.UserFilters;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace HSMServer.Core.Model.Authentication
 {
-    public class User : ClaimsPrincipal
+    public class User : ClaimsPrincipal, INotificatable
     {
         public Guid Id { get; set; }
 
@@ -22,8 +24,21 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
+        public UserNotificationSettings Notifications { get; internal set; }
 
-        public NotificationSettings Notifications { get; internal set; }
+        public TreeUserFilter TreeFilter { get; set; }
+
+
+        string INotificatable.Id => Id.ToString();
+
+        string INotificatable.Name => UserName;
+
+        NotificationSettings INotificatable.Notifications => Notifications;
+
+        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
+            Notifications.Telegram.MessagesAreEnabled &&
+            Notifications.IsSensorEnabled(sensor.Id) &&
+            !Notifications.IsSensorIgnored(sensor.Id);
 
 
         public User(string userName) : this()
@@ -36,6 +51,7 @@ namespace HSMServer.Core.Model.Authentication
             Id = Guid.NewGuid();
             ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
             Notifications = new();
+            TreeFilter = new();
         }
 
 
@@ -49,12 +65,9 @@ namespace HSMServer.Core.Model.Authentication
             CertificateThumbprint = user.CertificateThumbprint;
             CertificateFileName = user.CertificateFileName;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-                ProductsRoles.AddRange(user.ProductsRoles);
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
+            TreeFilter = user.TreeFilter;
         }
 
         public User(UserEntity entity)
@@ -76,6 +89,10 @@ namespace HSMServer.Core.Model.Authentication
             }
 
             Notifications = new(entity.NotificationSettings);
+
+            TreeFilter = entity.TreeFilter is null
+                ? new TreeUserFilter()
+                : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
         }
 
         /// <summary>
@@ -88,14 +105,9 @@ namespace HSMServer.Core.Model.Authentication
             //CertificateThumbprint = user.CertificateThumbprint;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
-
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
-            if (user.ProductsRoles != null && user.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(user.ProductsRoles);
-            }
-
+            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
+            TreeFilter = user.TreeFilter;
         }
 
         public User Copy()
@@ -103,7 +115,14 @@ namespace HSMServer.Core.Model.Authentication
             var copy = this.MemberwiseClone() as User;
             copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
             copy.Notifications = new(Notifications.ToEntity());
+            copy.TreeFilter = TreeFilter;
             return copy;
         }
+
+        public bool IsProductAvailable(string productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
+
+        public List<string> GetManagerProducts() =>
+            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
     }
 }

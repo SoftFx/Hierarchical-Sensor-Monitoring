@@ -229,9 +229,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateUnregisteredUserTest()
         {
-            var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
+            var unregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
 
-            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+            var actual = _userManager.Authenticate(unregisteredUser.UserName, unregisteredUser.Password);
 
             Assert.Null(actual);
         }
@@ -240,9 +240,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateEmptyUserTest()
         {
-            var UnregisteredUser = new User() { UserName = string.Empty, Password = string.Empty };
+            var unregisteredUser = new User() { UserName = string.Empty, Password = string.Empty };
 
-            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+            var actual = _userManager.Authenticate(unregisteredUser.UserName, unregisteredUser.Password);
 
             Assert.Null(actual);
         }

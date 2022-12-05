@@ -1,21 +1,15 @@
-﻿using HSMServer.Constants;
-using HSMServer.Core.Helpers;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Helpers;
 using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace HSMServer.HtmlHelpers
 {
     public static class TableHelper
     {
-        // regex for looking for strings that contain HTML markup
-        private static readonly Regex _tagRegex = new(@"<\s*([^ >]+)[^>]*>.*?<\s*/\s*\1\s*>");
-
         #region [ Users ]
         public static string CreateTable(User user, List<UserViewModel> users, Dictionary<string, string> products)
         {
@@ -171,7 +165,7 @@ namespace HSMServer.HtmlHelpers
 
                 if (UserRoleHelper.IsProductCRUDAllowed(user) ||
                     ProductRoleHelper.IsManager(product.Id, user.ProductsRoles))
-                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.Id}' " +
+                    result.Append($"<td><button style='margin-left: 5px' id='change_{product.EncodedId}' " +
                     "type='button' class='btn btn-secondary' title='edit'>" +
                     "<i class='fas fa-edit'></i></button>");
 
@@ -199,9 +193,9 @@ namespace HSMServer.HtmlHelpers
         {
             StringBuilder result = new StringBuilder();
             //header template
-            result.Append("<div style='margin: 10px'>" +
+            result.Append("<div>" +
                 "<div class='row justify-content-start'>" +
-                $"<h5 style='margin: 10px 20px 10px;'>Edit Product '{productName}' Members</h5></div></div>");
+                $"<h5 class='mt-1'>Members</h5></div></div>");
 
             result.Append("<div class='col-xxl'>");
             //table template
@@ -325,157 +319,6 @@ namespace HSMServer.HtmlHelpers
 
             return result.ToString();
         }
-        #endregion
-
-        #region Sensor history tables
-
-        public static string CreateHistoryTable(List<BaseValue> values, int type, string encodedPath)
-        {
-            if (values.Count == 0)
-                return string.Empty;
-
-            values.Reverse();
-
-            var sb = new StringBuilder(1 << 3);
-            sb.Append("<div>");
-
-            switch ((SensorType)type)
-            {
-                case SensorType.Boolean:
-                    sb.Append(CreateTable(values.Select(v => (BooleanValue)v).ToList()));
-                    break;
-                case SensorType.Integer:
-                    sb.Append(CreateTable(values.Select(v => (IntegerValue)v).ToList()));
-                    break;
-                case SensorType.Double:
-                    sb.Append(CreateTable(values.Select(v => (DoubleValue)v).ToList()));
-                    break;
-                case SensorType.String:
-                    sb.Append(CreateTable(values.Select(v => (StringValue)v).ToList()));
-                    break;
-                case SensorType.IntegerBar:
-                    sb.Append(CreateTable(values.Select(v => (IntegerBarValue)v).ToList()));
-                    break;
-                case SensorType.DoubleBar:
-                    sb.Append(CreateTable(values.Select(v => (DoubleBarValue)v).ToList()));
-                    break;
-                default:
-                    break;
-            }
-
-            sb.Append($"<input id='oldest_date_{encodedPath}' type='text' style='display: none'" +
-                      $" value='{values.LastOrDefault()?.Time.ToUniversalTime().ToString("O") ?? ""}' /></div>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<BooleanValue> booleanValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th scope='col'>Date</th>");
-            sb.Append("<th scope='col'>Value</th>");
-            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
-
-            foreach (var value in booleanValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<IntegerValue> integerValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th>Date</th>");
-            sb.Append("<th scope='col'>Number</th>");
-            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
-
-            foreach (var value in integerValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<DoubleValue> doubleValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th>Date</th>");
-            sb.Append("<th scope='col'>Number</th>");
-            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
-
-            foreach (var value in doubleValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<StringValue> stringValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th>Date</th>");
-            sb.Append("<th scope='col'>String value</th>");
-            sb.Append("<th scope='col'>Comment</th></tr></thead><tbody>");
-
-            foreach (var value in stringValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Value}</td><td>{GetHistoryRawComment(value.Comment)}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<IntegerBarValue> intBarValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th>Date</th>");
-            sb.Append("<th scope='col'>Min</th>");
-            sb.Append("<th scope='col'>Mean</th>");
-            sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
-
-            foreach (var value in intBarValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string CreateTable(List<DoubleBarValue> doubleBarValues)
-        {
-            var sb = new StringBuilder(1 << 5);
-
-            sb.Append("<table class='table table-striped'><thead><tr>");
-            sb.Append("<th>Date</th>");
-            sb.Append("<th scope='col'>Min</th>");
-            sb.Append("<th scope='col'>Mean</th>");
-            sb.Append("<th scope='col'>Max</th></tr></thead><tbody>");
-
-            foreach (var value in doubleBarValues)
-                sb.Append($"<tr><td>{value.Time.ToString(ViewConstants.NodeUpdateTimeFormat)}</td><td scope='row'>{value.Min}</td><td>{value.Mean}</td><td>{value.Max}</td></tr>");
-
-            sb.Append("</tbody>");
-
-            return sb.ToString();
-        }
-
-        private static string GetHistoryRawComment(string comment) =>
-            !string.IsNullOrEmpty(comment) && _tagRegex.IsMatch(comment) ? "This comment is invalid" : comment;
-
         #endregion
     }
 }

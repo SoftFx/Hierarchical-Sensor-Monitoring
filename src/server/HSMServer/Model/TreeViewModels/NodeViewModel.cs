@@ -1,23 +1,58 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
+    public enum SensorStatus
+    {
+        OffTime,
+        Ok,
+        Warning,
+        Error,
+    }
+
+
     public abstract class NodeViewModel
     {
-        private const int NodeNameMaxLength = 35;
-
+        public string EncodedId { get; }
 
         public string Name { get; protected set; }
 
         public DateTime UpdateTime { get; protected set; }
 
-        public virtual SensorStatus Status { get; protected set; }
+        public SensorStatus Status { get; protected set; }
+
+        public virtual bool HasData { get; protected set; }
+
+        public string Product { get; protected set; }
+
+        public string Path { get; protected set; }
+
+        public bool IsOwnExpectedUpdateInterval { get; protected set; }
 
         public NodeViewModel Parent { get; internal set; }
 
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
-        public string GetShortName(string name) =>
-            name.Length > NodeNameMaxLength ? $"{name[..NodeNameMaxLength]}..." : name;
+
+        public string Tooltip =>
+            $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+
+        public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
+
+
+        internal NodeViewModel(string encodedId)
+        {
+            EncodedId = encodedId;
+        }
+
+        protected void Update(NodeBaseModel model)
+        {
+            Name = model.DisplayName;
+
+            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateInterval?.ToTimeInterval());
+            IsOwnExpectedUpdateInterval = model.ExpectedUpdateInterval != null || model.ParentProduct == null;
+        }
     }
 }

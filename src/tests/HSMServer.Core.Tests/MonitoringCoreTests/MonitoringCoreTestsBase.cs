@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Authentication;
-using HSMServer.Core.Notifications;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -15,7 +14,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         protected readonly IUserManager _userManager;
         protected readonly IUpdatesQueue _updatesQueue;
-        protected readonly INotificationsCenter _notificationCenter;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
@@ -29,10 +27,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
-
-            var telegramMock = new Mock<INotificationsCenter>();
-            telegramMock.Setup(a => a.TelegramBot).Returns(new TelegramBot(_userManager, null));
-            _notificationCenter = telegramMock.Object;
         }
     }
 }

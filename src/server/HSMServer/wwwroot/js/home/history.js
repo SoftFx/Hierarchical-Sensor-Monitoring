@@ -186,10 +186,10 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
-            $(`#values_${encodedId}`).empty();
-            let values = JSON.parse(data).value;
-            
-            if (values === "") {
+            $(`#values_${encodedId}`).html(data);
+
+            let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
+            if (noValuesElement != null) {
                 $('#history_' + encodedId).hide();
                 $('#no_data_' + encodedId).show();
                 return;
@@ -197,7 +197,6 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
-            $(`#values_${encodedId}`).append(values);
             if (needSetRadio) {
                 selectRadioForTable(encodedId);
             }

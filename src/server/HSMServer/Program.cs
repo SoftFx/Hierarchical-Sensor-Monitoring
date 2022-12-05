@@ -88,7 +88,7 @@ namespace HSMServer
                                 });
                             });
 
-                        options.Limits.MaxRequestBodySize = 166666921; // Set up to ~158.9MB
+                        options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
                         options.Limits.MaxConcurrentConnections = 100;
                         options.Limits.MaxConcurrentUpgradedConnections = 100;
                         options.Limits.MinRequestBodyDataRate = null;

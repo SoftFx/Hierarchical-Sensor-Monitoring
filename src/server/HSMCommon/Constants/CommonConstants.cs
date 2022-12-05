@@ -23,5 +23,9 @@
         public const char SensorPathSeparator = '/';
 
         public const string InfrastructureLoggerName = "InfrastructureLogger";
+
+
+        public static string BuildPath(params string[] paths) =>
+            string.Join(SensorPathSeparator, paths);
     }
 }

@@ -6,12 +6,12 @@ using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Notifications;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModels;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -50,8 +50,8 @@ namespace HSMServer
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
-            services.AddSingleton<INotificationsCenter, NotificationsCenter>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+            services.AddSingleton<INotificationsCenter, NotificationsCenter>();
             services.AddSingleton<TreeViewModel>();
 
             services.AddHostedService<OutdatedSensorService>();
@@ -88,6 +88,8 @@ namespace HSMServer
 
             app.UseAuthentication();
             app.CountRequestStatistics();
+            app.UseMiddleware<LoggingExceptionMiddleware>();
+
             app.UseSwagger(c => c.SerializeAsV2 = true);
 
             app.UseSwaggerUI(c =>

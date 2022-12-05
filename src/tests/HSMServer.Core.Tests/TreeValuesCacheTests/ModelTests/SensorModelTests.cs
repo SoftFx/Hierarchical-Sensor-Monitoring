@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "SensorModel creation")]
         public void SensorModelCreationTest()
         {
-            var sensorEntity = EntitiesFactory.BuildSensorEntity();
+            var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: null);
 
             var sensor = SensorModelFactory.Build(sensorEntity);
 
@@ -68,9 +68,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "SensorModel to entity")]
         public void SensorModelToSensorEntityTest()
         {
-            var entity = EntitiesFactory.BuildSensorEntity();
+            var product = new ProductModel("product");
+            var entity = EntitiesFactory.BuildSensorEntity(parent: product.Id);
 
             var sensor = SensorModelFactory.Build(entity);
+            product.AddSensor(sensor);
+
             var sensorEntity = sensor.ToEntity();
 
             ModelsTester.TestSensorModel(sensorEntity, sensor);

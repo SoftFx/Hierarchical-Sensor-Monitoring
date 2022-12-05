@@ -17,6 +17,8 @@
     <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId" />
     <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id" />
     <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal" />
+    <input style='display: none' asp-for="IsModify" value="@Model.IsModify" />
+    <input style='display: none' asp-for="ExpirationTime" value="@Model.ExpirationTime"/>
 
     <div class="row">
         <div class="form-group col-8">
@@ -29,11 +31,11 @@
             <label asp-for="Expiration" class="col-form-label"></label>
             @if (Model.IsModify)
             {
-                <input id="accessKey_expiration" type="text" asp-for="ExpirationTime" class="form-control" value="@Model.ExpirationTime" disabled/>
+                <input type="text" value="@Model.ExpirationTime" class="form-control" disabled/>
             }
             else
             {
-                <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control custom-select"></select>
+                <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control form-select"></select>
             }
         </div>
     </div>
@@ -56,6 +58,10 @@
         <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" asp-for="CanAddSensors">
             <label class="form-check-label" asp-for="CanAddSensors"></label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" asp-for="CanReadSensorData">
+            <label class="form-check-label" asp-for="CanReadSensorData"></label>
         </div>
     </div>
 

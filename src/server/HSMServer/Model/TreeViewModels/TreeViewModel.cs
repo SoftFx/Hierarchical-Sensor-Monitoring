@@ -1,9 +1,8 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -37,44 +36,40 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        internal void UpdateNodesCharacteristics(User user)
+        public List<TreeNodeStateViewModel> GetUserTree(User user)
         {
-            var userIsAdmin = UserRoleHelper.IsAllProductsTreeAllowed(user);
-            foreach (var (nodeId, node) in Nodes)
-                if (node.Parent == null)
-                    node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
-
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.Recursion();
-
-            UpdateAccessKeysCharacteristics(user);
-            ResetNotificationsCharacteristics(user);
-        }
-
-        internal void UpdateAccessKeysCharacteristics(User user)
-        {
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
-
-            foreach (var (productId, role) in user.ProductsRoles)
-                if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
-                    node.UpdateAccessKeysAvailableOperations(true);
-        }
-
-        internal void ResetNotificationsCharacteristics(User user)
-        {
-            foreach (var (_, node) in Nodes)
-                node.SensorsWithNotificationsCount = 0;
-
-            foreach (var (_, sensor) in Sensors)
+            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
             {
-                sensor.IsNotificationsEnabled = false;
+                var node = new TreeNodeStateViewModel(product);
 
-                if (user.Notifications.EnabledSensors.Contains(sensor.Id))
-                    sensor.UpdateNotificationsStatus(true);
+                foreach (var (_, childNode) in product.Nodes)
+                    node.AddChild(FilterNodes(childNode), user);
+
+                foreach (var (_, sensor) in product.Sensors)
+                    node.AddChild(sensor, user);
+
+                return node;
             }
+
+
+            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+
+            foreach (var (_, product) in Nodes)
+                if (product.Parent == null && user.IsProductAvailable(product.Id))
+                {
+                    var node = FilterNodes(product);
+                    if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
+                        tree.Add(node);
+                }
+
+            return tree;
+        }
+
+        internal void RecalculateNodesCharacteristics()
+        {
+            foreach (var (_, node) in Nodes)
+                if (node.Parent == null)
+                    node.RecalculateCharacteristics();
         }
 
         internal List<Guid> GetNodeAllSensors(string selectedNode)
@@ -152,7 +147,7 @@ namespace HSMServer.Model.TreeViewModels
             switch (transaction)
             {
                 case TransactionType.Add:
-                    if (Nodes.TryGetValue(model.ParentProductId, out var parent))
+                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
                         AddNewSensorViewModel(model, parent);
 
                     break;
@@ -167,7 +162,7 @@ namespace HSMServer.Model.TreeViewModels
                 case TransactionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
 
-                    if (Nodes.TryGetValue(model.ParentProductId, out var parentProduct))
+                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                     break;
@@ -232,9 +227,16 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, viewModel);
         }
 
-        private string GetAccessKeyAuthorName(AccessKeyModel key) =>
-            Guid.TryParse(key.AuthorId, out var authorId)
-                ? _userManager.GetUser(authorId)?.UserName
-                : key.AuthorId;
+        private string GetAccessKeyAuthorName(AccessKeyModel key)
+        {
+            if (key.AuthorId.HasValue)
+            {
+                var user = _userManager.GetUser(key.AuthorId.Value);
+                if (user != null)
+                    return user.UserName;
+            }
+
+            return key.AuthorId?.ToString();
+        }
     }
 }

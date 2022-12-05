@@ -153,7 +153,7 @@ namespace HSMServer.Core.DataLayer
                 1 => SensorStatus.Ok,
                 2 => SensorStatus.Warning,
                 3 => SensorStatus.Error,
-                _ => SensorStatus.Unknown,
+                _ => SensorStatus.OffTime,
             };
         }
 
