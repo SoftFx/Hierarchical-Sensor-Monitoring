@@ -118,11 +118,11 @@
                                 </button>
                             </th>
                         </tr>
-                        @for(var i = 0;i < Model.UsersRights.Count; i++)
+                        @for(var i = 0; i < Model.UsersRights.Count; i++)
                             {
                                 var userRight = Model.UsersRights[i];
                                 <tr>
-                                    <th scope='row'>@(i+1)</th>
+                                    <th scope='row'>@(i + 1)</th>
                                     <td>
                                         @userRight.Item1.Username
                                         <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
