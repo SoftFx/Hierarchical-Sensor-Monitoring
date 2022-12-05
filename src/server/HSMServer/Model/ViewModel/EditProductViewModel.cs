@@ -11,26 +11,27 @@ namespace HSMServer.Model.ViewModel
     public class EditProductViewModel
     {
         #region Get Properties
+
+        private IList<UserViewModel> _usedUsers { get; }
+
         public string ProductName { get; }
-        
+
         public string ProductId { get; }
-        
+
         public string EncodedProductId { get; }
-        
+
         public List<AccessKeyViewModel> AccessKeys { get; }
-        
+
         public ISet<UserViewModel> NotAdminUsers { get; }
-        
-        public ISet<UserViewModel> UsedUsers { get;}
-        
+
         #endregion
 
         #region Set Properties
-        
+
         public TelegramSettingsViewModel Telegram { get; set; }
 
         public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; set; }
-        
+
         #endregion
 
         public EditProductViewModel(ProductNodeViewModel product,
@@ -40,16 +41,16 @@ namespace HSMServer.Model.ViewModel
             ProductName = product.Name;
             ProductId = product.Id;
             EncodedProductId = product.EncodedId;
-            
+
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetEditProductAccessKeys();
             Telegram = product.TelegramSettings;
-            
-            UsedUsers = UsersRights.Select(ur => ur.Item1).ToImmutableHashSet();
+
+            _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
             NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
-            RemoveUsedUsers(NotAdminUsers, UsedUsers);
+            RemoveUsedUsers(NotAdminUsers, _usedUsers);
         }
-        
+
         private static void RemoveUsedUsers(ISet<UserViewModel> users, IEnumerable<UserViewModel> usedUsers)
         {
             users.ExceptWith(usedUsers);
