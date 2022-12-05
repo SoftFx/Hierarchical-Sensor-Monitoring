@@ -5,11 +5,18 @@ namespace HSMServer.Model.ViewModel
 {
     public class UserViewModel
     {
-        public string UserId { get; set; }
-        public string Username { get; set; }
+        public string Username { get;}
+        
+        public bool IsAdmin { get;}
+
+        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get;}
+        
+        
         public string Password { get; set; }
-        public bool IsAdmin { get; set; }
-        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
+        
+        public string UserId { get; set; }
+        
+        
         public UserViewModel(User user)
         {
             UserId = user.Id.ToString();
@@ -25,7 +32,7 @@ namespace HSMServer.Model.ViewModel
 
         public override bool Equals(object obj)
         {
-            return UserId.Equals((obj as UserViewModel)!.UserId);
+            return UserId.Equals((obj as UserViewModel)?.UserId);
         }
 
         public override int GetHashCode()

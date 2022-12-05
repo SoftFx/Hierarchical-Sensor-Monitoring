@@ -10,14 +10,9 @@ namespace HSMServer.Model.ViewModel
 {
     public class EditProductViewModel
     {
-        #region Fields
-
         private readonly IList<UserViewModel> _usedUsers;
-
-        #endregion
-
-        #region Get Properties
-
+        
+        
         public string ProductName { get; }
 
         public string ProductId { get; }
@@ -26,21 +21,16 @@ namespace HSMServer.Model.ViewModel
 
         public List<AccessKeyViewModel> AccessKeys { get; }
 
-        public ISet<UserViewModel> NotAdminUsers { get; }
+        public HashSet<UserViewModel> NotAdminUsers { get; }
 
-        #endregion
+        public TelegramSettingsViewModel Telegram { get; }
 
-        #region Set Properties
-
-        public TelegramSettingsViewModel Telegram { get; set; }
-
-        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; set; }
-
-        #endregion
-
+        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; }
+       
+        
         public EditProductViewModel(ProductNodeViewModel product,
-            List<(User, ProductRoleEnum)> usersRights,
-            List<User> notAdminUsers)
+                                    List<(User, ProductRoleEnum)> usersRights,
+                                    List<User> notAdminUsers)
         {
             ProductName = product.Name;
             ProductId = product.Id;
@@ -51,13 +41,9 @@ namespace HSMServer.Model.ViewModel
             Telegram = product.TelegramSettings;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
-            NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
-            RemoveUsedUsers(NotAdminUsers, _usedUsers);
-        }
-
-        private static void RemoveUsedUsers(ISet<UserViewModel> users, IEnumerable<UserViewModel> usedUsers)
-        {
-            users.ExceptWith(usedUsers);
+            NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x))
+                .ToHashSet();
+            NotAdminUsers.ExceptWith(_usedUsers);
         }
     }
 }
