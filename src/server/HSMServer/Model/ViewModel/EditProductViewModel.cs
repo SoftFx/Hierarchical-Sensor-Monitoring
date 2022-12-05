@@ -10,7 +10,7 @@ namespace HSMServer.Model.ViewModel
 {
     public class EditProductViewModel
     {
-        private readonly IList<UserViewModel> _usedUsers;
+        private readonly List<UserViewModel> _usedUsers;
         
         
         public string ProductName { get; }
