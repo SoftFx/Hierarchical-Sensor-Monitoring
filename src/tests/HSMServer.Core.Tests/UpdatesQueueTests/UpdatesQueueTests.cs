@@ -43,7 +43,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
                 receivedInfo = items[0];
             }
 
-            StoreInfo storeInfo = new();
+            StoreInfo storeInfo = new("", "/");
             var updatesQueue = new UpdatesQueue();
             updatesQueue.AddItem(storeInfo);
             updatesQueue.NewItemsEvent += GetItem;
@@ -93,7 +93,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
             List<StoreInfo> items = new(count);
             for (int i = 0; i < count; i++)
             {
-                StoreInfo storeInfo = new();
+                StoreInfo storeInfo = new("", "/");
                 items.Add(storeInfo);
             }
 
@@ -122,7 +122,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
         private static StoreInfo BuildStoreInfo(int value)
         {
-            return new() { Key = "", Path = "/", BaseValue = new IntegerValue() { Value = value } };
+            return new("", "/") { BaseValue = new IntegerValue() { Value = value } };
         }
     }
 }
