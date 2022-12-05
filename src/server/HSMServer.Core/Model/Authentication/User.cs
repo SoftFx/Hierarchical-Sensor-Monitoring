@@ -29,8 +29,6 @@ namespace HSMServer.Core.Model.Authentication
         public TreeUserFilter TreeFilter { get; set; }
 
 
-        string INotificatable.Id => Id.ToString();
-
         string INotificatable.Name => UserName;
 
         NotificationSettings INotificatable.Notifications => Notifications;

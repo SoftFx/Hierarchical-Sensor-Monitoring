@@ -29,9 +29,12 @@ namespace HSMServer.Core.Cache
         private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
 
-        private readonly ConcurrentDictionary<string, ProductModel> _tree;
+        private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
+
+        [Obsolete]
+        private readonly ConcurrentDictionary<string, Guid> _productKeys = new();
 
         public bool IsInitialized { get; private set; }
 
@@ -50,7 +53,7 @@ namespace HSMServer.Core.Cache
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
-            _tree = new ConcurrentDictionary<string, ProductModel>();
+            _tree = new ConcurrentDictionary<Guid, ProductModel>();
             _sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
             _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
 
@@ -544,15 +547,26 @@ namespace HSMServer.Core.Cache
                 product.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);
+
+                if (productEntity.Id != product.Id.ToString())
+                    _productKeys.TryAdd(productEntity.Id, product.Id);
             }
             _logger.Info($"{nameof(productEntities)} applied");
 
             _logger.Info("Links between products are building");
             foreach (var productEntity in productEntities)
-                if (!string.IsNullOrEmpty(productEntity.ParentProductId) &&
-                    _tree.TryGetValue(productEntity.ParentProductId, out var parent) &&
-                    _tree.TryGetValue(productEntity.Id, out var product))
-                    parent.AddSubProduct(product);
+                if (!string.IsNullOrEmpty(productEntity.ParentProductId))
+                {
+                    var parentId = _productKeys.TryGetValue(productEntity.ParentProductId, out var mappedParentId)
+                        ? mappedParentId
+                        : Guid.Parse(productEntity.ParentProductId);
+                    var productId = _productKeys.TryGetValue(productEntity.Id, out var mappedProductId)
+                        ? mappedProductId
+                        : Guid.Parse(productEntity.Id);
+
+                    if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
+                        parent.AddSubProduct(product);
+                }
             _logger.Info("Links between products are built");
 
             var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
@@ -568,10 +582,17 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Links between products and their sensors are building");
             foreach (var sensorEntity in sensorEntities)
-                if (!string.IsNullOrEmpty(sensorEntity.ProductId) &&
-                    _tree.TryGetValue(sensorEntity.ProductId, out var parent) &&
-                    _sensors.TryGetValue(Guid.Parse(sensorEntity.Id), out var sensor))
-                    parent.AddSensor(sensor);
+                if (!string.IsNullOrEmpty(sensorEntity.ProductId))
+                {
+                    var parentId = _productKeys.TryGetValue(sensorEntity.ProductId, out var mappedParentId)
+                        ? mappedParentId
+                        : Guid.Parse(sensorEntity.ProductId);
+                    var sensorId = Guid.Parse(sensorEntity.Id);
+
+                    if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
+                        parent.AddSensor(sensor);
+                }
+                else { }
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
@@ -601,7 +622,9 @@ namespace HSMServer.Core.Cache
         {
             foreach (var keyEntity in entities)
             {
-                AddKeyToTree(new AccessKeyModel(keyEntity));
+                Guid? parentId = _productKeys.TryGetValue(keyEntity.ProductId, out var mappedId) ? mappedId : null;
+
+                AddKeyToTree(new AccessKeyModel(keyEntity, parentId));
             }
 
             foreach (var product in _tree.Values)
@@ -688,8 +711,7 @@ namespace HSMServer.Core.Cache
         {
             bool isSuccess = _keys.TryAdd(key.Id, key);
 
-            if (isSuccess && key.ProductId != null
-                && _tree.TryGetValue(key.ProductId, out var product))
+            if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
                 isSuccess &= product.AddAccessKey(key);
                 ChangeProductEvent?.Invoke(product, TransactionType.Update);

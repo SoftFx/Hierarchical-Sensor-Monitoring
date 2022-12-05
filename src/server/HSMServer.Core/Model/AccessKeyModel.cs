@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
 
         public Guid? AuthorId { get; }
 
-        public string ProductId { get; }
+        public Guid ProductId { get; }
 
         public DateTime CreationTime { get; }
 
@@ -49,11 +49,11 @@ namespace HSMServer.Core.Model
         public bool HasExpired => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
 
 
-        public AccessKeyModel(AccessKeyEntity entity)
+        public AccessKeyModel(AccessKeyEntity entity, Guid? produtId = null)
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ProductId = entity.ProductId;
+            ProductId = produtId ?? Guid.Parse(entity.ProductId);
             State = (KeyState)entity.State;
             Permissions = (KeyPermissions)entity.Permissions;
             DisplayName = entity.DisplayName;
@@ -103,7 +103,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ProductId,
+                ProductId = ProductId.ToString(),
                 State = (byte)State,
                 Permissions = (long)Permissions,
                 DisplayName = DisplayName,
