@@ -76,7 +76,7 @@ namespace HSMServer.Controllers
             _treeValuesCache.AddProduct(productName);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productId)
+        public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)
         {
             _treeValuesCache.RemoveProduct(productId);
         }
@@ -91,7 +91,7 @@ namespace HSMServer.Controllers
             // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
             TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            var decodedId = SensorPathHelper.Decode(encodedProductId);
+            var decodedId = SensorPathHelper.DecodeGuid(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(decodedId);

@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
             ExpirationTime = new DateTime(entity.ExpirationTime);
         }
 
-        public AccessKeyModel(Guid authorId, string productId) : this()
+        public AccessKeyModel(Guid authorId, Guid productId) : this()
         {
             AuthorId = authorId;
             ProductId = productId;

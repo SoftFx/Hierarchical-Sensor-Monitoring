@@ -110,9 +110,9 @@ namespace HSMServer.Core.Cache
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
-        public void RemoveProduct(string productId)
+        public void RemoveProduct(Guid productId)
         {
-            void RemoveProduct(string productId)
+            void RemoveProduct(Guid productId)
             {
                 if (!_tree.TryRemove(productId, out var product))
                     return;
@@ -124,7 +124,7 @@ namespace HSMServer.Core.Cache
                     RemoveSensor(sensorId);
 
                 product.ParentProduct?.SubProducts.TryRemove(productId, out _);
-                _databaseCore.RemoveProduct(product.Id);
+                _databaseCore.RemoveProduct(product.Id.ToString());
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
@@ -143,9 +143,9 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public ProductModel GetProduct(string id) => _tree.GetValueOrDefault(id);
+        public ProductModel GetProduct(Guid id) => _tree.GetValueOrDefault(id);
 
-        public string GetProductNameById(string id) => GetProduct(id)?.DisplayName;
+        public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
         {
@@ -169,9 +169,6 @@ namespace HSMServer.Core.Cache
             if (!TryCheckCacheInitialization(out message) ||
                 !TryGetProductByKey(request, out var product, out message))
                 return false;
-
-            if (product.Id == request.Key)
-                return true;
 
             // TODO: remove after refactoring sensors data storing
             if (product.ParentProduct is not null)
@@ -220,7 +217,7 @@ namespace HSMServer.Core.Cache
             if (!_keys.TryRemove(id, out var key))
                 return;
 
-            if (key.ProductId != null && _tree.TryGetValue(key.ProductId, out var product))
+            if (_tree.TryGetValue(key.ProductId, out var product))
             {
                 product.AccessKeys.TryRemove(id, out _);
                 ChangeProductEvent?.Invoke(product, TransactionType.Update);
@@ -274,7 +271,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
-        public void RemoveSensorsData(string productId)
+        public void RemoveSensorsData(Guid productId)
         {
             if (!_tree.TryGetValue(productId, out var product))
                 return;
@@ -401,7 +398,6 @@ namespace HSMServer.Core.Cache
             {
                 SensorEntity entity = new()
                 {
-                    ProductId = parentProduct.Id,
                     DisplayName = sensorName,
                     Type = (byte)value.Type,
                 };
@@ -730,9 +726,14 @@ namespace HSMServer.Core.Cache
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
             var keyModel = GetAccessKeyModel(request);
-            var productId = keyModel == AccessKeyModel.InvalidKey ? request.Key : keyModel.ProductId;
+            if (keyModel == AccessKeyModel.InvalidKey)
+            {
+                message = ErrorKeyNotFound;
+                product = null;
+                return false;
+            }
 
-            var hasProduct = _tree.TryGetValue(productId, out product);
+            var hasProduct = _tree.TryGetValue(keyModel.ProductId, out product);
             message = hasProduct ? string.Empty : ErrorKeyNotFound;
 
             return hasProduct;
@@ -783,7 +784,7 @@ namespace HSMServer.Core.Cache
 
         private static List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
         {
-            var productsWithTheirSubProducts = new Dictionary<string, ProductModel>(products.Count);
+            var productsWithTheirSubProducts = new Dictionary<Guid, ProductModel>(products.Count);
             foreach (var product in products)
             {
                 productsWithTheirSubProducts.Add(product.Id, product);
@@ -793,7 +794,7 @@ namespace HSMServer.Core.Cache
             return productsWithTheirSubProducts.Values.ToList();
         }
 
-        private static void GetAllProductSubProducts(ProductModel product, Dictionary<string, ProductModel> allSubProducts)
+        private static void GetAllProductSubProducts(ProductModel product, Dictionary<Guid, ProductModel> allSubProducts)
         {
             foreach (var (subProductId, subProduct) in product.SubProducts)
             {

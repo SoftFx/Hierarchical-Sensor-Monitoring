@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Helpers;
 using System;
 
 namespace HSMServer.Model.TreeViewModels
@@ -15,6 +16,8 @@ namespace HSMServer.Model.TreeViewModels
 
     public abstract class NodeViewModel
     {
+        public Guid Id { get; }
+
         public string EncodedId { get; }
 
         public string Name { get; protected set; }
@@ -42,9 +45,10 @@ namespace HSMServer.Model.TreeViewModels
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
 
-        internal NodeViewModel(string encodedId)
+        internal NodeViewModel(Guid id)
         {
-            EncodedId = encodedId;
+            Id = id;
+            EncodedId = SensorPathHelper.EncodeGuid(id);
         }
 
         protected void Update(NodeBaseModel model)

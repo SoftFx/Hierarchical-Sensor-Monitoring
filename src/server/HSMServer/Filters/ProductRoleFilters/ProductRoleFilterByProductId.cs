@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model.Authentication;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System;
 
 namespace HSMServer.Filters.ProductRoleFilters
 {
@@ -11,7 +12,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         public ProductRoleFilterByProductId(params ProductRoleEnum[] roles) : base(roles) { }
 
 
-        protected override string GetProductId(object arg, ActionExecutingContext _) =>
-            arg is string productId ? productId : null;
+        protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
+            arg is Guid productId ? productId : null;
     }
 }
