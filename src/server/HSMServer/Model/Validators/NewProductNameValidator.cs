@@ -36,7 +36,7 @@ namespace HSMServer.Model.Validators
         {
             if (context.InstanceToValidate == null) 
             {
-                result.Errors.Add(new ValidationFailure("Name", "Product name can't be empty"));
+                result.Errors.Add(new ValidationFailure("ProductName", "Product name must be not null"));
                 return false;
             }
             return true;

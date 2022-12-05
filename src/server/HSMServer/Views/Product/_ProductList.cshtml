@@ -1,5 +1,6 @@
 @using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Constants
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
@@ -12,6 +13,10 @@
 
 <div class="m-2">
     <div class="row" justify-content-start>
+         @if (TempData[TextConstants.TempDataErrorText] != null)
+                {
+                    <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+                }
         <div class="col-2">
             <h5 class="mx-4 my-2">Products</h5>
         </div>
