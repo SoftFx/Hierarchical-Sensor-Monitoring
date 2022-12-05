@@ -2,20 +2,22 @@
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Configuration;
 using System.Linq;
 
 namespace HSMServer.Model.ViewModel
 {
     public class EditProductViewModel
     {
-        public string ProductName { get; set; }
-        public string ProductId { get; set; }
-        public string EncodedProductId { get; set; }
-        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; set; }
-        public List<AccessKeyViewModel> AccessKeys { get; set; }
-        public TelegramSettingsViewModel Telegram { get; set; }
-        public List<User> NotAdminUsers { get; set; }
-        public IEnumerable<UserViewModel> UsedUsers { get; set; }
+        public string ProductName { get; }
+        public string ProductId { get; }
+        public string EncodedProductId { get; }
+        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; }
+        public List<AccessKeyViewModel> AccessKeys { get; }
+        public TelegramSettingsViewModel Telegram { get; }
+        public ISet<UserViewModel> NotAdminUsers { get; }
+        public ISet<UserViewModel> UsedUsers { get;}
 
         public EditProductViewModel(ProductNodeViewModel product,
             List<(User, ProductRoleEnum)> usersRights,
@@ -27,25 +29,13 @@ namespace HSMServer.Model.ViewModel
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetEditProductAccessKeys();
             Telegram = product.TelegramSettings;
-            UsedUsers = UsersRights.Select(ur => ur.Item1);
-            NotAdminUsers = notAdminUsers;
-            RemovedUsedUsers(NotAdminUsers, UsedUsers);
+            UsedUsers = UsersRights.Select(ur => ur.Item1).ToImmutableHashSet();
+            NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
+            RemoveUsedUsers(NotAdminUsers, UsedUsers);
         }
-
-        private void RemovedUsedUsers(List<User> users, IEnumerable<UserViewModel> usedUsers)
+        private void RemoveUsedUsers(ISet<UserViewModel> users, ISet<UserViewModel> usedUsers)
         {
-            if (users == null || users.Count == 0)
-                return;
-
-            if (usedUsers == null || Equals(usedUsers, Enumerable.Empty<UserViewModel>()))
-                return;
-
-            foreach (var usedUser in usedUsers)
-            {
-                var user = users.FirstOrDefault(u => u.UserName.Equals(usedUser.Username));
-                if (user != null)
-                    users.Remove(user);
-            }
+            users.ExceptWith(usedUsers);
         }
     }
 }

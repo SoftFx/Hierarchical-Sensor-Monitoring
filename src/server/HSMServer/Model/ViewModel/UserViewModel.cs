@@ -22,5 +22,15 @@ namespace HSMServer.Model.ViewModel
         {
 
         }
+
+        public override bool Equals(object obj)
+        {
+            return UserId.Equals((obj as UserViewModel)!.UserId);
+        }
+
+        public override int GetHashCode()
+        {
+            return UserId.GetHashCode();
+        }
     }
 }

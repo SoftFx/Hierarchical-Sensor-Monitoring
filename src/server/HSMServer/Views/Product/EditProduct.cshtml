@@ -94,7 +94,7 @@
                                     <select class='form-select' id='createUser'>
                                         @foreach (var user in Model.NotAdminUsers)
                                         {
-                                            <option value='@user.Id'>@user.UserName</option>
+                                            <option value='@user.UserId'>@user.Username</option>
                                         }
                                     </select>
                                 }
