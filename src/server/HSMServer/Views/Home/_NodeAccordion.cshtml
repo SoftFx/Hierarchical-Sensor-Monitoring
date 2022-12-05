@@ -31,8 +31,13 @@
                         </div>
                         <div class='col-md-auto time-ago-div me-1' id='update_@nodeId'>updated @Model.GetTimeAgo()</div>
                     </div>
-                    @if (Model is SensorNodeViewModel sensorModel)
-                        @sensorModel.ShortStringValue
+                    <span class="text-break">
+                        @if (Model is SensorNodeViewModel sensorModel)
+                        {
+                            @sensorModel.ShortStringValue
+                        }
+                    </span>
+                    
                 </div>
             </div>
         </div>
