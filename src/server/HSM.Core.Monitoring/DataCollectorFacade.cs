@@ -11,6 +11,7 @@ namespace HSM.Core.Monitoring
     {
         private const double KbDivisor = 1 << 10;
         private const double MbDivisor = 1 << 20;
+        private const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private readonly IDataCollector _dataCollector;
 
@@ -35,8 +36,8 @@ namespace HSM.Core.Monitoring
 
         private static string GetSelfMonitoringKey(ITreeValuesCache cache)
         {
-            var selfMonitoring = cache.GetProductByName(CommonConstants.SelfMonitoringProductName);
-            selfMonitoring ??= cache.AddProduct(CommonConstants.SelfMonitoringProductName);
+            var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
+            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName);
 
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 
