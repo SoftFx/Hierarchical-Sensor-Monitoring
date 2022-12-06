@@ -37,7 +37,10 @@ namespace HSMServer.Core.Tests.Infrastructure
             DatabaseCore = null;
         }
 
-        internal void AddTestProduct() =>
+        internal void AddTestProduct()
+        {
             DatabaseCore.AddProduct(TestProductsManager.TestProduct);
+            DatabaseCore.AddAccessKey(TestProductsManager.TestProductKey);
+        }
     }
 }

@@ -23,30 +23,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     {
         private readonly TreeValuesCache _valuesCache;
 
-        private delegate string GetProductNameById(string id);
-        private delegate ProductModel GetProduct(string id);
+        private delegate string GetProductNameById(Guid id);
+        private delegate ProductModel GetProduct(Guid id);
         private delegate ProductEntity GetProductFromDb(string id);
 
 
         public TreeValuesCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: false)
+            : base(fixture, registerFixture, addTestProduct: true)
         {
             InitializeDatabase();
 
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
 
-
-        [Fact]
-        [Trait("Category", "Initialization")]
-        public async void ProductsInitialization_SelfMonitoringProduct_Test()
-        {
-            await Task.Delay(100);
-
-            var product = _valuesCache.GetProduct(CommonConstants.SelfMonitoringProductKey);
-
-            ModelsTester.TestProductModel(CommonConstants.SelfMonitoringProductName, product);
-        }
 
         [Fact]
         [Trait("Category", "Initialization")]
@@ -125,7 +114,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ModelsTester.TestProductModel(productName, product);
 
                 ModelsTester.TestProductModel(product, _valuesCache.GetProduct(product.Id));
-                ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id), product);
+                ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id.ToString()), product);
             }
         }
 
@@ -138,7 +127,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             await Task.Delay(100);
 
-            var addedProducts = new List<string>(count);
+            var addedProducts = new List<Guid>(count);
             for (int i = 0; i < count; ++i)
                 addedProducts.Add(_valuesCache.AddProduct(RandomGenerator.GetRandomString()).Id);
 
@@ -242,22 +231,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void GetProductsWithoutParent_ProductManagerViewer_Test(ProductRoleEnum productRole)
         {
             var selfMonitoringProductManager =
-                TestUsersManager.BuildUserWithRole(productRole, CommonConstants.SelfMonitoringProductKey);
+                TestUsersManager.BuildUserWithRole(productRole, TestProductsManager.TestProduct.Id);
 
             var actualProducts = _valuesCache.GetProducts(selfMonitoringProductManager);
 
             Assert.Single(actualProducts);
 
             var actualProduct = actualProducts.First();
-            Assert.Equal(CommonConstants.SelfMonitoringProductKey, actualProduct.Id);
-            ModelsTester.TestProductModel(CommonConstants.SelfMonitoringProductName, actualProduct);
+            Assert.Equal(TestProductsManager.ProductId, actualProduct.Id);
+            ModelsTester.TestProductModel(TestProductsManager.ProductName, actualProduct);
         }
 
         [Fact]
         [Trait("Category", "Get product name")]
         public void GetProductName_NonExistingId_Test()
         {
-            var productName = _valuesCache.GetProductNameById(RandomGenerator.GetRandomString());
+            var productName = _valuesCache.GetProductNameById(Guid.NewGuid());
 
             Assert.Null(productName);
         }
@@ -439,12 +428,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
 
 
-            const string productKey = CommonConstants.SelfMonitoringProductKey;
+            string accessKey = TestProductsManager.TestProductKey.Id;
+            Guid productId = TestProductsManager.ProductId;
+
             const string subProductName = "new_subProduct";
             const string subSubProductName = "new_subSubProduct";
             const string sensorName = "new_sensor";
 
-            var storeInfo = BuildSensorStoreInfo(productKey, $"{subProductName}/{subSubProductName}/{sensorName}", type);
+            var storeInfo = BuildSensorStoreInfo(accessKey, $"{subProductName}/{subSubProductName}/{sensorName}", type);
 
             _valuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
@@ -454,7 +445,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeProductEvent -= ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
 
-            var product = _valuesCache.GetProduct(productKey);
+            var product = _valuesCache.GetProduct(productId);
             var subProduct = GetProductByName(subProductName);
             var subSubProduct = GetProductByName(subSubProductName);
             var sensor = GetSensorByNameFromCache(sensorName);
@@ -466,9 +457,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             ModelsTester.TestProductModel(subProductName, subProduct, parentProduct: product, subProducts: new List<ProductModel>() { subSubProduct });
             ModelsTester.TestProductModel(subSubProductName, subSubProduct, parentProduct: subProduct, sensors: new List<BaseSensorModel>() { sensor });
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id), product);
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subProduct.Id), subProduct);
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subSubProduct.Id), subSubProduct);
+            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id.ToString()), product);
+            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subProduct.Id.ToString()), subProduct);
+            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subSubProduct.Id.ToString()), subSubProduct);
 
             Assert.Equal(1, addedSensorsCount);
             Assert.Equal(1, updatedSensorsCount);
@@ -507,23 +498,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
 
 
-            const string productKey = CommonConstants.SelfMonitoringProductKey;
+            string accessKey = TestProductsManager.TestProductKey.Id;
+            Guid productId = TestProductsManager.ProductId;
+
             const string sensorName = "new_sensor";
 
             var timeCollected = DateTime.UtcNow;
 
-            var storeInfo = BuildSensorStoreInfo(productKey, $"{sensorName}", type);
+            var storeInfo = BuildSensorStoreInfo(accessKey, $"{sensorName}", type);
             _valuesCache.AddNewSensorValue(storeInfo);
             var sensorWithFirstValue = GetClonedSensorModel(GetSensorByNameFromCache(sensorName));
 
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
-            storeInfo = BuildSensorStoreInfo(productKey, $"{sensorName}", type);
+            storeInfo = BuildSensorStoreInfo(accessKey, $"{sensorName}", type);
             _valuesCache.AddNewSensorValue(storeInfo);
 
             _valuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
 
-            var product = _valuesCache.GetProduct(productKey);
+            var product = _valuesCache.GetProduct(productId);
             var sensor = GetSensorByNameFromCache(sensorName);
             var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValues(new(1) { sensor }).FirstOrDefault().Value;
 
@@ -639,18 +632,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.NotNull(GetSensorByIdFromDb(clearedSensorId));
         }
 
-        private static void TestRemovedProduct(string productId, GetProductNameById getProductName,
+        private static void TestRemovedProduct(Guid productId, GetProductNameById getProductName,
         GetProduct getProduct, GetProductFromDb getProductFromDb)
         {
             Assert.Null(getProductName?.Invoke(productId));
             Assert.Null(getProduct?.Invoke(productId));
-            Assert.Null(getProductFromDb?.Invoke(productId));
+            Assert.Null(getProductFromDb?.Invoke(productId.ToString()));
         }
 
 
-        private static List<string> GetAllProductIdsInBranch(ProductModel model)
+        private static List<Guid> GetAllProductIdsInBranch(ProductModel model)
         {
-            var products = new List<string>(1 << 2);
+            var products = new List<Guid>(1 << 2);
 
             void AddSubProductsToList(ProductModel product)
             {

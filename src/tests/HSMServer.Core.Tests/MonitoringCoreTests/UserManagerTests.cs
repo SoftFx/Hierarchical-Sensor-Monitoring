@@ -253,7 +253,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
-            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Id);
+            _userManager.RemoveProductFromUsers(TestProductsManager.ProductId);
 
             var result = _userManager.GetUsers().ToList();
 
@@ -270,7 +270,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -281,10 +281,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public void GetEmptyViewersTest()
         {
             var emptyViewer = TestUsersManager.GetEmptyUser();
-            emptyViewer.ProductsRoles = new (TestUsersManager.TestUserViewer.ProductsRoles);
+            emptyViewer.ProductsRoles = new(TestUsersManager.TestUserViewer.ProductsRoles);
             _userManager.AddUser(emptyViewer);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyViewer };
 
             CompareUserLists(expected, actual);
@@ -296,7 +296,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -307,11 +307,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public void GetEmptyManagersTest()
         {
             var emptyManager = TestUsersManager.GetEmptyUser();
-            emptyManager.ProductsRoles = new (TestUsersManager.TestUserManager.ProductsRoles);
+            emptyManager.ProductsRoles = new(TestUsersManager.TestUserManager.ProductsRoles);
 
             _userManager.AddUser(emptyManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyManager };
 
             CompareUserLists(expected, actual);

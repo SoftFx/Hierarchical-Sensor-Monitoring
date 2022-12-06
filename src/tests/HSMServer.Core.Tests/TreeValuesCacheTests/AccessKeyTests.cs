@@ -23,7 +23,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private (int add, int update, int delete) _keyTransactionCount;
         private ProductModel _product;
 
-        private delegate ProductModel GetProduct(string id);
+        private delegate ProductModel GetProduct(Guid id);
         private delegate AccessKeyModel GetAccessKey(Guid id);
 
 
@@ -207,7 +207,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return keys;
         }
 
-        private AccessKeyModel BuildAccessKeyModel() => new(EntitiesFactory
-            .BuildAccessKeyEntity(productId: _product.Id));
+        private AccessKeyModel BuildAccessKeyModel() =>
+            new(EntitiesFactory.BuildAccessKeyEntity(productId: _product.Id.ToString()));
     }
 }

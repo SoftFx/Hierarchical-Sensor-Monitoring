@@ -69,7 +69,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         public void SensorModelToSensorEntityTest()
         {
             var product = new ProductModel("product");
-            var entity = EntitiesFactory.BuildSensorEntity(parent: product.Id);
+            var entity = EntitiesFactory.BuildSensorEntity(parent: product.Id.ToString());
 
             var sensor = SensorModelFactory.Build(entity);
             product.AddSensor(sensor);
