@@ -18,7 +18,7 @@
             <td style="word-wrap: break-word">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)
+                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new {Product = key.ParentProduct.EncodedId}, null)
                 }
                 else
                 {
@@ -37,12 +37,22 @@
         <td nowrap>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
-                <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'>
-                    <i class='fas fa-edit'></i>
-                </button>
-                <button id='deleteAccessKey_@key.Id' title='remove' class='btn btn-secondary'>
-                    <i class='fas fa-trash-alt'></i>
-                </button>
+                @* <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'> *@
+                @*     <i class='fas fa-edit'></i> *@
+                @* </button> *@
+                @* <button id='deleteAccessKey_@key.Id' title='remove' class='btn btn-secondary'> *@
+                @*     <i class='fas fa-trash-alt'></i> *@
+                @* </button> *@
+                <div class='btn-group'>
+                    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
+                    <ul class='dropdown-menu'>
+                        <li>
+                            <a class='dropdown-item' href='#' >Edit</a>
+                            <a class='dropdown-item' href='#' >Block</a>
+                            <a class='dropdown-item' href='#' >Remove</a>
+                        </li>
+                    </ul>
+                </div>
             }
         </td>
     </tr>
