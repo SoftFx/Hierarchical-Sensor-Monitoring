@@ -9,24 +9,39 @@ namespace HSMServer.Model.ViewModel
 {
     public class EditProductViewModel
     {
-        public string ProductName { get; set; }
-        public Guid ProductId { get; set; }
-        public string EncodedProductId { get; set; }
-        public List<KeyValuePair<UserViewModel, ProductRoleEnum>> UsersRights { get; set; }
-        public List<AccessKeyViewModel> AccessKeys { get; set; }
-        public TelegramSettingsViewModel Telegram { get; set; }
+        private readonly List<UserViewModel> _usedUsers;
+
+
+        public List<AccessKeyViewModel> AccessKeys { get; }
+
+        public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; }
+
+        public HashSet<UserViewModel> NotAdminUsers { get; }
+
+        public TelegramSettingsViewModel Telegram { get; }
+
+        public string ProductName { get; }
+
+        public Guid ProductId { get; }
+
+        public string EncodedProductId { get; }
+
 
         public EditProductViewModel(ProductNodeViewModel product,
-            List<KeyValuePair<User, ProductRoleEnum>> usersRights)
+                                    List<(User, ProductRoleEnum)> usersRights,
+                                    List<User> notAdminUsers)
         {
             ProductName = product.Name;
             ProductId = product.Id;
             EncodedProductId = product.EncodedId;
-            UsersRights = usersRights.Select(x =>
-                new KeyValuePair<UserViewModel, ProductRoleEnum>(new UserViewModel(x.Key), x.Value)).ToList();
 
+            UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetEditProductAccessKeys();
             Telegram = product.TelegramSettings;
+
+            _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
+            NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
+            NotAdminUsers.ExceptWith(_usedUsers);
         }
     }
 }
