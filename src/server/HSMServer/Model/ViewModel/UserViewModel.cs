@@ -5,11 +5,11 @@ namespace HSMServer.Model.ViewModel
 {
     public class UserViewModel
     {
+        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get;}
+        
         public string Username { get;}
         
         public bool IsAdmin { get;}
-
-        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get;}
         
         
         public string Password { get; set; }
