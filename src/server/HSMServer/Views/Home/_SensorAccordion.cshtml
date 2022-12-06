@@ -3,7 +3,7 @@
 
 @model HSMServer.Model.TreeViewModels.SensorNodeViewModel
 
-@{ 
+@{
     const string hourPeriod = "hour";
     const string hourShortPeriod = "1H";
     const string dayPeriod = "day";
@@ -37,7 +37,8 @@
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
-                                        title='Status: @Model.Status'></li>
+                                        title='Status: @Model.Status'>
+                                    </li>
                                     <span id='validation_@sensorId'>
                                         @if (Model.IsValidationErrorVisible)
                                         {
@@ -47,11 +48,12 @@
                                 </div>
                                 @Model.Name
                             </div>
-                            <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none' />
+                            <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
                             <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.GetTimeAgo()</div>
                         </div>
-
-                        @Model.ShortStringValue
+                        <span class="text-break">
+                            @Model.ShortStringValue
+                        </span>
                     </div>
                     @if (Model.LastValue != null)
                     {
@@ -92,16 +94,18 @@
                                 @Model.Name
                             </div>
                             <div class='col-md-auto'>
-                                <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none' />
+                                <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
                                 <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.GetTimeAgo()</div>
                             </div>
                         </div>
-                        <div id='value_@sensorId'>@Model.ShortStringValue</div>
+                        <div class="text-break" id='value_@sensorId'>
+                            @Model.ShortStringValue
+                        </div>
                     </div>
                 </button>
             </h2>
 
-            <div id='collapse_@sensorId' class='accordion-collapse collapse' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
+            <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
                 <div class='accordion-body p-3'>
                     <div>
                         <div class="d-flex justify-content-between">
