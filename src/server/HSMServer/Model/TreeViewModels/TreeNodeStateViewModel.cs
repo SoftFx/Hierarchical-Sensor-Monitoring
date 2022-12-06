@@ -58,7 +58,7 @@ namespace HSMServer.Model.TreeViewModels
 
             VisibleSensorsCount += node.VisibleSensorsCount;
 
-            if (VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
+            if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
                 Nodes.Add(node);
         }
 
