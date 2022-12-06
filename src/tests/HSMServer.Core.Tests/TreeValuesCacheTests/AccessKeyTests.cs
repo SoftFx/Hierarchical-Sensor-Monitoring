@@ -28,7 +28,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
-            : base(fixture, dbFixture, addTestProduct: true)
+            : base(fixture, dbFixture)
         {
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
 
