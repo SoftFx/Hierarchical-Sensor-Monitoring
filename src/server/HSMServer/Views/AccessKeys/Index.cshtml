@@ -11,6 +11,7 @@
 
 <script>
     var getAvailableAccessKeys = "@Html.Raw(Url.Action(nameof(AccessKeysController.AvailableAccessKeys), ViewConstants.AccessKeysController))";
+    var getSearchKeyResult = "@Html.Raw(Url.Action(nameof(AccessKeysController.SearchKeyResult), ViewConstants.AccessKeysController))";
 </script>
 
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
@@ -19,12 +20,16 @@
 <div class="container">
     <div class="row justify-content-center">
         <h5 style='margin: 20px 0px 10px;'>Access keys</h5>
+       
+        <input id="searchKey" type="text" class="form-control" placeholder="Input key" />
+        <button onclick="searchKey()" type="button" class="btn btn-primary">Search</button>
+
 
         <table class="table">
             <tr>
                 <th id="accessKeys_productColumn">
                     Product
-                   @* <br />
+                    @* <br />
                     (
                     <input class="form-check-input" type="checkbox" value="" onchange="allProductsChanged()" id="allProducts">
                     <label class="form-check-label" for="allProducts">
@@ -40,7 +45,7 @@
                 <th></th>
             </tr>
             <tbody id="accessKeysTable">
-                @await Html.PartialAsync("_AllAccessKeys", Model)
+            @await Html.PartialAsync("_AllAccessKeys", Model)
             </tbody>
         </table>
     </div>
@@ -71,5 +76,18 @@
                 $('#accessKeysTable').html(viewData);
             }
         });
+    }
+    
+    function searchKey() {
+        const keyToSearch = document.getElementById("searchKey").value;
+        $.ajax({
+                    type: 'GET',
+                    url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
+                    cache: false,
+                    async: true,
+                    success: function (viewData) {
+                        $('#accessKeysTable').html(viewData);
+                    }
+                });
     }
 </script>
