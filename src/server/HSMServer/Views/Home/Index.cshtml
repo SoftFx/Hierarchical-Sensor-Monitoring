@@ -136,7 +136,7 @@
 
     var interval = $("#treeInterval").val() * 1000;
     
-    updateTreeTimer();
+    setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
     setTimeout(updateHistory, interval);
 
@@ -147,6 +147,9 @@
         else
             $("#filter").css("display", "none");
     });
+
+    $("#mainSpinner").css("display", "none");
+    $('#mainContainer').removeClass('hidden_element');
 
     function getSelectedNodeId(selectedNode) {
         let selectedNodeId = "";
@@ -203,9 +206,6 @@
             $('#jstree').jstree(true).refresh(true);
 
             refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-
-            $("#mainSpinner").css("display", "none");
-            $('#mainContainer').removeClass('hidden_element');
         });
     }
 
