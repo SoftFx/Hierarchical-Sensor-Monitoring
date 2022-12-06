@@ -29,6 +29,8 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
+        public bool IsEmpty => AllSensorsCount == 0;
+
 
         public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
         {
@@ -42,15 +44,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
-
-        public string GetSensorsCountString(NodeStateViewModel nodeState)
-        {
-            var sensorsCount = nodeState.FilteredSensorsCount == AllSensorsCount
-                ? $"{AllSensorsCount}"
-                : $"{nodeState.FilteredSensorsCount}/{AllSensorsCount}";
-
-            return $"({sensorsCount} sensors)";
-        }
 
 
         internal void Update(ProductModel model)
