@@ -16,7 +16,7 @@ namespace HSMServer.Model.TreeViewModels
         private readonly IUserManager _userManager;
 
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
@@ -72,15 +72,15 @@ namespace HSMServer.Model.TreeViewModels
                     node.RecalculateCharacteristics();
         }
 
-        internal List<Guid> GetNodeAllSensors(string selectedNode)
+        internal List<Guid> GetNodeAllSensors(Guid selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 
-            if (Guid.TryParse(selectedNode, out var sensorId) && Sensors.TryGetValue(sensorId, out var sensor))
+            if (Sensors.TryGetValue(selectedNode, out var sensor))
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
             {
-                void GetNodeSensors(string nodeId)
+                void GetNodeSensors(Guid nodeId)
                 {
                     if (!Nodes.TryGetValue(nodeId, out var node))
                         return;

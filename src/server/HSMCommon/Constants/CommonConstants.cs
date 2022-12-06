@@ -14,8 +14,6 @@
 
         public const string DefaultProductName = "Default product";
         public const string DefaultProductKey = "2201cd7959dc87a1dc82b8abf29f48";
-        public const string SelfMonitoringProductName = "HSM Server Monitoring";
-        public const string SelfMonitoringProductKey = "fdacff2027553772e6e641413af591";
         public const string ClientAppFolderName = "Client";
 
         public const string DefaultAccessKey = "DefaultKey";

@@ -9,9 +9,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class EntitiesFactory
     {
-        internal static ProductEntity BuildProduct() =>
-            BuildProductEntity().AddSubProduct(Guid.NewGuid().ToString());
-
         internal static ProductEntity BuildProductEntity(string name = null, string parent = "") =>
             new()
             {
@@ -22,23 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                SubProductsIds = new List<string>(2),
-                SensorsIds = new List<string>(2),
             };
-
-        internal static ProductEntity AddSubProduct(this ProductEntity product, string subProductId)
-        {
-            product.SubProductsIds.Add(subProductId);
-
-            return product;
-        }
-
-        internal static ProductEntity AddSensor(this ProductEntity product, string sensorId)
-        {
-            product.SensorsIds.Add(sensorId);
-
-            return product;
-        }
 
 
         internal static AccessKeyEntity BuildAccessKeyEntity(string id = null, string name = null, string productId = null,

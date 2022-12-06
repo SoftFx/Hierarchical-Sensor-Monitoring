@@ -3,7 +3,6 @@ using HSMCommon.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -14,12 +13,10 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductNodeViewModel : NodeViewModel
     {
-        public string Id { get; }
-
         public override bool HasData =>
             Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
@@ -32,9 +29,8 @@ namespace HSMServer.Model.TreeViewModels
         public bool IsEmpty => AllSensorsCount == 0;
 
 
-        public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
+        public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
-            Id = model.Id;
             Product = model.RootProductName;
             Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
 

@@ -32,7 +32,7 @@ namespace HSMServer.Core.Authentication
         /// <param name="userName">Name of the user to remove.</param>
         void RemoveUser(string userName);
 
-        void RemoveProductFromUsers(string productKey);
+        void RemoveProductFromUsers(Guid productId);
         void RemoveSensorFromUsers(Guid sensorId);
 
         User Authenticate(string login, string password);
@@ -41,8 +41,8 @@ namespace HSMServer.Core.Authentication
         User GetUser(Guid id);
         User GetUserByUserName(string username);
 
-        List<User> GetViewers(string productKey);
-        List<User> GetManagers(string productKey);
+        List<User> GetViewers(Guid productId);
+        List<User> GetManagers(Guid productId);
         IEnumerable<User> GetUsers(Func<User, bool> filter = null);
     }
 }

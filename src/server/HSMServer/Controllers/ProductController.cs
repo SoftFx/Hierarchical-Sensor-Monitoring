@@ -77,7 +77,7 @@ namespace HSMServer.Controllers
             _treeValuesCache.AddProduct(productName);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productId)
+        public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)
         {
             _treeValuesCache.RemoveProduct(productId);
         }
@@ -91,14 +91,14 @@ namespace HSMServer.Controllers
         {
             var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            var decodedId = SensorPathHelper.Decode(encodedProductId);
+            var decodedId = SensorPathHelper.DecodeGuid(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(decodedId);
 
             var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
-            var productNodeId = productNode.Id;
+            var productNodeId = productNode.Id.ToString();
             foreach (var user in users.OrderBy(x => x.UserName))
             {
                 pairs.Add(new(user,
@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
             var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(Guid.Parse(model.ProductKey)))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);

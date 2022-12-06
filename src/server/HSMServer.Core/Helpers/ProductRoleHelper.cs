@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model.Authentication;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,20 +12,10 @@ namespace HSMServer.Core.Helpers
             return productsRights.FirstOrDefault(x => x.Value == ProductRoleEnum.ProductManager).Key != null;
         }
 
-        public static bool IsViewer(string productKey,
+        public static bool IsManager(Guid productId,
             List<KeyValuePair<string, ProductRoleEnum>> productsRights)
         {
-            var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
-            if (pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductViewer)
-                return true;
-
-            return false;
-        }
-
-        public static bool IsManager(string productKey,
-            List<KeyValuePair<string, ProductRoleEnum>> productsRights)
-        {
-            var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productKey));
+            var pair = productsRights?.FirstOrDefault(x => x.Key.Equals(productId.ToString()));
             if (pair != null && pair.Value.Key != null && pair.Value.Value == ProductRoleEnum.ProductManager)
                 return true;
 

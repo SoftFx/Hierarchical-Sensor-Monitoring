@@ -23,7 +23,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         public void AccessKeyModelConstructor_AuthorIdProductId_Test()
         {
             var authorId = Guid.NewGuid();
-            var productId = Guid.NewGuid().ToString();
+            var productId = Guid.NewGuid();
 
             var key = new AccessKeyModel(authorId, productId);
 

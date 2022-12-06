@@ -262,7 +262,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void SmallRulesValidationTest(KeyPermissions permission)
         {
             var product = _valuesCache.AddProduct(TestProductsManager.ProductName);
-            var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id, permissions: permission));
+            var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString(), permissions: permission));
 
             _valuesCache.AddAccessKey(accessKey);
 

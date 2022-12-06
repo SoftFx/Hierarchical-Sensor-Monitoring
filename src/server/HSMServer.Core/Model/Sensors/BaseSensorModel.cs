@@ -26,8 +26,6 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
-        public Guid Id { get; private set; }
-
         public SensorState State { get; private set; }
 
         public string Unit { get; private set; }
@@ -108,7 +106,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ParentProduct.Id,
+                ProductId = ParentProduct.Id.ToString(),
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,

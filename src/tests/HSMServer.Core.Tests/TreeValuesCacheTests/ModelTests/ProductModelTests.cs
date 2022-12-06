@@ -29,19 +29,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             ModelsTester.TestProductModel(TestProductsManager.ProductName, product);
         }
 
-        [Fact]
-        [Trait("Category", "ProductModel constructor")]
-        public void ProductModelConstructor_KeyAndName_Test()
-        {
-            var key = TestProductsManager.TestProduct.Id;
-            var name = TestProductsManager.TestProduct.DisplayName;
-
-            var product = new ProductModel(key, name);
-
-            Assert.Equal(key, product.Id);
-            ModelsTester.TestProductModel(name, product);
-        }
-
 
         [Fact]
         [Trait("Category", "ProductModel to ProductEntity")]
@@ -50,13 +37,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var subProductId = Guid.NewGuid().ToString();
             var sensor1Id = Guid.NewGuid().ToString();
             var sensor2Id = Guid.NewGuid().ToString();
-            var entity = EntitiesFactory.BuildProductEntity(parent: null)
-                                        .AddSubProduct(subProductId)
-                                        .AddSensor(sensor1Id)
-                                        .AddSensor(sensor2Id);
+            var entity = EntitiesFactory.BuildProductEntity(parent: null);
 
             var product = new ProductModel(entity);
-            product.AddSubProduct(new ProductModel(subProductId, RandomGenerator.GetRandomString()));
+            product.AddSubProduct(new ProductModel(subProductId));
             product.AddSensor(SensorModelFactory.Build(new SensorEntity() { Id = sensor1Id }));
             product.AddSensor(SensorModelFactory.Build(new SensorEntity() { Id = sensor2Id }));
 
