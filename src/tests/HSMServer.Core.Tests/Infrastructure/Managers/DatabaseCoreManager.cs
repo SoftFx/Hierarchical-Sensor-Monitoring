@@ -1,6 +1,8 @@
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
+using System;
 using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -42,5 +44,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             DatabaseCore.AddProduct(TestProductsManager.TestProduct);
             DatabaseCore.AddAccessKey(TestProductsManager.TestProductKey);
         }
+
+        internal ProductEntity GetProduct(Guid id) => DatabaseCore.GetProduct(id.ToString());
     }
 }

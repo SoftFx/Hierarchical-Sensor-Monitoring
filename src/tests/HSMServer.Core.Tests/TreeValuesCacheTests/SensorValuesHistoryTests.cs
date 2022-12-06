@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         public SensorValuesHistoryTests(SensorValuesHistoryFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: true)
+            : base(fixture, registerFixture)
         {
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }

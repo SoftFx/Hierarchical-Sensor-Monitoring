@@ -29,7 +29,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         public TreeValuesCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: true)
+            : base(fixture, registerFixture)
         {
             InitializeDatabase();
 
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ModelsTester.TestProductModel(productName, product);
 
                 ModelsTester.TestProductModel(product, _valuesCache.GetProduct(product.Id));
-                ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id.ToString()), product);
+                ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(product.Id), product);
             }
         }
 
@@ -457,9 +457,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             ModelsTester.TestProductModel(subProductName, subProduct, parentProduct: product, subProducts: new List<ProductModel>() { subSubProduct });
             ModelsTester.TestProductModel(subSubProductName, subSubProduct, parentProduct: subProduct, sensors: new List<BaseSensorModel>() { sensor });
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(product.Id.ToString()), product);
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subProduct.Id.ToString()), subProduct);
-            ModelsTester.TestProductModel(_databaseCoreManager.DatabaseCore.GetProduct(subSubProduct.Id.ToString()), subSubProduct);
+            ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(product.Id), product);
+            ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(subProduct.Id), subProduct);
+            ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(subSubProduct.Id), subSubProduct);
 
             Assert.Equal(1, addedSensorsCount);
             Assert.Equal(1, updatedSensorsCount);
