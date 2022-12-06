@@ -45,13 +45,11 @@
                 @* </button> *@
                 <div class='btn-group'>
                     <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
-                    <ul class='dropdown-menu'>
-                        <li>
-                            <a class='dropdown-item' href='#' >Edit</a>
-                            <a class='dropdown-item' href='#' >Block</a>
-                            <a class='dropdown-item' href='#' >Remove</a>
-                        </li>
-                    </ul>
+                    <div class='dropdown-menu'>
+                        <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>Block</button>
+                        <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
+                    </div>
                 </div>
             }
         </td>
