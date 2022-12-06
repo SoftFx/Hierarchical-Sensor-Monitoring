@@ -479,6 +479,8 @@ namespace HSMServer.Core.Cache
             var productEntities = RequestProducts();
             ApplyProducts(productEntities, policies);
 
+            UsersMigration();
+
             ApplySensors(productEntities, RequestSensors(), policies);
 
             BuildNodesProductNameAndPath();
@@ -627,6 +629,31 @@ namespace HSMServer.Core.Cache
             {
                 if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
+            }
+        }
+
+        private void UsersMigration()
+        {
+            var users = _userManager.GetUsers();
+            var usersToResave = new List<User>();
+
+            foreach (var user in users)
+            {
+                bool needToResave = false;
+
+                for (int i = 0; i < user.ProductsRoles.Count; ++i)
+                {
+                    var role = user.ProductsRoles[i];
+
+                    if (_productKeys.TryGetValue(role.Key, out var mappedId))
+                    {
+                        user.ProductsRoles[i] = new KeyValuePair<string, ProductRoleEnum>(mappedId.ToString(), role.Value);
+                        needToResave = true;
+                    }
+                }
+
+                if (needToResave)
+                    usersToResave.Add(user);
             }
         }
 

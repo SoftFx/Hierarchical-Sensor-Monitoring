@@ -101,7 +101,7 @@ namespace HSMServer.Controllers
                 foreach (var user in users.OrderBy(x => x.UserName))
                 {
                     pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
+                        user.ProductsRoles.First(x => x.Key.Equals(productNode.Id.ToString())).Value));
                 }
 
             return View(new EditProductViewModel(productNode, pairs));
@@ -137,7 +137,7 @@ namespace HSMServer.Controllers
             var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(Guid.Parse(model.ProductKey)))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);

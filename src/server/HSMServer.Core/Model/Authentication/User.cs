@@ -117,10 +117,10 @@ namespace HSMServer.Core.Model.Authentication
             return copy;
         }
 
-        public bool IsProductAvailable(string productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
+        public bool IsProductAvailable(Guid productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId.ToString())) ?? false);
 
-        public List<string> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
+        public List<Guid> GetManagerProducts() =>
+            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => Guid.Parse(r.Key)).ToList();
     }
 }

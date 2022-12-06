@@ -85,13 +85,13 @@ namespace HSMServer.Core.Authentication
                 _logger.LogWarning($"There are no users with name={userName} to remove");
         }
 
-        public void RemoveProductFromUsers(string productKey)
+        public void RemoveProductFromUsers(Guid productId)
         {
             var updatedUsers = new List<User>(1 << 2);
 
             foreach (var user in _users)
             {
-                var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == productKey);
+                var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == productId.ToString());
                 if (removedRolesCount == 0)
                     continue;
 
@@ -138,7 +138,7 @@ namespace HSMServer.Core.Authentication
                 ? new User(user)
                 : null;
 
-        public List<User> GetViewers(string productKey)
+        public List<User> GetViewers(Guid productId)
         {
             var result = new List<User>(1 << 2);
 
@@ -147,7 +147,7 @@ namespace HSMServer.Core.Authentication
 
             foreach (var user in _users)
             {
-                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Key.Equals(productKey));
+                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Key.Equals(productId.ToString()));
                 if (pair != null && pair.Value.Key != null)
                     result.Add(user.Value);
             }
@@ -155,7 +155,7 @@ namespace HSMServer.Core.Authentication
             return result;
         }
 
-        public List<User> GetManagers(string productKey)
+        public List<User> GetManagers(Guid productId)
         {
             var result = new List<User>(1 << 2);
 
@@ -163,7 +163,7 @@ namespace HSMServer.Core.Authentication
                 return result;
 
             foreach (var user in _users)
-                if (ProductRoleHelper.IsManager(productKey, user.Value.ProductsRoles))
+                if (ProductRoleHelper.IsManager(productId, user.Value.ProductsRoles))
                     result.Add(user.Value);
 
             return result;
