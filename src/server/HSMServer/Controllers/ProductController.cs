@@ -48,6 +48,7 @@ namespace HSMServer.Controllers
         }
 
         #region Products
+
         public IActionResult Index()
         {
             var user = HttpContext.User as User;
@@ -88,23 +89,23 @@ namespace HSMServer.Controllers
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
-            // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
-            TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
+            var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
             var decodedId = SensorPathHelper.Decode(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(decodedId);
 
-            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
-            if (users != null || users.Any())
-                foreach (var user in users.OrderBy(x => x.UserName))
-                {
-                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
-                }
+            var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
-            return View(new EditProductViewModel(productNode, pairs));
+            var productNodeId = productNode.Id;
+            foreach (var user in users.OrderBy(x => x.UserName))
+            {
+                pairs.Add(new(user,
+                    user.ProductsRoles.First(x => x.Key.Equals(productNodeId)).Value));
+            }
+
+            return View(new EditProductViewModel(productNode, pairs, notAdminUsers));
         }
 
         [HttpPost]
@@ -162,7 +163,6 @@ namespace HSMServer.Controllers
                 user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
-
         }
 
         [HttpPost]

@@ -40,7 +40,11 @@ namespace HSMServer
             });
 
             services.AddMvc();
-            services.AddFluentValidation();
+            services.AddFluentValidation(options =>
+            {
+                options.ImplicitlyValidateChildProperties = true;
+                options.ImplicitlyValidateRootCollectionElements = true;
+            });
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 

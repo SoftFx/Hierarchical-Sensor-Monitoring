@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using HSMCommon.Model;
+﻿using System.Collections.Generic;
 using HSMServer.Core.Model;
 
 namespace HSMServer.Core.Configuration

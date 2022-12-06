@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.HtmlHelpers
+@using HSMServer.Core.Model.Authentication
 @model EditProductViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -36,145 +36,238 @@
     </div>
 </div>
 
-<input id="productKey" value="@Model.ProductId" style="display: none" />
-<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none" />
+<input id="productKey" value="@Model.ProductId" style="display: none"/>
+<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none"/>
 
 <div class="container">
     <div class="row justify-content-center">
-        <h4 class="my-3">Edit product '@Model.ProductName'</h4>
-
-        @*<div style="margin: 10px">
-            <div class="row justify-content-start">
-                <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-                <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
-
-
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email address</label>
-                    <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+            <h4 class="my-3">Edit product '@Model.ProductName'</h4>
+    
+            @*<div style="margin: 10px">
+                    <div class="row justify-content-start">
+                        <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
+                        <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
+    
+    
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email address</label>
+                            <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+                        </div>
+    
+                        <div class="mb-3">
+                            <label for="productRole" class="form-label">Choose a role permission</label>
+                            @ViewHelper.CreateProductRoleSelect()
+                        </div>
+    
+                        <span id="new_invite_span" style="display: none"></span>
+    
+                        <div class="mb-3">
+                            <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
+                                <i class="fas fa-envelope"></i> Invite
+                            </button>
+                        </div>
+                    </div>
+                </div>*@
+    
+            <div class="my-1">
+                <div>
+                    <div class='row justify-content-start'>
+                        <h5 class='mt-1'>Members</h5>
+                    </div>
                 </div>
-
-                <div class="mb-3">
-                    <label for="productRole" class="form-label">Choose a role permission</label>
-                    @ViewHelper.CreateProductRoleSelect()
+                <div class='col-xxl'>
+                    <table class='table table-striped'>
+                        <thead>
+                        <tr>
+                            <th scope='col'>#</th>
+                            <th scope='col'>Account</th>
+                            <th scope='col'>Role</th>
+                            <th scope='col'>Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <th>0</th>
+                            <th>
+                                @if (Model.NotAdminUsers.Count != 0)
+                                {
+                                    <select class='form-select' id='createUser'>
+                                        @foreach (var user in Model.NotAdminUsers)
+                                        {
+                                            <option value='@user.UserId'>@user.Username</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <select disabled class='form-select' id='createUser'></select>
+                                }
+                                <span class="d-none" id='new_user_span'></span>
+                            </th>
+                            <th>
+                                <select class='form-select' id='createProductRole'>
+                                    @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                    {
+                                        <option value='@((int)role)'>@role</option>
+                                    }
+                                </select>
+                            </th>
+                            <th>
+                                <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                                    <i class='fas fa-plus'></i>
+                                </button>
+                            </th>
+                        </tr>
+                        @for(var i = 0; i < Model.UsersRights.Count; i++)
+                            {
+                                var userRight = Model.UsersRights[i];
+                                <tr>
+                                    <th scope='row'>@(i + 1)</th>
+                                    <td>
+                                        @userRight.Item1.Username
+                                        <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
+                                    </td>
+                                    <td>
+                                        <select class='form-select' disabled id='role_@userRight.Item1.Username'>
+                                            @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                            {
+                                                if (role == userRight.Item2)
+                                                {
+                                                    <option selected value='@((int)role)'>@role</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value='@((int)role)'>@role</option>
+                                                }
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <button id='change_@userRight.Item1.Username'
+                                                type='button' class='btn btn-secondary ms-1' title='edit'>
+                                            <i class='fas fa-edit'></i>
+                                        </button>
+    
+                                        <button id='delete_@userRight.Item1.Username'
+                                                type='button' class='btn btn-secondary ms-1' title='delete'>
+                                            <i class='fas fa-trash-alt'></i>
+                                        </button>
+    
+                                        <button disabled id='ok_@userRight.Item1.Username'
+                                                type='button' class='btn btn-secondary ms-1' title='ok'>
+                                            <i class='fas fa-check'></i>
+                                        </button>
+    
+                                        <button disabled id='cancel_@userRight.Item1.Username'
+                                                type='button' class='btn btn-secondary ms-1' title='cancel'>
+                                            <i class='fas fa-times'></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-
-                <span id="new_invite_span" style="display: none"></span>
-
-                <div class="mb-3">
-                    <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
-                        <i class="fas fa-envelope"></i> Invite
+            </div>
+    
+            <div class="my-1">
+                <div class="row">
+                    <h5 class="col-auto mt-2">Access keys</h5>
+                    <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
+                        <i class='fas fa-plus'></i>
                     </button>
                 </div>
-            </div>
-        </div>*@
-
-        <div class="my-1">
-            @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
-        </div>
-
-
-        <div class="my-1">
-            <div class="row">
-                <h5 class="col-auto mt-2">Access keys</h5>
-                <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
-                    <i class='fas fa-plus'></i>
-                </button>
-            </div>
-
-            <table class="table">
-                <tr>
-                    <th>Display name</th>
-                    <th>Key</th>
-                    <th>Permissions</th>
-                    <th>Expiration</th>
-                    <th>Author</th>
-                    <th>State</th>
-                    <th></th>
-                </tr>
-                <tbody id="accessKeysTable">
+                <table class="table">
+                    <tr>
+                        <th>Display name</th>
+                        <th>Key</th>
+                        <th>Permissions</th>
+                        <th>Expiration</th>
+                        <th>Author</th>
+                        <th>State</th>
+                        <th></th>
+                    </tr>
+                    <tbody id="accessKeysTable">
                     @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
-                </tbody>
-            </table>
-        </div>
-
-
-        <div class="my-1">
-            <h5>Telegram groups <i class="fab fa-telegram"></i></h5>
-
-            <h6 class="fw-bold">Messages settings</h6>
-
-            <form class="mx-4 my-2" method="post" asp-controller="@ViewConstants.NotificationsController"
-                                                  asp-action="@nameof(NotificationsController.UpdateTelegramSettings)"
-                                                  asp-route-productId="@Model.EncodedProductId">
-                @await Html.PartialAsync("~/Views/Notifications/_NotificationsSettings.cshtml", Model.Telegram)
-            </form>
-
-            <div class="my-2">
-                <div class="row">
-                    <h6 class="col-auto fw-bold">Groups</h6>
-                    @if (Model.Telegram.Chats.Count == 0)
+                    </tbody>
+                </table>
+            </div>
+    
+            <div class="my-1">
+                <h5>Telegram groups <i class="fab fa-telegram"></i></h5>
+    
+                <h6 class="fw-bold">Messages settings</h6>
+    
+                <form class="mx-4 my-2" method="post" asp-controller="@ViewConstants.NotificationsController"
+                      asp-action="@nameof(NotificationsController.UpdateTelegramSettings)"
+                      asp-route-productId="@Model.EncodedProductId">
+                    @await Html.PartialAsync("~/Views/Notifications/_NotificationsSettings.cshtml", Model.Telegram)
+                </form>
+    
+                <div class="my-2">
+                    <div class="row">
+                        <h6 class="col-auto fw-bold">Groups</h6>
+                        @if (Model.Telegram.Chats.Count == 0)
+                        {
+                            <h6 class="col-auto p-0">(There are no authorized groups)</h6>
+                        }
+                    </div>
+    
+                    <div class="row mx-4 my-1">
+                        <label class="col-auto p-0">If you want to start getting messages in telegram group</label>
+                        <div class="col-auto">
+                            <a href="javascript:getGroupStartCommand()">copy message</a>
+                        </div>
+                        <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
+                    </div>
+                    @if (Model.Telegram.Chats.Count > 0)
                     {
-                        <h6 class="col-auto p-0">(There are no authorized groups)</h6>
+                        <table class="table mx-4">
+                            <tr>
+                                <th>Group name</th>
+                                <th>Authorized</th>
+                                <th style="text-align:center">Actions</th>
+                            </tr>
+                            @foreach (var group in Model.Telegram.Chats)
+                            {
+                                <tr>
+                                    <td>
+                                        <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
+                                           asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
+                                           asp-route-chatId="@group.ChatId">
+                                            @group.Name
+                                        </a>
+                                    </td>
+                                    <td>@group.AuthorizationTime</td>
+                                    <td style="text-align:center">
+                                        <div class="dropdown">
+                                            <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                                            <div class="dropdown-menu">
+                                                <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
+                                                   asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                                   asp-route-productId="@Model.EncodedProductId"
+                                                   asp-route-chatId="@group.ChatId">
+                                                    Send test message
+                                                </a>
+                                                <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
+                                                   asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                                   asp-route-productId="@Model.EncodedProductId"
+                                                   asp-route-chatId="@group.ChatId">
+                                                    Remove authorization
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </table>
                     }
                 </div>
-
-                <div class="row mx-4 my-1">
-                    <label class="col-auto p-0">If you want to start getting messages in telegram group</label>
-                    <div class="col-auto">
-                        <a href="javascript:getGroupStartCommand()">copy message</a>
-                    </div>
-                    <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
-                </div>
-                @if (Model.Telegram.Chats.Count > 0)
-                {
-                    <table class="table mx-4">
-                        <tr>
-                            <th>Group name</th>
-                            <th>Authorized</th>
-                            <th style="text-align:center">Actions</th>
-                        </tr>
-                        @foreach (var group in Model.Telegram.Chats)
-                        {
-                            <tr>
-                                <td>
-                                    <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
-                                                       asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
-                                                       asp-route-chatId="@group.ChatId">
-                                        @group.Name
-                                    </a>
-                                </td>
-                                <td>@group.AuthorizationTime</td>
-                                <td style="text-align:center">
-                                    <div class="dropdown">
-                                        <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
-                                        <div class="dropdown-menu">
-                                            <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
-                                                                     asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
-                                                                     asp-route-productId="@Model.EncodedProductId"
-                                                                     asp-route-chatId="@group.ChatId">
-                                                Send test message
-                                            </a>
-                                            <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
-                                                                     asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
-                                                                     asp-route-productId="@Model.EncodedProductId"
-                                                                     asp-route-chatId="@group.ChatId">
-                                                Remove authorization
-                                            </a>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </table>
-                }
             </div>
         </div>
-    </div>
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
-
 
 <script>
     let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';

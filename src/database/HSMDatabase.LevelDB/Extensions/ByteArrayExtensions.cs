@@ -1,7 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-
-namespace HSMDatabase.LevelDB.Extensions
+﻿namespace HSMDatabase.LevelDB.Extensions
 {
     public static class ByteArrayExtensions
     {
