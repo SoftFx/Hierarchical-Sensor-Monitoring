@@ -40,13 +40,14 @@ function getPreviousZoomData(graphElementId) {
 
 function convertToGraphData(graphData, graphType, graphName) {
     let escapedData = JSON.parse(graphData);
-
+    
     let data;
     let timeList;
     switch (graphType) {
         case "0":
-            data = getBoolData(escapedData);
-            timeList = getTimeList(escapedData);
+            const uniqueData = getUniqueData(escapedData)
+            data = getBoolData(uniqueData);
+            timeList = getTimeList(uniqueData);
             return getSimpleGraphData(timeList, data, "bar");
         case "1":
             data = getNumbersData(escapedData);
@@ -74,6 +75,10 @@ function convertToGraphData(graphData, graphType, graphName) {
         });
 
         return bools;
+    }
+    
+    function getUniqueData(data){
+        return [...new Map(data.map(item => [item['time'], item])).values()]
     }
 }
 
