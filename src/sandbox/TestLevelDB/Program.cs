@@ -1,6 +1,4 @@
-﻿using LevelDB;
-using System.Text;
-using TestLevelDB.Server;
+﻿using TestLevelDB.Server;
 
 namespace TestLevelDB
 {

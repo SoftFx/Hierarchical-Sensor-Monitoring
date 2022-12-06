@@ -2,8 +2,6 @@
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
 using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Configuration;
 using System.Linq;
 
 namespace HSMServer.Model.ViewModel

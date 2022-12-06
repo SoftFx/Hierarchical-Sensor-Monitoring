@@ -1,6 +1,5 @@
 ﻿using HSMCommon;
 using HSMServer.Core.Model.Authentication;
-using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure

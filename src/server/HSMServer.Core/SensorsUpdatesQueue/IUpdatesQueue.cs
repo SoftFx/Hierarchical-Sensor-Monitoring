@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.SensorsUpdatesQueue
