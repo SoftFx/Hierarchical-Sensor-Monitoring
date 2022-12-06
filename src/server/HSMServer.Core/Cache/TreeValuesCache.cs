@@ -145,6 +145,10 @@ namespace HSMServer.Core.Cache
 
         public ProductModel GetProduct(Guid id) => _tree.GetValueOrDefault(id);
 
+        /// <returns>product (without parent) with name = name</returns>
+        public ProductModel GetProductByName(string name) =>
+            _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
+
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
@@ -566,10 +570,6 @@ namespace HSMServer.Core.Cache
                         parent.AddSubProduct(product);
                 }
             _logger.Info("Links between products are built");
-
-            var monitoringProduct = GetProductByName(CommonConstants.SelfMonitoringProductName);
-            if (productEntities.Count == 0 || monitoringProduct == null)
-                AddSelfMonitoringProduct();
         }
 
         private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, Dictionary<Guid, Policy> policies)
@@ -678,17 +678,6 @@ namespace HSMServer.Core.Cache
             }
 
             return parentProduct;
-        }
-
-        /// <returns>"true" product (without parent) with name = name</returns>
-        private ProductModel GetProductByName(string name) =>
-            _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
-
-        private void AddSelfMonitoringProduct()
-        {
-            var product = new ProductModel(CommonConstants.SelfMonitoringProductKey, CommonConstants.SelfMonitoringProductName);
-
-            AddProduct(product);
         }
 
         private void AddProduct(ProductModel product)

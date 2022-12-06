@@ -35,6 +35,7 @@ namespace HSMServer.Core.Cache
         void UpdateProduct(ProductUpdate product);
         void RemoveProduct(Guid id);
         ProductModel GetProduct(Guid id);
+        ProductModel GetProductByName(string name);
         string GetProductNameById(Guid id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
 

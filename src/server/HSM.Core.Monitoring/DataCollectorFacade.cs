@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 
@@ -8,7 +9,11 @@ namespace HSM.Core.Monitoring
 {
     public class DataCollectorFacade : IDataCollectorFacade, IDisposable
     {
+        private const double KbDivisor = 1 << 10;
+        private const double MbDivisor = 1 << 20;
+
         private readonly IDataCollector _dataCollector;
+
         private IParamsFuncSensor<double, double> _requestSizeSensor;
         private IParamsFuncSensor<double, double> _responseSizeSensor;
         private IParamsFuncSensor<double, int> _receivedSensorsSensor;
@@ -16,15 +21,26 @@ namespace HSM.Core.Monitoring
         private IInstantValueSensor<double> _databaseSizeSensor;
         private IInstantValueSensor<double> _monitoringDataSizeSensor;
         private IInstantValueSensor<double> _environmentDataSizeSensor;
-        private const double _kbDivisor = 1024.0;
-        private const double _mbDivisor = 1048576.0;
-        public DataCollectorFacade()
+
+
+        public DataCollectorFacade(ITreeValuesCache cache)
         {
-            _dataCollector = new DataCollector(CommonConstants.SelfMonitoringProductKey,
-                "https://localhost");
+            _dataCollector = new DataCollector(GetSelfMonitoringKey(cache), "https://localhost");
             _dataCollector.Initialize(true);
             _dataCollector.InitializeProcessMonitoring(true, true, true);
+
             InitializeSensors();
+        }
+
+
+        private static string GetSelfMonitoringKey(ITreeValuesCache cache)
+        {
+            var selfMonitoring = cache.GetProductByName(CommonConstants.SelfMonitoringProductName);
+            selfMonitoring ??= cache.AddProduct(CommonConstants.SelfMonitoringProductName);
+
+            var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
+
+            return key.ToString();
         }
 
         #region Sensors creation
@@ -79,19 +95,19 @@ namespace HSM.Core.Monitoring
 
         public void ReportDatabaseSize(long bytesSize)
         {
-            double mbSize = bytesSize / _mbDivisor;
+            double mbSize = bytesSize / MbDivisor;
             _databaseSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
         }
 
         public void ReportMonitoringDataSize(long bytesSize)
         {
-            double mbSize = bytesSize / _mbDivisor;
+            double mbSize = bytesSize / MbDivisor;
             _monitoringDataSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
         }
 
         public void ReportEnvironmentDataSize(long bytesSize)
         {
-            double mbSize = bytesSize / _mbDivisor;
+            double mbSize = bytesSize / MbDivisor;
             _environmentDataSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
         }
 
@@ -101,7 +117,7 @@ namespace HSM.Core.Monitoring
 
         public void ReportRequestSize(double size)
         {
-            double processedSize = size / _kbDivisor;
+            double processedSize = size / KbDivisor;
             _requestSizeSensor.AddValue(processedSize);
         }
 
@@ -112,7 +128,7 @@ namespace HSM.Core.Monitoring
 
         public void ReportResponseSize(double size)
         {
-            double processedSize = size / _kbDivisor;
+            double processedSize = size / KbDivisor;
             _responseSizeSensor.AddValue(processedSize);
         }
 

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+    <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
   </ItemGroup>
 
 </Project>

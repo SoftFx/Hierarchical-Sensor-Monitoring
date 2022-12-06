@@ -61,10 +61,6 @@ namespace HSMServer.Core.Model
             CreationDate = DateTime.UtcNow;
         }
 
-        public ProductModel(string key, string name) : this(name)
-        {
-            Id = key;
-        }
 
         internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
