@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
 
@@ -101,11 +100,7 @@ namespace HSMServer.Core.Model
                 RootProductName = DisplayName;
             }
             else
-            {
                 base.BuildProductNameAndPath();
-
-                Path = $"{ParentProduct.Path}{DisplayName}{CommonConstants.SensorPathSeparator}";
-            }
 
             foreach (var (_, sensor) in Sensors)
                 sensor.BuildProductNameAndPath();

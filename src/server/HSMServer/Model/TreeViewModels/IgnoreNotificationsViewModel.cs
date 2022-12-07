@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
 
@@ -46,32 +45,20 @@ namespace HSMServer.Model
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
-        public IgnoreNotificationsViewModel(SensorNodeViewModel sensor) : this(sensor.EncodedId)
+        public IgnoreNotificationsViewModel(SensorNodeViewModel sensor) : this((NodeViewModel)sensor)
         {
-            Path = $"{sensor.Product}{CommonConstants.SensorPathSeparator}{sensor.Path}";
             TreeElement = nameof(sensor);
         }
 
-        public IgnoreNotificationsViewModel(ProductNodeViewModel node) : this(node.EncodedId)
+        public IgnoreNotificationsViewModel(ProductNodeViewModel node) : this((NodeViewModel)node)
         {
-            var nodePathParts = new List<string>() { node.Name };
-            NodeViewModel parent = node.Parent;
-
-            while (parent != null)
-            {
-                nodePathParts.Add(parent.Name);
-                parent = parent.Parent;
-            }
-
-            nodePathParts.Reverse();
-
-            Path = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
             TreeElement = nameof(node);
         }
 
-        private IgnoreNotificationsViewModel(string encodedId)
+        private IgnoreNotificationsViewModel(NodeViewModel node)
         {
-            EncodedId = encodedId;
+            EncodedId = node.EncodedId;
+            Path = $"{node.Product}{node.Path}";
             IgnorePeriod = new(_predefinedIntervals)
             {
                 CanCustomInputBeVisible = false,

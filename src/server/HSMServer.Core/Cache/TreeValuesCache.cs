@@ -189,7 +189,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor?.State == SensorState.Blocked)
             {
-                message = $"Sensor {CommonConstants.BuildPath(sensor.RootProductName, sensor.Path)} is blocked.";
+                message = $"Sensor {sensor.RootProductName}{sensor.Path} is blocked.";
                 return false;
             }
 

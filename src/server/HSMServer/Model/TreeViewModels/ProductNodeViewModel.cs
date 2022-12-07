@@ -32,7 +32,7 @@ namespace HSMServer.Model.TreeViewModels
         public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
             Product = model.RootProductName;
-            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
+            Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
 
             Update(model);
         }
