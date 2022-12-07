@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Extensions
 
 @model List<AccessKeyViewModel>
 
@@ -33,16 +34,10 @@
         <td>@key.Permissions</td>
         <td>@key.ExpirationDate</td>
         <td>@key.AuthorName</td>
-        <td>@key.State</td>
+        <td><span class="@key.State.ToIcon()" title="Status : @key.State"></span></td>
         <td nowrap>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
-                @* <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'> *@
-                @*     <i class='fas fa-edit'></i> *@
-                @* </button> *@
-                @* <button id='deleteAccessKey_@key.Id' title='remove' class='btn btn-secondary'> *@
-                @*     <i class='fas fa-trash-alt'></i> *@
-                @* </button> *@
                 <div class='btn-group'>
                     <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
                     <div class='dropdown-menu'>
