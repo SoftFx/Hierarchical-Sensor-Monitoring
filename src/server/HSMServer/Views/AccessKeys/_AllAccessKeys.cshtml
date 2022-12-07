@@ -10,7 +10,6 @@
     var user = User as User;
 }
 
-
 @foreach (var key in Model)
 {
     <tr>
@@ -19,15 +18,17 @@
             <td style="word-wrap: break-word">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)
+                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)">
+                        @Html.Raw(key.NodePath)
+                    </a>
                 }
                 else
                 {
-                    @key.NodePath
+                    @Html.Raw(key.NodePath)
                 }
             </td>
         }
-        <td nowrap>@key.DisplayName</td>
+        <td nowrap>@Html.Raw(key.DisplayName)</td>
         <td nowrap>
             <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
         </td>
