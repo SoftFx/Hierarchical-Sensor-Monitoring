@@ -32,7 +32,7 @@ namespace HSMServer.BackgroundTask
             do
             {
                 _dataCollector.ReportDatabaseSize(_databaseCore.GetDatabaseSize());
-                _dataCollector.ReportMonitoringDataSize(_databaseCore.GetMonitoringDataSize());
+                _dataCollector.ReportMonitoringDataSize(_databaseCore.GetSensorValuesSize());
                 _dataCollector.ReportEnvironmentDataSize(_databaseCore.GetEnvironmentDatabaseSize());
 
                 await Task.Delay(_checkInterval, stoppingToken);

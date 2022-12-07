@@ -47,15 +47,9 @@ namespace HSMDatabase.DatabaseWorkCore
             return GetDirectorySize(databasesDir);
         }
 
-        public long GetMonitoringDataSize()
+        public long GetSensorValuesSize()
         {
             long size = 0;
-            var databasesList = _environmentDatabase.GetMonitoringDatabases();
-            foreach (var monitoringDB in databasesList)
-            {
-                var info = new DirectoryInfo(_databaseSettings.GetPathToMonitoringDatabase(monitoringDB));
-                size += GetDirectorySize(info);
-            }
 
             foreach (var db in _sensorValuesDatabases)
                 size += GetDirectorySize(new DirectoryInfo(db.Name));
