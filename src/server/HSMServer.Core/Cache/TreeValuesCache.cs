@@ -269,7 +269,7 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.ParentProduct.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
-            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString(), sensor.RootProductName, sensor.Path);
+            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
             _userManager.RemoveSensorFromUsers(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
@@ -293,7 +293,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.ClearValues();
-            _databaseCore.ClearSensorValues(sensor.Id.ToString(), sensor.RootProductName, sensor.Path);
+            _databaseCore.ClearSensorValues(sensor.Id.ToString());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
         }
@@ -320,7 +320,7 @@ namespace HSMServer.Core.Cache
             {
                 var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
                 values.AddRange(sensor.ConvertValues(
-                    _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, oldestValueTime, remainingCount)));
+                    _databaseCore.GetSensorValues(sensorId.ToString(), oldestValueTime, remainingCount)));
             }
 
             return values;
@@ -336,7 +336,7 @@ namespace HSMServer.Core.Cache
 
             var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
             values.AddRange(sensor.ConvertValues(
-                _databaseCore.GetSensorValues(sensorId.ToString(), sensor.RootProductName, sensor.Path, from, oldestValueTime, count)));
+                _databaseCore.GetSensorValues(sensorId.ToString(), from, oldestValueTime, count)));
 
             return values;
         }

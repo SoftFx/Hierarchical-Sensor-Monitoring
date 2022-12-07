@@ -74,8 +74,5 @@ namespace HSMDatabase.AccessManager
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
-
-        List<string> GetMonitoringDatabases();
-        void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }
