@@ -76,3 +76,72 @@ function showNewAccessKeyModal(url, openModal) {
         setModalTitle("New access key");
     });
 }
+
+function changeAccessKey(url, id){
+    $.ajax({
+        type: 'GET',
+        url: `${url}?SelectedKey=${id}`,
+        cache: false,
+        async: true,
+        success: function (viewData) {
+            setModalBody(viewData);
+        }
+    }).done(function () {
+        showModal();
+        showMiddleModal();
+        setModalTitle(`Edit access key '${id}'`);
+    });
+}
+
+function deleteAccessKey(id){
+    showDeletionConfirmationModal(
+        "Removing access key",
+        `Do you really want to remove selected access key '${id}'?`,
+        function () {
+            $.ajax({
+                type: 'POST',
+                url: getRemoveAccessKeyURL(id),
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $('#accessKeysTable').html(viewData);
+                }
+            })
+        }
+    );
+}
+
+function blockAccessKey(url, id){
+
+    showDeletionConfirmationModal(
+        "Blocking access key",
+        `Do you really want to block selected access key '${id}'?`,
+        function () {
+            $.ajax({
+                type: 'POST',
+                url: url + "?SelectedKey=" + id,
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $('#accessKeysTable').html(viewData);
+                }
+            })
+        }
+    );
+}
+
+function getRemoveAccessKeyURL(selectedKeyId) {
+    let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+
+    let url;
+    if (isAllAccessKeysTable != undefined) {
+        let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+
+        url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
+    }
+    else {
+        url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+    }
+
+    return url;
+}

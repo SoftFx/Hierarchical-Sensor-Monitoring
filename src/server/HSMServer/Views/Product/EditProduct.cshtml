@@ -182,13 +182,12 @@
                         <th>Display name</th>
                         <th>Key</th>
                         <th>Permissions</th>
-                        <th>Expiration</th>
                         <th>Author</th>
                         <th>State</th>
                         <th></th>
                     </tr>
                     <tbody id="accessKeysTable">
-                    @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
+                        @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
                     </tbody>
                 </table>
             </div>
