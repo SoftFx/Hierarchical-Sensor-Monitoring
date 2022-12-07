@@ -19,7 +19,7 @@
             <td style="word-wrap: break-word">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new {Product = key.ParentProduct.EncodedId}, null)
+                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)
                 }
                 else
                 {
@@ -32,9 +32,11 @@
             <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
         </td>
         <td>@key.Permissions</td>
-        <td>@key.ExpirationDate</td>
         <td>@key.AuthorName</td>
-        <td><span class="@key.State.ToIcon()" title="Status : @key.State"></span></td>
+        <td class="text-center">
+            <i class='@key.State.ToIcon()' title="Status : @key.State 
+Expiration date : @key.ExpirationDate"></i>
+        </td>
         <td nowrap>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
@@ -97,6 +99,28 @@
                 }
             );
         });
+    
+    var blockAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKey), ViewConstants.AccessKeysController))"
+    $('[id^="blockAccessKey_"]').off("click").on("click",
+            function () {
+                let selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
+    
+                showDeletionConfirmationModal(
+                    "Blocking access key",
+                    `Do you really want to block selected access key '${selectedKeyId}'?`,
+                    function () {
+                        $.ajax({
+                            type: 'POST',
+                            url: blockAccessKeyAction + "?SelectedKey=" + selectedKeyId,
+                            cache: false,
+                            async: true,
+                            success: function (viewData) {
+                                $('#accessKeysTable').html(viewData);
+                            }
+                        })
+                    }
+                );
+            });
 
     function getRemoveAccessKeyURL(selectedKeyId) {
         let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');

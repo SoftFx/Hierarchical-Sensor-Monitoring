@@ -7,12 +7,12 @@ public static class AccessKeyExtensions
     internal static string ToCssIconClass(this KeyState status) =>
         status switch
         {
-            KeyState.Active => "tree-icon-ok",
-            KeyState.Expired => "tree-icon-warning",
-            KeyState.Blocked => "tree-icon-error",
-            _ => "tree-icon-offTime",
+            KeyState.Active => "check key-icon-active",
+            KeyState.Expired => "exclamation key-icon-expired",
+            KeyState.Blocked => "xmark key-icon-blocked",
+            _ => "dot",
         };
 
     internal static string ToIcon(this KeyState status) =>
-        $"fas fa-circle {status.ToCssIconClass()}";
+        $"fa-regular fa-circle-{status.ToCssIconClass()}";
 }

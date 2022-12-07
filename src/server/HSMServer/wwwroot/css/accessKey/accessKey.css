@@ -1,0 +1,15 @@
+.key-icon-active {
+    color: green;
+}
+
+.key-icon-expired {
+    color: #ffc107;
+}
+
+.key-icon-blocked {
+    color: #dc3545;
+}
+
+.key-icon-with-margin {
+    margin-right: 5px;
+}

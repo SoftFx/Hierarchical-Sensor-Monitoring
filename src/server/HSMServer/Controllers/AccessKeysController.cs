@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Controllers
 {
@@ -114,6 +116,21 @@ namespace HSMServer.Controllers
             return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
         }
 
+        [HttpPost]
+        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
+        public IActionResult BlockAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey)
+        {
+            var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+
+            TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
+            {
+                Id = key.Id,
+                DisplayName = key.DisplayName,
+                Permissions = key.Permissions,
+                State = KeyState.Blocked
+            });
+            return GetPartialAllAccessKeys(isAllProducts: false);
+        }
 
         private PartialViewResult GetPartialAllAccessKeys(bool isAllProducts) =>
             PartialView("_AllAccessKeys", GetAvailableAccessKeys(isAllProducts));

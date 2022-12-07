@@ -47,9 +47,12 @@
     "outputFileName": "wwwroot/css/bundles/homeBundle.min.css",
     "inputFiles": [
       "wwwroot/css/home/home.css"
-    ],
-    "minify": {
-      "enabled": true
-    }
+    ]
+  },
+  {
+    "outputFileName": "wwwroot/css/accessKey/accessKeyBundle.min.css",
+    "inputFiles": [
+      "wwwroot/css/accessKey/accessKey.css"
+    ]
   }
 ]
