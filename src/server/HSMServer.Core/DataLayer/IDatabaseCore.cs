@@ -11,7 +11,7 @@ namespace HSMServer.Core.DataLayer
         #region Size
 
         long GetDatabaseSize();
-        long GetSensorValuesSize();
+        long GetSensorsHistoryDatabaseSize();
         long GetEnvironmentDatabaseSize();
 
         #endregion

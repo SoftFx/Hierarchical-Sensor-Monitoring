@@ -47,7 +47,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return GetDirectorySize(databasesDir);
         }
 
-        public long GetSensorValuesSize()
+        public long GetSensorsHistoryDatabaseSize()
         {
             long size = 0;
 
