@@ -1,8 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
-using HSMServer.Helpers;
-using System;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -11,8 +9,6 @@ namespace HSMServer.Model.TreeViewModels
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
 
-
-        public Guid Id { get; }
 
         public SensorType SensorType { get; private set; }
 
@@ -36,10 +32,8 @@ namespace HSMServer.Model.TreeViewModels
             !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
 
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(SensorPathHelper.EncodeGuid(model.Id))
+        public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
         {
-            Id = model.Id;
-
             Update(model);
         }
 

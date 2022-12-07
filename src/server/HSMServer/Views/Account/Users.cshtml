@@ -71,7 +71,7 @@
                             </td>
                             <td>
                                 @{
-                                    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<string, string>;
+                                    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<Guid, string>;
                                     if (userItem.ProductsRoles == null || userItem.ProductsRoles.Count == 0)
                                     {
                                         <span>---</span>
@@ -81,7 +81,7 @@
                                         foreach (var right in userItem.ProductsRoles)
                                         {
                                             string name = string.Empty;
-                                            products?.TryGetValue(right.Key, out name);
+                                            products?.TryGetValue(Guid.Parse(right.Key), out name);
                                             <span>@(name ?? right.Key) (@right.Value)</span>
                                             <br>
                                         }

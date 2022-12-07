@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model.Authentication;
 using HSMServer.Helpers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System;
 
 namespace HSMServer.Filters.ProductRoleFilters
 {
@@ -12,7 +13,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         public ProductRoleFilterByEncodedProductId(params ProductRoleEnum[] roles) : base(roles) { }
 
 
-        protected override string GetProductId(object arg, ActionExecutingContext _) =>
-            arg is string encodedProductId ? SensorPathHelper.Decode(encodedProductId) : null;
+        protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
+            arg is string encodedProductId ? SensorPathHelper.DecodeGuid(encodedProductId) : null;
     }
 }

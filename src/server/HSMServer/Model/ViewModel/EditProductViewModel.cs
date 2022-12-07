@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model.Authentication;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.TreeViewModels;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,22 +10,23 @@ namespace HSMServer.Model.ViewModel
     public class EditProductViewModel
     {
         private readonly List<UserViewModel> _usedUsers;
-        
-        
+
+
         public List<AccessKeyViewModel> AccessKeys { get; }
-        
+
         public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; }
-        
+
         public HashSet<UserViewModel> NotAdminUsers { get; }
-        
+
         public TelegramSettingsViewModel Telegram { get; }
-        
+
         public string ProductName { get; }
 
-        public string ProductId { get; }
+        public Guid ProductId { get; }
 
         public string EncodedProductId { get; }
-        
+
+
         public EditProductViewModel(ProductNodeViewModel product,
                                     List<(User, ProductRoleEnum)> usersRights,
                                     List<User> notAdminUsers)

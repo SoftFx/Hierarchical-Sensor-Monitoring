@@ -72,7 +72,7 @@ namespace HSMServer.Controllers
             return GetPartialNewAccessKey(
                 new EditAccessKeyViewModel(key)
                 {
-                    EncodedProductId = SensorPathHelper.Encode(key.ProductId),
+                    EncodedProductId = SensorPathHelper.EncodeGuid(key.ProductId),
                     CloseModal = true,
                     IsModify = true,
                 });
@@ -141,7 +141,7 @@ namespace HSMServer.Controllers
 
         private PartialViewResult GetPartialProductAccessKeys(string productId)
         {
-            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(productId), out var node);
+            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(productId), out var node);
 
             return PartialView("_ProductAccessKeys", node);
         }

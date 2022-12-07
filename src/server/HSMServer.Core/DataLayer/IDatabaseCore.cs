@@ -20,6 +20,8 @@ namespace HSMServer.Core.DataLayer
 
         void AddProduct(ProductEntity entity);
         void UpdateProduct(ProductEntity entity);
+        [Obsolete("Remove this after product id migration")]
+        void UpdateProduct(string oldId, ProductEntity entity);
         void RemoveProduct(string id);
         ProductEntity GetProduct(string id);
         List<ProductEntity> GetAllProducts();

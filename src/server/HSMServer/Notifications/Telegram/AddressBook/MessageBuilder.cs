@@ -11,7 +11,7 @@ namespace HSMServer.Notifications
     {
         private const int MaxSensorMessages = 5;
 
-        private readonly ConcurrentDictionary<string, Dictionary<string, MessagesQueue>> _messages = new();
+        private readonly ConcurrentDictionary<Guid, Dictionary<string, MessagesQueue>> _messages = new();
 
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;

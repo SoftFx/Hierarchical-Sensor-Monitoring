@@ -58,11 +58,11 @@ namespace HSMServer.Controllers
 
             if (!string.IsNullOrEmpty(selectedId))
             {
-                var decodedId = SensorPathHelper.Decode(selectedId);
+                var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
                 if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                     viewModel = node;
-                else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     viewModel = sensor;
             }
 
@@ -102,11 +102,11 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 _treeValuesCache.RemoveSensorsData(node.Id);
-            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.RemoveSensorData(sensor.Id);
         }
 
@@ -134,12 +134,12 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 viewModel = new IgnoreNotificationsViewModel(node);
-            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 viewModel = new IgnoreNotificationsViewModel(sensor);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
@@ -169,11 +169,11 @@ namespace HSMServer.Controllers
         [HttpPost]
         public string GetPath([FromQuery(Name = "Selected")] string selectedId)
         {
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 return node.Path;
-            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 return sensor.Path;
 
             return string.Empty;
@@ -191,7 +191,7 @@ namespace HSMServer.Controllers
         }
 
         private List<Guid> GetNodeSensors(string encodedId) =>
-            _treeViewModel.GetNodeAllSensors(SensorPathHelper.Decode(encodedId));
+            _treeViewModel.GetNodeAllSensors(SensorPathHelper.DecodeGuid(encodedId));
 
         #region Update
 
@@ -201,7 +201,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(selectedId))
                 return Json(string.Empty);
 
-            var decodedId = SensorPathHelper.Decode(selectedId);
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
             var updatedSensorsData = new List<object>();
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
                 foreach (var (_, sensor) in node.Sensors)
                     updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
             }
-            else if (_treeViewModel.Sensors.TryGetValue(Guid.Parse(decodedId), out var sensor))
+            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
 
             return Json(updatedSensorsData);
@@ -428,7 +428,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetProductInfo([FromQuery(Name = "Id")] string encodedId)
         {
-            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(encodedId), out var product))
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var product))
                 return _emptyResult;
 
             return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
@@ -437,7 +437,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult UpdateProductInfo(ProductInfoViewModel updatedModel)
         {
-            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(updatedModel.EncodedId), out var product))
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var product))
                 return _emptyResult;
 
             var productUpdate = new ProductUpdate
