@@ -122,11 +122,9 @@ namespace HSMServer.Core.Model
                 message = string.Empty;
                 return true;
             }
-            else
-            {
-                message = $"AccessKey doesn't have {expectedPermissions & ~common}.";
-                return false;
-            }
+
+            message = $"AccessKey doesn't have {expectedPermissions & ~common}.";
+            return false;
         }
 
         internal bool IsExpired(out string message)

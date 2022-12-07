@@ -33,7 +33,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult SearchKeyResult([FromQuery(Name = "SearchKey")] string searchKey) =>
             GetPartialSearchedKeys(searchKey);
-        
+
         [HttpGet]
         public IActionResult AvailableAccessKeys([FromQuery(Name = "AllProducts")] bool isAllProducts) =>
             GetPartialAllAccessKeys(isAllProducts);
@@ -45,13 +45,14 @@ namespace HSMServer.Controllers
         [HttpGet]
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
-                                          [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
-            GetPartialNewAccessKey(
-                new EditAccessKeyViewModel()
-                {
-                    EncodedProductId = encodedProductId,
-                    CloseModal = closeModal,
-                });
+                                          [FromQuery(Name = "CloseModal")] bool closeModal = false)
+        {
+            return GetPartialNewAccessKey(new EditAccessKeyViewModel()
+            {
+                EncodedProductId = encodedProductId,
+                CloseModal = closeModal,
+            });
+        }
 
         [HttpPost]
         [ProductRoleFilterByKey(ProductRoleEnum.ProductManager)]
@@ -95,7 +96,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
-                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
+            [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
 
@@ -132,12 +133,6 @@ namespace HSMServer.Controllers
             return GetPartialAllAccessKeys(isAllProducts: false);
         }
 
-        private PartialViewResult GetPartialAllAccessKeys(bool isAllProducts) =>
-            PartialView("_AllAccessKeys", GetAvailableAccessKeys(isAllProducts));
-
-        private PartialViewResult GetPartialSearchedKeys(string searchKey) =>
-            PartialView("_AllAccessKeys", GetAvailableAccessKeys(searchKey: searchKey));
-
         private List<AccessKeyViewModel> GetAvailableAccessKeys(bool isAllProducts = false, string searchKey = "")
         {
             var user = HttpContext.User as User;
@@ -152,9 +147,10 @@ namespace HSMServer.Controllers
 
             var resultKeys = keys.OrderBy(key => key?.NodePath);
             if (string.IsNullOrEmpty(searchKey)) return resultKeys.ToList();
-            
+
             return keys.OrderBy(key => key?.NodePath).Where(x => x.Id.ToString().Contains(searchKey)).ToList();
         }
+
 
         private PartialViewResult GetPartialProductAccessKeys(string productId)
         {
@@ -162,6 +158,12 @@ namespace HSMServer.Controllers
 
             return PartialView("_ProductAccessKeys", node);
         }
+
+        private PartialViewResult GetPartialAllAccessKeys(bool isAllProducts) =>
+            PartialView("_AllAccessKeys", GetAvailableAccessKeys(isAllProducts));
+
+        private PartialViewResult GetPartialSearchedKeys(string searchKey) =>
+            PartialView("_AllAccessKeys", GetAvailableAccessKeys(searchKey: searchKey));
 
         private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) =>
             PartialView("_NewAccessKey", key);

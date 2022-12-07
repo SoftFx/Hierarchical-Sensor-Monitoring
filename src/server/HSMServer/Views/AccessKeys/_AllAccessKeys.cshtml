@@ -12,6 +12,7 @@
 
 @foreach (var key in Model)
 {
+    var title = $"Status : {key.State}\nExpiration date : {key.ExpirationDate}";
     <tr>
         @if (key.HasProductColumn)
         {
@@ -35,8 +36,7 @@
         <td>@key.Permissions</td>
         <td>@key.AuthorName</td>
         <td class="text-center">
-            <i class='@key.State.ToIcon()' title="Status : @key.State 
-Expiration date : @key.ExpirationDate"></i>
+            <i class='@key.State.ToIcon()' title="@title"></i>
         </td>
         <td nowrap>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
@@ -55,7 +55,6 @@ Expiration date : @key.ExpirationDate"></i>
 }
 
 @await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
-
 
 <script src="~/js/bundles/accessKey.min.js"></script>
 

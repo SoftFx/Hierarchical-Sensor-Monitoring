@@ -16,11 +16,13 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string ExpirationDate { get; }
 
+
+        public KeyState State { get; private set; }
+        
         public string DisplayName { get; private set; }
 
         public string Permissions { get; private set; }
 
-        public KeyState State { get; private set; }
 
         public string NodePath { get; private set; }
 
@@ -37,8 +39,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             Update(accessKey);
             UpdateNodePath();
         }
-
-
+        
         internal void Update(AccessKeyModel accessKey)
         {
             DisplayName = accessKey.DisplayName;
