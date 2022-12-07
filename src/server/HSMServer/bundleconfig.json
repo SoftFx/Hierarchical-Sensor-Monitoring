@@ -50,9 +50,9 @@
     ]
   },
   {
-    "outputFileName": "wwwroot/css/accessKey/accessKeyBundle.min.css",
+    "outputFileName": "wwwroot/css/bundles/accessKeyBundle.min.css",
     "inputFiles": [
       "wwwroot/css/accessKey/accessKey.css"
     ]
-  }
+  },
 ]
