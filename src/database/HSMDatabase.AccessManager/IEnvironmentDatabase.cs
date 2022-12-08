@@ -75,7 +75,7 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
-        List<string> GetMonitoringDatabases();
-        void RemoveMonitoringDatabaseFromList(string folderName);
+        [Obsolete("Remove this after monitoring dbs removing")]
+        void RemoveMonitoringDatabases();
     }
 }

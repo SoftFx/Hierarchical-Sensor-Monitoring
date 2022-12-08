@@ -585,44 +585,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        public List<string> GetMonitoringDatabases()
+        [Obsolete("Remove this after monitoring dbs removing")]
+        public void RemoveMonitoringDatabases()
         {
-            string listKey = PrefixConstants.GetMonitoringDatabasesListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(listKey);
-            List<string> result = new List<string>();
+            byte[] keyBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetMonitoringDatabasesListKey());
+
             try
             {
-                var products = _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                result.AddRange(products);
+                _database.Delete(keyBytes);
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get databases list");
-            }
-
-            return result;
-        }
-
-        public void RemoveMonitoringDatabaseFromList(string folderName)
-        {
-            var key = PrefixConstants.GetMonitoringDatabasesListKey();
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                var currentList = _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
-
-                currentList.Remove(folderName);
-
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add prodct to list");
+                _logger.Error(e, "Failed to removing monitoring databases list from environment db");
             }
         }
 

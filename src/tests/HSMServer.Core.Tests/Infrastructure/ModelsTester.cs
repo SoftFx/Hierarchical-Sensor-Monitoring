@@ -211,7 +211,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));
             Assert.Equal(expected.Path.GetSensorName(), actual.DisplayName);
-            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(expected.Path, actual.Path.WithoutFirstSlash());
 
             if (parentProduct == null)
             {

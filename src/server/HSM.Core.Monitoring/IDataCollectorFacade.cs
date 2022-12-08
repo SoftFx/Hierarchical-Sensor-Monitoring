@@ -13,7 +13,7 @@
         #region Database size reporting
 
         void ReportDatabaseSize(long bytesSize);
-        void ReportMonitoringDataSize(long bytesSize);
+        void ReportSensorsHistoryDataSize(long bytesSize);
         void ReportEnvironmentDataSize(long bytesSize);
 
         #endregion
