@@ -277,46 +277,6 @@ namespace HSMServer.Controllers
             }
         }
 
-        /// <summary>
-        /// Endpoint used by HSMDataCollector services, which sends data in portions
-        /// </summary>
-        /// <param name="values"></param>
-        /// <returns></returns>
-        [HttpPost("list")]
-        [SwaggerIgnore]
-        [Consumes(MediaTypeNames.Application.Json)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<List<CommonSensorValue>> Post([FromBody] IEnumerable<CommonSensorValue> values)
-        {
-            if (values == null || !values.Any())
-                return BadRequest(values);
-
-            try
-            {
-                var valuesList = values.ToList();
-
-                _dataCollector.ReportSensorsCount(valuesList.Count);
-
-                var result = new Dictionary<string, string>(values.Count());
-                foreach (var value in valuesList)
-                {
-                    var sensorValue = value.Convert();
-
-                    if (!CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                        result[sensorValue.Key] = message;
-                }
-
-                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to put data");
-                return BadRequest(values);
-            }
-        }
-
 
         [HttpPost("listNew")]
         [Consumes(MediaTypeNames.Application.Json)]

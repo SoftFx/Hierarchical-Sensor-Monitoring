@@ -16,9 +16,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             _productKey = productKey;
 
 
-        internal SensorValueBase BuildRandomSensorValue() =>
-            BuildSensorValue((SensorType)RandomGenerator.GetRandomByte());
-
         // max: 6, because United sensor values don't exist for FileSensorValue and FileSensorBytesValue
         internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
             BuildUnitedSensorValue((SensorType)RandomGenerator.GetRandomByte(max: 6));
