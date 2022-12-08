@@ -17,10 +17,10 @@
     <tr>
         @if (key.HasProductColumn)
         {
-            <td class="text-break">
+            <td  class="text-break">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)">
+                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new {Product = key.ParentProduct.EncodedId}, null)">
                         @Html.Raw(key.NodePath)
                     </a>
                 }
@@ -46,15 +46,14 @@
             </td>
             <td nowrap>@Html.Raw(key.DisplayName)</td>
             <td>@key.Permissions</td>
-
         }
         <td class="text-center">
             <i class='@key.State.ToIcon()' title="@title"></i>
         </td>
+        @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+        {
+            <td nowrap class="text-center">
 
-        <td nowrap class="text-center">
-            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
-            {
                 <div class='btn-group'>
                     <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown"></i>
                     <div class='dropdown-menu'>
@@ -72,8 +71,9 @@
                         <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
                     </div>
                 </div>
-            }
-        </td>
+
+            </td>
+        }
     </tr>
 }
 

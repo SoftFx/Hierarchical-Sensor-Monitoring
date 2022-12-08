@@ -19,11 +19,17 @@
 
 <div class="container">
     <div class="row justify-content-center">
-        <h5 class="my-3">Access keys</h5>
-
-        <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
-        <button onclick="searchKey()" type="button" class="btn btn-primary">Search</button>
-
+        <div class="d-flex my-3">
+            <div class="col-2 mt-1">
+                <h5>Access keys</h5>
+            </div>
+            <div class="col-5 mb-1">
+                <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
+            </div>
+            <div class="col-5 mb-1 ms-3">
+                <button onclick="searchKey()" type="button" class="btn btn-primary">Search</button>
+            </div>
+        </div>
         <table class="table">
             <tr>
                 <th id="accessKeys_productColumn">
