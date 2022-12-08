@@ -55,7 +55,7 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorBytesValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
             Recommended to use for pdf files in order to keep the pdf file encoding.

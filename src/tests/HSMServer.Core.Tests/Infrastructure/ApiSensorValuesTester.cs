@@ -34,7 +34,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 case StringSensorValue expectedString:
                     TestSimpleValue(expectedString, actual as StringValue);
                     break;
-                case FileSensorBytesValue expectedFile:
+                case FileSensorValue expectedFile:
                     TestFileValue(expectedFile, actual as FileValue);
                     break;
                 case IntBarSensorValue expectedIntBar:
@@ -57,7 +57,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static void TestSimpleValue<T>(ValueBase<T> expected, BaseValue<T> actual) =>
             Assert.Equal(expected.Value, actual.Value);
 
-        private static void TestFileValue(FileSensorBytesValue expected, FileValue actual)
+        private static void TestFileValue(FileSensorValue expected, FileValue actual)
         {
             Assert.Equal(expected.FileName, actual.Name);
             Assert.Equal(expected.Extension, actual.Extension);
@@ -162,7 +162,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.IntSensor => Model.SensorType.Integer,
                 SensorType.DoubleSensor => Model.SensorType.Double,
                 SensorType.StringSensor => Model.SensorType.String,
-                SensorType.FileSensorBytes => Model.SensorType.File,
+                SensorType.FileSensor => Model.SensorType.File,
                 SensorType.IntegerBarSensor => Model.SensorType.IntegerBar,
                 SensorType.DoubleBarSensor => Model.SensorType.DoubleBar,
                 _ => throw new NotImplementedException(),

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Runtime.Serialization;
+﻿using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects
 {
@@ -48,16 +47,6 @@ namespace HSMSensorDataObjects
         /// </summary>
         [EnumMember]
         DoubleBarSensor = 5,
-        
-        /// <summary>
-        /// The sensor has a file data in its' value, the file data is stored in the database like the other sensors' data
-        /// Only the last value for file sensors is stored due to possible size of files
-        /// May be used to store different reports, graphs, etc.
-        /// Data object also includes file extension, so the client app automatically opens the file using a proper program
-        /// </summary>
-        [EnumMember]
-        [Obsolete("FileSensor enum member is obsolete. New FileSensorValues are replaced by FileSensorBytesValues in API, saved FileSensorValues in db are converted to FileSensorBytesValues in Core")]
-        FileSensor = 6,
 
         /// <summary>
         /// The sensor value is a file, as the above one. The only difference is that the file contents are represented as byte array,
@@ -65,6 +54,6 @@ namespace HSMSensorDataObjects
         /// you have another file, for which encoding is important. 
         /// </summary>
         [EnumMember]
-        FileSensorBytes = 7
+        FileSensor = 6
     }
 }

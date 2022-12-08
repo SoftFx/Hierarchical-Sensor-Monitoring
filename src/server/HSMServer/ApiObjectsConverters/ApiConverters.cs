@@ -85,7 +85,7 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Data
             };
 
-        public static FileValue Convert(this FileSensorBytesValue value) =>
+        public static FileValue Convert(this FileSensorValue value) =>
             new()
             {
                 Comment = value.Comment,

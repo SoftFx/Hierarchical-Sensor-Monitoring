@@ -35,9 +35,9 @@ namespace HSMServer.Core.Tests.ConverterTests
 
         [Fact]
         [Trait("Category", "Simple")]
-        public void FileSensorBytesValueToFileValueConverterTest()
+        public void FileSensorValueToFileValueConverterTest()
         {
-            var apiSensorValue = _apiSensorValuesFactory.BuildFileSensorBytesValue();
+            var apiSensorValue = _apiSensorValuesFactory.BuildFileSensorValue();
 
             var baseValue = apiSensorValue.Convert();
 

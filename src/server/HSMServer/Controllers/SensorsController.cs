@@ -229,7 +229,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<FileSensorBytesValue> Post([FromBody] FileSensorBytesValue sensorValue)
+        public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
         {
             try
             {

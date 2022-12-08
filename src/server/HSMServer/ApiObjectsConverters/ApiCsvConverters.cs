@@ -38,9 +38,9 @@ namespace HSMServer.ApiObjectsConverters
         private static readonly List<string> _fileSensorHeader = new()
         {
             nameof(SensorValueBase.Time),
-            nameof(FileSensorBytesValue.Value),
+            nameof(FileSensorValue.Value),
             nameof(FileValue.Name),
-            nameof(FileSensorBytesValue.Extension),
+            nameof(FileSensorValue.Extension),
             nameof(SensorValueBase.Status),
             nameof(SensorValueBase.Comment),
         };
