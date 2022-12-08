@@ -13,7 +13,6 @@
 
 @foreach (var key in Model)
 {
-    var title = $"Status : {key.State}\nExpiration date : {key.ExpirationDate}";
     <tr>
         @if (key.HasProductColumn)
         {
@@ -53,7 +52,6 @@
         @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
         {
             <td nowrap class="text-center">
-
                 <div class='btn-group'>
                     <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown"></i>
                     <div class='dropdown-menu'>
@@ -71,7 +69,6 @@
                         <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
                     </div>
                 </div>
-
             </td>
         }
     </tr>
