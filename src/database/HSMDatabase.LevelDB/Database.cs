@@ -109,33 +109,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public long GetSize(byte[] startWithKey)
-        {
-            Iterator iterator = null;
-
-            try
-            {
-                long size = 0;
-                iterator = _database.CreateIterator();
-
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
-                {
-                    size += iterator.Value().LongLength;
-                    //TODO: possibly add startwithKey size
-                }
-
-                return size;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-        }
-
         public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
         {
             Iterator iterator = null;

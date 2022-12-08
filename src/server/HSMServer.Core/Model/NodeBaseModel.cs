@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Constants;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -39,6 +40,7 @@ namespace HSMServer.Core.Model
         {
             RootProductId = ParentProduct.RootProductId;
             RootProductName = ParentProduct.RootProductName;
+            Path = $"{ParentProduct.Path}{CommonConstants.SensorPathSeparator}{DisplayName}";
         }
 
 

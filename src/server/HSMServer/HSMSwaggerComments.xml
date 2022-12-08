@@ -55,13 +55,6 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
-            <summary>
-            Receives the value of file sensor
-            </summary>
-            <param name="sensorValue"></param>
-            <returns></returns>
-        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorBytesValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.

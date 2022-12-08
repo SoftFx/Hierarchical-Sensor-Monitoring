@@ -219,41 +219,12 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Receives the value of file sensor
-        /// </summary>
-        /// <param name="sensorValue"></param>
-        /// <returns></returns>
-        [HttpPost("file")]
-        [Consumes(MediaTypeNames.Application.Json)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
-        {
-            try
-            {
-                _dataCollector.ReportSensorsCount(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.ConvertToFileSensorBytes().Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to put data!");
-                return BadRequest(sensorValue);
-            }
-        }
-
-        /// <summary>
         /// Receives the value of file sensor, where the file contents are presented as byte array.
         /// Recommended to use for pdf files in order to keep the pdf file encoding.
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
-        [HttpPost("fileBytes")]
+        [HttpPost("file")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

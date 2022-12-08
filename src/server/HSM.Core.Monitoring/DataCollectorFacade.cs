@@ -11,7 +11,17 @@ namespace HSM.Core.Monitoring
     {
         private const double KbDivisor = 1 << 10;
         private const double MbDivisor = 1 << 20;
+
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
+
+        private const string RequestSizeSensorPath = "Load/Received data per second KB";
+        private const string SensorsCountSensorPath = "Load/Received sensors per second";
+        private const string RequestsCountSensorPath = "Load/Requests per second";
+        private const string ResponseSizeSensorPath = "Load/Sent data per second KB";
+
+        private const string DatabaseSizePath = "Database/All database size MB";
+        private const string EnvironmentDataSizePath = "Database/Environment data size MB";
+        private const string SensorsHistoryDataSizePath = "Database/Monitoring data size MB";
 
         private readonly IDataCollector _dataCollector;
 
@@ -20,7 +30,7 @@ namespace HSM.Core.Monitoring
         private IParamsFuncSensor<double, int> _receivedSensorsSensor;
         private IParamsFuncSensor<double, int> _requestsCountSensor;
         private IInstantValueSensor<double> _databaseSizeSensor;
-        private IInstantValueSensor<double> _monitoringDataSizeSensor;
+        private IInstantValueSensor<double> _sensorsHistoryDataSizeSensor;
         private IInstantValueSensor<double> _environmentDataSizeSensor;
 
 
@@ -51,42 +61,33 @@ namespace HSM.Core.Monitoring
             #region Load sensors
 
             //Request size sensor
-            _requestSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>
-            (MonitoringConstants.RequestSizeSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
+            _requestSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>(
+                RequestSizeSensorPath, "", valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
 
             //Response size sensor
-            _responseSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>
-            (MonitoringConstants.ResponseSizeSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
-                45000);
+            _responseSizeSensor = _dataCollector.CreateParamsFuncSensor<double, double>(
+                ResponseSizeSensorPath, "", valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
 
             //Received sensors count
             _receivedSensorsSensor = _dataCollector.CreateParamsFuncSensor<double, int>(
-                MonitoringConstants.SensorsCountSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
-                45000);
+                SensorsCountSensorPath, "", valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
 
             //Requests count sensor
             _requestsCountSensor = _dataCollector.CreateParamsFuncSensor<double, int>(
-                MonitoringConstants.RequestsCountSensorPath, "",
-                valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero),
-                45000);
+                RequestsCountSensorPath, "", valuesList => Math.Round(valuesList.Sum() / 45.0, 2, MidpointRounding.AwayFromZero), 45000);
 
             #endregion
 
             #region Database sensors
 
             //Database size sensor
-            _databaseSizeSensor = _dataCollector.CreateDoubleSensor(MonitoringConstants.DatabaseSizePath);
+            _databaseSizeSensor = _dataCollector.CreateDoubleSensor(DatabaseSizePath);
 
             //Monitoring data size sensor
-            _monitoringDataSizeSensor = _dataCollector
-                .CreateDoubleSensor(MonitoringConstants.MonitoringDataSizePath);
+            _sensorsHistoryDataSizeSensor = _dataCollector.CreateDoubleSensor(SensorsHistoryDataSizePath);
 
             //Environment data size sensor
-            _environmentDataSizeSensor = _dataCollector
-                .CreateDoubleSensor(MonitoringConstants.EnvironmentDataSizePath);
+            _environmentDataSizeSensor = _dataCollector.CreateDoubleSensor(EnvironmentDataSizePath);
 
             #endregion
         }
@@ -100,10 +101,10 @@ namespace HSM.Core.Monitoring
             _databaseSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
         }
 
-        public void ReportMonitoringDataSize(long bytesSize)
+        public void ReportSensorsHistoryDataSize(long bytesSize)
         {
             double mbSize = bytesSize / MbDivisor;
-            _monitoringDataSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
+            _sensorsHistoryDataSizeSensor.AddValue(Math.Round(mbSize, 2, MidpointRounding.AwayFromZero));
         }
 
         public void ReportEnvironmentDataSize(long bytesSize)
