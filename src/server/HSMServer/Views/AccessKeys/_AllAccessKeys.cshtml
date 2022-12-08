@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Extensions
 
@@ -58,7 +59,16 @@
                     <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown"></i>
                     <div class='dropdown-menu'>
                         <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
-                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>Block</button>
+                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>
+                            @if (key.State == KeyState.Blocked)
+                            {
+                                <span>Unblock</span>
+                            }
+                            else
+                            {
+                                <span>Block</span>
+                            }
+                        </button>
                         <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
                     </div>
                 </div>
@@ -72,7 +82,7 @@
 <script src="~/js/bundles/accessKey.min.js"></script>
 
 <script>
-    const changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
+    var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
             const selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);

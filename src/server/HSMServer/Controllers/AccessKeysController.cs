@@ -127,9 +127,7 @@ namespace HSMServer.Controllers
             TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
             {
                 Id = key.Id,
-                DisplayName = key.DisplayName,
-                Permissions = key.Permissions,
-                State = KeyState.Blocked
+                State = key.State == KeyState.Blocked ?  KeyState.Active : KeyState.Blocked
             });
             return GetPartialAllAccessKeys(isAllProducts: false);
         }
@@ -138,20 +136,15 @@ namespace HSMServer.Controllers
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
-            var guidKey = Guid.Parse(selectedKey);
-            var key = TreeValuesCache.GetAccessKey(guidKey);
-
+            _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(selectedKey), out var key);     
+            
             TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
             {
                 Id = key.Id,
-                DisplayName = key.DisplayName,
-                Permissions = key.Permissions,
-                State = KeyState.Blocked
+                State = key.State == KeyState.Blocked ?  KeyState.Active : KeyState.Blocked
             });
             
-
-            _treeViewModel.AccessKeys.TryGetValue(guidKey, out var keyViewModel);
-            _treeViewModel.Nodes.TryGetValue(keyViewModel.ParentProduct.Id, out var productNode);
+            _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
             
             return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
         }
