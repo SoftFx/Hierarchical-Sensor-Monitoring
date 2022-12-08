@@ -114,7 +114,7 @@ function deleteAccessKey(url, id) {
 function blockAccessKey(url, id) {
     $.ajax({
         type: 'POST',
-        url: url + "?SelectedKey=" + id,
+        url: url,
         cache: false,
         async: true,
         success: function (viewData) {

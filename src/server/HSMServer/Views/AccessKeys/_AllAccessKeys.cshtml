@@ -19,7 +19,7 @@
             <td style="word-wrap: break-word">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new {Product = key.ParentProduct.EncodedId}, null)">
+                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)">
                         @Html.Raw(key.NodePath)
                     </a>
                 }
@@ -28,16 +28,29 @@
                     @Html.Raw(key.NodePath)
                 }
             </td>
+            <td nowrap>@Html.Raw(key.DisplayName)</td>
+            <td nowrap>
+                <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
+            </td>
+            <td>@key.Permissions</td>
+            <td>@key.AuthorName</td>
         }
-        <td nowrap>@Html.Raw(key.DisplayName)</td>
-        <td nowrap>
-            <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
-        </td>
-        <td>@key.Permissions</td>
-        <td>@key.AuthorName</td>
+        else
+        {
+            <td nowrap>
+                @key.Id
+            </td>
+            <td nowrap>
+                <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
+            </td>
+            <td nowrap>@Html.Raw(key.DisplayName)</td>
+            <td>@key.Permissions</td>
+
+        }
         <td class="text-center">
             <i class='@key.State.ToIcon()' title="@title"></i>
         </td>
+
         <td nowrap class="text-center">
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
@@ -83,10 +96,24 @@
             deleteAccessKey(url,  selectedKeyId)
         });
     
-    var blockAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKey), ViewConstants.AccessKeysController))"
     $('[id^="blockAccessKey_"]').off("click").on("click",
         function () {
              let selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
-             blockAccessKey(blockAccessKeyAction, selectedKeyId)
+              let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+                         let url;
+                         if (isAllAccessKeysTable != undefined) {
+                             let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+                     
+                             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTAble), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
+                         } else {
+                             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+                         }
+             blockAccessKey(url, selectedKeyId)
         });
+    
+    function isProductColumn(){
+        return document.getElementById('accessKeys_productColumn')!==undefined;
+        
+    }
+    
 </script>
