@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 
 namespace HSMServer.Model.TreeViewModels
@@ -49,7 +48,7 @@ namespace HSMServer.Model.TreeViewModels
             Status = model.ValidationResult.Result.ToClient();
             ValidationError = model.ValidationResult.Message;
             Product = model.RootProductName;
-            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
+            Path = model.Path;
             Unit = model.Unit;
 
             LastValue = model.LastValue;
