@@ -6,13 +6,14 @@
 
 ## Core:
 
-* Supporting of old sensor history databases (MonitoringData_ folders) has been removed
-* Supporting of sending sensor values by product ID has been removed
-* Supporting of FileSensorValue has been removed
+* Supporting of old sensor history databases (MonitoringData_ folders) has been removed. **(It's a breaking change)**
+* Supporting of sending sensor values by product ID has been removed. **(It's a breaking change)**
+* Supporting of file sensors with string content has been removed. **(It's a breaking change)**
 
 ## Rest API
 
-* There is only one request for receiving file sensors (/file) - receives the value of file sensor, where the file contents are presented as byte array.
+* Old /file request for file sensor with string content has been removed. **(It's a breaking change)**
+* /fileBytes request has been renamed to /file. **(It's a breaking change)**
 
 ## Other
 
