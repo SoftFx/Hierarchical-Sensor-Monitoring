@@ -1,24 +1,14 @@
-﻿using HSMSensorDataObjects.Swagger;
-using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
 {
     [DataContract]
-    public class FileSensorValue : ValueBase<byte[]>
+    public class FileSensorValue : SensorValueBase<byte[]>
     {
         [DataMember]
         [DefaultValue((int)SensorType.FileSensor)]
         public override SensorType Type => SensorType.FileSensor;
-
-        [Obsolete]
-        [SwaggerExclude]
-        public byte[] FileContent
-        {
-            get => Value;
-            set => Value = value;
-        }
 
         [DataMember]
         [DefaultValue("txt")]

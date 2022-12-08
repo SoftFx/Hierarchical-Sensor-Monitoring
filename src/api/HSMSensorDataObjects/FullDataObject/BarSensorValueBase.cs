@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects.Swagger;
-using System;
+﻿using System;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -7,22 +6,6 @@ namespace HSMSensorDataObjects.FullDataObject
     [DataContract]
     public abstract class BarSensorValueBase : SensorValueBase
     {
-        [Obsolete]
-        [SwaggerExclude]
-        public DateTime StartTime
-        {
-            get => OpenTime;
-            set => OpenTime = value;
-        }
-
-        [Obsolete]
-        [SwaggerExclude]
-        public DateTime EndTime
-        {
-            get => CloseTime;
-            set => CloseTime = value;
-        }
-
         [DataMember]
         public DateTime OpenTime { get; set; }
 
@@ -32,6 +15,7 @@ namespace HSMSensorDataObjects.FullDataObject
         [DataMember]
         public int Count { get; set; }
     }
+
 
     [DataContract]
     public abstract class BarValueSensorBase<T> : BarSensorValueBase

@@ -54,7 +54,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             }
         }
 
-        private static void TestSimpleValue<T>(ValueBase<T> expected, BaseValue<T> actual) =>
+        private static void TestSimpleValue<T>(SensorValueBase<T> expected, BaseValue<T> actual) =>
             Assert.Equal(expected.Value, actual.Value);
 
         private static void TestFileValue(FileSensorValue expected, FileValue actual)

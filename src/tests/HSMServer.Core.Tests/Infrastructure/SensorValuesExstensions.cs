@@ -10,8 +10,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             if (sensorValue is BarSensorValueBase barSensorValue)
             {
-                barSensorValue.StartTime = DateTime.UtcNow.AddSeconds(-10);
-                barSensorValue.EndTime = DateTime.UtcNow.AddSeconds(10);
+                barSensorValue.OpenTime = DateTime.UtcNow.AddSeconds(-10);
+                barSensorValue.CloseTime = DateTime.UtcNow.AddSeconds(10);
                 barSensorValue.Count = RandomGenerator.GetRandomInt(positive: true);
             }
 
@@ -26,7 +26,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 
                 sensorValueBase.Key = productKey;
                 sensorValueBase.Path = $"{sensorValueType}{(string.IsNullOrEmpty(uniqPath) ? string.Empty : $"{uniqPath}")}";
-                sensorValueBase.Description = $"{sensorValueType} {nameof(SensorValueBase.Description)}";
                 sensorValueBase.Comment = $"{sensorValueType} {nameof(SensorValueBase.Comment)}";
                 sensorValueBase.Time = DateTime.UtcNow;
                 sensorValueBase.Status = SensorStatus.Ok;

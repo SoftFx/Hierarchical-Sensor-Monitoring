@@ -95,7 +95,6 @@ namespace HSMDataCollector.Core
             List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
             if (_dataQueue != null)
             {
-                //allData.AddRange(_dataQueue.GetAllCollectedData());
                 allData.AddRange(_dataQueue.GetCollectedData());
                 _dataQueue.Stop();
             }
@@ -117,7 +116,6 @@ namespace HSMDataCollector.Core
 
             if (allData.Any())
             {
-                //SendData(allData);
                 SendMonitoringData(allData);
             }
 
@@ -538,10 +536,6 @@ namespace HSMDataCollector.Core
         {
             SendMonitoringData(e);
         }
-        //private void DataQueue_SendData(object sender, List<CommonSensorValue> e)
-        //{
-        //    SendData(e);
-        //}
 
         private void SendMonitoringData(List<UnitedSensorValue> values)
         {

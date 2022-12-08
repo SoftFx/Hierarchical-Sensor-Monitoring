@@ -37,7 +37,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var boolSensorValue = new BoolSensorValue()
             {
-                BoolValue = RandomGenerator.GetRandomBool(),
+                Value = RandomGenerator.GetRandomBool(),
             };
 
             return boolSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var intSensorValue = new IntSensorValue()
             {
-                IntValue = RandomGenerator.GetRandomInt(),
+                Value = RandomGenerator.GetRandomInt(),
             };
 
             return intSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -57,7 +57,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var doubleSensorValue = new DoubleSensorValue()
             {
-                DoubleValue = RandomGenerator.GetRandomDouble(),
+                Value = RandomGenerator.GetRandomDouble(),
             };
 
             return doubleSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -67,7 +67,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var stringSensorValue = new StringSensorValue()
             {
-                StringValue = RandomGenerator.GetRandomString(),
+                Value = RandomGenerator.GetRandomString(),
             };
 
             return stringSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -106,7 +106,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             var fileSensorValue = new FileSensorValue()
             {
                 Extension = RandomGenerator.GetRandomString(3),
-                FileContent = RandomGenerator.GetRandomBytes(),
+                Value = RandomGenerator.GetRandomBytes(),
                 FileName = nameof(FileSensorValue),
             };
 
