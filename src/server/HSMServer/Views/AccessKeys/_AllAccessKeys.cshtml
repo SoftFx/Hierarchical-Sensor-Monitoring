@@ -16,7 +16,7 @@
     <tr>
         @if (key.HasProductColumn)
         {
-            <td style="word-wrap: break-word">
+            <td class="text-break">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
                     <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.EncodedId }, null)">
@@ -55,7 +55,7 @@
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
                 <div class='btn-group'>
-                    <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown" style="cursor: pointer"></i>
+                    <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown"></i>
                     <div class='dropdown-menu'>
                         <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
                         <button id='blockAccessKey_@key.Id' class='dropdown-item'>Block</button>
@@ -72,48 +72,41 @@
 <script src="~/js/bundles/accessKey.min.js"></script>
 
 <script>
-    var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
+    const changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
-            let selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
+            const selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
             changeAccessKey(changeAccessKeyAction, selectedKeyId)
         });
    
     $('[id^="deleteAccessKey_"]').off("click").on("click",
         function () {
-            let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
-             
-            let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+            const selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
+            const isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+            
             let url;
             if (isAllAccessKeysTable != undefined) {
                 let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
         
                 url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-            } else {
-                url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-            }
-            
+            } else url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+     
             deleteAccessKey(url,  selectedKeyId)
         });
     
     $('[id^="blockAccessKey_"]').off("click").on("click",
         function () {
-             let selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
-              let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
-                         let url;
-                         if (isAllAccessKeysTable != undefined) {
-                             let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+             const selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
+             const isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+             
+             let url;
+             if (isAllAccessKeysTable != undefined) {
+                 let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
                      
-                             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTAble), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-                         } else {
-                             url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-                         }
+                  url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTAble), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
+             } 
+             else url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+              
              blockAccessKey(url, selectedKeyId)
-        });
-    
-    function isProductColumn(){
-        return document.getElementById('accessKeys_productColumn')!==undefined;
-        
-    }
-    
+        }); 
 </script>

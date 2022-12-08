@@ -27,16 +27,12 @@ function showAccessKeysListModal() {
 }
 
 function showModal() {
-    $('#accessKeys_modal').modal({
-        backdrop: 'static',
-    });
     $('#accessKeys_modal').modal('show');
 }
 
 function hideModal() {
     $('#accessKeys_modal').modal('hide');
 }
-
 
 function showAccessKeysList(productId, showModalFirst) {
     $.ajax({
@@ -121,19 +117,4 @@ function blockAccessKey(url, id) {
             $('#accessKeysTable').html(viewData);
         }
     })
-}
-
-function getRemoveAccessKeyURL(selectedKeyId) {
-    let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
-
-    let url;
-    if (isAllAccessKeysTable != undefined) {
-        let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
-
-        url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-    } else {
-        url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-    }
-
-    return url;
 }

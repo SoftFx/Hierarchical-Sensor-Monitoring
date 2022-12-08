@@ -2,7 +2,6 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Core.Model.Authentication
-@using HSMServer.Extensions
 
 @model ProductNodeViewModel
 
@@ -18,8 +17,8 @@
 @await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 <script src="~/js/bundles/accessKey.min.js"></script>
 
-<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId"/>
-<input id='accessKey_productName' style='display: none' value="@Model.Name"/>
+<input class="d-none" id='accessKey_prodcutId' value="@Model.EncodedId"/>
+<input class="d-none" id='accessKey_productName' value="@Model.Name"/>
 
 <table class="table">
     <tr>
@@ -31,8 +30,7 @@
         <th>Actions</th>
     </tr>
     <tbody id="accessKeysTable">
-    @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
-
+        @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
     </tbody>
 </table>
 
@@ -46,53 +44,10 @@
 
 
 <script>
-    var clipboardCopy = new ClipboardJS('[id^="copy_"]', {
-        container: document.getElementById('accessKeys_modal')
-    });
-
     function addButtonClick() {
         let productId = $('#accessKey_prodcutId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
         showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
     }
-    
-     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
-        $('[id^="changeAccessKey_"]').off("click").on("click",
-            function () {
-                let selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
-                changeAccessKey(changeAccessKeyAction, selectedKeyId)
-            });
-    
-        $('[id^="deleteAccessKey_"]').off("click").on("click",
-            function () {
-                let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
-                         
-                let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
-                let url;
-                if (isAllAccessKeysTable != undefined) {
-                     let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
-                    
-                     url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-                     }
-                    else {
-                       url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-                        }    
-                deleteAccessKey(url, selectedKeyId)
-            });
-        
-        $('[id^="blockAccessKey_"]').off("click").on("click",
-            function () {
-                 let selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
-                  let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
-                                          let url;
-                                          if (isAllAccessKeysTable != undefined) {
-                                              let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
-                                      
-                                              url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTAble), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-                                          } else {
-                                              url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-                                          }
-                 blockAccessKey(url, selectedKeyId)
-            });
 </script>

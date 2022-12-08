@@ -16,7 +16,7 @@
     <div class="row justify-content-center">
         @if (TempData[TextConstants.TempDataErrorText] != null)
         {
-            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+            <span class="font-weight-normal text-danger h1">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
         
         <div class="m-2">
