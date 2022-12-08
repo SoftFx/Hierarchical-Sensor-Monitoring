@@ -17,10 +17,10 @@
     <tr>
         @if (key.HasProductColumn)
         {
-            <td  class="text-break">
+            <td class="text-break">
                 @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    <a href="@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController, new {Product = key.ParentProduct.EncodedId}, null)">
+                    <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-encodedProductId="@key.ParentProduct.EncodedId">
                         @Html.Raw(key.NodePath)
                     </a>
                 }
@@ -48,7 +48,7 @@
             <td>@key.Permissions</td>
         }
         <td class="text-center">
-            <i class='@key.State.ToIcon()' title="@title"></i>
+            <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
         </td>
         @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
         {

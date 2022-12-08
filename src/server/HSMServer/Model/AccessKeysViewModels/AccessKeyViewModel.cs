@@ -15,6 +15,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string AuthorName { get; }
 
         public string ExpirationDate { get; }
+        
+        public string StatusTitle { get; set; }
 
 
         public KeyState State { get; private set; }
@@ -35,7 +37,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             ParentProduct = parent;
             AuthorName = authorName;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
-
+            
             Update(accessKey);
             UpdateNodePath();
         }
@@ -45,6 +47,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             DisplayName = accessKey.DisplayName;
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
+            StatusTitle = $"Status : {State}\nExpiration date : {ExpirationDate}";
         }
 
         internal void UpdateNodePath()
@@ -74,8 +77,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             var result = new List<string>(3);
 
-            foreach (var permission in Enum.GetValues(typeof(KeyPermissions)))
-                if (permissions.HasFlag((KeyPermissions)permission))
+            foreach (var permission in Enum.GetValues<KeyPermissions>())
+                if (permissions.HasFlag(permission))
                     result.Add(permission.ToString());
 
             return string.Join(", ", result);

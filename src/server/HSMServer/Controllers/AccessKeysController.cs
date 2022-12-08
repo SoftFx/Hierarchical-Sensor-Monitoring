@@ -180,7 +180,7 @@ namespace HSMServer.Controllers
             var keys = GetAvailableAccessKeys();
             
             if (string.IsNullOrWhiteSpace(searchKey))
-                return  PartialView("_AllAccessKeys", keys);
+                return PartialView("_AllAccessKeys", keys);
             
             return PartialView("_AllAccessKeys", keys.Where(x => x.Id.ToString().Contains(searchKey)).ToList());
         }

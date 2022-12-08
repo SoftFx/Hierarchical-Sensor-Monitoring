@@ -4,8 +4,8 @@ namespace HSMServer.Extensions;
 
 public static class AccessKeyExtensions
 {
-    internal static string ToCssIconClass(this KeyState status) =>
-        status switch
+    internal static string ToCssIconClass(this KeyState state) =>
+        state switch
         {
             KeyState.Active => "check key-icon-active",
             KeyState.Expired => "exclamation key-icon-expired",
@@ -13,6 +13,6 @@ public static class AccessKeyExtensions
             _ => "dot",
         };
 
-    internal static string ToIcon(this KeyState status) =>
-        $"fa-regular fa-circle-{status.ToCssIconClass()}";
+    internal static string ToIcon(this KeyState state) =>
+        $"fa-regular fa-circle-{state.ToCssIconClass()}";
 }
