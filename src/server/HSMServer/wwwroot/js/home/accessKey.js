@@ -93,14 +93,14 @@ function changeAccessKey(url, id) {
     });
 }
 
-function deleteAccessKey(id) {
+function deleteAccessKey(url, id) {
     showDeletionConfirmationModal(
         "Removing access key",
         `Do you really want to remove selected access key '${id}'?`,
         function () {
             $.ajax({
                 type: 'POST',
-                url: getRemoveAccessKeyURL(id),
+                url: url,
                 cache: false,
                 async: true,
                 success: function (viewData) {

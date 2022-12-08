@@ -96,7 +96,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
-            [FromQuery(Name = "AllProducts")] bool isAllProducts)
+                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
 

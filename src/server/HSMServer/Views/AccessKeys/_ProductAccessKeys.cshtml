@@ -15,6 +15,9 @@
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+<script src="~/js/bundles/accessKey.min.js"></script>
+
 <input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId"/>
 <input id='accessKey_productName' style='display: none' value="@Model.Name"/>
 
@@ -27,6 +30,7 @@
         <th>State</th>
         <th>Actions</th>
     </tr>
+    <tbody id="accessKeysTable">
     @foreach (var (_, key) in Model.AccessKeys)
     {
         var title = $"Status : {key.State}\nExpiration date : {key.ExpirationDate}";
@@ -57,6 +61,7 @@
             </td>
         </tr>
     }
+    </tbody>
 </table>
 
 <div align="right">
@@ -79,4 +84,35 @@
 
         showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
     }
+    
+     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
+        $('[id^="changeAccessKey_"]').off("click").on("click",
+            function () {
+                let selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
+                changeAccessKey(changeAccessKeyAction, selectedKeyId)
+            });
+    
+        $('[id^="deleteAccessKey_"]').off("click").on("click",
+            function () {
+                let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
+                         
+                let isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+                let url;
+                if (isAllAccessKeysTable != undefined) {
+                     let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
+                    
+                     url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
+                     }
+                    else {
+                       url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
+                        }    
+                deleteAccessKey(url, selectedKeyId)
+            });
+        
+     var blockAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKey), ViewConstants.AccessKeysController))"
+        $('[id^="blockAccessKey_"]').off("click").on("click",
+            function () {
+                 let selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
+                 blockAccessKey(blockAccessKeyAction, selectedKeyId)
+            });
 </script>
