@@ -25,7 +25,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 
         [Fact]
         [Trait("Category", "Compressing content")]
-        public void FileSensorValue_CompressingContent_Test()
+        public void FileValue_CompressingContent_Test()
         {
             var fileValue = SensorValuesFactory.BuildFileValue();
             var compressedValue = CompressionHelper.GetCompressedValue(fileValue);

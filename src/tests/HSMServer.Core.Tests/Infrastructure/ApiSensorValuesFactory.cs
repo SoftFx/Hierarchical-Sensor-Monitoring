@@ -19,7 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal SensorValueBase BuildRandomSensorValue() =>
             BuildSensorValue((SensorType)RandomGenerator.GetRandomByte());
 
-        // max: 6, because United sensor values don't exist for FileSensorValue and FileSensorBytesValue
+        // max: 6, because United sensor values don't exist for FileSensorValue
         internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
             BuildUnitedSensorValue((SensorType)RandomGenerator.GetRandomByte(max: 6));
 
