@@ -8,7 +8,6 @@ using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
-using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
@@ -74,8 +73,6 @@ namespace HSMServer
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
                 options.IncludeXmlComments(xmlPath, true);
-                options.DocumentFilter<SwaggerIgnoreClassFilter>();
-                options.SchemaFilter<SwaggerExcludePropertiesFilter>();
             });
         }
 

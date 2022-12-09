@@ -1,8 +1,6 @@
 ﻿using HSM.Core.Monitoring;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.HistoryRequests;
-using HSMSensorDataObjects.Swagger;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Helpers;
@@ -17,7 +15,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
