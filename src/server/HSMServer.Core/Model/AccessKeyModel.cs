@@ -24,9 +24,10 @@ namespace HSMServer.Core.Model
 
     public class AccessKeyModel
     {
-        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
-
         internal static InvalidAccessKey InvalidKey { get; } = new();
+
+        
+        public static KeyPermissions FullPermissions { get; set; } = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
 
         public Guid Id { get; }
@@ -78,7 +79,7 @@ namespace HSMServer.Core.Model
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = _fullPermissions;
+            Permissions = FullPermissions;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }

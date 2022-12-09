@@ -1,7 +1,9 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Core.Extensions
 {
@@ -16,6 +18,11 @@ namespace HSMServer.Core.Extensions
                             .First()
                             .GetCustomAttribute<DisplayAttribute>()
                             ?.Name ?? enumValueStr;
+        }
+
+        public static KeyState GetBlockingState(this KeyState state)
+        {
+            return state == KeyState.Blocked ? KeyState.Active : KeyState.Blocked;
         }
     }
 }

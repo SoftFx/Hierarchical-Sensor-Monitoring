@@ -4,6 +4,7 @@ using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -47,7 +48,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             DisplayName = accessKey.DisplayName;
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
-            StatusTitle = $"Status : {State}\nExpiration date : {ExpirationDate}";
+            StatusTitle = $"Status : {State}{Environment.NewLine}Expiration date : {ExpirationDate}";
         }
 
         internal void UpdateNodePath()
@@ -76,10 +77,10 @@ namespace HSMServer.Model.AccessKeysViewModels
         private static string BuildPermissions(KeyPermissions permissions)
         {
             var result = new List<string>(3);
-
-            if (Enum.GetValues<KeyPermissions>().Count(x => permissions.HasFlag(x)) == Enum.GetValues<KeyPermissions>().Length)
-                return "Full";
             
+            if (permissions == AccessKeyModel.FullPermissions)
+                return "Full";
+
             foreach (var permission in Enum.GetValues<KeyPermissions>())
                 if (permissions.HasFlag(permission))
                     result.Add(permission.ToString());
