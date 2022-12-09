@@ -5,7 +5,7 @@
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<Version>2.1.43</Version>
+		<Version>3.0.0</Version>
 		<Authors>HSM team</Authors>
 		<Company>Soft-FX</Company>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
