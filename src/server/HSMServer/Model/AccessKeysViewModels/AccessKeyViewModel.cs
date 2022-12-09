@@ -16,18 +16,17 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string ExpirationDate { get; }
         
-        public string StatusTitle { get; set; }
-
-
+        
         public KeyState State { get; private set; }
         
         public string DisplayName { get; private set; }
 
         public string Permissions { get; private set; }
-
-
+        
         public string NodePath { get; private set; }
 
+        public string StatusTitle { get; private set; }
+        
         public bool HasProductColumn { get; internal set; } = true;
 
 
