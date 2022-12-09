@@ -24,12 +24,11 @@ namespace HSMServer.Core.Model
 
     public class AccessKeyModel
     {
+        public static readonly KeyPermissions FullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
+        
         internal static InvalidAccessKey InvalidKey { get; } = new();
 
         
-        public static KeyPermissions FullPermissions { get; set; } = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
-
-
         public Guid Id { get; }
 
         public Guid? AuthorId { get; }

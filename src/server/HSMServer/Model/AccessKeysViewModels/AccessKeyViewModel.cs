@@ -80,12 +80,11 @@ namespace HSMServer.Model.AccessKeysViewModels
             
             if (permissions == AccessKeyModel.FullPermissions)
                 return "Full";
-
+            
             foreach (var permission in Enum.GetValues<KeyPermissions>())
-                if (permissions.HasFlag(permission))
-                    result.Add(permission.ToString());
-
-            return string.Join(", ", result);
+                result.Add((permissions & permission).ToString());
+            
+            return string.Join(", ", result.Where(x => !x.Equals("0")));
         }
     }
 }

@@ -20,7 +20,7 @@ namespace HSMServer.Core.Extensions
                             ?.Name ?? enumValueStr;
         }
 
-        public static KeyState GetBlockingState(this KeyState state)
+        public static KeyState GetInversed(this KeyState state)
         {
             return state == KeyState.Blocked ? KeyState.Active : KeyState.Blocked;
         }
