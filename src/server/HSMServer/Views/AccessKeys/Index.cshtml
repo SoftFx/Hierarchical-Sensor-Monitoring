@@ -1,6 +1,8 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Helpers
+@using HSMServer.Core.Model.Authentication
 
 @model List<AccessKeyViewModel>
 
@@ -48,7 +50,10 @@
                 <th>Permissions</th>
                 <th>Author</th>
                 <th>State</th>
-                <th>Actions</th>
+                @if (UserRoleHelper.IsProductCRUDAllowed(User as User))
+                {
+                    <th>Actions</th>
+                }
                 <th></th>
             </tr>
             <tbody id="accessKeysTable">

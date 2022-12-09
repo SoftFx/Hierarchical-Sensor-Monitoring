@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 
 namespace HSMServer.Controllers
@@ -119,17 +120,17 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult BlockAccessKeyFromAllTAble([FromQuery(Name = "SelectedKey")] string selectedKey,
+        public IActionResult BlockAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
-
+            
             TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
             {
                 Id = key.Id,
-                State = key.State == KeyState.Blocked ?  KeyState.Active : KeyState.Blocked
+                State = key.State.GetInversed()
             });
-            return GetPartialAllAccessKeys(isAllProducts: false);
+            return GetPartialAllAccessKeys(isAllProducts);
         }
         
         [HttpPost]
@@ -141,7 +142,7 @@ namespace HSMServer.Controllers
             TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
             {
                 Id = key.Id,
-                State = key.State == KeyState.Blocked ?  KeyState.Active : KeyState.Blocked
+                State = key.State.GetInversed()
             });
             
             _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
@@ -160,7 +161,7 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
                     keys.AddRange(productViewModel.GetAccessKeys());
             }
-            
+
             return keys.OrderBy(key => key?.NodePath).ToList();
         }
 
@@ -178,9 +179,6 @@ namespace HSMServer.Controllers
         private PartialViewResult GetPartialSearchedKeys(string searchKey)
         {
             var keys = GetAvailableAccessKeys();
-            
-            if (string.IsNullOrWhiteSpace(searchKey))
-                return PartialView("_AllAccessKeys", keys);
             
             return PartialView("_AllAccessKeys", keys.Where(x => x.Id.ToString().Contains(searchKey)).ToList());
         }

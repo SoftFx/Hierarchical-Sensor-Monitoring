@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Helpers
 @using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Extensions
@@ -63,18 +64,26 @@
         else
         {
             <td id="displayName_@key.DisplayName" nowrap>@Html.Raw(key.DisplayName)</td>
+            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+            {
+                <td nowrap>
+                    @key.Id
+                </td>
+            }
             <td nowrap>
-                @key.Id
-            </td>
-            <td nowrap>
-                <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary" >copy</a>
+                <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
             </td>
             <td>@key.Permissions</td>
             <td class="text-center">
                 <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
             </td>
+            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+            {
+                <td nowrap>
+                    @key.Id
+                </td>
+            }
         }
-
     </tr>
 }
 
@@ -115,10 +124,12 @@
              if (isAllAccessKeysTable != undefined) {
                  let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
                      
-                  url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTAble), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
+                  url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
              } 
              else url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
               
              blockAccessKey(url, selectedKeyId)
         }); 
+    function qwe(){
+        }
 </script>
