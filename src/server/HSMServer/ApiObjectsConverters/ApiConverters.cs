@@ -110,7 +110,7 @@ namespace HSMServer.ApiObjectsConverters
                 Max = value.Max,
                 Mean = value.Mean,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = value.Percentiles ?? new(),
             };
 
         public static IntegerBarValue ConvertToIntBar(this UnitedSensorValue value)
@@ -129,7 +129,7 @@ namespace HSMServer.ApiObjectsConverters
                 Max = barData.Max,
                 Mean = barData.Mean,
                 LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = barData.Percentiles ?? new(),
             };
         }
 
@@ -146,7 +146,7 @@ namespace HSMServer.ApiObjectsConverters
                 Max = value.Max,
                 Mean = value.Mean,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = value.Percentiles ?? new(),
             };
 
         public static DoubleBarValue ConvertToDoubleBar(this UnitedSensorValue value)
@@ -165,7 +165,7 @@ namespace HSMServer.ApiObjectsConverters
                 Max = barData.Max,
                 Mean = barData.Mean,
                 LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = barData.Percentiles ?? new(),
             };
         }
 

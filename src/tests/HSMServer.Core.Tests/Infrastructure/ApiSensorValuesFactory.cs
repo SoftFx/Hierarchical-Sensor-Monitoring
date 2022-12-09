@@ -164,22 +164,22 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        private static List<PercentileValueInt> GetPercentileValuesInt(int size = 2)
+        private static Dictionary<double, int> GetPercentileValuesInt(int size = 3)
         {
-            var percentiles = new List<PercentileValueInt>(size);
+            var percentiles = new Dictionary<double, int>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueInt(RandomGenerator.GetRandomInt(), RandomGenerator.GetRandomDouble()));
+                percentiles.Add(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomInt());
 
             return percentiles;
         }
 
-        private static List<PercentileValueDouble> GetPercentileValuesDouble(int size = 2)
+        private static Dictionary<double, double> GetPercentileValuesDouble(int size = 3)
         {
-            var percentiles = new List<PercentileValueDouble>(size);
+            var percentiles = new Dictionary<double, double>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueDouble(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomDouble()));
+                percentiles.Add(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomDouble());
 
             return percentiles;
         }

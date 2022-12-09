@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 
 namespace HSMSensorDataObjects.FullDataObject
@@ -31,5 +32,14 @@ namespace HSMSensorDataObjects.FullDataObject
 
         [DataMember]
         public T LastValue { get; set; }
+
+        [DataMember]
+        public Dictionary<double, T> Percentiles { get; set; }
+
+
+        public BarValueSensorBase()
+        {
+            Percentiles = new Dictionary<double, T>();
+        }
     }
 }

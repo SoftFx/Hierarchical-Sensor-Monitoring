@@ -141,9 +141,9 @@ namespace HSMDataCollector.Bar
                 data.Min = GetRoundedNumber(values.First());
                 data.Count = values.Count;
                 data.Mean = GetRoundedNumber(CountMean(values));
-                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.25)), 0.25));
-                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.5)), 0.5));
-                data.Percentiles.Add(new PercentileValueDouble(GetRoundedNumber(GetPercentile(values, 0.75)), 0.75));
+                data.Percentiles.Add(0.25, GetRoundedNumber(GetPercentile(values, 0.25)));
+                data.Percentiles.Add(0.5, GetRoundedNumber(GetPercentile(values, 0.5)));
+                data.Percentiles.Add(0.75, GetRoundedNumber(GetPercentile(values, 0.75)));
                 return;
             }
 
@@ -195,9 +195,9 @@ namespace HSMDataCollector.Bar
                 data.Min = values.First();
                 data.Count = values.Count;
                 data.Mean = CountMean(values);
-                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.25), 0.25));
-                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.5), 0.5));
-                data.Percentiles.Add(new PercentileValueInt(GetPercentile(values, 0.75), 0.75));
+                data.Percentiles.Add(0.25, GetPercentile(values, 0.25));
+                data.Percentiles.Add(0.5, GetPercentile(values, 0.5));
+                data.Percentiles.Add(0.75, GetPercentile(values, 0.75));
                 return;
             }
 

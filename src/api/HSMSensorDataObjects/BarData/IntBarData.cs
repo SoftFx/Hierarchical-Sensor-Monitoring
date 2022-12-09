@@ -13,11 +13,11 @@ namespace HSMSensorDataObjects.BarData
         public int Count { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
-        public List<PercentileValueInt> Percentiles { get; set; }
+        public Dictionary<double, int> Percentiles { get; set; }
 
         public IntBarData()
         {
-            Percentiles = new List<PercentileValueInt>();
+            Percentiles = new Dictionary<double, int>();
         }
     }
 }

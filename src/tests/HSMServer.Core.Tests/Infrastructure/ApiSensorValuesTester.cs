@@ -79,14 +79,14 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         private static void TestPercentiles(DoubleBarSensorValue expected, DoubleBarValue actual)
         {
-            var expectedDict = expected.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new();
+            var expectedDict = expected.Percentiles ?? new();
 
             Assert.Equal(expectedDict, actual.Percentiles);
         }
 
         private static void TestPercentiles(IntBarSensorValue expected, IntegerBarValue actual)
         {
-            var expectedDict = expected.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new();
+            var expectedDict = expected.Percentiles ?? new();
 
             Assert.Equal(expectedDict, actual.Percentiles);
         }
@@ -127,7 +127,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static void TestBarValue(UnitedSensorValue expected, IntegerBarValue actual)
         {
             var expectedBarData = JsonSerializer.Deserialize<IntBarData>(expected.Data);
-            var expectedPercentilesDict = expectedBarData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new();
+            var expectedPercentilesDict = expectedBarData.Percentiles ?? new();
 
             Assert.Equal(expectedBarData.Count, actual.Count);
             Assert.Equal(expectedBarData.StartTime.ToUniversalTime(), actual.OpenTime);
@@ -142,7 +142,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static void TestBarValue(UnitedSensorValue expected, DoubleBarValue actual)
         {
             var expectedBarData = JsonSerializer.Deserialize<DoubleBarData>(expected.Data);
-            var expectedPercentilesDict = expectedBarData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new();
+            var expectedPercentilesDict = expectedBarData.Percentiles ?? new();
 
             Assert.Equal(expectedBarData.Count, actual.Count);
             Assert.Equal(expectedBarData.StartTime.ToUniversalTime(), actual.OpenTime);
