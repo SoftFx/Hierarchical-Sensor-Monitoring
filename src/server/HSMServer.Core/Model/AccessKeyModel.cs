@@ -26,10 +26,11 @@ namespace HSMServer.Core.Model
     {
         internal static InvalidAccessKey InvalidKey { get; } = new();
 
-        
-        public static KeyPermissions FullPermissions { get; } = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
-        
+        public static KeyPermissions FullPermissions { get; } =
+            (KeyPermissions) (1 << Enum.GetValues<KeyPermissions>().Length) - 1;
+
+
         public Guid Id { get; }
 
         public Guid? AuthorId { get; }
@@ -55,8 +56,8 @@ namespace HSMServer.Core.Model
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             ProductId = produtId ?? Guid.Parse(entity.ProductId);
-            State = (KeyState)entity.State;
-            Permissions = (KeyPermissions)entity.Permissions;
+            State = (KeyState) entity.State;
+            Permissions = (KeyPermissions) entity.Permissions;
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
@@ -105,8 +106,8 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
                 ProductId = ProductId.ToString(),
-                State = (byte)State,
-                Permissions = (long)Permissions,
+                State = (byte) State,
+                Permissions = (long) Permissions,
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks
@@ -142,8 +143,21 @@ namespace HSMServer.Core.Model
             return false;
         }
 
+        internal bool IsBlocked(out string message)
+        {
+            message = string.Empty;
+
+            if (State == KeyState.Blocked)
+            {
+                message = "AccessKey is blocked.";
+                return true;
+            }
+
+            return false;
+        }
+
         internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsExpired(out message) && IsHasPermissions(permissions, out message);
+            !IsExpired(out message) && !IsBlocked(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel

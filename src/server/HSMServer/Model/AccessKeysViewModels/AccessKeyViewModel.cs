@@ -3,6 +3,8 @@ using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -65,7 +67,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
 
-        internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
+        internal AccessKeyViewModel Copy() => (AccessKeyViewModel) MemberwiseClone();
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
@@ -74,6 +76,5 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         private static string BuildPermissions(KeyPermissions permissions) =>
             permissions == AccessKeyModel.FullPermissions ? "Full" : permissions.ToString();
-
     }
 }

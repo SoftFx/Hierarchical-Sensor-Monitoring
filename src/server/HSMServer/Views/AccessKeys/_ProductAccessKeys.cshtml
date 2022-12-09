@@ -23,13 +23,19 @@
 <table class="table">
     <tr>
         <th>Display name</th>
-        <th>Key</th>
-        <th></th>
+        @if (Model.IsChangingAccessKeysAvailable(User as User))
+        {
+            <th>Key</th>
+        }
         <th>Permissions</th>
         <th>State</th>
+        @if (Model.IsChangingAccessKeysAvailable(User as User))
+        {
+            <th>Action</th>
+        }
     </tr>
     <tbody id="accessKeysTable">
-        @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
+    @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
     </tbody>
 </table>
 

@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
 @model EditProductViewModel
 
@@ -182,10 +183,9 @@
                     <tr>
                         <th>Name</th>
                         <th>Key</th>
-                        <th></th>
                         <th>Permissions</th>
                         <th>State</th>
-                        <th></th>
+                        <th>Actions</th>
                     </tr>
                     <tbody id="accessKeysTable">
                         @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
