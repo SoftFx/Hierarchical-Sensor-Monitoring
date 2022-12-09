@@ -22,12 +22,11 @@
 
 <table class="table">
     <tr>
+        <th>Display name</th>
         <th>Key</th>
         <th></th>
-        <th>Display name</th>
         <th>Permissions</th>
         <th>State</th>
-        <th>Actions</th>
     </tr>
     <tbody id="accessKeysTable">
         @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())

@@ -23,7 +23,7 @@ function showAccessKeysListModal() {
     showLargeModal();
 
     let productName = $('#accessKey_productName').val();
-    setModalTitle(`Access keys list for product '${productName}'`);
+    setModalTitle(`Access keys for product '${productName}'`);
 }
 
 function showModal() {
