@@ -74,17 +74,8 @@ namespace HSMServer.Model.AccessKeysViewModels
                 ? nameof(AccessKeyExpiration.Unlimited)
                 : expirationTime.ToString();
 
-        private static string BuildPermissions(KeyPermissions permissions)
-        {
-            var result = new List<string>(3);
-            
-            if (permissions == AccessKeyModel.FullPermissions)
-                return "Full";
-            
-            foreach (var permission in Enum.GetValues<KeyPermissions>())
-                result.Add((permissions & permission).ToString());
-            
-            return string.Join(", ", result.Where(x => !x.Equals("0")));
-        }
+        private static string BuildPermissions(KeyPermissions permissions) =>
+            permissions == AccessKeyModel.FullPermissions ? "Full" : permissions.ToString();
+        
     }
 }
