@@ -34,6 +34,9 @@
             </td>
             <td>@key.Permissions</td>
             <td>@key.AuthorName</td>
+            <td class="text-center">
+                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+            </td>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
                 <td nowrap class="text-center">
@@ -56,9 +59,6 @@
                     </div>
                 </td>
             }
-            <td class="text-center">
-                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
-            </td>
         }
         else
         {
