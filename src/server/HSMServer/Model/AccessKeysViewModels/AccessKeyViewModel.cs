@@ -3,8 +3,6 @@ using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -17,18 +15,18 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string AuthorName { get; }
 
         public string ExpirationDate { get; }
-        
-        
+
+
         public KeyState State { get; private set; }
-        
+
         public string DisplayName { get; private set; }
 
         public string Permissions { get; private set; }
-        
+
         public string NodePath { get; private set; }
 
         public string StatusTitle { get; private set; }
-        
+
         public bool HasProductColumn { get; internal set; } = true;
 
 
@@ -38,11 +36,11 @@ namespace HSMServer.Model.AccessKeysViewModels
             ParentProduct = parent;
             AuthorName = authorName;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
-            
+
             Update(accessKey);
             UpdateNodePath();
         }
-        
+
         internal void Update(AccessKeyModel accessKey)
         {
             DisplayName = accessKey.DisplayName;
@@ -76,6 +74,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         private static string BuildPermissions(KeyPermissions permissions) =>
             permissions == AccessKeyModel.FullPermissions ? "Full" : permissions.ToString();
-        
+
     }
 }
