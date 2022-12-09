@@ -78,7 +78,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             var result = new List<string>(3);
 
             if (Enum.GetValues<KeyPermissions>().Count(x => permissions.HasFlag(x)) == Enum.GetValues<KeyPermissions>().Length)
-                return "All";
+                return "Full";
             
             foreach (var permission in Enum.GetValues<KeyPermissions>())
                 if (permissions.HasFlag(permission))
