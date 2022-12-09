@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -76,6 +77,9 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             var result = new List<string>(3);
 
+            if (Enum.GetValues<KeyPermissions>().Count(x => permissions.HasFlag(x)) == Enum.GetValues<KeyPermissions>().Length)
+                return "All";
+            
             foreach (var permission in Enum.GetValues<KeyPermissions>())
                 if (permissions.HasFlag(permission))
                     result.Add(permission.ToString());
