@@ -89,9 +89,9 @@ function changeAccessKey(url, id) {
     });
 }
 
-function deleteAccessKey(url, id) {
+function deleteAccessKey(url, id, name) {
     showDeletionConfirmationModal(
-        "Removing access key",
+        `Removing ${name} access key`,
         `Do you really want to remove selected access key '${id}'?`,
         function () {
             $.ajax({

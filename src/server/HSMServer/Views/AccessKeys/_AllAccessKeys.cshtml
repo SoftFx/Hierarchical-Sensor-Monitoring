@@ -13,7 +13,7 @@
 
 @foreach (var key in Model)
 {
-    <tr>
+    <tr id="row_@key.Id">
         @if (key.HasProductColumn)
         {
             <td class="text-break">
@@ -28,7 +28,7 @@
                     @Html.Raw(key.NodePath)
                 }
             </td>
-            <td nowrap>@Html.Raw(key.DisplayName)</td>
+            <td class="displayName" nowrap>@Html.Raw(key.DisplayName)</td>
             <td nowrap>
                 <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
             </td>
@@ -43,7 +43,7 @@
             <td nowrap>
                 <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
             </td>
-            <td nowrap>@Html.Raw(key.DisplayName)</td>
+            <td id="displayName_@key.DisplayName" nowrap>@Html.Raw(key.DisplayName)</td>
             <td>@key.Permissions</td>
         }
         <td class="text-center">
@@ -89,8 +89,9 @@
     $('[id^="deleteAccessKey_"]').off("click").on("click",
         function () {
             const selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
+            const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
             const isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
-            
+                       
             let url;
             if (isAllAccessKeysTable != undefined) {
                 let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
@@ -98,7 +99,7 @@
                 url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
             } else url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
      
-            deleteAccessKey(url,  selectedKeyId)
+            deleteAccessKey(url, selectedKeyId, displayName)
         });
     
     $('[id^="blockAccessKey_"]').off("click").on("click",
