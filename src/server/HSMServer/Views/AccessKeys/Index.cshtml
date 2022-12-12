@@ -26,10 +26,13 @@
             <div class="col-2 mt-1">
                 <h5>Access keys</h5>
             </div>
-            <div class="col-5 mb-1">
+
+        </div>
+        <div class="row ms-0 ps-0">
+            <div class="col-3 mb-1 ms-0 ps-0">
                 <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
             </div>
-            <div class="col-5 mb-1 ms-3">
+            <div class="col-5 mb-1 ms-1">
                 <button type="button" class="btn btn-secondary">
                     <i onclick="searchKey()" type="button" class="fas fa-search"></i>
                 </button>
@@ -37,7 +40,7 @@
         </div>
         <table class="table">
             <tr>
-                <th id="accessKeys_productColumn">
+                <th scope="col" id="accessKeys_productColumn">
                     Product
                     @* <br />
                     (
@@ -46,16 +49,16 @@
                         node)
                     </label>*@
                 </th>
-                <th>Name</th>
-                <th>Key</th>
-                <th class="text-center">Permissions</th>
-                <th>Author</th>
-                <th class="text-center">State</th>
+                <th scope="col">Name</th>
+                <th scope="col" style="padding: 0;">Key</th>
+                <th scope="col" class="text-center">Permissions</th>
+                <th scope="col">Author</th>
+                <th scope="col" class="text-center">State</th>
                 @if (UserRoleHelper.IsManager(User as User))
                 {
-                    <th class="text-center">Actions</th>
+                    <th scope="col" class="text-center">Actions</th>
                 }
-                <th></th>
+                <th ></th>
             </tr>
             <tbody id="accessKeysTable">
             @await Html.PartialAsync("_AllAccessKeys", Model)
