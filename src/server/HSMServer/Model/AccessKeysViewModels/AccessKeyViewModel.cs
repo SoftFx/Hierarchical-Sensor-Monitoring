@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -72,7 +73,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
                 ? nameof(AccessKeyExpiration.Unlimited)
-                : expirationTime.ToString();
+                : expirationTime.ToDefaultFormat();
 
         private static string BuildPermissions(KeyPermissions permissions) =>
             permissions == AccessKeyModel.FullPermissions ? "Full" : permissions.ToString();
