@@ -8,6 +8,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
+using HSMServer.ModelBinders;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -18,7 +19,6 @@ using System.Collections.Generic;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
-using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
 {
@@ -250,11 +250,8 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
+        public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder))][FromBody] List<SensorValueBase> values)
         {
-            if (values == null || values.Count == 0)
-                return BadRequest();
-
             try
             {
                 _dataCollector.ReportSensorsCount(values.Count);
@@ -262,20 +259,7 @@ namespace HSMServer.Controllers
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
                 {
-                    BaseValue convertedValue = value.Type switch
-                    {
-                        SensorType.BooleanSensor => value.ConvertToBool(),
-                        SensorType.DoubleSensor => value.ConvertToDouble(),
-                        SensorType.IntSensor => value.ConvertToInt(),
-                        SensorType.StringSensor => value.ConvertToString(),
-                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
-                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
-                        _ => null
-                    };
-                    var storeInfo = new StoreInfo(value.Key, value.Path)
-                    {
-                        BaseValue = convertedValue
-                    };
+                    var storeInfo = BuildStoreInfo(value, value.Convert());
 
                     if (!CanAddToQueue(storeInfo, out var message))
                         result[storeInfo.Key] = message;
