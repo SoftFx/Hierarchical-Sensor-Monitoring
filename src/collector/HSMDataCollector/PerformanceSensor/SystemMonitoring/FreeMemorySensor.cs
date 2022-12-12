@@ -13,7 +13,7 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     internal class FreeMemorySensor : StandardPerformanceSensorBase<int>
     {
         private const string _sensorName = "Free memory MB";
-        public FreeMemorySensor(string productKey, IValuesQueue queue, string nodeName) : 
+        public FreeMemorySensor(string productKey, IValuesQueue queue, string nodeName) :
             base($"{nodeName ?? TextConstants.PerformanceNodeName}/{_sensorName}", "Memory", "Available MBytes", string.Empty, GetFreeMemoryFunc())
         {
             InternalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
@@ -27,10 +27,9 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             }
             catch (Exception e)
             { }
-            
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return InternalBar.GetLastValue();
         }

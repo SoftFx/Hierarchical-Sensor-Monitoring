@@ -26,17 +26,16 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             }
             catch (Exception e)
             { }
-            
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetProcessMemoryFunc()
         {
-            Func<double> func = delegate()
+            Func<double> func = delegate ()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return currentProcess.WorkingSet64;

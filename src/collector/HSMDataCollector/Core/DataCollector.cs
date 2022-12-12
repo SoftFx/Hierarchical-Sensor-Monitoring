@@ -92,7 +92,7 @@ namespace HSMDataCollector.Core
 
             _logger?.Info("DataCollector stopping...");
 
-            List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
+            var allData = new List<SensorValueBase>();
             if (_dataQueue != null)
             {
                 allData.AddRange(_dataQueue.GetCollectedData());
@@ -532,16 +532,16 @@ namespace HSMDataCollector.Core
 
             return count;
         }
-        private void DataQueue_SendValues(object sender, List<UnitedSensorValue> e)
+        private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
         {
             SendMonitoringData(e);
         }
 
-        private void SendMonitoringData(List<UnitedSensorValue> values)
+        private void SendMonitoringData(List<SensorValueBase> values)
         {
             try
             {
-                string jsonString = JsonConvert.SerializeObject(values);
+                string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
                 //_logger?.Info("Try to send data: " + jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
                 var res = _client.PostAsync(_listSendingAddress, data).Result;

@@ -5,7 +5,7 @@ namespace HSMDataCollector.Base
     internal interface ISensor
     {
         bool HasLastValue { get; }
-        UnitedSensorValue GetLastValue();
+        SensorValueBase GetLastValue();
         void Dispose();
     }
 }

@@ -27,14 +27,14 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             { }
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetProcessThreadCountFunc()
         {
-            Func<double> func = delegate()
+            Func<double> func = delegate ()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return currentProcess.Threads.Count;

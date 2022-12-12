@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.FullDataObject;
 using System;
@@ -28,20 +29,18 @@ namespace HSMDataCollector.DefaultValueSensor
 
         public override void Dispose()
         {
-            
+
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
-            UnitedSensorValue value = new UnitedSensorValue();
-            value.Type = _type;
+            var value = SensorValuesFactory.BuildValue(_currentValue);
+
             value.Key = ProductKey;
             value.Path = Path;
             value.Time = DateTime.Now;
-            value.Description = Description;
             lock (_syncRoot)
             {
-                value.Data = _currentValue.ToString();
                 value.Comment = _currentComment;
                 value.Status = _currentStatus;
             }

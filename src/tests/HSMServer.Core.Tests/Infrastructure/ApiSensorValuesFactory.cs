@@ -107,7 +107,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Extension = RandomGenerator.GetRandomString(3),
                 Value = RandomGenerator.GetRandomBytes(),
-                FileName = nameof(FileSensorValue),
+                Name = nameof(FileSensorValue),
             };
 
             return fileSensorValue.FillCommonSensorValueProperties(_productKey);

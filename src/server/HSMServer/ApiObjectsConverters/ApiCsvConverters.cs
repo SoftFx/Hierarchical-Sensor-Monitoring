@@ -39,7 +39,7 @@ namespace HSMServer.ApiObjectsConverters
         {
             nameof(SensorValueBase.Time),
             nameof(FileSensorValue.Value),
-            nameof(FileValue.Name),
+            nameof(FileSensorValue.Name),
             nameof(FileSensorValue.Extension),
             nameof(SensorValueBase.Status),
             nameof(SensorValueBase.Comment),

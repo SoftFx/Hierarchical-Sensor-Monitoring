@@ -2,7 +2,7 @@
 
 namespace HSMSensorDataObjects.FullDataObject
 {
-    public class DoubleBarSensorValue : BarValueSensorBase<double>
+    public class DoubleBarSensorValue : BarSensorValueBase<double>
     {
         [DefaultValue((int)SensorType.DoubleBarSensor)]
         public override SensorType Type => SensorType.DoubleBarSensor;

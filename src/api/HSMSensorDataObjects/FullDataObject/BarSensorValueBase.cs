@@ -13,7 +13,7 @@ namespace HSMSensorDataObjects.FullDataObject
     }
 
 
-    public abstract class BarValueSensorBase<T> : BarSensorValueBase
+    public abstract class BarSensorValueBase<T> : BarSensorValueBase
     {
         public T Min { get; set; }
 
@@ -26,7 +26,7 @@ namespace HSMSensorDataObjects.FullDataObject
         public Dictionary<double, T> Percentiles { get; set; }
 
 
-        public BarValueSensorBase()
+        public BarSensorValueBase()
         {
             Percentiles = new Dictionary<double, T>();
         }

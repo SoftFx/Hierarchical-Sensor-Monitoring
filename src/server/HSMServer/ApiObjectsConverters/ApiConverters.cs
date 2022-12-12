@@ -92,7 +92,7 @@ namespace HSMServer.ApiObjectsConverters
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value,
-                Name = value.FileName,
+                Name = value.Name,
                 Extension = value.Extension,
                 OriginalSize = value.Value.LongLength
             };

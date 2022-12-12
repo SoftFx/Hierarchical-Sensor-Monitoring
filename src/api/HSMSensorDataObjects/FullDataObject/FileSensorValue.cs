@@ -10,6 +10,6 @@ namespace HSMSensorDataObjects.FullDataObject
         [DefaultValue("txt")]
         public string Extension { get; set; }
 
-        public string FileName { get; set; }
+        public string Name { get; set; }
     }
 }

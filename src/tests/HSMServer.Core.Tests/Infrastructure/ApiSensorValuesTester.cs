@@ -59,7 +59,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         private static void TestFileValue(FileSensorValue expected, FileValue actual)
         {
-            Assert.Equal(expected.FileName, actual.Name);
+            Assert.Equal(expected.Name, actual.Name);
             Assert.Equal(expected.Extension, actual.Extension);
             Assert.Equal(expected.Value.LongLength, actual.OriginalSize);
 
