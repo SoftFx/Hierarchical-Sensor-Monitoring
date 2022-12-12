@@ -1,9 +1,6 @@
-﻿using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.FullDataObject;
 using HSMServer.Core.Model;
 using System;
-using System.Linq;
-using System.Text.Json;
 using Xunit;
 using SensorType = HSMSensorDataObjects.SensorType;
 
@@ -66,7 +63,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSimpleValue(expected, actual);
         }
 
-        private static void TestBarValue<T>(BarValueSensorBase<T> expected, BarBaseValue<T> actual) where T : struct
+        private static void TestBarValue<T>(BarSensorValueBase<T> expected, BarBaseValue<T> actual) where T : struct
         {
             Assert.Equal(expected.Count, actual.Count);
             Assert.Equal(expected.OpenTime, actual.OpenTime);
@@ -89,69 +86,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             var expectedDict = expected.Percentiles ?? new();
 
             Assert.Equal(expectedDict, actual.Percentiles);
-        }
-
-
-        internal static void TestServerSensorValue(UnitedSensorValue expected, BaseValue actual)
-        {
-            Assert.NotEqual(DateTime.MinValue, actual.ReceivingTime);
-
-            Assert.Equal(expected.Comment, actual.Comment);
-            Assert.Equal(expected.Time, actual.Time);
-            Assert.Equal(expected.Status.Convert(), actual.Status);
-            Assert.Equal(expected.Type.Convert(), actual.Type);
-
-            switch (expected.Type)
-            {
-                case SensorType.BooleanSensor:
-                    Assert.Equal(bool.TryParse(expected.Data, out var boolValue) && boolValue, (actual as BooleanValue).Value);
-                    break;
-                case SensorType.IntSensor:
-                    Assert.Equal(int.TryParse(expected.Data, out var intValue) ? intValue : 0, (actual as IntegerValue).Value);
-                    break;
-                case SensorType.DoubleSensor:
-                    Assert.Equal(double.TryParse(expected.Data, out var doubleValue) ? doubleValue : 0, (actual as DoubleValue).Value);
-                    break;
-                case SensorType.StringSensor:
-                    Assert.Equal(expected.Data, (actual as StringValue).Value);
-                    break;
-                case SensorType.IntegerBarSensor:
-                    TestBarValue(expected, actual as IntegerBarValue);
-                    break;
-                case SensorType.DoubleBarSensor:
-                    TestBarValue(expected, actual as DoubleBarValue);
-                    break;
-            }
-        }
-
-        private static void TestBarValue(UnitedSensorValue expected, IntegerBarValue actual)
-        {
-            var expectedBarData = JsonSerializer.Deserialize<IntBarData>(expected.Data);
-            var expectedPercentilesDict = expectedBarData.Percentiles ?? new();
-
-            Assert.Equal(expectedBarData.Count, actual.Count);
-            Assert.Equal(expectedBarData.StartTime.ToUniversalTime(), actual.OpenTime);
-            Assert.Equal(expectedBarData.EndTime.ToUniversalTime(), actual.CloseTime);
-            Assert.Equal(expectedBarData.Min, actual.Min);
-            Assert.Equal(expectedBarData.Max, actual.Max);
-            Assert.Equal(expectedBarData.Mean, actual.Mean);
-            Assert.Equal(expectedBarData.LastValue, actual.LastValue);
-            Assert.Equal(expectedPercentilesDict, actual.Percentiles);
-        }
-
-        private static void TestBarValue(UnitedSensorValue expected, DoubleBarValue actual)
-        {
-            var expectedBarData = JsonSerializer.Deserialize<DoubleBarData>(expected.Data);
-            var expectedPercentilesDict = expectedBarData.Percentiles ?? new();
-
-            Assert.Equal(expectedBarData.Count, actual.Count);
-            Assert.Equal(expectedBarData.StartTime.ToUniversalTime(), actual.OpenTime);
-            Assert.Equal(expectedBarData.EndTime.ToUniversalTime(), actual.CloseTime);
-            Assert.Equal(expectedBarData.Min, actual.Min);
-            Assert.Equal(expectedBarData.Max, actual.Max);
-            Assert.Equal(expectedBarData.Mean, actual.Mean);
-            Assert.Equal(expectedBarData.LastValue, actual.LastValue);
-            Assert.Equal(expectedPercentilesDict, actual.Percentiles);
         }
 
 

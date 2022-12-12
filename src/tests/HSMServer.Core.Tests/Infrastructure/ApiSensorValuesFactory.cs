@@ -1,8 +1,5 @@
-﻿using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.FullDataObject;
-using System;
+﻿using HSMSensorDataObjects.FullDataObject;
 using System.Collections.Generic;
-using System.Text.Json;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -15,10 +12,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal ApiSensorValuesFactory(string productKey) =>
             _productKey = productKey;
 
-
-        // max: 6, because United sensor values don't exist for FileSensorValue
-        internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
-            BuildUnitedSensorValue((SensorType)RandomGenerator.GetRandomByte(max: 6));
 
         internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
             sensorType switch
@@ -112,56 +105,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
-
-        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType, bool isMinEndTime = false)
-        {
-            var sensorValue = new UnitedSensorValue
-            {
-                Type = sensorType,
-                Data = BuildUnitedValueData(sensorType, isMinEndTime),
-            };
-
-            return sensorValue.FillCommonSensorValueProperties(_productKey, uniqPath: sensorType.ToString());
-        }
-
-
-        private static string BuildUnitedValueData(SensorType sensorType, bool isMinEndTime) =>
-            sensorType switch
-            {
-                SensorType.BooleanSensor => RandomGenerator.GetRandomBool().ToString(),
-                SensorType.IntSensor => RandomGenerator.GetRandomInt().ToString(),
-                SensorType.DoubleSensor => RandomGenerator.GetRandomDouble().ToString(),
-                SensorType.StringSensor => RandomGenerator.GetRandomString(),
-                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData(isMinEndTime)),
-                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData(isMinEndTime)),
-                _ => null,
-            };
-
-        private static IntBarData BuildIntBarData(bool isMinEndTime) =>
-            new()
-            {
-                LastValue = RandomGenerator.GetRandomInt(),
-                Min = RandomGenerator.GetRandomInt(),
-                Max = RandomGenerator.GetRandomInt(),
-                Mean = RandomGenerator.GetRandomInt(),
-                Count = RandomGenerator.GetRandomInt(positive: true),
-                StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
-                Percentiles = GetPercentileValuesInt(),
-            };
-
-        private static DoubleBarData BuildDoubleBarData(bool isMinEndTime) =>
-            new()
-            {
-                LastValue = RandomGenerator.GetRandomDouble(),
-                Min = RandomGenerator.GetRandomDouble(),
-                Max = RandomGenerator.GetRandomDouble(),
-                Mean = RandomGenerator.GetRandomDouble(),
-                Count = RandomGenerator.GetRandomInt(positive: true),
-                StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
-                Percentiles = GetPercentileValuesDouble(),
-            };
 
 
         private static Dictionary<double, int> GetPercentileValuesInt(int size = 3)
