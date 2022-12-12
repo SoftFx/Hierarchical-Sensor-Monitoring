@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;

@@ -1,15 +1,11 @@
 ﻿using System;
 using System.ComponentModel;
 
-namespace HSMSensorDataObjects.FullDataObject
+namespace HSMSensorDataObjects.SensorValueRequests
 {
-    public abstract class SensorValueBase
+    public abstract class SensorValueBase : BaseRequest
     {
         public abstract SensorType Type { get; }
-
-        public string Key { get; set; }
-
-        public string Path { get; set; }
 
         public DateTime Time { get; set; } = DateTime.UtcNow;
 

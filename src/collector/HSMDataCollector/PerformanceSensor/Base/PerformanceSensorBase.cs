@@ -1,5 +1,5 @@
 ﻿using HSMDataCollector.Base;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Diagnostics;
 using System.Threading;

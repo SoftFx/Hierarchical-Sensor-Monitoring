@@ -10,7 +10,7 @@ using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;

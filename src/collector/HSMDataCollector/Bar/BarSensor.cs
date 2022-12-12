@@ -1,7 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 using System.Linq;

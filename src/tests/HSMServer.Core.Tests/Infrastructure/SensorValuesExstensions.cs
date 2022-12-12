@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMServer.Core.Tests.Infrastructure

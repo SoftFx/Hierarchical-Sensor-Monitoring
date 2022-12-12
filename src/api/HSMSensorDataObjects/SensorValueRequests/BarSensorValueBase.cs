@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace HSMSensorDataObjects.FullDataObject
+namespace HSMSensorDataObjects.SensorValueRequests
 {
     public abstract class BarSensorValueBase : SensorValueBase
     {

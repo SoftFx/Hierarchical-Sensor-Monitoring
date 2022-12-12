@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Base
 {

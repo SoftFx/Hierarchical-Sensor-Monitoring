@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace HSMSensorDataObjects.FullDataObject
+namespace HSMSensorDataObjects.SensorValueRequests
 {
     public class IntBarSensorValue : BarSensorValueBase<int>
     {

@@ -3,7 +3,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.InstantValue

@@ -2,7 +2,7 @@
 using HSMDataCollector.Logging;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.CustomFuncSensor

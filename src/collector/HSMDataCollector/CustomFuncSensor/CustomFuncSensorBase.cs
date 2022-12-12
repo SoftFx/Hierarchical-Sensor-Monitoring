@@ -2,7 +2,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
 

@@ -1,7 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using Microsoft.Win32;
 using System;
 

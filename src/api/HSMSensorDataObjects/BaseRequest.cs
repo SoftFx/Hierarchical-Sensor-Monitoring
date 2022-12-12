@@ -1,4 +1,4 @@
-﻿namespace HSMSensorDataObjects.HistoryRequests
+﻿namespace HSMSensorDataObjects
 {
     public abstract class BaseRequest
     {

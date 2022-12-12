@@ -20,42 +20,42 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntSensorValue)">
             <summary>
             Receives value of int sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue)">
             <summary>
             Receives value of double sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.StringSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.StringSensorValue)">
             <summary>
             Receives value of string sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntBarSensorValue)">
             <summary>
             Receives value of integer bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.FileSensorValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
             Recommended to use for pdf files in order to keep the pdf file encoding.

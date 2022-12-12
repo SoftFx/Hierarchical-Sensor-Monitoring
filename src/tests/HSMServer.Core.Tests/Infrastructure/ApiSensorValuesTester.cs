@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Model;
 using System;
 using Xunit;

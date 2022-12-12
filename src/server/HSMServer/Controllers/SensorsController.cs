@@ -1,6 +1,6 @@
 ﻿using HSM.Core.Monitoring;
-using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Helpers;
