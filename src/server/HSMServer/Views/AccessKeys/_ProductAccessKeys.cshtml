@@ -27,11 +27,11 @@
         {
             <th>Key</th>
         }
-        <th>Permissions</th>
-        <th>State</th>
+        <th class="text-center">Permissions</th>
+        <th class="text-center">State</th>
         @if (Model.IsChangingAccessKeysAvailable(User as User))
         {
-            <th>Action</th>
+            <th class="text-center">Action</th>
         }
     </tr>
     <tbody id="accessKeysTable">
