@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model
 
         public DateTime ExpirationTime { get; init; }
 
-        public KeyState State { get; private set; }
+        public KeyState State { get; set; }
 
         public KeyPermissions Permissions { get; private set; }
 

@@ -51,7 +51,7 @@
                 <th class="text-center">Permissions</th>
                 <th>Author</th>
                 <th class="text-center">State</th>
-                @if (UserRoleHelper.IsProductCRUDAllowed(User as User))
+                @if (UserRoleHelper.IsManager(User as User))
                 {
                     <th class="text-center">Actions</th>
                 }

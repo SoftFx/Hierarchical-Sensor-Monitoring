@@ -14,6 +14,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Cache
 {
@@ -32,6 +33,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
+
 
         [Obsolete("Remove this after product id migration")]
         private readonly ConcurrentDictionary<string, Guid> _productKeys = new();
@@ -245,6 +247,18 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
+        public AccessKeyModel UpdateAccessKeyState(Guid id)
+        {
+            if (!_keys.TryGetValue(id, out var key))
+                return null;
+            
+            if (!key.IsExpired(out var message))
+                key.State = key.State.GetInversed();
+
+
+            return UpdateAccessKey(new AccessKeyUpdate (key.Id, key.State));
+        }
+
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
 
         public void UpdateSensor(SensorUpdate updatedSensor)
@@ -346,7 +360,8 @@ namespace HSMServer.Core.Cache
             var sensor = GetSensor(request);
             var historyValues = request.To.HasValue
                 ? GetSensorValues(sensor.Id, request.From, request.To.Value)
-                : GetSensorValues(sensor.Id, request.From, DateTime.UtcNow.AddDays(1), int.MaxValue).TakeLast(request.Count.Value).ToList();
+                : GetSensorValues(sensor.Id, request.From, DateTime.UtcNow.AddDays(1), int.MaxValue)
+                    .TakeLast(request.Count.Value).ToList();
 
             return historyValues;
         }
@@ -367,7 +382,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
+        private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId,
+            Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
         {
             var values = new List<BaseValue>(1 << 6);
 
@@ -456,7 +472,8 @@ namespace HSMServer.Core.Cache
             node.RefreshOutdatedError();
         }
 
-        private void NotifyAllProductChildrenAboutUpdate(ProductModel product, Dictionary<Guid, ValidationResult> sensorsOldStatuses)
+        private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
+            Dictionary<Guid, ValidationResult> sensorsOldStatuses)
         {
             ChangeProductEvent(product, TransactionType.Update);
 
@@ -542,7 +559,8 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private Dictionary<Guid, string> ApplyProducts(List<ProductEntity> productEntities, Dictionary<Guid, Policy> policies)
+        private Dictionary<Guid, string> ApplyProducts(List<ProductEntity> productEntities,
+            Dictionary<Guid, Policy> policies)
         {
             var productsToResave = new Dictionary<Guid, string>(1 << 6);
 
@@ -560,6 +578,7 @@ namespace HSMServer.Core.Cache
                     productsToResave.Add(product.Id, productEntity.Id);
                 }
             }
+
             _logger.Info($"{nameof(productEntities)} applied");
 
             _logger.Info("Links between products are building");
@@ -576,12 +595,14 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
+
             _logger.Info("Links between products are built");
 
             return productsToResave;
         }
 
-        private List<SensorEntity> ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, Dictionary<Guid, Policy> policies)
+        private List<SensorEntity> ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
+            Dictionary<Guid, Policy> policies)
         {
             var sensorsToResave = new List<SensorEntity>(1 << 4);
 
@@ -606,7 +627,10 @@ namespace HSMServer.Core.Cache
                             sensorsToResave.Add(sensor.ToEntity());
                     }
                 }
-                else { }
+                else
+                {
+                }
+
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
@@ -675,10 +699,13 @@ namespace HSMServer.Core.Cache
 
                     if (_productKeys.TryGetValue(role.Key, out var mappedId))
                     {
-                        user.ProductsRoles[i] = new KeyValuePair<string, ProductRoleEnum>(mappedId.ToString(), role.Value);
+                        user.ProductsRoles[i] =
+                            new KeyValuePair<string, ProductRoleEnum>(mappedId.ToString(), role.Value);
                         needToResave = true;
                     }
-                    else if (!Guid.TryParse(role.Key, out _)) // there are users with non exists product keys in product roles
+                    else if
+                        (!Guid.TryParse(role.Key,
+                            out _)) // there are users with non exists product keys in product roles
                     {
                         rolesToRemove.Add(role);
                         needToResave = true;
@@ -711,6 +738,7 @@ namespace HSMServer.Core.Cache
                 else
                     _databaseCore.UpdateProduct(entity);
             }
+
             _logger.Info($"{nameof(products)} resaving is done.");
 
             _logger.Info($"{nameof(sensors)} resaving is in process...");
@@ -731,14 +759,16 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(ResaveEntities)} is stopped");
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct,
+            BaseRequestModel request)
         {
             var pathParts = request.PathParts;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
                 var subProductName = pathParts[i];
-                var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
+                var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName)
+                    .Value;
                 if (subProduct == null)
                 {
                     subProduct = new ProductModel(subProductName);
@@ -845,7 +875,8 @@ namespace HSMServer.Core.Cache
                     product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
                     if (product == null &&
-                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                        !TryCheckAccessKeyPermissions(accessKey,
+                            KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
                 else
@@ -861,7 +892,8 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions, out string message)
+        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
+            out string message)
         {
             if (accessKey == null)
             {
@@ -884,7 +916,8 @@ namespace HSMServer.Core.Cache
             return productsWithTheirSubProducts.Values.ToList();
         }
 
-        private static void GetAllProductSubProducts(ProductModel product, Dictionary<Guid, ProductModel> allSubProducts)
+        private static void GetAllProductSubProducts(ProductModel product,
+            Dictionary<Guid, ProductModel> allSubProducts)
         {
             foreach (var (subProductId, subProduct) in product.SubProducts)
             {
@@ -895,7 +928,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, ValidationResult> sensorsStatuses)
+        private static void GetProductSensorsStatuses(ProductModel product,
+            Dictionary<Guid, ValidationResult> sensorsStatuses)
         {
             foreach (var (sensorId, sensor) in product.Sensors)
                 sensorsStatuses.Add(sensorId, sensor.ValidationResult);

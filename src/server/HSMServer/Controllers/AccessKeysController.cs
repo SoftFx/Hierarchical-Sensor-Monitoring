@@ -123,13 +123,7 @@ namespace HSMServer.Controllers
         public IActionResult BlockAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
-            var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
-            
-            TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
-            {
-                Id = key.Id,
-                State = key.State.GetInversed()
-            });
+            TreeValuesCache.UpdateAccessKeyState(Guid.Parse(selectedKey));
             return GetPartialAllAccessKeys(isAllProducts);
         }
         
@@ -137,14 +131,9 @@ namespace HSMServer.Controllers
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
-            _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(selectedKey), out var key);     
+            _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(selectedKey), out var key);
             
-            TreeValuesCache.UpdateAccessKey(new AccessKeyUpdate()
-            {
-                Id = key.Id,
-                State = key.State.GetInversed()
-            });
-            
+            TreeValuesCache.UpdateAccessKeyState(key.Id);
             _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
             
             return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
