@@ -6,6 +6,8 @@
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Extensions
 
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 @model List<AccessKeyViewModel>
 
 @{
@@ -18,9 +20,9 @@
         @if (key.HasProductColumn)
         {
             <td class="text-break">
-                @if (key.ParentProduct.Parent == null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
                 {
-                    <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-encodedProductId="@key.ParentProduct.EncodedId">
+                    <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
                         @Html.Raw(key.NodePath)
                     </a>
                 }
@@ -44,12 +46,12 @@
             <td id="displayName_@key.DisplayName" nowrap>@Html.Raw(key.DisplayName)</td>
             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
             {
-                <td nowrap>
+                <td>
                     @key.Id
                 </td>
             }
-            <td nowrap>
-                <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
+            <td>
+                <a role="button" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
             </td>
             <td class="text-center">@key.Permissions</td>
             <td class="text-center">

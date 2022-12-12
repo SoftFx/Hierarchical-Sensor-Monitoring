@@ -254,8 +254,7 @@ namespace HSMServer.Core.Cache
             
             if (!key.IsExpired(out var message))
                 key.State = key.State.GetInversed();
-
-
+            
             return UpdateAccessKey(new AccessKeyUpdate (key.Id, key.State));
         }
 
