@@ -35,7 +35,7 @@
             <td nowrap>
                 <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
             </td>
-            <td class="text-center">@key.Permissions</td>
+            <td>@key.Permissions</td>
             <td>@key.AuthorName</td>
             <td class="text-center">
                 <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
@@ -58,12 +58,18 @@
                 <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
             </td>
         }
-        @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
-        {
+        
             <td nowrap class="text-center">
                 <div class='btn-group'>
-                    <i class="fa-solid fa-ellipsis-vertical" data-bs-toggle="dropdown"></i>
-                    <div class='dropdown-menu'>
+                @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                {
+                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"  data-bs-toggle="dropdown"></i>
+                }
+                else
+                {
+                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey"  data-bs-toggle="dropdown"></i>
+                }
+                    <div class='dropdown-menu overflow-auto'>
                         <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
                         <button id='blockAccessKey_@key.Id' class='dropdown-item'>
                             @if (key.State == KeyState.Blocked)
@@ -79,7 +85,7 @@
                     </div>
                 </div>
             </td>
-        }
+        
     </tr>
 }
 
@@ -126,6 +132,4 @@
               
              blockAccessKey(url, selectedKeyId)
         }); 
-    function qwe(){
-        }
 </script>
