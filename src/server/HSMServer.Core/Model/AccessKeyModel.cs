@@ -151,7 +151,7 @@ namespace HSMServer.Core.Model
         }
 
         internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsExpired(out message) && !IsBlocked(out message) && IsHasPermissions(permissions, out message);
+            !IsBlocked(out message) && !IsExpired(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel
