@@ -24,9 +24,10 @@
         <table class="table">
             <tr>
                 <th>Display name</th>
+                <th>Key</th>
                 @if (Model.IsChangingAccessKeysAvailable(User as User))
                 {
-                    <th>Key</th>
+                    <th></th>
                 }
                 <th class="text-center">Permissions</th>
                 <th class="text-center">State</th>
@@ -46,9 +47,9 @@
         <div class="row flex-nowrap">
             @if (Model.IsChangingAccessKeysAvailable(User as User))
             {
-                <button class="btn btn-secondary col-2 w-50 mx-1" type="button" onclick="addButtonClick()">Add</button>
+                <button id="addButton" class="btn btn-secondary col-2 w-50 mx-1" type="button" onclick="addButtonClick()">Add</button>
             }
-            <button class="btn btn-secondary col-2 w-50" type="button" onclick="hideModal()">Close</button>
+            <button id="closeButton" class="btn btn-secondary col-2" type="button" onclick="hideModal()">Close</button>
         </div>
     </div>
 </div>
@@ -61,4 +62,14 @@
 
         showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
     }
+    
+    $(document).ready( () => {
+            if (document.getElementById('addButton') !== null){
+                console.log(213123)
+                console.log(document.getElementById('addButton'))
+                document.getElementById('closeButton').classList.add('w-50')
+                }else{
+                document.getElementById('closeButton').classList.add('w-100')
+                }
+        })       
 </script>
