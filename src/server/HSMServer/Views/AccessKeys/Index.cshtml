@@ -38,32 +38,8 @@
                 </button>
             </div>
         </div>
-        <table class="table">
-            <tr>
-                <th scope="col" id="accessKeys_productColumn">
-                    Product
-                    @* <br />
-                    (
-                    <input class="form-check-input" type="checkbox" value="" onchange="allProductsChanged()" id="allProducts">
-                    <label class="form-check-label" for="allProducts">
-                        node)
-                    </label>*@
-                </th>
-                <th scope="col">Name</th>
-                <th scope="col">Key</th>
-                <th scope="col">Permissions</th>
-                <th scope="col">Author</th>
-                <th scope="col" class="text-center">State</th>
-                @if (UserRoleHelper.IsManager(User as User))
-                {
-                    <th scope="col" class="text-center">Actions</th>
-                }
-                <th ></th>
-            </tr>
-            <tbody id="accessKeysTable">
-            @await Html.PartialAsync("_AllAccessKeys", Model)
-            </tbody>
-        </table>
+        
+        @await Html.PartialAsync("_AllAccessKeys", Model)
     </div>
 </div>
 

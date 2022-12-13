@@ -21,25 +21,7 @@
 <input class="d-none" id='accessKey_productName' value="@Model.Name"/>
 <div class="container-fluid">
     <div class="table-responsive overflow-visible">
-        <table class="table">
-            <tr>
-                <th>Display name</th>
-                <th>Key</th>
-                @if (Model.IsChangingAccessKeysAvailable(User as User))
-                {
-                    <th></th>
-                }
-                <th class="text-center">Permissions</th>
-                <th class="text-center">State</th>
-                @if (Model.IsChangingAccessKeysAvailable(User as User))
-                {
-                    <th class="text-center">Action</th>
-                }
-            </tr>
-            <tbody id="accessKeysTable">
-            @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
-            </tbody>
-        </table>
+        @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
     </div>
 
 
