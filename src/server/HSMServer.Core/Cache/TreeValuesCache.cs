@@ -251,9 +251,14 @@ namespace HSMServer.Core.Cache
         {
             if (!_keys.TryGetValue(id, out var key))
                 return null;
-            
-            if (!key.IsExpired(out var message))
-                key.State = key.State.GetInversed();
+
+            key.State = key.State switch
+            {
+                KeyState.Active => KeyState.Blocked,
+                KeyState.Blocked => key.IsExpired(out var message) ? KeyState.Expired : KeyState.Active,
+                KeyState.Expired => KeyState.Blocked,
+                _ => key.State
+            };
             
             return UpdateAccessKey(new AccessKeyUpdate (key.Id, key.State));
         }
