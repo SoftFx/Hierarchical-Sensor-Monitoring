@@ -74,9 +74,10 @@ function showNewAccessKeyModal(url, openModal) {
 }
 
 function changeAccessKey(url, id) {
+    const isModalOpen = $('#accessKeys_modal').is(':visible')
     $.ajax({
         type: 'GET',
-        url: `${url}?SelectedKey=${id}`,
+        url: `${url}?SelectedKey=${id}&CloseModal=${!isModalOpen}`,
         cache: false,
         async: true,
         success: function (viewData) {

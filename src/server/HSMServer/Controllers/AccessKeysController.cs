@@ -69,7 +69,8 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult ModifyAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey)
+        public IActionResult ModifyAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey,
+                                             [FromQuery(Name = "CloseModal")] bool closeModal = true)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
 
@@ -77,7 +78,7 @@ namespace HSMServer.Controllers
                 new EditAccessKeyViewModel(key)
                 {
                     EncodedProductId = SensorPathHelper.EncodeGuid(key.ProductId),
-                    CloseModal = true,
+                    CloseModal = closeModal,
                     IsModify = true,
                 });
         }
@@ -90,14 +91,14 @@ namespace HSMServer.Controllers
                 return GetPartialNewAccessKey(key);
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
-
-            return GetPartialNewAccessKey(key);
+           
+            return GetPartialProductAccessKeys(key.EncodedProductId);
         }
 
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
-                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
+            [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
 
@@ -121,24 +122,24 @@ namespace HSMServer.Controllers
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
-                                                        [FromQuery(Name = "AllProducts")] bool isAllProducts)
+            [FromQuery(Name = "AllProducts")] bool isAllProducts)
         {
             TreeValuesCache.UpdateAccessKeyState(Guid.Parse(selectedKey));
             return GetPartialAllAccessKeys(isAllProducts);
         }
-        
+
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
         {
             _treeViewModel.AccessKeys.TryGetValue(Guid.Parse(selectedKey), out var key);
-            
+
             TreeValuesCache.UpdateAccessKeyState(key.Id);
             _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
-            
+
             return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
         }
-        
+
         private List<AccessKeyViewModel> GetAvailableAccessKeys(bool isAllProducts = false)
         {
             var user = HttpContext.User as User;
@@ -168,10 +169,10 @@ namespace HSMServer.Controllers
         private PartialViewResult GetPartialSearchedKeys(string searchKey)
         {
             var keys = GetAvailableAccessKeys();
-            
+
             return PartialView("_AllAccessKeys", keys.Where(x => x.Id.ToString().Contains(searchKey ?? "")).ToList());
         }
-        
+
         private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) =>
             PartialView("_NewAccessKey", key);
     }
