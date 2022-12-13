@@ -167,11 +167,10 @@ namespace HSMDataCollector.Core
                     if (value is FileSensorBytesValue fileValue)
                         FileReceving?.Invoke(this, fileValue);
                     else
-                    {
                         dataList.Add(value as UnitedSensorValue);
-                        ++count;
-                        --_internalCount;
-                    }
+
+                    ++count;
+                    --_internalCount;
                 }
             }
 
