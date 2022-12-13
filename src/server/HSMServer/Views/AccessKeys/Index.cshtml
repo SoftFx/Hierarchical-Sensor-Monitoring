@@ -38,8 +38,9 @@
                 </button>
             </div>
         </div>
-        
+        <div id="accessTable">
         @await Html.PartialAsync("_AllAccessKeys", Model)
+        </div>
     </div>
 </div>
 
@@ -78,8 +79,12 @@
                     cache: false,
                     async: true,
                     success: function (viewData) {
-                        $('#accessKeysTable').html(viewData);
+                        const isEmpty = document.querySelectorAll("#accessTable tr").length <= 1;
+                        if (isEmpty) console.log(12312312312312)
+                        $('#accessKeysTable').html(viewData)
+                        document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<h1><strong>Key not found</strong></h1>") : this;
                     }
                 });
     }
+   
 </script>
