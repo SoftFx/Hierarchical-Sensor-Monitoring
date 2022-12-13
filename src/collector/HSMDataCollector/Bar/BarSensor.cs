@@ -77,7 +77,7 @@ namespace HSMDataCollector.Bar
 
                 return GetSensorValueFromGenericList(collected, startTime);
             }
-            catch (Exception e)
+            catch
             {
                 return null;
             }
@@ -99,7 +99,7 @@ namespace HSMDataCollector.Bar
                 var intList = values.OfType<int>().ToList();
                 return GetIntegerDataObject(intList, barStart, barEnd);
             }
-            catch (Exception e)
+            catch
             {
                 return null;
             }
@@ -121,7 +121,7 @@ namespace HSMDataCollector.Bar
             FillCommonData(result, barStartTime);
             FillNumericData(result, values);
 
-            result.LastValue = values.Any() ? GetRoundedNumber(values.Last()) : 0.0;
+            result.LastValue = GetRoundedNumber(values.LastOrDefault());
             result.OpenTime = barStartTime.ToUniversalTime();
             result.CloseTime = barEndTime.ToUniversalTime();
 
@@ -148,7 +148,8 @@ namespace HSMDataCollector.Bar
             data.Count = 0;
             data.Mean = 0.0;
         }
-        private double CountMean(List<double> values)
+
+        private static double CountMean(List<double> values)
         {
             double sum = values.Sum();
             double mean = 0.0;
@@ -156,10 +157,11 @@ namespace HSMDataCollector.Bar
             {
                 mean = sum / values.Count;
             }
-            catch (Exception e)
+            catch
             { }
             return mean;
         }
+
         private double GetRoundedNumber(double number)
         {
             return Math.Round(number, _precision, MidpointRounding.AwayFromZero);
@@ -176,7 +178,7 @@ namespace HSMDataCollector.Bar
             FillCommonData(result, barStartTime);
             FillNumericData(result, values);
 
-            result.LastValue = values.Any() ? values.Last() : 0;
+            result.LastValue = values.LastOrDefault();
             result.OpenTime = barStartTime.ToUniversalTime();
             result.CloseTime = barEndTime.ToUniversalTime();
 
@@ -204,7 +206,7 @@ namespace HSMDataCollector.Bar
             data.Mean = 0;
         }
 
-        private int CountMean(List<int> values)
+        private static int CountMean(List<int> values)
         {
             //long sum = values.Sum();
             decimal sum = CountSum(values);
@@ -213,13 +215,13 @@ namespace HSMDataCollector.Bar
             {
                 mean = (int)(sum / values.Count);
             }
-            catch (Exception e)
+            catch
             { }
 
             return mean;
         }
 
-        private decimal CountSum(List<int> values)
+        private static decimal CountSum(List<int> values)
         {
             decimal result = decimal.Zero;
             foreach (var number in values)
