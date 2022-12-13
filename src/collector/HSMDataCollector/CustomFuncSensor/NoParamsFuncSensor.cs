@@ -7,7 +7,7 @@ using System;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal class NoParamsFuncSensor<T> : CustomFuncSensorBase, INoParamsFuncSensor<T>
+    internal class NoParamsFuncSensor<T> : CustomFuncSensorBase<UnitedSensorValue>, INoParamsFuncSensor<T>
     {
         private readonly Func<T> _funcToInvoke;
         private readonly NLog.Logger _logger;

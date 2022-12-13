@@ -7,7 +7,7 @@ using System;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal sealed class WindowsUpdateFuncSensor : CustomFuncSensorBase
+    internal sealed class WindowsUpdateFuncSensor : CustomFuncSensorBase<UnitedSensorValue>
     {
         private readonly NLog.Logger _logger;
         private readonly TimeSpan _updateInterval;

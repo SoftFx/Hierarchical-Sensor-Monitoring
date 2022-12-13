@@ -27,5 +27,10 @@ namespace HSMDataCollector.Base
         {
             _queue.EnqueueData(value);
         }
+
+        protected void EnqueueObject(object value)
+        {
+            _queue.EnqueueObject(value);
+        }
     }
 }
