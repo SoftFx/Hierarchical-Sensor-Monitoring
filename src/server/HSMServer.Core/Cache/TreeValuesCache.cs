@@ -252,13 +252,7 @@ namespace HSMServer.Core.Cache
             if (!_keys.TryGetValue(id, out var key))
                 return null;
 
-            key.State = key.State switch
-            {
-                KeyState.Active => KeyState.Blocked,
-                KeyState.Blocked => key.IsExpired(out var message) ? KeyState.Expired : KeyState.Active,
-                KeyState.Expired => KeyState.Blocked,
-                _ => key.State
-            };
+            InverseAccessKeyState(key);
             
             return UpdateAccessKey(new AccessKeyUpdate (key.Id, key.State));
         }
@@ -368,6 +362,18 @@ namespace HSMServer.Core.Cache
                     .TakeLast(request.Count.Value).ToList();
 
             return historyValues;
+        }
+
+        private void InverseAccessKeyState(AccessKeyModel key)
+        {
+            
+            key.State = key.State switch
+            {
+                KeyState.Active => KeyState.Blocked,
+                KeyState.Blocked => key.IsExpired(out var message) ? KeyState.Expired : KeyState.Active,
+                KeyState.Expired => KeyState.Blocked,
+                _ => key.State
+            };
         }
 
         public void UpdatePolicy(TransactionType type, Policy policy)
