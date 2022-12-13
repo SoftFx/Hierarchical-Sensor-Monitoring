@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
             
             return PartialView("_AllAccessKeys", productNode.GetEditProductAccessKeys());
         }
-
+        
         private List<AccessKeyViewModel> GetAvailableAccessKeys(bool isAllProducts = false)
         {
             var user = HttpContext.User as User;
@@ -169,7 +169,7 @@ namespace HSMServer.Controllers
         {
             var keys = GetAvailableAccessKeys();
             
-            return PartialView("_AllAccessKeys", keys.Where(x => x.Id.ToString().Contains(searchKey)).ToList());
+            return PartialView("_AllAccessKeys", keys.Where(x => x.Id.ToString().Contains(searchKey ?? "")).ToList());
         }
         
         private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) =>
