@@ -383,7 +383,7 @@ namespace HSMDataCollector.Core
         {
             return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
         }
-        public INoParamsFuncSensor<byte[]> CreateFileFuncSensor(string path, string fileName, string extension, string description, Func<byte[]> function, TimeSpan interval)
+        public INoParamsFuncSensor<byte[]> CreateFileFuncSensor(string path, string fileName, Func<byte[]> function, TimeSpan interval, string extension = "txt", string description = "")
         {
             var existingSensor = GetExistingSensor(path);
             if (existingSensor is FileFuncSensor typedSensor)

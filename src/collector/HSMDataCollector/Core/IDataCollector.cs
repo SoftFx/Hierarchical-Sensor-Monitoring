@@ -347,7 +347,7 @@ namespace HSMDataCollector.Core
         /// <param name="function">The function that is invoked</param>
         /// <param name="interval">The <see cref="function"/> is invoked every time the interval passes</param>
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set via TimeSpan</returns>
-        INoParamsFuncSensor<byte[]> CreateFileFuncSensor(string path, string fileName, string extension, string description, Func<byte[]> function, TimeSpan interval);
+        INoParamsFuncSensor<byte[]> CreateFileFuncSensor(string path, string fileName, Func<byte[]> function, TimeSpan interval, string extension = "txt", string description = "");
         #endregion
         /// <summary>
         /// The event is fired after the values queue (current capacity is 100000 items) overflows
