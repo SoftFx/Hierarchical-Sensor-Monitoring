@@ -68,7 +68,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
 
-        internal AccessKeyViewModel Copy() => (AccessKeyViewModel) MemberwiseClone();
+        internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
