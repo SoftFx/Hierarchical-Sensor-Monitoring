@@ -1,4 +1,5 @@
 ﻿using HSM.Core.Monitoring;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
@@ -250,7 +251,7 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder))][FromBody] List<SensorValueBase> values)
+        public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder)), FromBody] List<SensorValueBase> values)
         {
             try
             {
@@ -356,7 +357,11 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
-            new(valueBase.Key, valueBase.Path) { BaseValue = baseValue };
+        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        {
+            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+
+            return new(key, valueBase.Path) { BaseValue = baseValue };
+        }
     }
 }

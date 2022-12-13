@@ -8,6 +8,7 @@ using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
@@ -27,9 +28,8 @@ namespace HSMServer
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services
-                .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                    .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
 
             services.AddHsts(options =>
             {
@@ -66,6 +66,7 @@ namespace HSMServer
             services.AddSwaggerGen(o =>
             {
                 o.UseInlineDefinitionsForEnums();
+                o.OperationFilter<DataRequestHeaderSwaggerFilter>();
             });
 
             services.ConfigureSwaggerGen(options =>

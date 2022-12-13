@@ -55,6 +55,7 @@ namespace HSMDataCollector.Core
             HttpClientHandler handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
             _client = new HttpClient(handler);
+            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), productKey);
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();

@@ -7,9 +7,10 @@ namespace HSMSensorDataObjects.SensorValueRequests
     {
         public abstract SensorType Type { get; }
 
-        public DateTime Time { get; set; } = DateTime.UtcNow;
 
         public string Comment { get; set; }
+
+        public DateTime Time { get; set; } = DateTime.UtcNow;
 
         [DefaultValue((int)SensorStatus.Ok)]
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
