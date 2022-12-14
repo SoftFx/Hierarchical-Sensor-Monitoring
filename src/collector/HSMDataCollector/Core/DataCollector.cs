@@ -50,7 +50,7 @@ namespace HSMDataCollector.Core
         public DataCollector(string productKey, string address, int port = 44330)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
-            _listSendingAddress = $"{connectionAddress}/listNew";
+            _listSendingAddress = $"{connectionAddress}/list";
             _fileSendingAddress = $"{connectionAddress}/file";
             _productKey = productKey;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();

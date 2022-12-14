@@ -247,7 +247,7 @@ namespace HSMServer.Controllers
         }
 
 
-        [HttpPost("listNew")]
+        [HttpPost("list")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
