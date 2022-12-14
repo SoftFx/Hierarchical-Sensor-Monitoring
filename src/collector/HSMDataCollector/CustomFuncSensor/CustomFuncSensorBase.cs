@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal abstract class CustomFuncSensorBase<U> : SensorBase
+    internal abstract class CustomFuncSensorBase : SensorBase
     {
         private Timer _internalTimer;
         protected readonly SensorType Type;
@@ -21,12 +21,8 @@ namespace HSMDataCollector.CustomFuncSensor
         }
         private void TimerCallback(object state)
         {
-            var value = GetInvokeResult();
-
-            if (value is UnitedSensorValue unitedV)
-                EnqueueValue(unitedV);
-            else if (value is FileSensorBytesValue fileV)
-                EnqueueObject(fileV);
+            UnitedSensorValue value = GetInvokeResult();
+            EnqueueValue(value);
         }
         protected UnitedSensorValue CreateErrorDataObject(Exception ex)
         {
@@ -55,7 +51,7 @@ namespace HSMDataCollector.CustomFuncSensor
 
             return valueObject;
         }
-        protected abstract U GetInvokeResult();
+        protected abstract UnitedSensorValue GetInvokeResult();
 
         protected void RestartTimerInternal(TimeSpan timerSpan)
         {
