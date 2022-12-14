@@ -27,6 +27,9 @@ function showAccessKeysListModal() {
 }
 
 function showModal() {
+    $('#accessKeys_modal').modal({    
+        backdrop: 'static'
+    });
     $('#accessKeys_modal').modal('show');
 }
 
