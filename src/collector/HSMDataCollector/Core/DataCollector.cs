@@ -33,6 +33,7 @@ namespace HSMDataCollector.Core
     {
         private readonly string _productKey;
         private readonly string _listSendingAddress;
+        private readonly string _fileSendingAddress;
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
@@ -50,6 +51,7 @@ namespace HSMDataCollector.Core
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
             _listSendingAddress = $"{connectionAddress}/listNew";
+            _fileSendingAddress = $"{connectionAddress}/file";
             _productKey = productKey;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             HttpClientHandler handler = new HttpClientHandler();
@@ -59,6 +61,7 @@ namespace HSMDataCollector.Core
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
+            _dataQueue.FileReceving += DataQueue_FileReceving; ;
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
         }
@@ -198,6 +201,16 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<string> CreateStringSensor(string path, string description)
         {
             return CreateInstantValueSensorInternal<string>(path, description, SensorType.StringSensor);
+        }
+        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            if (existingSensor is IInstantValueSensor<string> instantValueSensor)
+                return instantValueSensor;
+
+            var sensor = new InstantFileSensor(path, _productKey, fileName, extension, _dataQueue as IValuesQueue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
         }
 
         private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description,
@@ -538,6 +551,27 @@ namespace HSMDataCollector.Core
         {
             SendMonitoringData(e);
         }
+
+        private void DataQueue_FileReceving(object _, FileSensorBytesValue value)
+        {
+            try
+            {
+                string jsonString = JsonConvert.SerializeObject(value);
+                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
+                var res = _client.PostAsync(_fileSendingAddress, data).Result;
+
+                if (!res.IsSuccessStatusCode)
+                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
+            }
+            catch (Exception e)
+            {
+                if (_dataQueue != null && !_dataQueue.Disposed)
+                    _dataQueue?.ReturnFile(value);
+
+                _logger?.Error($"Failed to send: {e}");
+            }
+        }
+
         //private void DataQueue_SendData(object sender, List<CommonSensorValue> e)
         //{
         //    SendData(e);

@@ -20,7 +20,7 @@ namespace HSMDataCollector.CustomFuncSensor
                 _logger = Logger.Create(nameof(NoParamsFuncSensor<T>));
             }
         }
-        
+
         public override UnitedSensorValue GetLastValue()
         {
             return GetValueInternal();

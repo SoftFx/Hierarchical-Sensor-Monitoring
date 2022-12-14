@@ -1,9 +1,9 @@
 ﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.FullDataObject;
 using System;
 using System.Threading;
-using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
