@@ -1,6 +1,6 @@
-﻿using System;
+﻿using HSMDataCollector.PublicInterface;
+using System;
 using System.Collections.Generic;
-using HSMDataCollector.PublicInterface;
 
 namespace HSMDataCollector.Core
 {
@@ -106,6 +106,15 @@ namespace HSMDataCollector.Core
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
+        /// <summary>
+        /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
+        /// </summary>
+        /// <param name="path">Sensor path to display in the tree</param>
+        /// <param name="fileName">Name of result file</param>
+        /// <param name="extension">Extension of result file</param>
+        /// <param name="description">Possible sensor description, empty by default</param>
+        /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
+        IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is bool
         /// </summary>
@@ -305,7 +314,7 @@ namespace HSMDataCollector.Core
         /// <param name="function">The function that is invoked</param>
         /// <param name="interval">The <see cref="function"/> is invoked every time the interval passes</param>
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set via TimeSpan</returns>
-        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>,T> function, TimeSpan interval);
+        IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval);
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with the specified parameters
         /// </summary>

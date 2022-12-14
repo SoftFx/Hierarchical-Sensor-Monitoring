@@ -7,10 +7,11 @@ namespace HSMServer.Model.ViewModel
     {
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get;}
         
-        public bool IsAdmin { get;}
         
+        public bool IsAdmin { get; set; }
         
         public string Username { get; set; }
+        
         public string Password { get; set; }
         
         public string UserId { get; set; }

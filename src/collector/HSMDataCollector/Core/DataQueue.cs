@@ -29,12 +29,23 @@ namespace HSMDataCollector.Core
 
         public event EventHandler<List<SensorValueBase>> SendValues;
         public event EventHandler<DateTime> QueueOverflow;
+        public event EventHandler<FileSensorValue> FileReceving;
 
         public void ReturnData(List<SensorValueBase> values)
         {
             lock (_listLock)
             {
                 _failedList.AddRange(values);
+            }
+
+            _hasFailedData = true;
+        }
+
+        public void ReturnFile(FileSensorValue file)
+        {
+            lock (_listLock)
+            {
+                _failedList.Add(file);
             }
 
             _hasFailedData = true;
@@ -123,7 +134,14 @@ namespace HSMDataCollector.Core
             {
                 lock (_listLock)
                 {
-                    dataList.AddRange(_failedList);
+                    foreach (var failedValue in _failedList)
+                    {
+                        if (failedValue is FileSensorValue fileValue)
+                            FileReceving?.Invoke(this, fileValue);
+                        else
+                            dataList.Add(failedValue);
+                    }
+
                     _failedList.Clear();
                 }
 
@@ -135,7 +153,13 @@ namespace HSMDataCollector.Core
             {
                 while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
                 {
-                    dataList.Add(_valuesQueue.Dequeue());
+                    var value = _valuesQueue.Dequeue();
+
+                    if (value is FileSensorValue fileValue)
+                        FileReceving?.Invoke(this, fileValue);
+                    else
+                        dataList.Add(value);
+
                     ++count;
                     --_internalCount;
                 }
