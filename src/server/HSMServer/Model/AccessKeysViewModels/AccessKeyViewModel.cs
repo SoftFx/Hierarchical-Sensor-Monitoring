@@ -30,8 +30,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string StatusTitle { get; private set; }
 
-        public bool HasProductColumn { get; internal set; } = true;
-
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, string authorName)
         {
@@ -67,8 +65,6 @@ namespace HSMServer.Model.AccessKeysViewModels
 
             NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
-
-        internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
 
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue

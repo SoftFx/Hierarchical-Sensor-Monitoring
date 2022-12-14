@@ -48,7 +48,7 @@ namespace HSMServer.Core.Model
         public string DisplayName { get; private set; }
 
 
-        public bool HasExpired => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
+        public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
 
 
         public AccessKeyModel(AccessKeyEntity entity, Guid? produtId = null)
@@ -127,7 +127,7 @@ namespace HSMServer.Core.Model
             return string.IsNullOrEmpty(message);
         }
 
-        internal bool IsExpired(out string message)
+        internal bool CheckExpired(out string message)
         {
             message = string.Empty;
 
@@ -151,7 +151,7 @@ namespace HSMServer.Core.Model
         }
 
         internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsBlocked(out message) && !IsExpired(out message) && IsHasPermissions(permissions, out message);
+            !IsBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel

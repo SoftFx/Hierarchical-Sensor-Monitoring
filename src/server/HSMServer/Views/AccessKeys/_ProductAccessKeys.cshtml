@@ -21,7 +21,7 @@
 <input class="d-none" id='accessKey_productName' value="@Model.Name"/>
 <div class="container-fluid">
     <div class="table-responsive overflow-visible">
-        @await Html.PartialAsync("_AllAccessKeys", Model.GetEditProductAccessKeys())
+        @await Html.PartialAsync("_AllAccessKeys",new AccessKeyTableViewModel() { Keys = Model.GetAccessKeys()})
     </div>
 
 

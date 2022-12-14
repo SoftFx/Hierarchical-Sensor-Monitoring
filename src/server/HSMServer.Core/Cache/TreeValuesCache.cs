@@ -218,20 +218,22 @@ namespace HSMServer.Core.Cache
             return null;
         }
 
-        public void RemoveAccessKey(Guid id)
+        public AccessKeyModel RemoveAccessKey(Guid id)
         {
-            if (!_keys.TryRemove(id, out var key))
-                return;
-
-            if (_tree.TryGetValue(key.ProductId, out var product))
+            if (_keys.TryRemove(id, out var key))
             {
-                product.AccessKeys.TryRemove(id, out _);
-                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+                if (_tree.TryGetValue(key.ProductId, out var product))
+                {
+                    product.AccessKeys.TryRemove(id, out _);
+                    ChangeProductEvent?.Invoke(product, TransactionType.Update);
+                }
+
+                _databaseCore.RemoveAccessKey(id);
+
+                ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
             }
-
-            _databaseCore.RemoveAccessKey(id);
-
-            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
+            
+            return key;
         }
 
         public AccessKeyModel UpdateAccessKey(AccessKeyUpdate updatedKey)
@@ -247,14 +249,20 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel UpdateAccessKeyState(Guid id)
+        public AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key)
+        {
+            if (key.IsExpired && key.State < KeyState.Expired)
+                UpdateAccessKeyState(key.Id, KeyState.Expired);
+            
+            return key;
+        }
+
+        public AccessKeyModel UpdateAccessKeyState(Guid id, KeyState updatedState)
         {
             if (!_keys.TryGetValue(id, out var key))
                 return null;
-
-            InverseAccessKeyState(key);
-
-            return UpdateAccessKey(new AccessKeyUpdate(key.Id, key.State));
+            
+            return UpdateAccessKey(new AccessKeyUpdate(key.Id, updatedState));
         }
 
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
@@ -362,17 +370,6 @@ namespace HSMServer.Core.Cache
                     .TakeLast(request.Count.Value).ToList();
 
             return historyValues;
-        }
-
-        private void InverseAccessKeyState(AccessKeyModel key)
-        {
-            key.State = key.State switch
-            {
-                KeyState.Active => KeyState.Blocked,
-                KeyState.Blocked => key.IsExpired(out var message) ? KeyState.Expired : KeyState.Active,
-                KeyState.Expired => KeyState.Blocked,
-                _ => key.State
-            };
         }
 
         public void UpdatePolicy(TransactionType type, Policy policy)
@@ -609,7 +606,8 @@ namespace HSMServer.Core.Cache
             return productsToResave;
         }
 
-        private List<SensorEntity> ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities, Dictionary<Guid, Policy> policies)
+        private List<SensorEntity> ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
+            Dictionary<Guid, Policy> policies)
         {
             var sensorsToResave = new List<SensorEntity>(1 << 4);
 
@@ -634,7 +632,7 @@ namespace HSMServer.Core.Cache
                             sensorsToResave.Add(sensor.ToEntity());
                     }
                 }
-            
+
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
@@ -861,7 +859,8 @@ namespace HSMServer.Core.Cache
             return hasProduct;
         }
 
-        private static bool TryGetSensor(BaseRequestModel request, ProductModel product, AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
+        private static bool TryGetSensor(BaseRequestModel request, ProductModel product, AccessKeyModel accessKey, out BaseSensorModel sensor,
+            out string message)
         {
             message = string.Empty;
             sensor = null;

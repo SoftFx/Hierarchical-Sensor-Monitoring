@@ -65,16 +65,7 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
-
-        internal List<AccessKeyViewModel> GetEditProductAccessKeys()
-        {
-            var accessKeys = GetAccessKeys().Select(k => k.Copy()).ToList();
-            accessKeys.ForEach(k => k.HasProductColumn = false);
-
-            return accessKeys;
-        }
-
-
+        
         internal void RecalculateCharacteristics()
         {
             int allSensorsCount = 0;

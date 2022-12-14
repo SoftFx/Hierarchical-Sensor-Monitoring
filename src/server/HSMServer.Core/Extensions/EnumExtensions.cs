@@ -19,10 +19,5 @@ namespace HSMServer.Core.Extensions
                             .GetCustomAttribute<DisplayAttribute>()
                             ?.Name ?? enumValueStr;
         }
-
-        public static KeyState GetInversed(this KeyState state)
-        {
-            return state == KeyState.Blocked ? KeyState.Active : KeyState.Blocked;
-        }
     }
 }

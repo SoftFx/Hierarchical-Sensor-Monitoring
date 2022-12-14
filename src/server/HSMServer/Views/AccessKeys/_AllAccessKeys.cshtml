@@ -8,11 +8,11 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model List<AccessKeyViewModel>
+@model AccessKeyTableViewModel
 
 @{
     var user = User as User;
-    var hasProductColumn = Model.Exists(x => x.HasProductColumn);
+    var hasProductColumn = Model.FullTable;
 }
 <div id="accessKeysTable">
     <table class="table">
@@ -37,10 +37,10 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var key in Model)
+            @foreach (var key in Model.Keys)
             {
                 <tr id="row_@key.Id">
-                    @if (key.HasProductColumn)
+                    @if (Model.FullTable)
                     {
                         <td class="text-break">
                             @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
@@ -108,11 +108,11 @@
                                     <button id='blockAccessKey_@key.Id' class='dropdown-item'>
                                         @if (key.State == KeyState.Blocked)
                                         {
-                                            <span>Unblock</span>
+                                            <span id="state_value_@key.Id">Unblock</span>
                                         }
                                         else
                                         {
-                                            <span>Block</span>
+                                            <span id="state_value_@key.Id">Block</span>
                                         }
                                     </button>
                                     <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
@@ -141,29 +141,24 @@
         function () {
             const selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
             const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
-            const isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
            
-            let url;
-            if (isAllAccessKeysTable != undefined) {
-                url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-            }
-            else{
-                url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-            }
+            let url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?selectedKey=${selectedKeyId}&fullTable=@Model.FullTable`;
+ 
             deleteAccessKey(url, selectedKeyId, displayName)
         });
     
     $('[id^="blockAccessKey_"]').off("click").on("click",
         function () {
              const selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
-             const isAllAccessKeysTable = document.getElementById('accessKeys_productColumn');
+             const state = document.getElementById(`state_value_${selectedKeyId}`).textContent;
+             console.log(state)
+             let updatedState = "";
+             if (state === "Block"){
+                updatedState = '@KeyState.Blocked'
+             } else  updatedState = '@KeyState.Active'
              
-             let url;
-             if (isAllAccessKeysTable != undefined) {
-                  url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-             } 
-             else url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-              
+             let url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTable), ViewConstants.AccessKeysController))?selectedKey=${selectedKeyId}&updatedState=${updatedState}&fullTable=@Model.FullTable`;
+            
              blockAccessKey(url, selectedKeyId)
         }); 
 </script>

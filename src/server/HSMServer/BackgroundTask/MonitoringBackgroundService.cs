@@ -57,8 +57,7 @@ namespace HSMServer.BackgroundTask
         private void UpdateAccessKeysState()
         {
             foreach (var key in _treeValuesCache.GetAccessKeys())
-                if (key.HasExpired)
-                    _treeValuesCache.UpdateAccessKey(new() { Id = key.Id, State = KeyState.Expired });
+                _treeValuesCache.CheckAccessKeyExpiration(key);
         }
 
         private void RemoveOutdatedIgnoredSensors()
