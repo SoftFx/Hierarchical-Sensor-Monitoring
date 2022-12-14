@@ -17,13 +17,6 @@ using Microsoft.AspNetCore.Components;
 
 namespace HSMServer.Controllers
 {
-    public sealed class AccessKeyTableViewModel
-    {
-        public bool FullTable { get; init; }
-
-        public List<AccessKeyViewModel> Keys { get; init; }
-    }
-
     [Authorize]
     public class AccessKeysController : Controller
     {
