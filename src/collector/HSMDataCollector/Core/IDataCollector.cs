@@ -107,6 +107,15 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
         /// <summary>
+        /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
+        /// </summary>
+        /// <param name="path">Sensor path to display in the tree</param>
+        /// <param name="fileName">Name of result file</param>
+        /// <param name="extension">Extension of result file</param>
+        /// <param name="description">Possible sensor description, empty by default</param>
+        /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
+        IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
+        /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is bool
         /// </summary>
         /// <param name="path">Sensor path to display in the tree</param>

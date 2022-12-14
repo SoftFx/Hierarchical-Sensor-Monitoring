@@ -202,6 +202,16 @@ namespace HSMDataCollector.Core
         {
             return CreateInstantValueSensorInternal<string>(path, description, SensorType.StringSensor);
         }
+        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            if (existingSensor is IInstantValueSensor<string> instantValueSensor)
+                return instantValueSensor;
+
+            var sensor = new InstantFileSensor(path, _productKey, fileName, extension, _dataQueue as IValuesQueue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
+        }
 
         private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description,
             SensorType sensorType)
