@@ -140,7 +140,7 @@ namespace HSMServer.Core.Model
             return !string.IsNullOrEmpty(message);
         }
 
-        internal bool IsBlocked(out string message)
+        internal bool CheckBlocked(out string message)
         {
             message = string.Empty;
 
@@ -151,7 +151,7 @@ namespace HSMServer.Core.Model
         }
 
         internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
+            !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel

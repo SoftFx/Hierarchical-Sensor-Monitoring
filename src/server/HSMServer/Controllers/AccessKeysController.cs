@@ -9,11 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
-using HSMServer.Model.ViewModel;
-using Microsoft.AspNetCore.Components;
 
 namespace HSMServer.Controllers
 {
@@ -49,7 +45,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
-            [FromQuery(Name = "CloseModal")] bool closeModal = false)
+                                          [FromQuery(Name = "CloseModal")] bool closeModal = false)
         {
             return GetPartialNewAccessKey(new EditAccessKeyViewModel()
             {
@@ -111,8 +107,7 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult BlockAccessKeyFromAllTable([FromQuery] string selectedKey,
-            [FromQuery] KeyState updatedState, [FromQuery] bool fullTable)
+        public IActionResult BlockAccessKeyFromAllTable([FromQuery] string selectedKey, [FromQuery] KeyState updatedState, [FromQuery] bool fullTable)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
             if (updatedState == KeyState.Active && key.IsExpired)
