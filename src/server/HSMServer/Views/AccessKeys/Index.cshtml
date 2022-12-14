@@ -18,29 +18,31 @@
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="d-flex my-3">
-            <div class="col-2 mt-1">
+<div class="container w-100">
+    <div class="row">
+        <div class="my-3">
+            <div class="col-2 mt-1 text-nowrap">
                 <h5>Access keys</h5>
             </div>
-
         </div>
         <div class="row ms-0 ps-0">
-            <div class="col-3 mb-1 mx-0 px-0">
+            <div class="col-7 mb-1 mx-0 px-0">
                 <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
             </div>
-            <div class="col-5 px-0 ms-1">
+            <div class="col-2 px-0 ms-1">
                 <button onclick="searchKey()" type="button" class="btn btn-secondary">
                     <i type="button" class="fas fa-search"></i>
                 </button>
             </div>
         </div>
-        <div id="accessTable">
-        @await Html.PartialAsync("_AllAccessKeys", Model)
-        </div>
     </div>
 </div>
+<div class="container">
+    <div class="d-flex align-items-center w-100 justify-content-center" id="accessTable">
+        @await Html.PartialAsync("_AllAccessKeys", Model)
+    </div>
+</div>
+
 
 @await Html.PartialAsync("_AccessKeysModal")
 
@@ -66,6 +68,7 @@
     
     function searchKey() {
         const keyToSearch = document.getElementById("searchKey").value;
+        console.log(keyToSearch)
         $.ajax({
                     type: 'GET',
                     url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
@@ -73,7 +76,7 @@
                     async: true,
                     success: function (viewData) {
                         $('#accessKeysTable').html(viewData)
-                        document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<h2><strong>Keys not found</strong></h2>") : this;
+                        document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
                     }
                 });
     }
