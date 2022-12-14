@@ -1,9 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Core.Extensions
 {

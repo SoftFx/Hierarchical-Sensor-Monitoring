@@ -14,7 +14,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Cache
 {
@@ -600,7 +599,6 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
-
             _logger.Info("Links between products are built");
 
             return productsToResave;
@@ -632,7 +630,6 @@ namespace HSMServer.Core.Cache
                             sensorsToResave.Add(sensor.ToEntity());
                     }
                 }
-
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
@@ -767,8 +764,7 @@ namespace HSMServer.Core.Cache
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
                 var subProductName = pathParts[i];
-                var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName)
-                    .Value;
+                var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
                 if (subProduct == null)
                 {
                     subProduct = new ProductModel(subProductName);
@@ -859,8 +855,8 @@ namespace HSMServer.Core.Cache
             return hasProduct;
         }
 
-        private static bool TryGetSensor(BaseRequestModel request, ProductModel product, AccessKeyModel accessKey, out BaseSensorModel sensor,
-            out string message)
+        private static bool TryGetSensor(BaseRequestModel request, ProductModel product,
+            AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
         {
             message = string.Empty;
             sensor = null;

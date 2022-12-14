@@ -70,14 +70,14 @@
         const keyToSearch = document.getElementById("searchKey").value;
         console.log(keyToSearch)
         $.ajax({
-                    type: 'GET',
-                    url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
-                    cache: false,
-                    async: true,
-                    success: function (viewData) {
-                        $('#accessKeysTable').html(viewData)
-                        document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
-                    }
-                });
+               type: 'GET',
+               url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
+               cache: false,
+               async: true,
+               success: function (viewData) {
+                    $('#accessKeysTable').html(viewData)
+                    document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
+               }
+        });
     }
 </script>

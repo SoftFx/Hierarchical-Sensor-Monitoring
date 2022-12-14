@@ -27,7 +27,7 @@ namespace HSMServer.Controllers
             _treeViewModel = treeViewModel;
         }
 
-        public IActionResult Index() => View( GenerateFullViewModel());
+        public IActionResult Index() => View(GenerateFullViewModel());
 
         [HttpGet]
         public IActionResult SearchKeyResult([FromQuery(Name = "SearchKey")] string searchKey)
@@ -68,7 +68,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult ModifyAccessKey([FromQuery] string selectedKey,[FromQuery] bool closeModal = false)
+        public IActionResult ModifyAccessKey([FromQuery] string selectedKey, [FromQuery] bool closeModal = false)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
             
@@ -111,7 +111,7 @@ namespace HSMServer.Controllers
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
             if (updatedState == KeyState.Active && key.IsExpired)
-                    updatedState = KeyState.Expired;
+                updatedState = KeyState.Expired;
             
             TreeValuesCache.UpdateAccessKeyState(Guid.Parse(selectedKey), updatedState);
             
