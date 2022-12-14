@@ -151,7 +151,7 @@
         function () {
              const selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
              const state = document.getElementById(`state_value_${selectedKeyId}`).textContent;
-             console.log(state)
+          
              let updatedState = "";
              if (state === "Block"){
                 updatedState = '@KeyState.Blocked'
