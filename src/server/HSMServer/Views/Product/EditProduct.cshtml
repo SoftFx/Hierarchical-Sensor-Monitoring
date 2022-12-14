@@ -180,7 +180,7 @@
                     </button>
                 </div>
                 
-                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
+                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
             </div>
     
             <div class="my-1">
