@@ -5,6 +5,9 @@ using System.Collections.Generic;
 
 namespace HSMServer.Filters
 {
+    /// <summary>
+    /// Swagger filter for adding required string 'Key' in API requests header
+    /// </summary>
     public sealed class DataRequestHeaderSwaggerFilter : IOperationFilter
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)

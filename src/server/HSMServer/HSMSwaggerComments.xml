@@ -73,6 +73,11 @@
             Get file (csv or txt) history [from, to] or [from - count] for some sensor
             </summary>
         </member>
+        <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
+            <summary>
+            Swagger filter for adding required string 'Key' in API requests header
+            </summary>
+        </member>
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
