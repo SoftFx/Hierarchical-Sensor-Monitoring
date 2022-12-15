@@ -206,6 +206,7 @@
             $('#jstree').jstree(true).refresh(true);
 
             refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         });
     }
 
@@ -215,7 +216,6 @@
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
-        
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
@@ -237,10 +237,7 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
-
-                updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
             });
-        else updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
