@@ -3,14 +3,14 @@
 ## Site
 
 * Tree rendering has been improved
+* All Access keys tables have beend improved
+* Logic for Block/Unblock for Access keys has been added
 
 ## Core:
 
 * Supporting of old sensor history databases (MonitoringData_ folders) has been removed. **(It's a breaking change)**
 * Supporting of sending sensor values by product ID has been removed. **(It's a breaking change)**
 * Supporting of file sensors with string content has been removed. **(It's a breaking change)**
-* All Access keys tables have beend improved
-* Logic for Block/Unblock for Access keys has been added
 
 ## Rest API
 
