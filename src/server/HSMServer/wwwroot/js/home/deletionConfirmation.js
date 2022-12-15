@@ -8,7 +8,9 @@ function showDeletionConfirmationModal(title, body, okButtonAction) {
     setDeletionConfirmationModalTitle(title);
     setDeletionConfirmationModalBody(body);
     setDeletionConfirmationModalOkButton(okButtonAction);
-    
+    $(`#${modalId}`).modal({
+        backdrop: 'static'
+    });
     $(`#${modalId}`).modal('show');
 }
 
