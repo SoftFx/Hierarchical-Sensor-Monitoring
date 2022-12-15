@@ -3,6 +3,8 @@
 ## Site
 
 * Tree rendering has been improved
+* All Access keys tables have been improved
+* Logic for Block/Unblock for Access keys has been added
 
 ## Core:
 

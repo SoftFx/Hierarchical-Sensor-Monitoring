@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -16,15 +17,16 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string ExpirationDate { get; }
 
+
+        public KeyState State { get; private set; }
+
         public string DisplayName { get; private set; }
 
         public string Permissions { get; private set; }
 
-        public KeyState State { get; private set; }
-
         public string NodePath { get; private set; }
 
-        public bool HasProductColumn { get; internal set; } = true;
+        public string StatusTitle { get; private set; }
 
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, string authorName)
@@ -38,12 +40,12 @@ namespace HSMServer.Model.AccessKeysViewModels
             UpdateNodePath();
         }
 
-
         internal void Update(AccessKeyModel accessKey)
         {
             DisplayName = accessKey.DisplayName;
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
+            StatusTitle = $"Status : {State}{Environment.NewLine}Expiration date : {ExpirationDate}";
         }
 
         internal void UpdateNodePath()
@@ -62,22 +64,12 @@ namespace HSMServer.Model.AccessKeysViewModels
             NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
 
-        internal AccessKeyViewModel Copy() => (AccessKeyViewModel)MemberwiseClone();
-
         internal static string BuildExpiration(DateTime expirationTime) =>
             expirationTime == DateTime.MaxValue
                 ? nameof(AccessKeyExpiration.Unlimited)
-                : expirationTime.ToString();
+                : expirationTime.ToDefaultFormat();
 
-        private static string BuildPermissions(KeyPermissions permissions)
-        {
-            var result = new List<string>(3);
-
-            foreach (var permission in Enum.GetValues(typeof(KeyPermissions)))
-                if (permissions.HasFlag((KeyPermissions)permission))
-                    result.Add(permission.ToString());
-
-            return string.Join(", ", result);
-        }
+        private static string BuildPermissions(KeyPermissions permissions) =>
+            permissions == AccessKeyModel.FullPermissions ? "Full" : permissions.ToString();
     }
 }
