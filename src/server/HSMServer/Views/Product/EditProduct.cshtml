@@ -2,12 +2,15 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Model.AccessKeysViewModels
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 @model EditProductViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{ ViewData["Title"] = $"Product {Model.ProductName}"; }
 
+<link rel="stylesheet" href="~/css/bundles/accessKeyBundle.min.css"/>
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 <script>
@@ -177,20 +180,8 @@
                         <i class='fas fa-plus'></i>
                     </button>
                 </div>
-                <table class="table">
-                    <tr>
-                        <th>Display name</th>
-                        <th>Key</th>
-                        <th>Permissions</th>
-                        <th>Expiration</th>
-                        <th>Author</th>
-                        <th>State</th>
-                        <th></th>
-                    </tr>
-                    <tbody id="accessKeysTable">
-                    @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
-                    </tbody>
-                </table>
+                
+                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
             </div>
     
             <div class="my-1">

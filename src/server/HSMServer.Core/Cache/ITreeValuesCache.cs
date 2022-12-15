@@ -43,8 +43,10 @@ namespace HSMServer.Core.Cache
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
-        void RemoveAccessKey(Guid id);
+        AccessKeyModel RemoveAccessKey(Guid id);
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
+        AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
+        AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key);
         AccessKeyModel GetAccessKey(Guid id);
 
         void UpdateSensor(SensorUpdate updatedSensor);

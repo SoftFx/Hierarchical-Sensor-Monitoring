@@ -60,6 +60,8 @@
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
 <script src="~/moment.js/moment.min.js"></script>
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -116,7 +118,7 @@
     </div>
 
     <div class="flex-grow-1 my-1 me-1">
-        <div id="nodeDataSpinner" style="display:none">
+        <div class="d-none" id="nodeDataSpinner">
             <div class="d-flex justify-content-center align-items-center center_relative_spinner">
                 <div class="spinner-border normal_spinner text-secondary" role="status"></div>
             </div>
@@ -186,7 +188,7 @@
 
         $('#validation_' + id).empty();
         if (dataObject.isValidationErrorVisible) {
-            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1' title='${dataObject.validationError}'></li>`);
         }
     }
 
@@ -259,4 +261,8 @@
 
         updateHistoryTimeoutId = setTimeout(updateHistory, interval);
     }
+    
+    var clipboard = new ClipboardJS('[id^="copy_"]',{
+      container: document.getElementById('accessKeys_modal')
+    });
 </script>
