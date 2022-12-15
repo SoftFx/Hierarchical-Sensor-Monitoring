@@ -251,6 +251,7 @@ namespace HSMServer.Controllers
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder)), FromBody] List<SensorValueBase> values)
         {
             try

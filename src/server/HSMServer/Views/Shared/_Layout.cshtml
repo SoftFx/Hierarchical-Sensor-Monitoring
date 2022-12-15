@@ -2,7 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Helpers
 @using HSMServer.Core.Model.Authentication
-@using HSMServer.Controllers.LayoutStaticController
+@using HSMServer.Model
 
 <!DOCTYPE html>
 <html lang="en">
@@ -173,7 +173,7 @@
     <footer class="border-top footer text-muted">
        <div class="d-flex justify-content-between mx-3">
             <div>
-                &copy; 2022 - Soft-FX @LayoutStaticController.Version
+                &copy; 2022 - Soft-FX Current version: @ServerSettings.Version
             </div>
 
             <div>
