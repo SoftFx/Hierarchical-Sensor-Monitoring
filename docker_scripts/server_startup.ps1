@@ -30,18 +30,25 @@ if ($CurrentIdImage)
 }
 else
 {
-    Write-Host "Running images hasn't be found"
+    Write-Host "Running images haven't been found"
 }
 
 $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
-Write-Host "Image id to run = $ExpectedImageId"
+if ($ExpectedImageId)
+{   
+	Write-Host "Image id to run = $ExpectedImageId"
 
-$LogsFolder = "/usr/HSM/Logs:/app/Logs"
-$SensorDataFolder = "/usr/HSM/MonitoringData:/app/MonitoringData"
-$SensorConfigFolder = "/usr/HSM/Config:/app/Config"
-$EnviromentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
+	$LogsFolder = "/usr/HSM/Logs:/app/Logs"
+	$SensorDataFolder = "/usr/HSM/MonitoringData:/app/MonitoringData"
+	$SensorConfigFolder = "/usr/HSM/Config:/app/Config"
+	$EnviromentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
 
-$SensorDataPort = "44330:44330"
-$SensorSitePort = "443:44333"
+	$SensorDataPort = "44330:44330"
+	$SensorSitePort = "443:44333"
 
-docker run -d -it -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+}
+else
+{
+    Write-Host "Expected image hasn't been found" 
+}
