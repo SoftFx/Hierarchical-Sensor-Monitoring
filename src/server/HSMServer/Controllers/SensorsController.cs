@@ -10,6 +10,7 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.ModelBinders;
+using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +21,7 @@ using System.Collections.Generic;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
+using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
 {
@@ -276,6 +278,50 @@ namespace HSMServer.Controllers
             }
         }
 
+        [HttpPost("listNew")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
+        {
+            if (values == null || values.Count == 0)
+                return BadRequest();
+
+            try
+            {
+                _dataCollector.ReportSensorsCount(values.Count);
+
+                var result = new Dictionary<string, string>(values.Count);
+                foreach (var value in values)
+                {
+                    BaseValue convertedValue = value.Type switch
+                    {
+                        SensorType.BooleanSensor => value.ConvertToBool(),
+                        SensorType.DoubleSensor => value.ConvertToDouble(),
+                        SensorType.IntSensor => value.ConvertToInt(),
+                        SensorType.StringSensor => value.ConvertToString(),
+                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
+                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
+                        _ => null
+                    };
+                    var storeInfo = new StoreInfo(value.Key, value.Path)
+                    {
+                        BaseValue = convertedValue
+                    };
+
+                    if (!CanAddToQueue(storeInfo, out var message))
+                        result[storeInfo.Key] = message;
+                }
+                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data");
+                return BadRequest(values);
+            }
+        }
+
         /// <summary>
         /// Get history [from, to] or [from - count] for some sensor
         /// </summary>
@@ -361,6 +407,9 @@ namespace HSMServer.Controllers
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
         {
             Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+
+            if (string.IsNullOrEmpty(key))
+                key = valueBase.Key;
 
             return new(key, valueBase.Path) { BaseValue = baseValue };
         }

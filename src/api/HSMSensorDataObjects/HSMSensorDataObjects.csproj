@@ -12,7 +12,4 @@
     <IsPackable>true</IsPackable>
     <Description>Data objects for HSMDataCollector</Description>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-  </ItemGroup>
 </Project>
