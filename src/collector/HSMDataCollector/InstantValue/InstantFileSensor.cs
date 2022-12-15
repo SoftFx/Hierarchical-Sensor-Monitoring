@@ -4,6 +4,7 @@ using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Linq;
 using System.Text;
 
 namespace HSMDataCollector.InstantValue
@@ -50,7 +51,7 @@ namespace HSMDataCollector.InstantValue
                 Comment = comment,
                 Name = _fileName,
                 Extension = _fileExtension,
-                Value = Encoding.UTF8.GetBytes(value),
+                Value = Encoding.UTF8.GetBytes(value).ToList(),
             };
     }
 }

@@ -53,10 +53,10 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value,
+                Value = value.Value.ToArray(),
                 Name = value.Name,
                 Extension = value.Extension,
-                OriginalSize = value.Value.LongLength
+                OriginalSize = value.Value.Count
             };
 
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>

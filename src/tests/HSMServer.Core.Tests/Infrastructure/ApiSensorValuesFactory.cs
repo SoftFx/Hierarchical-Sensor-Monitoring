@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects.SensorValueRequests;
 using System.Collections.Generic;
+using System.Linq;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -99,7 +100,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             var fileSensorValue = new FileSensorValue()
             {
                 Extension = RandomGenerator.GetRandomString(3),
-                Value = RandomGenerator.GetRandomBytes(),
+                Value = RandomGenerator.GetRandomBytes().ToList(),
                 Name = nameof(FileSensorValue),
             };
 

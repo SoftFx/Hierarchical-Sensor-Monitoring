@@ -58,9 +58,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.Equal(expected.Name, actual.Name);
             Assert.Equal(expected.Extension, actual.Extension);
-            Assert.Equal(expected.Value.LongLength, actual.OriginalSize);
-
-            TestSimpleValue(expected, actual);
+            Assert.Equal(expected.Value.Count, actual.OriginalSize);
+            Assert.Equal(expected.Value, actual.Value);
         }
 
         private static void TestBarValue<T>(BarSensorValueBase<T> expected, BarBaseValue<T> actual) where T : struct

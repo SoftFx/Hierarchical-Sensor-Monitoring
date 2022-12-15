@@ -1,8 +1,9 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace HSMSensorDataObjects.SensorValueRequests
 {
-    public class FileSensorValue : SensorValueBase<byte[]>
+    public class FileSensorValue : SensorValueBase<List<byte>>
     {
         [DefaultValue((int)SensorType.FileSensor)]
         public override SensorType Type => SensorType.FileSensor;
