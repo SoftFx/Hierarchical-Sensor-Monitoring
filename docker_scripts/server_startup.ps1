@@ -33,6 +33,9 @@ else
     Write-Host "Running images hasn't be found"
 }
 
+$ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
+Write-Host "Image id to run = $ExpectedImageId"
+
 $LogsFolder = "/usr/HSM/Logs:/app/Logs"
 $SensorDataFolder = "/usr/HSM/MonitoringData:/app/MonitoringData"
 $SensorConfigFolder = "/usr/HSM/Config:/app/Config"
