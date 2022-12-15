@@ -575,6 +575,9 @@ namespace HSMDataCollector.Core
         {
             try
             {
+                if (values.Count == 0)
+                    return;
+
                 string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
                 //_logger?.Info("Try to send data: " + jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
