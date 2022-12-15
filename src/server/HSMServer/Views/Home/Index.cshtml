@@ -215,7 +215,7 @@
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
-
+        
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
@@ -240,6 +240,7 @@
 
                 updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
             });
+        else updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
