@@ -175,7 +175,7 @@
         var id = dataObject.id;
 
         $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-
+        $('#value_' + id).empty().append(dataObject.value);
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
         $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
