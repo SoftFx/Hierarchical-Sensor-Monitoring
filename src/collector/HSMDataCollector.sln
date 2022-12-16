@@ -7,8 +7,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "HSMData
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector.Tests", "HSMDataCollector.Tests\HSMDataCollector.Tests.csproj", "{785E3A92-D50E-4234-B543-8FA8C3E2F18E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{C05D6329-5A6E-4DF7-B349-873FD650EB5E}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,14 +31,6 @@ Global
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|x64.ActiveCfg = Release|x64
 		{785E3A92-D50E-4234-B543-8FA8C3E2F18E}.Release|x64.Build.0 = Release|x64
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Debug|x64.Build.0 = Debug|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Release|x64.ActiveCfg = Release|Any CPU
-		{C05D6329-5A6E-4DF7-B349-873FD650EB5E}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
