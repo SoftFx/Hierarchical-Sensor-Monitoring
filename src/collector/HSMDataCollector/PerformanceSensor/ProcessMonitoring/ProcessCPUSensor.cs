@@ -2,7 +2,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Diagnostics;
 
@@ -11,7 +11,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
     internal class ProcessCPUSensor : StandardPerformanceSensorBase<double>
     {
         private const string _sensorName = "Process CPU";
-        public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName, string nodeName) 
+        public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName, string nodeName)
             : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
         {
             InternalBar = new BarSensor<double>(Path, productKey, queue, SensorType.DoubleBarSensor);
@@ -25,17 +25,16 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
             }
             catch (Exception e)
             { }
-            
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetProcessCPUFunc()
         {
-            Func<double> func = delegate()
+            Func<double> func = delegate ()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return 100 * currentProcess.PrivilegedProcessorTime.TotalMilliseconds /

@@ -1,8 +1,7 @@
 ﻿using HSM.Core.Monitoring;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
 using HSMSensorDataObjects.HistoryRequests;
-using HSMSensorDataObjects.Swagger;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Helpers;
@@ -10,6 +9,8 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
+using HSMServer.ModelBinders;
+using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,7 +18,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -229,7 +229,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<FileSensorBytesValue> Post([FromBody] FileSensorBytesValue sensorValue)
+        public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
         {
             try
             {
@@ -248,35 +248,25 @@ namespace HSMServer.Controllers
             }
         }
 
-        /// <summary>
-        /// Endpoint used by HSMDataCollector services, which sends data in portions
-        /// </summary>
-        /// <param name="values"></param>
-        /// <returns></returns>
+
         [HttpPost("list")]
-        [SwaggerIgnore]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<List<CommonSensorValue>> Post([FromBody] IEnumerable<CommonSensorValue> values)
+        public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder)), FromBody] List<SensorValueBase> values)
         {
-            if (values == null || !values.Any())
-                return BadRequest(values);
-
             try
             {
-                var valuesList = values.ToList();
+                _dataCollector.ReportSensorsCount(values.Count);
 
-                _dataCollector.ReportSensorsCount(valuesList.Count);
-
-                var result = new Dictionary<string, string>(values.Count());
-                foreach (var value in valuesList)
+                var result = new Dictionary<string, string>(values.Count);
+                foreach (var value in values)
                 {
-                    var sensorValue = value.Convert();
+                    var storeInfo = BuildStoreInfo(value, value.Convert());
 
-                    if (!CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                        result[sensorValue.Key] = message;
+                    if (!CanAddToQueue(storeInfo, out var message))
+                        result[storeInfo.Key] = message;
                 }
 
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -288,11 +278,11 @@ namespace HSMServer.Controllers
             }
         }
 
-
         [HttpPost("listNew")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
         {
             if (values == null || values.Count == 0)
@@ -323,7 +313,6 @@ namespace HSMServer.Controllers
                     if (!CanAddToQueue(storeInfo, out var message))
                         result[storeInfo.Key] = message;
                 }
-
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
             catch (Exception e)
@@ -415,7 +404,14 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private static StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
-            new(valueBase.Key, valueBase.Path) { BaseValue = baseValue };
+        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        {
+            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+
+            if (string.IsNullOrEmpty(key))
+                key = valueBase.Key;
+
+            return new(key, valueBase.Path) { BaseValue = baseValue };
+        }
     }
 }

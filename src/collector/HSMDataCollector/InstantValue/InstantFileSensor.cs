@@ -2,8 +2,9 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Linq;
 using System.Text;
 
 namespace HSMDataCollector.InstantValue
@@ -26,31 +27,31 @@ namespace HSMDataCollector.InstantValue
 
         public override void Dispose() { }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             throw new NotImplementedException();
         }
 
         public void AddValue(string value) =>
-            EnqueueObject(CreateFile(value));
+            EnqueueValue(CreateFile(value));
 
         public void AddValue(string value, string comment = "") =>
-            EnqueueObject(CreateFile(value, comment));
+            EnqueueValue(CreateFile(value, comment));
 
         public void AddValue(string value, SensorStatus status = SensorStatus.Ok, string comment = "") =>
-            EnqueueObject(CreateFile(value, comment, status));
+            EnqueueValue(CreateFile(value, comment, status));
 
-        private FileSensorBytesValue CreateFile(string value, string comment = null, SensorStatus status = SensorStatus.Ok) =>
-            new FileSensorBytesValue()
+        private FileSensorValue CreateFile(string value, string comment = null, SensorStatus status = SensorStatus.Ok) =>
+            new FileSensorValue()
             {
                 Key = ProductKey,
                 Path = Path,
                 Status = status,
                 Time = DateTime.Now,
                 Comment = comment,
-                FileName = _fileName,
+                Name = _fileName,
                 Extension = _fileExtension,
-                Value = Encoding.UTF8.GetBytes(value),
+                Value = Encoding.UTF8.GetBytes(value).ToList(),
             };
     }
 }

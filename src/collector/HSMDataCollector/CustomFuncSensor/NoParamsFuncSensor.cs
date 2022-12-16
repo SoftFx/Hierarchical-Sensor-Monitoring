@@ -2,7 +2,7 @@
 using HSMDataCollector.Logging;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.CustomFuncSensor
@@ -21,16 +21,16 @@ namespace HSMDataCollector.CustomFuncSensor
             }
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return GetValueInternal();
         }
-        protected override UnitedSensorValue GetInvokeResult()
+        protected override SensorValueBase GetInvokeResult()
         {
             return GetValueInternal();
         }
 
-        private UnitedSensorValue GetValueInternal()
+        private SensorValueBase GetValueInternal()
         {
             try
             {
@@ -40,7 +40,7 @@ namespace HSMDataCollector.CustomFuncSensor
             catch (Exception e)
             {
                 _logger?.Error(e);
-                return CreateErrorDataObject(e);
+                return CreateErrorDataObject(default(T), e);
             }
         }
 
@@ -51,7 +51,7 @@ namespace HSMDataCollector.CustomFuncSensor
 
         public TimeSpan GetInterval()
         {
-            return TimerSpan;
+            return _timerSpan;
         }
 
         public void RestartTimer(TimeSpan timeSpan)

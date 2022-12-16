@@ -4,9 +4,9 @@
     ".NETFramework,Version=v4.7.2": {
       "HSMDataCollector.HSMSensorDataObjects": {
         "type": "Direct",
-        "requested": "[2.1.36, )",
-        "resolved": "2.1.36",
-        "contentHash": "utZwHz+ej+FGmprBvATHdT27TSbpNb5CeZSbJkDTJiggoQXIlGPbyWzOBfuiH4YJftgjYrT9QMfnMxcSibfH/A=="
+        "requested": "[3.0.0, )",
+        "resolved": "3.0.0",
+        "contentHash": "JmQXuvqULk1dbLc9KPJaAJaH2VWJyXNEaP+OuVNTtGvlkWnWpOGHGAdYMqGciZKJBfNfP0tJtbU4PwP8TTlIzg=="
       },
       "Microsoft.CSharp": {
         "type": "Direct",
@@ -108,9 +108,9 @@
     ".NETStandard,Version=v2.0": {
       "HSMDataCollector.HSMSensorDataObjects": {
         "type": "Direct",
-        "requested": "[2.1.36, )",
-        "resolved": "2.1.36",
-        "contentHash": "utZwHz+ej+FGmprBvATHdT27TSbpNb5CeZSbJkDTJiggoQXIlGPbyWzOBfuiH4YJftgjYrT9QMfnMxcSibfH/A=="
+        "requested": "[3.0.0, )",
+        "resolved": "3.0.0",
+        "contentHash": "JmQXuvqULk1dbLc9KPJaAJaH2VWJyXNEaP+OuVNTtGvlkWnWpOGHGAdYMqGciZKJBfNfP0tJtbU4PwP8TTlIzg=="
       },
       "Microsoft.CSharp": {
         "type": "Direct",

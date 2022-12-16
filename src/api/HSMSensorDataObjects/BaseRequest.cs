@@ -1,13 +1,12 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
 
-namespace HSMSensorDataObjects.HistoryRequests
+namespace HSMSensorDataObjects
 {
     public abstract class BaseRequest
     {
-        [DataMember]
+        [Obsolete("Send key in request header instead")]
         public string Key { get; set; }
 
-        [DataMember]
         public string Path { get; set; }
     }
 }

@@ -5,8 +5,9 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
     <UserSecretsId>a4cdf004-6f82-4fe4-b26d-ecc4e174bb5d</UserSecretsId>
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>2.13.5</Version>
+    <Version>3.13.6</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="10.3.0" />
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.36" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
     <PackageReference Include="NLog" Version="4.7.10" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="4.13.0" />

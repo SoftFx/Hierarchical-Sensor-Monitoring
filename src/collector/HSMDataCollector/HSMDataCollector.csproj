@@ -5,7 +5,7 @@
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<Version>2.1.44</Version>
+		<Version>3.0.0</Version>
 		<Authors>HSM team</Authors>
 		<Company>Soft-FX</Company>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -17,7 +17,7 @@
 		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="2.1.36" />
+		<PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.0" />
 		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
 		<PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
