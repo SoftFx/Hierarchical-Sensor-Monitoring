@@ -10,13 +10,12 @@
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
-
 <div class="m-2">
     <div class="row" justify-content-start>
-         @if (TempData[TextConstants.TempDataErrorText] != null)
-                {
-                    <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-                }
+        @if (TempData[TextConstants.TempDataErrorText] != null)
+        {
+            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+        }
         <div class="col-2">
             <h5 class="mx-4 my-2">Products</h5>
         </div>
@@ -66,7 +65,9 @@
             var product = Model[i];
             <tr>
                 <th scope='row'>@(i + 1)</th>
-                <td>@product.Name</td>
+                <td>
+                    @Html.Raw(product.Name)
+                </td>
                 <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
                 <td>
                     <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>

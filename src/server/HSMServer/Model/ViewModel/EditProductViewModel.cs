@@ -36,7 +36,7 @@ namespace HSMServer.Model.ViewModel
             EncodedProductId = product.EncodedId;
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
-            AccessKeys = product.GetEditProductAccessKeys();
+            AccessKeys = product.GetAccessKeys();
             Telegram = product.TelegramSettings;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();

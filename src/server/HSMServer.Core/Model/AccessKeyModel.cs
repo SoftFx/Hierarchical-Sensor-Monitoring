@@ -24,9 +24,11 @@ namespace HSMServer.Core.Model
 
     public class AccessKeyModel
     {
-        private static readonly KeyPermissions _fullPermissions = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
-
         internal static InvalidAccessKey InvalidKey { get; } = new();
+
+
+        public static KeyPermissions FullPermissions { get; } =
+            (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
 
         public Guid Id { get; }
@@ -46,7 +48,7 @@ namespace HSMServer.Core.Model
         public string DisplayName { get; private set; }
 
 
-        public bool HasExpired => DateTime.UtcNow >= ExpirationTime && State < KeyState.Expired;
+        public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
 
 
         public AccessKeyModel(AccessKeyEntity entity, Guid? produtId = null)
@@ -78,7 +80,7 @@ namespace HSMServer.Core.Model
             AuthorId = product.AuthorId;
             ProductId = product.Id;
             State = KeyState.Active;
-            Permissions = _fullPermissions;
+            Permissions = FullPermissions;
             DisplayName = CommonConstants.DefaultAccessKey;
             ExpirationTime = DateTime.MaxValue;
         }
@@ -116,20 +118,16 @@ namespace HSMServer.Core.Model
         internal bool IsHasPermissions(KeyPermissions expectedPermissions, out string message)
         {
             var common = expectedPermissions & Permissions;
-
-            if (common == expectedPermissions)
-            {
-                message = string.Empty;
-                return true;
-            }
-            else
-            {
+            message = string.Empty;
+            
+            if (common != expectedPermissions)
                 message = $"AccessKey doesn't have {expectedPermissions & ~common}.";
-                return false;
-            }
+
+
+            return string.IsNullOrEmpty(message);
         }
 
-        internal bool IsExpired(out string message)
+        internal bool CheckExpired(out string message)
         {
             message = string.Empty;
 
@@ -137,14 +135,23 @@ namespace HSMServer.Core.Model
             {
                 message = "AccessKey expired.";
                 State = KeyState.Expired;
-                return true;
             }
 
-            return false;
+            return !string.IsNullOrEmpty(message);
+        }
+
+        internal bool CheckBlocked(out string message)
+        {
+            message = string.Empty;
+
+            if (State == KeyState.Blocked)
+                message = "AccessKey is blocked.";
+
+            return !string.IsNullOrEmpty(message);
         }
 
         internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !IsExpired(out message) && IsHasPermissions(permissions, out message);
+            !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel

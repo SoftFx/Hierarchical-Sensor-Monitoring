@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
 using System;
@@ -57,8 +56,7 @@ namespace HSMServer.BackgroundTask
         private void UpdateAccessKeysState()
         {
             foreach (var key in _treeValuesCache.GetAccessKeys())
-                if (key.HasExpired)
-                    _treeValuesCache.UpdateAccessKey(new() { Id = key.Id, State = KeyState.Expired });
+                _treeValuesCache.CheckAccessKeyExpiration(key);
         }
 
         private void RemoveOutdatedIgnoredSensors()
