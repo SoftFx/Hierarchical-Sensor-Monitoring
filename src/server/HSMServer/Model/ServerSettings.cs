@@ -1,27 +1,23 @@
-﻿using System;
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace HSMServer.Model
 {
     public static class ServerSettings
     {
-        public static string Version
+        public static string Version { get; }
+
+        public static string Name { get; }
+
+
+        static ServerSettings()
         {
-            get
-            {
-                try
-                {
-                    var version = Assembly.GetExecutingAssembly().GetName().Version;
+            var assembly = Assembly.GetExecutingAssembly().GetName();
+            var version = assembly.Version;
 
-                    if (version is not null)
-                        return $"{version.Major}.{version.Minor}.{version.Build}";
-                }
-                catch (Exception) { }
+            Name = assembly.Name;
 
-                return string.Empty;
-            }
+            if (version is not null)
+                Version = $"{version.Major}.{version.Minor}.{version.Build}";
         }
-
-        public static string Name => Assembly.GetExecutingAssembly().GetName().Name;
     }
 }
