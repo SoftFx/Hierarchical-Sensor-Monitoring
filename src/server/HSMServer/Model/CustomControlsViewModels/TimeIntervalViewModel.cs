@@ -72,7 +72,7 @@ namespace HSMServer.Model
             var customPeriod = model?.CustomPeriod ?? 0;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = new TimeSpan(customPeriod).ToString();
+            CustomTimeInterval = customPeriod == 0 ? "00.00:00:00" : new TimeSpan(customPeriod).ToString();
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -96,8 +96,8 @@ namespace HSMServer.Model
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpan.TryParse(CustomTimeInterval, out var timeInterval))
-                return timeInterval.Ticks;
+            if (TimeInterval == TimeInterval.Custom && TimeSpanTryParse(CustomTimeInterval, out var ticks))
+                return ticks;
 
             return 0;
         }
@@ -122,6 +122,28 @@ namespace HSMServer.Model
                 items.Add(new SelectListItem() { Text = interval.GetDisplayName(), Value = interval.ToString() });
 
             return items;
+        }
+
+        private bool TimeSpanTryParse(string interval, out long ticks)
+        {
+            try
+            {
+                var ddString = interval.Split(".");
+                var hmsString = ddString[^1].Split(":");
+            
+                int days = int.Parse(ddString[0]);
+                int hours = int.Parse(hmsString[0]);
+                int minutes = int.Parse(hmsString[1]);
+                int seconds = int.Parse(hmsString[2]);
+                
+                ticks = new TimeSpan(days, hours, minutes, seconds).Ticks;
+                return true;
+            }
+            catch (Exception e)
+            {
+                ticks = 0;
+                return false;
+            }
         }
     }
 }
