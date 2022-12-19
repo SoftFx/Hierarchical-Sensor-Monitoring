@@ -19,6 +19,7 @@ namespace HSMDatabase.DatabaseWorkCore
     public sealed class DatabaseCore : IDatabaseCore
     {
         private const int MaxHistoryCount = 50000;
+        private const int SensorValuesPageCount = 10;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -187,6 +188,43 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return result;
+        }
+
+        public IEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
+        {
+            var result = new List<byte[]>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            var sensorIdBytes = Encoding.UTF8.GetBytes(sensorId);
+            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
+            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
+
+            foreach (var database in _sensorValuesDatabases.Dbs)
+            {
+                if (database.To < from.Ticks)
+                    continue;
+
+                if (database.From > to.Ticks)
+                    yield break;
+
+                foreach (var value in database.GetValue(sensorIdBytes, fromBytes, toBytes))
+                {
+                    result.Add(value);
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (count == totalCount)
+                        yield break;
+                }
+            }
+
+            yield return result;
         }
 
         public List<SensorEntity> GetAllSensors()

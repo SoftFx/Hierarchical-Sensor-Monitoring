@@ -76,6 +76,8 @@ namespace HSMDatabase.DatabaseWorkCore
             return (from, to);
         }
 
+        public List<ISensorValuesDatabase> Dbs => _sensorDbs.ToList();
+
         public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.Reverse().GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -336,7 +337,7 @@ namespace HSMServer.Controllers
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = _cache.GetSensorValues(requestModel);
+                    var historyValues = _cache.GetSensorValues(requestModel).SelectMany(x => x).ToList();
                     var response = JsonSerializer.Serialize(historyValues.Convert());
 
                     return Ok(response);
@@ -365,7 +366,7 @@ namespace HSMServer.Controllers
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = _cache.GetSensorValues(requestModel);
+                    var historyValues = _cache.GetSensorValues(requestModel).SelectMany(x => x).ToList();
                     var response = historyValues.ConvertToCsv();
 
                     return request.IsZipArchive

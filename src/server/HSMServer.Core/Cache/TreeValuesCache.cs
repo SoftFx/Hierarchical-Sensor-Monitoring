@@ -23,6 +23,8 @@ namespace HSMServer.Core.Cache
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
 
+        private const int MaxHistoryCount = 50000;
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
@@ -231,7 +233,7 @@ namespace HSMServer.Core.Cache
 
                 ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
             }
-            
+
             return key;
         }
 
@@ -252,7 +254,7 @@ namespace HSMServer.Core.Cache
         {
             if (key.IsExpired && key.State < KeyState.Expired)
                 UpdateAccessKeyState(key.Id, KeyState.Expired);
-            
+
             return key;
         }
 
@@ -260,7 +262,7 @@ namespace HSMServer.Core.Cache
         {
             if (!_keys.TryGetValue(id, out var key))
                 return null;
-            
+
             return UpdateAccessKey(new AccessKeyUpdate(key.Id, updatedState));
         }
 
@@ -360,15 +362,25 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
-        public List<BaseValue> GetSensorValues(HistoryRequestModel request)
+        public IEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
         {
-            var sensor = GetSensor(request);
-            var historyValues = request.To.HasValue
-                ? GetSensorValues(sensor.Id, request.From, request.To.Value)
-                : GetSensorValues(sensor.Id, request.From, DateTime.UtcNow.AddDays(1), int.MaxValue)
-                    .TakeLast(request.Count.Value).ToList();
+            var sensorId = GetSensor(request).Id;
+            var from = request.From;
+            var to = request.To ?? DateTime.UtcNow.AddDays(1);
+            var count = request.Count > 0 ? request.Count.Value : MaxHistoryCount;
 
-            return historyValues;
+            return GetSensorValuesPage(sensorId, from, to, count);
+        }
+
+        public IEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        {
+            if (_sensors.TryGetValue(sensorId, out var sensor))
+            {
+                var pages = _databaseCore.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+
+                foreach (var page in pages)
+                    yield return sensor.ConvertValues(page);
+            }
         }
 
         public void UpdatePolicy(TransactionType type, Policy policy)

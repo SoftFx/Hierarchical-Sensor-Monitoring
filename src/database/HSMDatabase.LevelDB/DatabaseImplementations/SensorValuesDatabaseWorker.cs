@@ -105,5 +105,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 return new();
             }
         }
+
+        public IEnumerable<byte[]> GetValue(byte[] sensorId, byte[] from, byte[] to)
+        {
+            try
+            {
+                return _openedDb.GetStartingWithFromTo(sensorId, from, to);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting value for sensor {Encoding.UTF8.GetString(sensorId)} - {e.Message}");
+
+                return null;
+            }
+        }
     }
 }
