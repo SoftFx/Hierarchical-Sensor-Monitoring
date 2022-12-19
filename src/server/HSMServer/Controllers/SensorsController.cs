@@ -397,7 +397,9 @@ namespace HSMServer.Controllers
 
         private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
         {
-            requestModel = request.Convert();
+            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+
+            requestModel = request.Convert(key);
 
             return request.TryValidate(out message) &&
                    requestModel.TryCheckRequest(out message) &&
