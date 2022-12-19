@@ -16,13 +16,13 @@ namespace HSMServer.ApiObjectsConverters
         {
             Utf8JsonReader readerClone = reader; // readerClone is a full copy of reader, because Utf8JsonReader is ref struct
 
-            while (readerClone.Read() || readerClone.TokenType != JsonTokenType.EndObject)
+            while ((readerClone.TokenType is not JsonTokenType.EndObject or JsonTokenType.EndArray) && readerClone.Read())
             {
                 if (readerClone.TokenType != JsonTokenType.PropertyName)
                     continue;
 
                 string propertyName = readerClone.GetString();
-                if (propertyName != nameof(SensorValueBase.Type))
+                if (!string.Equals(propertyName, nameof(SensorValueBase.Type), StringComparison.InvariantCultureIgnoreCase))
                     continue;
 
                 readerClone.Read();
@@ -30,13 +30,13 @@ namespace HSMServer.ApiObjectsConverters
 
                 return (SensorType)sensorType switch
                 {
-                    SensorType.BooleanSensor => JsonSerializer.Deserialize<BoolSensorValue>(ref reader),
-                    SensorType.IntSensor => JsonSerializer.Deserialize<IntSensorValue>(ref reader),
-                    SensorType.DoubleSensor => JsonSerializer.Deserialize<DoubleSensorValue>(ref reader),
-                    SensorType.StringSensor => JsonSerializer.Deserialize<StringSensorValue>(ref reader),
-                    SensorType.IntegerBarSensor => JsonSerializer.Deserialize<IntBarSensorValue>(ref reader),
-                    SensorType.DoubleBarSensor => JsonSerializer.Deserialize<DoubleBarSensorValue>(ref reader),
-                    SensorType.FileSensor => JsonSerializer.Deserialize<FileSensorValue>(ref reader),
+                    SensorType.BooleanSensor => JsonSerializer.Deserialize<BoolSensorValue>(ref reader, options),
+                    SensorType.IntSensor => JsonSerializer.Deserialize<IntSensorValue>(ref reader, options),
+                    SensorType.DoubleSensor => JsonSerializer.Deserialize<DoubleSensorValue>(ref reader, options),
+                    SensorType.StringSensor => JsonSerializer.Deserialize<StringSensorValue>(ref reader, options),
+                    SensorType.IntegerBarSensor => JsonSerializer.Deserialize<IntBarSensorValue>(ref reader, options),
+                    SensorType.DoubleBarSensor => JsonSerializer.Deserialize<DoubleBarSensorValue>(ref reader, options),
+                    SensorType.FileSensor => JsonSerializer.Deserialize<FileSensorValue>(ref reader, options),
                     _ => throw new JsonException(UnexpectedSensorTypeError),
                 };
             }

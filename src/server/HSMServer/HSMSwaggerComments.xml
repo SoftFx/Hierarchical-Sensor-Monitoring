@@ -58,9 +58,24 @@
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.FileSensorValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
-            Recommended to use for pdf files in order to keep the pdf file encoding.
             </summary>
             <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorValueRequests.SensorValueBase})">
+            <summary>
+            Accepts data in SensorValueBase format. Converts data to a typed format and saves it to the database.
+            The key must be unique and stored in the header.
+            </summary>
+            <param name="values"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMServer.ObsoleteUnitedSensorValue.UnitedSensorValue})">
+            <summary>
+            Obsolete method. Will be removed.
+            Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
+            </summary>
+            <param name="values"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
