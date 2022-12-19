@@ -190,7 +190,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public IEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
         {
             var result = new List<byte[]>(SensorValuesPageCount);
             var totalCount = 0;

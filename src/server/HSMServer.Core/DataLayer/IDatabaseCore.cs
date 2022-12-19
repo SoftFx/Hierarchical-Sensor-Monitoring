@@ -50,7 +50,7 @@ namespace HSMServer.Core.DataLayer
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
         List<byte[]> GetSensorValues(string sensorId, DateTime to, int count);
         List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count = 50000);
-        IEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count = 50000);
+        IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count = 50000);
 
         List<SensorEntity> GetAllSensors();
 

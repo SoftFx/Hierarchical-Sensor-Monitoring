@@ -22,6 +22,7 @@ using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -331,13 +332,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<string> Get([FromBody] HistoryRequest request)
+        public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request)
         {
             try
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = _cache.GetSensorValues(requestModel).SelectMany(x => x).ToList();
+                    var historyValues = await _cache.GetSensorValues(requestModel).SelectMany(x => x.ToAsyncEnumerable()).ToListAsync();
                     var response = JsonSerializer.Serialize(historyValues.Convert());
 
                     return Ok(response);
@@ -360,13 +361,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public IActionResult Get([FromBody] FileHistoryRequest request)
+        public async Task<IActionResult> Get([FromBody] FileHistoryRequest request)
         {
             try
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = _cache.GetSensorValues(requestModel).SelectMany(x => x).ToList();
+                    var historyValues = await _cache.GetSensorValues(requestModel).SelectMany(x => x.ToAsyncEnumerable()).ToListAsync();
                     var response = historyValues.ConvertToCsv();
 
                     return request.IsZipArchive

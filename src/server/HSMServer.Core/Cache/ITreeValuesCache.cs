@@ -58,7 +58,7 @@ namespace HSMServer.Core.Cache
 
         List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000);
-        IEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
 
         void UpdatePolicy(TransactionType type, Policy policy);
     }

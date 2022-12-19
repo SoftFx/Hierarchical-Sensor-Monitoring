@@ -362,7 +362,7 @@ namespace HSMServer.Core.Cache
             return values;
         }
 
-        public IEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
+        public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
         {
             var sensorId = GetSensor(request).Id;
             var from = request.From;
@@ -372,13 +372,13 @@ namespace HSMServer.Core.Cache
             return GetSensorValuesPage(sensorId, from, to, count);
         }
 
-        public IEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _databaseCore.GetSensorValuesPage(sensorId.ToString(), from, to, count);
 
-                foreach (var page in pages)
+                await foreach (var page in pages)
                     yield return sensor.ConvertValues(page);
             }
         }
