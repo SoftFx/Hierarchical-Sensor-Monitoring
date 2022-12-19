@@ -13,7 +13,11 @@ namespace HSMServer.ModelBinders
             if (bindingContext == null)
                 throw new ArgumentNullException(nameof(bindingContext));
 
-            var serializeOptions = new JsonSerializerOptions();
+            var serializeOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            };
+
             serializeOptions.Converters.Add(new SensorValueBaseDeserializationConverter());
 
             var value = await JsonSerializer.DeserializeAsync(bindingContext.HttpContext.Request.Body, bindingContext.ModelType, serializeOptions);
