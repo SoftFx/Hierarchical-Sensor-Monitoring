@@ -1,8 +1,10 @@
-﻿@using HSMServer.Model.History;
+﻿@using HSMServer.Controllers
+@using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
-@model HistoryValuesViewModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@model HistoryValuesViewModel
 
 @if (Model.Values.Count == 0)
 {
@@ -13,50 +15,68 @@ else
     <div>
         <table class='table table-striped'>
             <thead>
-                <tr class="text-nowrap">
-                    <th>Date</th>
+            <tr class="text-nowrap">
+                <th>Date</th>
+                @if (Model.IsBarSensor)
+                {
+                    <th>Min</th>
+                    <th>Mean</th>
+                    <th>Max</th>
+                    <th>Count</th>
+                }
+                else
+                {
+                    <th>Value</th>
+                }
+                <th>Status</th>
+                <th>Comment</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var value in Model.Values)
+            {
+                <tr>
+                    <td>@value.Time.ToDefaultFormat()</td>
                     @if (Model.IsBarSensor)
                     {
-                        <th>Min</th>
-                        <th>Mean</th>
-                        <th>Max</th>
-                        <th>Count</th>
+                        var barValue = value as BarSensorValueViewModel;
+
+                        <td>@barValue.Min</td>
+                        <td>@barValue.Mean</td>
+                        <td>@barValue.Max</td>
+                        <td>@barValue.Count</td>
                     }
                     else
                     {
-                        <th>Value</th>
+                        var simpleValue = value as SimpleSensorValueViewModel;
+
+                        <td>@simpleValue.Value</td>
                     }
-                    <th>Status</th>
-                    <th>Comment</th>
+                    <td>
+                        <span class="@value.Status.ToIcon()"></span> @value.Status
+                    </td>
+                    <td>@value.Comment</td>
                 </tr>
-            </thead>
-            <tbody>
-                @foreach (var value in Model.Values)
-                {
-                    <tr>
-                        <td>@value.Time.ToDefaultFormat()</td>
-                        @if (Model.IsBarSensor)
-                        {
-                            var barValue = value as BarSensorValueViewModel;
-
-                            <td>@barValue.Min</td>
-                            <td>@barValue.Mean</td>
-                            <td>@barValue.Max</td>
-                            <td>@barValue.Count</td>
-                        }
-                        else
-                        {
-                            var simpleValue = value as SimpleSensorValueViewModel;
-
-                            <td>@simpleValue.Value</td>
-                        }
-                        <td><span class="@value.Status.ToIcon()"></span> @value.Status</td>
-                        <td>@value.Comment</td>
-                    </tr>
-                }
+            }
             </tbody>
         </table>
 
         <input id='oldest_date_@Model.EncodedId' type='text' style='display: none' value='@Model.OldestValueTime'/>
+
+        <div class="container d-flex justify-content-center">
+            <ul class="pagination">
+                <li class="page-item">
+                    <a class="page-link" asp-controller="Home"  asp-action="GetPreviousPage" asp-route-encodedId="@Model.EncodedId" asp-route-isBarSensor="@Model.IsBarSensor" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" asp-controller="Home" asp-action="GetNextPage" asp-route-encodedId="@Model.EncodedId" asp-route-isBarSensor="@Model.IsBarSensor" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
     </div>
 }
