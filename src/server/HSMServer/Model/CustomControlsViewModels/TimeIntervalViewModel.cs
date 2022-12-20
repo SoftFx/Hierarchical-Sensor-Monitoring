@@ -42,6 +42,8 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
+        public const string CustomTemplate = @"dd\.HH\:mm\:ss";
+
         public List<SelectListItem> IntervalItems { get; }
 
         public bool CanCustomInputBeVisible { get; init; } = true;
@@ -69,10 +71,10 @@ namespace HSMServer.Model
         internal void Update(TimeIntervalModel model)
         {
             var interval = model?.TimeInterval ?? CoreTimeInterval.Custom;
-            var customPeriod = model?.CustomPeriod ?? 0;
+            var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = new TimeSpan(customPeriod).ToString();
+            CustomTimeInterval = new TimeSpan(customPeriod).ToString(CustomTemplate);
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -96,10 +98,10 @@ namespace HSMServer.Model
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpan.TryParse(CustomTimeInterval, out var timeInterval))
-                return timeInterval.Ticks;
+            if (TimeInterval == TimeInterval.Custom && TimeSpanTryParse(CustomTimeInterval, out var ticks))
+                return ticks;
 
-            return 0;
+            return 0L;
         }
 
         private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customIntervalTicks) =>
@@ -110,7 +112,7 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.Custom => customIntervalTicks == 0 ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.Custom => customIntervalTicks == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
 
@@ -122,6 +124,26 @@ namespace HSMServer.Model
                 items.Add(new SelectListItem() { Text = interval.GetDisplayName(), Value = interval.ToString() });
 
             return items;
+        }
+
+        private static bool TimeSpanTryParse(string interval, out long ticks)
+        {
+            var ddString = interval.Split(".");
+            var hmsString = ddString[^1].Split(":");
+            
+            if (ddString.Length == 2 &&
+                hmsString.Length == 3 &&
+                int.TryParse(ddString[0], out var days) &&
+                int.TryParse(hmsString[0], out var hours) &&
+                int.TryParse(hmsString[1], out var minutes) &&
+                int.TryParse(hmsString[2], out var seconds))
+            {
+                ticks = new TimeSpan(days, hours, minutes, seconds).Ticks;
+                return true;
+            }
+
+            ticks = 0L;
+            return false;
         }
     }
 }
