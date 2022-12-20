@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net7.0</TargetFramework>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
     <UserSecretsId>a4cdf004-6f82-4fe4-b26d-ecc4e174bb5d</UserSecretsId>
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
