@@ -42,8 +42,8 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
-        public const string CustomTemplate = @"dd\.hh\:mm\:ss";
-        
+        public const string CustomTemplate = @"dd\.HH\:mm\:ss";
+
         public List<SelectListItem> IntervalItems { get; }
 
         public bool CanCustomInputBeVisible { get; init; } = true;
@@ -128,24 +128,22 @@ namespace HSMServer.Model
 
         private static bool TimeSpanTryParse(string interval, out long ticks)
         {
-            try
-            {
-                var ddString = interval.Split(".");
-                var hmsString = ddString[^1].Split(":");
+            var ddString = interval.Split(".");
+            var hmsString = ddString[^1].Split(":");
             
-                int.TryParse(ddString[0], out var days);
-                int.TryParse(hmsString[0], out var hours);
-                int.TryParse(hmsString[1], out var minutes);
-                int.TryParse(hmsString[2], out var seconds);
-                
+            if (ddString.Length == 2 &&
+                hmsString.Length == 3 &&
+                int.TryParse(ddString[0], out var days) &&
+                int.TryParse(hmsString[0], out var hours) &&
+                int.TryParse(hmsString[1], out var minutes) &&
+                int.TryParse(hmsString[2], out var seconds))
+            {
                 ticks = new TimeSpan(days, hours, minutes, seconds).Ticks;
                 return true;
             }
-            catch (Exception)
-            {
-                ticks = 0L;
-                return false;
-            }
+
+            ticks = 0L;
+            return false;
         }
     }
 }
