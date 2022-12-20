@@ -42,7 +42,9 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
-        public const string CustomTemplate = @"dd\.HH\:mm\:ss";
+        private const string ZeroCustomInterval = "00.00:00:00";
+        public const string CustomTemplate = "dd.HH:mm:ss";
+
 
         public List<SelectListItem> IntervalItems { get; }
 
@@ -74,7 +76,7 @@ namespace HSMServer.Model
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = new TimeSpan(customPeriod).ToString(CustomTemplate);
+            CustomTimeInterval = customPeriod > 0L ? new TimeSpan(customPeriod).ToString(CustomTemplate) : ZeroCustomInterval;
         }
 
         internal TimeIntervalModel ToModel() =>
