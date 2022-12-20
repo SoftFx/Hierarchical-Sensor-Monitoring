@@ -140,7 +140,7 @@
     
     setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
-    setTimeout(updateHistory, interval);
+    //setTimeout(updateHistory, interval);
 
 
     $("#show").click(function () {
@@ -245,22 +245,22 @@
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
 
-    var updateHistoryTimeoutId;
-    function updateHistory() {
-        clearTimeout(updateHistoryTimeoutId);
+    //var updateHistoryTimeoutId;
+    //function updateHistory() {
+    //    clearTimeout(updateHistoryTimeoutId);
 
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
+    //    var selectedNode = $('#jstree').jstree().get_selected(true)[0];
+    //    var selectedNodeId = getSelectedNodeId(selectedNode);
 
-        if (selectedNodeId != "" && selectedNode.children.length == 0) {
-            let selectedRadio = $('input[id$=' + selectedNodeId + ']:checked');
-            if (selectedRadio !== undefined) {
-                selectedRadio.click();
-            }
-        }
+    //    if (selectedNodeId != "" && selectedNode.children.length == 0) {
+    //        let selectedRadio = $('input[id$=' + selectedNodeId + ']:checked');
+    //        if (selectedRadio !== undefined) {
+    //            selectedRadio.click();
+    //        }
+    //    }
 
-        updateHistoryTimeoutId = setTimeout(updateHistory, interval);
-    }
+    //    updateHistoryTimeoutId = setTimeout(updateHistory, interval);
+    //}
     
     var clipboard = new ClipboardJS('[id^="copy_"]',{
       container: document.getElementById('accessKeys_modal')

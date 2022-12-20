@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
@@ -234,14 +235,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult History([FromBody] GetSensorHistoryModel model)
+        public async Task<IActionResult> History([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return null;
 
-            var values = GetSensorValues(model.EncodedId, model.From, model.To, MaxUIHistoryCount);
+            var values = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.From.ToUniversalTime(), model.To.ToUniversalTime(), -50000);// GetSensorValues(model.EncodedId, model.From, model.To, MaxUIHistoryCount);
 
-            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues(values, model.Type));
+            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues((await values.ToListAsync())[0], model.Type));
         }
 
         [HttpPost]

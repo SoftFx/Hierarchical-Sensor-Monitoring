@@ -25,7 +25,7 @@
             {
                 var cmpResult = initialArray[i].CompareTo(anotherBytes[i]);
                 if (cmpResult != 0)
-                    return cmpResult < 0;
+                    return cmpResult > 0;
             }
 
             return true;

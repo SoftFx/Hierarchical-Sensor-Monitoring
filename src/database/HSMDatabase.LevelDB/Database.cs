@@ -152,6 +152,33 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public IEnumerable<byte[]> GetStartingWithToFrom(byte[] startWithKey, byte[] from, byte[] to)
+        {
+            Iterator iterator = null;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                iterator.Seek(to);
+
+                if (!iterator.IsValid)
+                    iterator.SeekToLast();
+                else if (!iterator.Key().SequenceEqual(to))
+                    iterator.Prev();
+
+                for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
+                    if (iterator.Key().StartsWith(startWithKey))
+                        yield return iterator.Value();
+                    else
+                        yield break;
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
         public List<byte[]> GetStartingWithTo(byte[] to, byte[] startWithKey, int count)
         {
             Iterator iterator = null;

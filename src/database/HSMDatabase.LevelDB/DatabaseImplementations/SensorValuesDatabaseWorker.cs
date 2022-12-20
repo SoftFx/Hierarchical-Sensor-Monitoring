@@ -106,7 +106,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public IEnumerable<byte[]> GetValue(byte[] sensorId, byte[] from, byte[] to)
+        public IEnumerable<byte[]> GetValuesFrom(byte[] sensorId, byte[] from, byte[] to)
         {
             try
             {
@@ -114,7 +114,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error($"Failed getting value for sensor {Encoding.UTF8.GetString(sensorId)} - {e.Message}");
+                _logger.Error($"Failed getting value [{Encoding.UTF8.GetString(from)}, {Encoding.UTF8.GetString(to)}] for sensor {Encoding.UTF8.GetString(sensorId)} - {e.Message}");
+
+                return null;
+            }
+        }
+
+        public IEnumerable<byte[]> GetValuesTo(byte[] sensorId, byte[] from, byte[] to)
+        {
+            try
+            {
+                return _openedDb.GetStartingWithToFrom(sensorId, from, to);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting value [{Encoding.UTF8.GetString(to)}, {Encoding.UTF8.GetString(from)}] for sensor {Encoding.UTF8.GetString(sensorId)} - {e.Message}");
 
                 return null;
             }
