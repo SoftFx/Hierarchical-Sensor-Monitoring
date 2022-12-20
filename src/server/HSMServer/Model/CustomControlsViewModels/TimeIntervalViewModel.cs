@@ -42,7 +42,6 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
-        private const string ZeroCustomInterval = "00.00:00:00";
         public const string CustomTemplate = "dd.HH:mm:ss";
 
 
@@ -76,7 +75,7 @@ namespace HSMServer.Model
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = customPeriod > 0L ? new TimeSpan(customPeriod).ToString(CustomTemplate) : ZeroCustomInterval;
+            CustomTimeInterval = TicksToString(customPeriod);
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -146,6 +145,12 @@ namespace HSMServer.Model
 
             ticks = 0L;
             return false;
+        }
+
+        private static string TicksToString(long ticks)
+        {
+            var timeSpan = TimeSpan.FromTicks(ticks);
+            return $"{timeSpan.Days}.{timeSpan.Hours}:{timeSpan.Minutes}:{timeSpan.Seconds}";
         }
     }
 }
