@@ -5,6 +5,7 @@
 
 @model HistoryValuesViewModel
 
+
 @if (Model.Values.Count == 0)
 {
     <div id="noTableValues_@Model.EncodedId"></div>
@@ -32,10 +33,10 @@ else
                 </tr>
             </thead>
             <tbody>
-            @foreach (var value in Model.Values)
-            {
-                <tr>
-                    <td>@value.Time.ToDefaultFormat()</td>
+                @foreach (var value in Model.Values)
+                {
+                    <tr>
+                        <td>@value.Time.ToDefaultFormat()</td>
                         @if (Model.IsBarSensor)
                         {
                             var barValue = value as BarSensorValueViewModel;
@@ -51,12 +52,12 @@ else
 
                             <td>@simpleValue.Value</td>
                         }
-                    <td>
-                        <span class="@value.Status.ToIcon()"></span> @value.Status
-                    </td>
-                    <td>@value.Comment</td>
-                </tr>
-            }
+                        <td>
+                            <span class="@value.Status.ToIcon()"></span> @value.Status
+                        </td>
+                        <td>@value.Comment</td>
+                    </tr>
+                }
             </tbody>
         </table>
 
@@ -76,6 +77,5 @@ else
                 </li>
             </ul>
         </div>
-        
     </div>
 }
