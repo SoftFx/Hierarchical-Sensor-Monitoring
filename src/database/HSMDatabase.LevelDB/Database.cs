@@ -163,8 +163,14 @@ namespace HSMDatabase.LevelDB
 
                 if (!iterator.IsValid)
                     iterator.SeekToLast();
-                else if (!iterator.Key().SequenceEqual(to))
+
+                while (iterator.Key().IsGreater(to))
+                {
                     iterator.Prev();
+
+                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
+                        yield break;
+                }
 
                 for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
                     yield return iterator.Value();
