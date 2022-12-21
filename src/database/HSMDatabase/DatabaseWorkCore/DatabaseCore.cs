@@ -18,7 +18,7 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int SensorValuesPageCount = 10;
+        private const int SensorValuesPageCount = 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -113,7 +113,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 tempResult.Add(key, value);
             }
 
-            foreach (var database in _sensorValuesDatabases)
+            foreach (var database in _sensorValuesDatabases.Reverse())
                 database.FillLatestValues(tempResult);
 
             foreach (var (_, (sensorId, value)) in tempResult)
@@ -178,7 +178,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
-            var databases = _sensorValuesDatabases.Dbs.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
+            var databases = _sensorValuesDatabases.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
             GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
 
             if (count < 0)
