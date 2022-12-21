@@ -278,12 +278,11 @@ function Data(to, from, type, encodedId) {
             $('#radio_month_' + encodedId).prop("checked", true);
             return;
         }
-
         $('#radio_all_' + encodedId).prop("checked", true);
     }
 
     function isFileSensor(type) {
-        return type === "6" || type === "7";
+        return type === "6";
     }
 
     function isGraphAvailable(type) {
