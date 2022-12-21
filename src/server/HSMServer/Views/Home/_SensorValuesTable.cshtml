@@ -1,5 +1,4 @@
-﻿@using HSMServer.Controllers
-@using HSMServer.Model.History;
+﻿@using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -15,43 +14,43 @@ else
     <div>
         <table class='table table-striped'>
             <thead>
-            <tr class="text-nowrap">
-                <th>Date</th>
-                @if (Model.IsBarSensor)
-                {
-                    <th>Min</th>
-                    <th>Mean</th>
-                    <th>Max</th>
-                    <th>Count</th>
-                }
-                else
-                {
-                    <th>Value</th>
-                }
-                <th>Status</th>
-                <th>Comment</th>
-            </tr>
+                <tr class="text-nowrap">
+                    <th>Date</th>
+                        @if (Model.IsBarSensor)
+                        {
+                            <th>Min</th>
+                            <th>Mean</th>
+                            <th>Max</th>
+                            <th>Count</th>
+                        }
+                        else
+                        {
+                            <th>Value</th>
+                        }
+                    <th>Status</th>
+                    <th>Comment</th>
+                </tr>
             </thead>
             <tbody>
             @foreach (var value in Model.Values)
             {
                 <tr>
                     <td>@value.Time.ToDefaultFormat()</td>
-                    @if (Model.IsBarSensor)
-                    {
-                        var barValue = value as BarSensorValueViewModel;
+                        @if (Model.IsBarSensor)
+                        {
+                            var barValue = value as BarSensorValueViewModel;
 
-                        <td>@barValue.Min</td>
-                        <td>@barValue.Mean</td>
-                        <td>@barValue.Max</td>
-                        <td>@barValue.Count</td>
-                    }
-                    else
-                    {
-                        var simpleValue = value as SimpleSensorValueViewModel;
+                            <td>@barValue.Min</td>
+                            <td>@barValue.Mean</td>
+                            <td>@barValue.Max</td>
+                            <td>@barValue.Count</td>
+                        }
+                        else
+                        {
+                            var simpleValue = value as SimpleSensorValueViewModel;
 
-                        <td>@simpleValue.Value</td>
-                    }
+                            <td>@simpleValue.Value</td>
+                        }
                     <td>
                         <span class="@value.Status.ToIcon()"></span> @value.Status
                     </td>
