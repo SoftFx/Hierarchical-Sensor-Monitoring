@@ -54,7 +54,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value.Ticks
+                Value = value.Value
             };
 
         public static FileValue Convert(this FileSensorValue value) =>
