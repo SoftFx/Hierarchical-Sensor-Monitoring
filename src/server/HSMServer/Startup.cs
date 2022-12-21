@@ -13,6 +13,7 @@ using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
+using HSMServer.Pagination;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -58,6 +59,7 @@ namespace HSMServer
             services.AddSingleton<INotificationsCenter, NotificationsCenter>();
             services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<TreeViewModel>();
+            services.AddSingleton<ISensorValuesHistoryPagination, SensorValuesHistoryPagination>();
 
             services.AddHostedService<OutdatedSensorService>();
             services.AddHostedService<DatabaseMonitoringService>();

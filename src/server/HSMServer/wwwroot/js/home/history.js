@@ -343,3 +343,27 @@ function Data(to, from, type, encodedId) {
         return $('#sensor_type_' + encodedId).val();
     }    
 }
+
+//Pagination
+{
+    function nextPage(encodedId, type) {
+        showPage(nextPageAction, encodedId, type);
+    }
+
+    function prevPage(encodedId, type) {
+        showPage(prevPageAction, encodedId, type);
+    }
+
+    function showPage(getPageAction, encodedId, type) {
+        $.ajax({
+            type: 'GET',
+            url: getPageAction + "?EncodedId=" + encodedId + "&Type=" + type,
+            contentType: 'application/json',
+            dataType: 'html',
+            cache: false,
+            async: true
+        }).done(function (data) {
+            $(`#values_${encodedId}`).html(data);
+        });
+    }
+}

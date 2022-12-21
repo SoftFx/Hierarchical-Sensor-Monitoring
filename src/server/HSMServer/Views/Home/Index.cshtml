@@ -34,6 +34,8 @@
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
+    var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";

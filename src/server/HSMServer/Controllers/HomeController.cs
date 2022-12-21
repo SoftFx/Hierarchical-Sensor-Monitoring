@@ -10,6 +10,7 @@ using HSMServer.Model;
 using HSMServer.Model.History;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
+using HSMServer.Pagination;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -30,16 +31,19 @@ namespace HSMServer.Controllers
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
         private static readonly EmptyResult _emptyResult = new EmptyResult();
 
+        private readonly ISensorValuesHistoryPagination _pagination;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel, IUserManager userManager)
+        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel,
+            IUserManager userManager, ISensorValuesHistoryPagination pagination)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _userManager = userManager;
+            _pagination = pagination;
         }
 
 
@@ -227,17 +231,33 @@ namespace HSMServer.Controllers
             if (model == null)
                 return null;
 
-            var values = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.From.ToUniversalTime(), model.To.ToUniversalTime(), -50000);// GetSensorValues(model.EncodedId, model.From, model.To, MaxUIHistoryCount);
+            await _pagination.InitializeEnumerator(model.EncodedId, model.From, model.To);
 
-            return GetHistoryTable(model.EncodedId, model.Type, GetTableValues((await values.ToListAsync())[0], model.Type));
+            return GetHistoryTable(model.EncodedId, model.Type);
         }
 
         [HttpPost]
         public async Task<IActionResult> HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            var values = await GetAllSensorValues(encodedId);
+            await _pagination.InitializeEnumerator(encodedId, DateTime.MinValue, DateTime.MaxValue);
 
-            return GetHistoryTable(encodedId, type, values);
+            return GetHistoryTable(encodedId, type);
+        }
+
+        [HttpGet]
+        public IActionResult GetPreviousPage([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        {
+            _pagination.SwitchToPrevPage();
+
+            return GetHistoryTable(encodedId, type);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetNextPage([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        {
+            await _pagination.SwitchToNextPage();
+
+            return GetHistoryTable(encodedId, type);
         }
 
         [HttpPost]
@@ -285,8 +305,9 @@ namespace HSMServer.Controllers
             return GetExportHistory(values, type, fileName);
         }
 
-        private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
-            PartialView("_SensorValuesTable", new HistoryValuesViewModel(encodedId, type, values));
+
+        private PartialViewResult GetHistoryTable(string encodedId, int type) =>
+            PartialView("_SensorValuesTable", new HistoryValuesViewModel(encodedId, type, _pagination));
 
         private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
         {
@@ -295,7 +316,6 @@ namespace HSMServer.Controllers
 
             return File(content, fileName.GetContentType(), fileName);
         }
-
 
         private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to)
         {
@@ -312,16 +332,6 @@ namespace HSMServer.Controllers
 
             return await GetSensorValues(encodedId, from, to);
         }
-
-        private static List<BaseValue> GetReversedValues(List<BaseValue> values)
-        {
-            values.Reverse();
-
-            return values;
-        }
-
-        private static List<BaseValue> GetTableValues(List<BaseValue> values, int type) =>
-             GetReversedValues(values);
 
         #endregion
 
@@ -426,16 +436,6 @@ namespace HSMServer.Controllers
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
             return (sensor?.Product, sensor?.Path);
-        }
-
-        public IActionResult GetPreviousPage(string encodedId, bool isBarSensor)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IActionResult GetNextPage(string encodedId, bool isBarSensor)
-        {
-            throw new NotImplementedException();
         }
     }
 }
