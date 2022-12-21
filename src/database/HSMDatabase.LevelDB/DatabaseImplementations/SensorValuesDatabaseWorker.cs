@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB.Extensions;
 using NLog;
 using System;
@@ -47,18 +46,16 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutSensorValue(SensorValueEntity entity)
+        public void PutSensorValue(byte[] key, object value)
         {
-            var key = PrefixConstants.GetSensorValueKey(entity.SensorId, entity.ReceivingTime);
-
             try
             {
-                var value = JsonSerializer.SerializeToUtf8Bytes(entity.Value);
-                _openedDb.Put(key, value);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
+                _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {entity.SensorId}");
+                _logger.Error(e, $"Failed to write data for {key.GetString()}");
             }
         }
 
@@ -107,7 +104,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public IEnumerable<byte[]> GetValuesFrom(string sensorId, byte[] from, byte[] to)
+        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try
             {
@@ -115,13 +112,13 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] for sensor {sensorId} - {e.Message}");
+                _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] - {e.Message}");
 
                 return null;
             }
         }
 
-        public IEnumerable<byte[]> GetValuesTo(string sensorId, byte[] from, byte[] to)
+        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to)
         {
             try
             {
@@ -129,7 +126,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] for sensor {sensorId} - {e.Message}");
+                _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
                 return null;
             }

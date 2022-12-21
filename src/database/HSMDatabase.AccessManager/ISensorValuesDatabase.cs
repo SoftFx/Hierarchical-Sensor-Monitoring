@@ -1,5 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager
@@ -15,7 +14,7 @@ namespace HSMDatabase.AccessManager
 
         void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
 
-        void PutSensorValue(SensorValueEntity entity);
+        void PutSensorValue(byte[] key, object value);
 
         void RemoveSensorValues(string sensorId);
 
@@ -23,8 +22,8 @@ namespace HSMDatabase.AccessManager
 
         List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count);
 
-        IEnumerable<byte[]> GetValuesFrom(string sensorId, byte[] from, byte[] to);
+        IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);
 
-        IEnumerable<byte[]> GetValuesTo(string sensorId, byte[] from, byte[] to);
+        IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to);
     }
 }

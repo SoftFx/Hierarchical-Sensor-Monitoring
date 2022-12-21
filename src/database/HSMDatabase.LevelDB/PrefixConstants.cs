@@ -50,10 +50,6 @@ namespace HSMDatabase.LevelDB
 
         internal static string GetPolicyIdsKey() => POLICYIDS_PREFIX;
 
-        // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
-        public static byte[] GetSensorValueKey(string sensorId, long time) =>
-            Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
-
         internal static string GetMonitoringDatabasesListKey()
         {
             return MONITORING_DATABASE_LIST_PREFIX;

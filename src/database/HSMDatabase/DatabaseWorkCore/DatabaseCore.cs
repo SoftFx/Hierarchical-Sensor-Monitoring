@@ -151,13 +151,29 @@ namespace HSMDatabase.DatabaseWorkCore
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
             var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
+            var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
 
-            dbs.PutSensorValue(valueEntity);
+            dbs.PutSensorValue(key, valueEntity.Value);
+        }
+
+        public List<SensorEntity> GetAllSensors()
+        {
+            var sensorsIds = _environmentDatabase.GetAllSensorsIds();
+
+            var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
+            foreach (var sensorId in sensorsIds)
+            {
+                var sensor = _environmentDatabase.GetSensorEntity(sensorId);
+                if (sensor != null)
+                    sensorEntities.Add(sensor);
+            }
+
+            return sensorEntities;
         }
 
         public List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
         {
-            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, to.Ticks);
+            var toBytes = BuildSensorValueKey(sensorId, to.Ticks);
             var result = new List<byte[]>(count);
 
             foreach (var database in _sensorValuesDatabases)
@@ -175,8 +191,8 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
 
-            var fromBytes = PrefixConstants.GetSensorValueKey(sensorId, from.Ticks);
-            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, to.Ticks);
+            var fromBytes = BuildSensorValueKey(sensorId, from.Ticks);
+            var toBytes = BuildSensorValueKey(sensorId, to.Ticks);
 
             foreach (var database in _sensorValuesDatabases)
             {
@@ -197,16 +213,16 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = PrefixConstants.GetSensorValueKey(sensorId, fromTicks);
-            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, toTicks);
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
             var databases = _sensorValuesDatabases.Dbs.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
-            GetValuesFunc getValues = (db) => db.GetValuesFrom(sensorId, fromBytes, toBytes);
+            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
 
             if (count < 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesTo(sensorId, fromBytes, toBytes);
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
             }
 
             return GetSensorValuesPage(databases, count, getValues);
@@ -239,20 +255,9 @@ namespace HSMDatabase.DatabaseWorkCore
             yield return result;
         }
 
-        public List<SensorEntity> GetAllSensors()
-        {
-            var sensorsIds = _environmentDatabase.GetAllSensorsIds();
-
-            var sensorEntities = new List<SensorEntity>(sensorsIds.Count);
-            foreach (var sensorId in sensorsIds)
-            {
-                var sensor = _environmentDatabase.GetSensorEntity(sensorId);
-                if (sensor != null)
-                    sensorEntities.Add(sensor);
-            }
-
-            return sensorEntities;
-        }
+        // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
+        private static byte[] BuildSensorValueKey(string sensorId, long time) =>
+            Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
 
         private void RemoveSensorValues(string sensorId)
         {
