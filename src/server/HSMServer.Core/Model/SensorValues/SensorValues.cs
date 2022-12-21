@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace HSMServer.Core.Model
 {
@@ -26,6 +27,12 @@ namespace HSMServer.Core.Model
     }
 
 
+    public record TimeSpanValue : BaseValue<long>
+    {
+        public override SensorType Type => SensorType.TimeSpan;
+    }
+
+    
     public record FileValue : BaseValue<byte[]>
     {
         private const double SizeDenominator = 1024.0;

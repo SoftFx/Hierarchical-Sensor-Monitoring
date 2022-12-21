@@ -37,6 +37,7 @@ namespace HSMServer.ApiObjectsConverters
                     SensorType.IntegerBarSensor => JsonSerializer.Deserialize<IntBarSensorValue>(ref reader, options),
                     SensorType.DoubleBarSensor => JsonSerializer.Deserialize<DoubleBarSensorValue>(ref reader, options),
                     SensorType.FileSensor => JsonSerializer.Deserialize<FileSensorValue>(ref reader, options),
+                    SensorType.TimeSpanSensor => JsonSerializer.Deserialize<TimeSpanSensorValue>(ref reader, options),
                     _ => throw new JsonException(UnexpectedSensorTypeError),
                 };
             }

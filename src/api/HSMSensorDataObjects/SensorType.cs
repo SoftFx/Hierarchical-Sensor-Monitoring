@@ -44,6 +44,11 @@
         /// not as a string. This type is used for pdf files, which really depend on encoding. You should also use this type if
         /// you have another file, for which encoding is important. 
         /// </summary>
-        FileSensor = 6
+        FileSensor = 6,
+        
+        /// <summary>
+        /// Simple sensor which collects data of string type and sends the collected data instantly
+        /// </summary>
+        TimeSpanSensor = 7,
     }
 }
