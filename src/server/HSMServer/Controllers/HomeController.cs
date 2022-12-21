@@ -430,5 +430,15 @@ namespace HSMServer.Controllers
 
             return (sensor?.Product, sensor?.Path);
         }
+
+        public IActionResult GetPreviousPage(string encodedId, bool isBarSensor)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IActionResult GetNextPage(string encodedId, bool isBarSensor)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

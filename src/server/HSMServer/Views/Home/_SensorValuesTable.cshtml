@@ -1,6 +1,8 @@
 ﻿@using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 @model HistoryValuesViewModel
 
 
@@ -50,7 +52,9 @@ else
 
                             <td>@simpleValue.Value</td>
                         }
-                        <td><span class="@value.Status.ToIcon()"></span> @value.Status</td>
+                        <td>
+                            <span class="@value.Status.ToIcon()"></span> @value.Status
+                        </td>
                         <td>@value.Comment</td>
                     </tr>
                 }
@@ -58,5 +62,20 @@ else
         </table>
 
         <input id='oldest_date_@Model.EncodedId' type='text' style='display: none' value='@Model.OldestValueTime'/>
+
+        <div class="container d-flex justify-content-center">
+            <ul class="pagination">
+                <li class="page-item">
+                    <a class="page-link" asp-controller="Home"  asp-action="GetPreviousPage" asp-route-encodedId="@Model.EncodedId" asp-route-isBarSensor="@Model.IsBarSensor" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" asp-controller="Home" asp-action="GetNextPage" asp-route-encodedId="@Model.EncodedId" asp-route-isBarSensor="@Model.IsBarSensor" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 }
