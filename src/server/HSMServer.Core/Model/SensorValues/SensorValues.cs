@@ -27,7 +27,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public record TimeSpanValue : BaseValue<long>
+    public record TimeSpanValue : BaseValue<TimeSpan>
     {
         public override SensorType Type => SensorType.TimeSpan;
     }

@@ -23,6 +23,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
+using Microsoft.OpenApi.Any;
 
 namespace HSMServer
 {
@@ -74,6 +75,11 @@ namespace HSMServer
                     Version = ServerSettings.Version,
                     Title = ServerSettings.Name,
                 });
+                o.MapType<TimeSpan>(() => new OpenApiSchema
+                {
+                    Type = "string",
+                    Example = new OpenApiString("00:00:00")
+                });;
 
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");

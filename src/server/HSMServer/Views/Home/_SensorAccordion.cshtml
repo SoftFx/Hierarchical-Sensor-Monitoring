@@ -100,14 +100,7 @@
                             </div>
                         </div>
                         <div class="text-break" id='value_@sensorId'>
-                            @if (Model.SensorType == SensorType.TimeSpan)
-                            {
-                                <span>@TimeSpanHelper.TicksToString(long.Parse(Model.ShortStringValue))</span>
-                            }
-                            else
-                            {
-                                @Model.ShortStringValue
-                            }
+                            @Model.ShortStringValue
                         </div>
                     </div>
                 </button>
