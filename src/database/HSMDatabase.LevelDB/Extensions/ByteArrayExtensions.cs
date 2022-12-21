@@ -1,8 +1,10 @@
-﻿namespace HSMDatabase.LevelDB.Extensions
+﻿using System.Text;
+
+namespace HSMDatabase.LevelDB.Extensions
 {
-    public static class ByteArrayExtensions
+    internal static class ByteArrayExtensions
     {
-        public static bool StartsWith(this byte[] initialArray, byte[] startCheck)
+        internal static bool StartsWith(this byte[] initialArray, byte[] startCheck)
         {
             for (int i = 0; i < startCheck.Length; i++)
             {
@@ -15,7 +17,7 @@
             return true;
         }
 
-        public static bool IsGreaterOrEquals(this byte[] initialArray, byte[] anotherBytes)
+        internal static bool IsGreaterOrEquals(this byte[] initialArray, byte[] anotherBytes)
         {
             if (initialArray.Length != anotherBytes.Length)
                 return initialArray.Length.CompareTo(anotherBytes.Length) >= 0;
@@ -31,7 +33,7 @@
             return true;
         }
 
-        public static bool IsSmallerOrEquals(this byte[] initialArray, byte[] anotherBytes)
+        internal static bool IsSmallerOrEquals(this byte[] initialArray, byte[] anotherBytes)
         {
             if (initialArray.Length != anotherBytes.Length)
                 return initialArray.Length.CompareTo(anotherBytes.Length) > 0;
@@ -45,5 +47,7 @@
 
             return true;
         }
+
+        internal static string GetString(this byte[] bytes) => Encoding.UTF8.GetString(bytes);
     }
 }

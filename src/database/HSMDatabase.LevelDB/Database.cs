@@ -134,7 +134,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public IEnumerable<byte[]> GetStartingWithFromTo(byte[] startWithKey, byte[] from, byte[] to)
+        public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
 
@@ -143,8 +143,7 @@ namespace HSMDatabase.LevelDB
                 iterator = _database.CreateIterator(_iteratorOptions);
 
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    if (iterator.Key().StartsWith(startWithKey))
-                        yield return iterator.Value();
+                    yield return iterator.Value();
             }
             finally
             {
@@ -152,7 +151,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public IEnumerable<byte[]> GetStartingWithToFrom(byte[] startWithKey, byte[] from, byte[] to)
+        public IEnumerable<byte[]> GetValueToFrom(byte[] from, byte[] to)
         {
             Iterator iterator = null;
 
@@ -168,10 +167,7 @@ namespace HSMDatabase.LevelDB
                     iterator.Prev();
 
                 for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
-                    if (iterator.Key().StartsWith(startWithKey))
-                        yield return iterator.Value();
-                    else
-                        yield break;
+                    yield return iterator.Value();
             }
             finally
             {

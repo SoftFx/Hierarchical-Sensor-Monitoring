@@ -157,7 +157,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
         {
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
+            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, to.Ticks);
             var result = new List<byte[]>(count);
 
             foreach (var database in _sensorValuesDatabases)
@@ -175,8 +175,8 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
 
-            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
+            var fromBytes = PrefixConstants.GetSensorValueKey(sensorId, from.Ticks);
+            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, to.Ticks);
 
             foreach (var database in _sensorValuesDatabases)
             {
@@ -194,17 +194,19 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
         {
-            var sensorIdBytes = Encoding.UTF8.GetBytes(sensorId);
-            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
 
-            var databases = _sensorValuesDatabases.Dbs.Where(db => from.Ticks <= db.To && to.Ticks >= db.From).ToList();
-            GetValuesFunc getValues = (db) => db.GetValuesFrom(sensorIdBytes, fromBytes, toBytes);
+            var fromBytes = PrefixConstants.GetSensorValueKey(sensorId, fromTicks);
+            var toBytes = PrefixConstants.GetSensorValueKey(sensorId, toTicks);
+
+            var databases = _sensorValuesDatabases.Dbs.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
+            GetValuesFunc getValues = (db) => db.GetValuesFrom(sensorId, fromBytes, toBytes);
 
             if (count < 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesTo(sensorIdBytes, fromBytes, toBytes);
+                getValues = (db) => db.GetValuesTo(sensorId, fromBytes, toBytes);
             }
 
             return GetSensorValuesPage(databases, count, getValues);
