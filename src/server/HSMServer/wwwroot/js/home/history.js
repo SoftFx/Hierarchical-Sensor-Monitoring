@@ -57,14 +57,14 @@ function Data(to, from, type, encodedId) {
     function accordionClicked() {
         let encodedId = this.id.substring("collapse_".length);
         let type = getTypeForSensor(encodedId);
-        let from = new Date();
+        const { from, to } = getFromAndTo(encodedId);
         if (isFileSensor(type)) {
             return;
         }
         if (isGraphAvailable(type)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, type, Data(from, from, type, encodedId), true);
+            initializeGraph(encodedId, rawHistoryAction, type, Data(to, from, type, encodedId), true);
         } else {
-            initializeTable(encodedId, historyLatestAction, type, Data(from, from, type, encodedId), true);
+            initializeTable(encodedId, historyAction, type, Data(to, from, type, encodedId), true);
         }
     }
 
