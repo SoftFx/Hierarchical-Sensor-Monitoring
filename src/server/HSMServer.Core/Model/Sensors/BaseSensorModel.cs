@@ -120,7 +120,5 @@ namespace HSMServer.Core.Model
             Storage.Clear();
             ValidationResult = ValidationResult.Ok;
         }
-
-        internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
     }
 }

@@ -4,7 +4,6 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -109,31 +108,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
-        {
-            Iterator iterator = null;
-            List<byte[]> values = new(1 << 4);
-
-            try
-            {
-                iterator = _database.CreateIterator(_iteratorOptions);
-
-                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    if (iterator.Key().StartsWith(startWithKey))
-                        values.Add(iterator.Value());
-
-                return values;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-        }
-
         public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
@@ -164,11 +138,11 @@ namespace HSMDatabase.LevelDB
                 if (!iterator.IsValid)
                     iterator.SeekToLast();
 
-                while (iterator.Key().IsGreater(to))
+                while (iterator.IsValid && iterator.Key().IsGreater(to))
                 {
                     iterator.Prev();
 
-                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
+                    if (iterator.Key().IsSmaller(from))
                         yield break;
                 }
 

@@ -3,7 +3,6 @@ using HSMDatabase.LevelDB.Extensions;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -70,23 +69,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
-            }
-        }
-
-        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
-        {
-            try
-            {
-                var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
-                result.Reverse();
-
-                return result.Take(count).ToList();
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (from: {from}, to: {to}, count: {count})");
-
-                return new();
             }
         }
 

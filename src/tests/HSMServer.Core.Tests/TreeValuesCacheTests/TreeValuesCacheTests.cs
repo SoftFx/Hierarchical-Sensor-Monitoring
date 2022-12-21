@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
@@ -325,7 +324,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Remove sensor(s)")]
-        public void RemoveSensorsTest()
+        public async Task RemoveSensorsTest()
         {
             var allSensors = _valuesCache.GetSensors();
 
@@ -349,12 +348,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Empty(_valuesCache.GetSensors());
             Assert.Empty(_databaseCoreManager.DatabaseCore.GetAllSensors());
             foreach (var sensor in allSensors)
-                Assert.Empty(GetAllSensorValues(sensor));
+                Assert.Empty(await GetAllSensorValues(sensor));
         }
 
         [Fact]
         [Trait("Category", "Remove sensor(s) data")]
-        public void RemoveSensorsDataTest()
+        public async Task RemoveSensorsDataTest()
         {
             int clearedSensorsCount = 0;
             void UpdateSensorEventHandler(BaseSensorModel clearedSensor, TransactionType type)
@@ -377,18 +376,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.Equal(4, clearedSensorsCount);
             foreach (var sensorId in sensors)
-                TestClearedSensor(sensorId);
+                await TestClearedSensor(sensorId);
         }
 
         [Fact]
         [Trait("Category", "Remove sensor(s) data")]
-        public void RemoveSensorDataTest()
+        public async Task RemoveSensorDataTest()
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
             _valuesCache.RemoveSensorData(sensor.Id);
 
-            TestClearedSensor(sensor.Id);
+            await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));
         }
 
@@ -553,8 +552,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private SensorEntity GetSensorByIdFromDb(Guid id) =>
             _databaseCoreManager.DatabaseCore.GetAllSensors().FirstOrDefault(s => s.Id == id.ToString());
 
-        private List<byte[]> GetAllSensorValues(BaseSensorModel sensor) =>
-            _databaseCoreManager.DatabaseCore.GetSensorValues(sensor.Id.ToString(), DateTime.MinValue, DateTime.MaxValue);
+        private ValueTask<List<byte[]>> GetAllSensorValues(BaseSensorModel sensor) =>
+            _databaseCoreManager.DatabaseCore.GetSensorValuesPage(sensor.Id.ToString(), DateTime.MinValue, DateTime.MaxValue, MaxHistoryCount).JoinAllPages();
 
 
         private void TestSensors(List<SensorEntity> expected, List<BaseSensorModel> actual)
@@ -618,7 +617,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return clonedSensor;
         }
 
-        private void TestClearedSensor(Guid clearedSensorId)
+        private async Task TestClearedSensor(Guid clearedSensorId)
         {
             var sensor = GetSensorByIdFromCache(clearedSensorId);
 
@@ -627,7 +626,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(default, sensor.LastValue);
             Assert.False(sensor.HasData);
 
-            Assert.Empty(GetAllSensorValues(sensor));
+            Assert.Empty(await GetAllSensorValues(sensor));
             Assert.NotNull(GetSensorByIdFromDb(clearedSensorId));
         }
 

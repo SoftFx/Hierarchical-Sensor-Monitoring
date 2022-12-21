@@ -328,21 +328,6 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000)
-        {
-            List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
-
-            (var sensor, var values) = GetCachedValues(sensorId, GetValues);
-            if (sensor == null)
-                return values;
-
-            var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? to;
-            values.AddRange(sensor.ConvertValues(
-                _databaseCore.GetSensorValues(sensorId.ToString(), from, oldestValueTime, count)));
-
-            return values;
-        }
-
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
         {
             var sensorId = GetSensor(request).Id;
@@ -378,19 +363,6 @@ namespace HSMServer.Core.Cache
                     _databaseCore.RemovePolicy(policy.Id);
                     return;
             }
-        }
-
-        private (BaseSensorModel sensor, List<BaseValue> values) GetCachedValues(Guid sensorId, Func<BaseSensorModel, List<BaseValue>> getValuesFunc)
-        {
-            var values = new List<BaseValue>(1 << 6);
-
-            if (_sensors.TryGetValue(sensorId, out var sensor))
-            {
-                values.AddRange(getValuesFunc(sensor));
-                values.Reverse();
-            }
-
-            return (sensor, values);
         }
 
 

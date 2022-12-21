@@ -18,7 +18,6 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int MaxHistoryCount = 50000;
         private const int SensorValuesPageCount = 10;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
@@ -169,27 +168,6 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return sensorEntities;
-        }
-
-        public List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count = MaxHistoryCount)
-        {
-            var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
-
-            var fromBytes = BuildSensorValueKey(sensorId, from.Ticks);
-            var toBytes = BuildSensorValueKey(sensorId, to.Ticks);
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                if (database.To < from.Ticks || database.From > to.Ticks)
-                    continue;
-
-                result.AddRange(database.GetValues(sensorId, fromBytes, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
         }
 
         public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
