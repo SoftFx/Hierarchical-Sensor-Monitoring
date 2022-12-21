@@ -25,9 +25,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
-        private const int DefaultRequestedCount = 40;
-        private const int MaxExportHistoryCount = 50000;
-        private const int MaxUIHistoryCount = 1000;
+        private const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
         private static readonly EmptyResult _emptyResult = new EmptyResult();
@@ -235,26 +233,34 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
-            GetHistoryTable(encodedId, type, GetAllTableValues(encodedId, MaxUIHistoryCount));
+        public async Task<IActionResult> HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        {
+            var values = await GetAllSensorValues(encodedId);
+
+            return GetHistoryTable(encodedId, type, values);
+        }
 
         [HttpPost]
-        public JsonResult RawHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<JsonResult> RawHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return _emptyJsonResult;
 
-            var values = GetSensorValues(model.EncodedId, model.From, model.To, MaxUIHistoryCount);
+            var values = await GetSensorValues(model.EncodedId, model.From, model.To);
 
-            return GetJsonProcessedValues(values, model.Type);
+            return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
 
         [HttpPost]
-        public JsonResult RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type) =>
-            new(GetAllSensorValues(encodedId, MaxUIHistoryCount).Select(v => (object)v));
+        public async Task<JsonResult> RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        {
+            var values = await GetAllSensorValues(encodedId);
+
+            return new(values.Select(v => (object)v));
+        }
 
 
-        public FileResult ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
+        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             DateTime fromUTC = from.ToUniversalTime();
@@ -264,17 +270,19 @@ namespace HSMServer.Controllers
             string fileName = $"{productName}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = GetSensorValues(encodedId, fromUTC, toUTC, MaxExportHistoryCount);
+            var values = await GetSensorValues(encodedId, fromUTC, toUTC);
 
             return GetExportHistory(values, type, fileName);
         }
 
-        public FileResult ExportHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        public async Task<FileResult> ExportHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
             var (productName, path) = GetSensorProductAndPath(encodedId);
             string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
 
-            return GetExportHistory(GetAllTableValues(encodedId, MaxExportHistoryCount), type, fileName);
+            var values = await GetAllSensorValues(encodedId);
+
+            return GetExportHistory(values, type, fileName);
         }
 
         private PartialViewResult GetHistoryTable(string encodedId, int type, List<BaseValue> values) =>
@@ -289,29 +297,21 @@ namespace HSMServer.Controllers
         }
 
 
-        private List<BaseValue> GetSensorValues(string encodedId, DateTime from, DateTime to, int maxCount)
+        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to)
         {
             if (string.IsNullOrEmpty(encodedId))
-                return new();
+                return new(new List<BaseValue>());
 
-            return _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), maxCount);
+            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), MaxHistoryCount).JoinAll();
         }
 
-        private List<BaseValue> GetAllSensorValues(string encodedId, int maxCount)
+        private async Task<List<BaseValue>> GetAllSensorValues(string encodedId)
         {
-            if (string.IsNullOrEmpty(encodedId))
-                return new();
-
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
-            var values = _treeValuesCache.GetSensorValues(SensorPathHelper.DecodeGuid(encodedId), from, to, maxCount);
-
-            return HistoryProcessorFactory.BuildProcessor().Processing(values);
+            return await GetSensorValues(encodedId, from, to);
         }
-
-        private List<BaseValue> GetAllTableValues(string encodedId, int maxCount) =>
-            GetReversedValues(GetAllSensorValues(encodedId, maxCount));
 
         private static List<BaseValue> GetReversedValues(List<BaseValue> values)
         {
@@ -321,10 +321,7 @@ namespace HSMServer.Controllers
         }
 
         private static List<BaseValue> GetTableValues(List<BaseValue> values, int type) =>
-             GetReversedValues(HistoryProcessorFactory.BuildProcessor(type).Processing(values));
-
-        private static JsonResult GetJsonProcessedValues(List<BaseValue> values, int type) =>
-            new(HistoryProcessorFactory.BuildProcessor(type).ProcessingAndCompression(values).Select(v => (object)v));
+             GetReversedValues(values);
 
         #endregion
 

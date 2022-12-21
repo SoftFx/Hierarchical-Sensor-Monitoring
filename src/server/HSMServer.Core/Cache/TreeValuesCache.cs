@@ -23,7 +23,7 @@ namespace HSMServer.Core.Cache
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
 
-        private const int MaxHistoryCount = 50000;
+        public const int MaxHistoryCount = 50000;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
