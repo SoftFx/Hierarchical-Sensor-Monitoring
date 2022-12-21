@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
+using HSMServer.Helpers;
 using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model.History
@@ -23,13 +24,14 @@ namespace HSMServer.Model.History
                 SensorType.String => Create((StringValue)value),
                 SensorType.IntegerBar => Create((IntegerBarValue)value),
                 SensorType.DoubleBar => Create((DoubleBarValue)value),
+                SensorType.TimeSpan => Create((TimeSpanValue)value),
                 _ => throw new ArgumentException($"Sensor type {sensorType} is not alowed for history table"),
             };
 
         private static SimpleSensorValueViewModel Create<T>(BaseValue<T> value) =>
             new()
             {
-                Value = value.Value.ToString(),
+                Value = typeof(T) == typeof(long) ? TimeSpanHelper.TicksToString(long.Parse(value.Value.ToString())) : value.Value.ToString(),
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,

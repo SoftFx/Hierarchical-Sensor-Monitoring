@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Helpers
 
 @model HSMServer.Model.TreeViewModels.SensorNodeViewModel
 
@@ -99,7 +100,14 @@
                             </div>
                         </div>
                         <div class="text-break" id='value_@sensorId'>
-                            @Model.ShortStringValue
+                            @if (Model.SensorType == SensorType.TimeSpan)
+                            {
+                                <span>@TimeSpanHelper.TicksToString(long.Parse(Model.ShortStringValue))</span>
+                            }
+                            else
+                            {
+                                @Model.ShortStringValue
+                            }
                         </div>
                     </div>
                 </button>

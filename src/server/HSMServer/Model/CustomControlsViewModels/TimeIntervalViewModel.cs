@@ -1,9 +1,9 @@
 ﻿using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using HSMServer.Helpers;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -75,7 +75,7 @@ namespace HSMServer.Model
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = TicksToString(customPeriod);
+            CustomTimeInterval = TimeSpanHelper.TicksToString(customPeriod);
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -99,7 +99,7 @@ namespace HSMServer.Model
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpanTryParse(CustomTimeInterval, out var ticks))
+            if (TimeInterval == TimeInterval.Custom && TimeSpanHelper.TryParse(CustomTimeInterval, out var ticks))
                 return ticks;
 
             return 0L;
@@ -125,32 +125,6 @@ namespace HSMServer.Model
                 items.Add(new SelectListItem() { Text = interval.GetDisplayName(), Value = interval.ToString() });
 
             return items;
-        }
-
-        private static bool TimeSpanTryParse(string interval, out long ticks)
-        {
-            var ddString = interval.Split(".");
-            var hmsString = ddString[^1].Split(":");
-            
-            if (ddString.Length == 2 &&
-                hmsString.Length == 3 &&
-                int.TryParse(ddString[0], out var days) &&
-                int.TryParse(hmsString[0], out var hours) &&
-                int.TryParse(hmsString[1], out var minutes) &&
-                int.TryParse(hmsString[2], out var seconds))
-            {
-                ticks = new TimeSpan(days, hours, minutes, seconds).Ticks;
-                return true;
-            }
-
-            ticks = 0L;
-            return false;
-        }
-
-        private static string TicksToString(long ticks)
-        {
-            var timeSpan = TimeSpan.FromTicks(ticks);
-            return $"{timeSpan.Days}.{timeSpan.Hours}:{timeSpan.Minutes}:{timeSpan.Seconds}";
         }
     }
 }
