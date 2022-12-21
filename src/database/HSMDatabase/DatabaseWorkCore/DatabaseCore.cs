@@ -171,22 +171,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return sensorEntities;
         }
 
-        public List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
-        {
-            var toBytes = BuildSensorValueKey(sensorId, to.Ticks);
-            var result = new List<byte[]>(count);
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
-        }
-
         public List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count = MaxHistoryCount)
         {
             var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
@@ -247,8 +231,11 @@ namespace HSMDatabase.DatabaseWorkCore
                         result.Clear();
                     }
 
-                    if (count == totalCount)
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
                         yield break;
+                    }
                 }
             }
 

@@ -56,7 +56,6 @@ namespace HSMServer.Core.Cache
         BaseSensorModel GetSensor(Guid sensorId);
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
-        List<BaseValue> GetSensorValues(Guid sensorId, int count);
         List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000);
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);

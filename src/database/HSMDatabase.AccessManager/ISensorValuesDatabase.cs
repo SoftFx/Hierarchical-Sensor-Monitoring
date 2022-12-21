@@ -18,8 +18,6 @@ namespace HSMDatabase.AccessManager
 
         void RemoveSensorValues(string sensorId);
 
-        List<byte[]> GetValues(string sensorId, byte[] to, int count);
-
         List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count);
 
         IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);

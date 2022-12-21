@@ -73,20 +73,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] to, int count)
-        {
-            try
-            {
-                return _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (to: {to}, count: {count})");
-
-                return new();
-            }
-        }
-
         public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
         {
             try

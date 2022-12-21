@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -8,6 +7,7 @@ using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
@@ -33,7 +33,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.DoubleBar)]
         [InlineData(SensorType.File)]
         [Trait("Category", "Getting sensor values history")]
-        public void GetValues_Count_Test(SensorType type, int sensorsCount = 5)
+        public async Task GetValues_Count_Test(SensorType type, int sensorsCount = 5)
         {
             const int sensorValuesCount = 1000;
             const int historyValuesCount = 101;
@@ -44,8 +44,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 sensorValues.Reverse();
 
-                var expectedValues = sensorValues.Take(historyValuesCount).ToList();
-                var actualValues = _valuesCache.GetSensorValues(sensor.Id, historyValuesCount);
+                var expectedValues = type is SensorType.IntegerBar or SensorType.DoubleBar
+                    ? sensorValues.Skip(1).Take(historyValuesCount).ToList() // skip last value because GetSensorValuesPage returns values only from db (not from cache)
+                    : sensorValues.Take(historyValuesCount).ToList();
+                var actualValues = await JoinAllPages(_valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, -historyValuesCount));
 
                 Assert.True(historyValuesCount >= actualValues.Count);
                 Assert.Equal(expectedValues.Count, actualValues.Count);
@@ -171,6 +173,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             return sensors;
         }
+
+        private static ValueTask<List<T>> JoinAllPages<T>(IAsyncEnumerable<List<T>> enumerable) =>
+            enumerable.SelectMany(x => x.ToAsyncEnumerable()).ToListAsync();
 
 
         private sealed class SensorModelInfo

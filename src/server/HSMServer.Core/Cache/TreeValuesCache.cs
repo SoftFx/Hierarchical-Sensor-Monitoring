@@ -328,25 +328,6 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public List<BaseValue> GetSensorValues(Guid sensorId, int count)
-        {
-            List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(count);
-
-            (var sensor, var values) = GetCachedValues(sensorId, GetValues);
-            if (sensor == null)
-                return values;
-
-            int remainingCount = count - values.Count;
-            if (remainingCount > 0)
-            {
-                var oldestValueTime = values.LastOrDefault()?.ReceivingTime.AddTicks(-1) ?? DateTime.MaxValue;
-                values.AddRange(sensor.ConvertValues(
-                    _databaseCore.GetSensorValues(sensorId.ToString(), oldestValueTime, remainingCount)));
-            }
-
-            return values;
-        }
-
         public List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000)
         {
             List<BaseValue> GetValues(BaseSensorModel sensor) => sensor.GetValues(from, to);
