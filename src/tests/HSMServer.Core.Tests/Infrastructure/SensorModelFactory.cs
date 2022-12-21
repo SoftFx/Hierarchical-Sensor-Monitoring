@@ -21,6 +21,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.IntegerBar => BuildSensor<IntegerBarSensorModel>(),
                 SensorType.DoubleBar => BuildSensor<DoubleBarSensorModel>(),
                 SensorType.File => BuildSensor<FileSensorModel>(),
+                SensorType.TimeSpan => BuildSensor<TimeSpanSensorModel>(),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
