@@ -177,7 +177,7 @@ namespace HSMServer.Controllers
                 _dataCollector.ReportSensorsCount(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                        out var message))
+                    out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
