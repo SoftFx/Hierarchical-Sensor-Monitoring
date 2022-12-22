@@ -3,7 +3,6 @@ using HSMServer.Core.Model;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using HSMServer.Helpers;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -75,7 +74,7 @@ namespace HSMServer.Model
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = TimeSpanHelper.TicksToString(customPeriod);
+            CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -99,9 +98,9 @@ namespace HSMServer.Model
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpanHelper.TryParse(CustomTimeInterval, out var ticks))
+            if (TimeInterval == TimeInterval.Custom && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks))
                 return ticks;
-
+            
             return 0L;
         }
 

@@ -47,7 +47,7 @@
         FileSensor = 6,
         
         /// <summary>
-        /// Simple sensor which collects data of string type and sends the collected data instantly
+        /// Simple sensor which collects data of TimeSpan type and sends the collected data instantly
         /// </summary>
         TimeSpanSensor = 7,
     }
