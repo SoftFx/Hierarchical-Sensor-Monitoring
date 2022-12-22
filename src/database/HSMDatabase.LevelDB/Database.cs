@@ -142,7 +142,7 @@ namespace HSMDatabase.LevelDB
                 {
                     iterator.Prev();
 
-                    if (iterator.Key().IsSmaller(from))
+                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
                         yield break;
                 }
 
