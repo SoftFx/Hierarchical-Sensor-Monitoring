@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
@@ -42,6 +41,9 @@ namespace HSMServer.Model
 
     public record TimeIntervalViewModel
     {
+        public const string CustomTemplate = "dd.HH:mm:ss";
+
+
         public List<SelectListItem> IntervalItems { get; }
 
         public bool CanCustomInputBeVisible { get; init; } = true;
@@ -69,10 +71,10 @@ namespace HSMServer.Model
         internal void Update(TimeIntervalModel model)
         {
             var interval = model?.TimeInterval ?? CoreTimeInterval.Custom;
-            var customPeriod = model?.CustomPeriod ?? 0;
+            var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = new TimeSpan(customPeriod).ToString();
+            CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
         }
 
         internal TimeIntervalModel ToModel() =>
@@ -96,10 +98,10 @@ namespace HSMServer.Model
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpan.TryParse(CustomTimeInterval, out var timeInterval))
-                return timeInterval.Ticks;
-
-            return 0;
+            if (TimeInterval == TimeInterval.Custom && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks))
+                return ticks;
+            
+            return 0L;
         }
 
         private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customIntervalTicks) =>
@@ -110,7 +112,7 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.Custom => customIntervalTicks == 0 ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.Custom => customIntervalTicks == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
 

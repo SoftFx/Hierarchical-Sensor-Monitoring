@@ -21,6 +21,7 @@ namespace HSMServer.Core.Model
         IntegerBar,
         DoubleBar,
         File,
+        TimeSpan
     }
 
 

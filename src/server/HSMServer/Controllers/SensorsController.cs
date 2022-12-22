@@ -159,6 +159,35 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
+        
+        /// <summary>
+        /// Receives value of timespan sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("timespan")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<TimeSpanSensorValue> Post([FromBody] TimeSpanSensorValue sensorValue)
+        {
+            try
+            {
+                _dataCollector.ReportSensorsCount(1);
+
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
 
         /// <summary>
         /// Receives value of double bar sensor
@@ -220,7 +249,6 @@ namespace HSMServer.Controllers
 
         /// <summary>
         /// Receives the value of file sensor, where the file contents are presented as byte array.
-        /// Recommended to use for pdf files in order to keep the pdf file encoding.
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
@@ -249,12 +277,18 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Accepts data in SensorValueBase format. Converts data to a typed format and saves it to the database.
+        /// The key must be unique and stored in the header.
+        /// </summary>
+        /// <param name="values"></param>
+        /// <returns></returns>
         [HttpPost("list")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<List<SensorValueBase>> Post([ModelBinder(typeof(SensorValueModelBinder)), FromBody] List<SensorValueBase> values)
+        public ActionResult<List<SensorValueBase>> Post([FromBody, ModelBinder(typeof(SensorValueModelBinder))]List<SensorValueBase> values)
         {
             try
             {
@@ -278,6 +312,13 @@ namespace HSMServer.Controllers
             }
         }
 
+
+        /// <summary>
+        /// Obsolete method. Will be removed.
+        /// Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
+        /// </summary>
+        /// <param name="values"></param>
+        /// <returns></returns>
         [HttpPost("listNew")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]

@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
+using HSMServer.Helpers;
 using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model.History
@@ -23,6 +24,7 @@ namespace HSMServer.Model.History
                 SensorType.String => Create((StringValue)value),
                 SensorType.IntegerBar => Create((IntegerBarValue)value),
                 SensorType.DoubleBar => Create((DoubleBarValue)value),
+                SensorType.TimeSpan => Create((TimeSpanValue)value),
                 _ => throw new ArgumentException($"Sensor type {sensorType} is not alowed for history table"),
             };
 

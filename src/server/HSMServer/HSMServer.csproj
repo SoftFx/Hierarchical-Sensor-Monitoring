@@ -7,7 +7,7 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.13.6</Version>
+    <Version>3.13.7</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -33,6 +33,7 @@
     <PackageReference Include="NLog.Web.AspNetCore" Version="4.13.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="Telegram.Bot" Version="18.0.0" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.1" />
   </ItemGroup>
 
   <ItemGroup>
