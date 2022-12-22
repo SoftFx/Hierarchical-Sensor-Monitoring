@@ -105,16 +105,19 @@
                                 }
                                 <div class='dropdown-menu overflow-auto'>
                                     <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
-                                    <button id='blockAccessKey_@key.Id' class='dropdown-item'>
-                                        @if (key.State == KeyState.Blocked)
-                                        {
-                                            <span id="state_value_@key.Id">Unblock</span>
-                                        }
-                                        else
-                                        {
-                                            <span id="state_value_@key.Id">Block</span>
-                                        }
-                                    </button>
+                                    @if (key.State != KeyState.Expired)
+                                    {
+                                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>
+                                            @if (key.State == KeyState.Blocked)
+                                            {
+                                                <span id="state_value_@key.Id">Unblock</span>
+                                            }
+                                            else
+                                            {
+                                                <span id="state_value_@key.Id">Block</span>
+                                            }
+                                        </button>
+                                    }
                                     <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
                                 </div>
                             </div>

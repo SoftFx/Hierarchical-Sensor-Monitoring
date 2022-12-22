@@ -35,7 +35,7 @@ else
 
 $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
 if ($ExpectedImageId)
-{   
+{
 	Write-Host "Image id to run = $ExpectedImageId"
 
 	$LogsFolder = "/usr/HSM/Logs:/app/Logs"
@@ -44,11 +44,11 @@ if ($ExpectedImageId)
 	$EnviromentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
 
 	$SensorDataPort = "44330:44330"
-	$SensorSitePort = "443:44333"
+	$SensorSitePort = "44333:44333"
 
 	docker run -d -it -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
 }
 else
 {
-    Write-Host "Expected image hasn't been found" 
+    Write-Host "Expected image hasn't been found"
 }
