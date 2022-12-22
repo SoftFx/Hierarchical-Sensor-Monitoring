@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
@@ -39,6 +40,15 @@ namespace HSMServer.ApiObjectsConverters
             };
 
         public static StringValue Convert(this StringSensorValue value) =>
+            new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
+
+        public static TimeSpanValue Convert(this TimeSpanSensorValue value) =>
             new()
             {
                 Comment = value.Comment,
@@ -100,6 +110,7 @@ namespace HSMServer.ApiObjectsConverters
                 IntSensorValue sv => sv.Convert(),
                 BoolSensorValue sv => sv.Convert(),
                 StringSensorValue sv => sv.Convert(),
+                TimeSpanSensorValue sv => sv.Convert(),
                 _ => null
             };
 

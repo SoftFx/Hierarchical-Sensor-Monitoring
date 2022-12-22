@@ -41,6 +41,13 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.TimeSpanSensorValue)">
+            <summary>
+            Receives value of timespan sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor

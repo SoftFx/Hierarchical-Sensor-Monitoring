@@ -14,6 +14,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Factory
                 SensorType.String => new StringHistoryProcessor(),
                 SensorType.IntegerBar => new IntBarHistoryProcessor(),
                 SensorType.DoubleBar => new DoubleBarHistoryProcessor(),
+                SensorType.TimeSpan => new TimeSpanHistoryProcessor(),
                 _ => new EmptyHistoryProcessor(), // Types that typically won't occur in that case
             };
     }
