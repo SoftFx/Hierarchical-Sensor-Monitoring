@@ -31,7 +31,7 @@ namespace HSMServer.Model.History
         private static SimpleSensorValueViewModel Create<T>(BaseValue<T> value) =>
             new()
             {
-                Value = typeof(T) == typeof(long) ? TimeSpanHelper.TicksToString(long.Parse(value.Value.ToString())) : value.Value.ToString(),
+                Value = value.Value.ToString(),
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
