@@ -67,12 +67,15 @@ else
 
         <div class="container d-flex justify-content-center">
             <ul class="pagination">
-                <li id="prevPageButton" class="page-item">
+                <li id="prevPageButton" class="page-item button-link">
                     <a class="page-link" aria-label="Previous" onclick="prevPage('@(Model.EncodedId)', '@((int)Model.SensorType)')">
                         <span aria-hidden="true">&laquo;</span>
                     </a>
                 </li>
-                <li id="nextPageButton" class="page-item">
+                <li class="page-item">
+                    <a class="page-link">@Model.CurrentPageIndex</a>
+                </li>
+                <li id="nextPageButton" class="page-item button-link">
                     <a class="page-link" aria-label="Next" onclick="nextPage('@(Model.EncodedId)', '@((int)Model.SensorType)')">
                         <span aria-hidden="true">&raquo;</span>
                     </a>

@@ -11,6 +11,8 @@ namespace HSMServer.Model.History
 
         public SensorType SensorType { get; }
 
+        public int CurrentPageIndex { get; }
+
         public bool NextPageIsEnabled { get; }
 
         public bool PrevPageIsEnabled { get; }
@@ -26,6 +28,7 @@ namespace HSMServer.Model.History
         {
             EncodedId = encodedId;
             SensorType = (SensorType)type;
+            CurrentPageIndex = pagination.CurrentPageIndex;
             NextPageIsEnabled = pagination.HasNextPage;
             PrevPageIsEnabled = pagination.HasPrevPage;
 
