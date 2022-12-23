@@ -18,13 +18,15 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int MaxHistoryCount = 50000;
+        private const int SensorValuesPageCount = 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
         private readonly IDatabaseSettings _databaseSettings;
+
+        private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
 
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -111,7 +113,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 tempResult.Add(key, value);
             }
 
-            foreach (var database in _sensorValuesDatabases)
+            foreach (var database in _sensorValuesDatabases.Reverse())
                 database.FillLatestValues(tempResult);
 
             foreach (var (_, (sensorId, value)) in tempResult)
@@ -148,45 +150,9 @@ namespace HSMDatabase.DatabaseWorkCore
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
             var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
+            var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
 
-            dbs.PutSensorValue(valueEntity);
-        }
-
-        public List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
-        {
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
-            var result = new List<byte[]>(count);
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
-        }
-
-        public List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count = MaxHistoryCount)
-        {
-            var result = new List<byte[]>(Math.Min(MaxHistoryCount, count));
-
-            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                if (database.To < from.Ticks || database.From > to.Ticks)
-                    continue;
-
-                result.AddRange(database.GetValues(sensorId, fromBytes, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
+            dbs.PutSensorValue(key, valueEntity.Value);
         }
 
         public List<SensorEntity> GetAllSensors()
@@ -203,6 +169,60 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return sensorEntities;
         }
+
+        public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+
+            var databases = _sensorValuesDatabases.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
+            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+
+            if (count < 0)
+            {
+                databases.Reverse();
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+            }
+
+            return GetSensorValuesPage(databases, count, getValues);
+        }
+
+        private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(List<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)
+        {
+            var result = new List<byte[]>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            foreach (var database in databases)
+            {
+                foreach (var value in getValues(database))
+                {
+                    result.Add(value);
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
+                        yield break;
+                    }
+                }
+            }
+
+            yield return result;
+        }
+
+        // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
+        private static byte[] BuildSensorValueKey(string sensorId, long time) =>
+            Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
 
         private void RemoveSensorValues(string sensorId)
         {

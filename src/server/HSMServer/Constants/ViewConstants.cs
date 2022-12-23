@@ -52,9 +52,6 @@
         public const string RawHistoryAction = "RawHistory";
         public const string RawHistoryAllAction = "RawHistoryAll";
 
-        public const string RawHistoryLatestAction = "RawHistoryLatest";
-        public const string HistoryLatestAction = "HistoryLatest";
-
         public const string ExportHistoryAction = "ExportHistory";
         public const string ExportHistoryAllAction = "ExportHistoryAll";
 

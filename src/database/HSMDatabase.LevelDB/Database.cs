@@ -4,7 +4,6 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -109,24 +108,16 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
+        public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
-            List<byte[]> values = new(1 << 4);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    if (iterator.Key().StartsWith(startWithKey))
-                        values.Add(iterator.Value());
-
-                return values;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
+                    yield return iterator.Value();
             }
             finally
             {
@@ -134,28 +125,29 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetStartingWithTo(byte[] to, byte[] startWithKey, int count)
+        public IEnumerable<byte[]> GetValueToFrom(byte[] from, byte[] to)
         {
             Iterator iterator = null;
-            var values = new List<byte[]>(count);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                iterator.Seek(to);
+
+                if (!iterator.IsValid)
+                    iterator.SeekToLast();
+
+                while (iterator.IsValid && iterator.Key().IsGreater(to))
                 {
-                    if (iterator.Key().IsSmallerOrEquals(to))
-                        values.Add(iterator.Value());
+                    iterator.Prev();
+
+                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
+                        yield break;
                 }
 
-                values.Reverse(); // from newest to oldest
-
-                return values.Take(count).ToList();
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
+                for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
+                    yield return iterator.Value();
             }
             finally
             {

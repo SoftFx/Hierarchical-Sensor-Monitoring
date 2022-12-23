@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Authentication.History;
 using HSMServer.Core.Model.UserFilters;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,9 @@ namespace HSMServer.Core.Model.Authentication
         public UserNotificationSettings Notifications { get; internal set; }
 
         public TreeUserFilter TreeFilter { get; set; }
+
+
+        public HistoryValuesViewModel Pagination { get; set; }
 
 
         string INotificatable.Name => UserName;
