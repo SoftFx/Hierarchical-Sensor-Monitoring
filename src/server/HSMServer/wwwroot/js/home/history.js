@@ -57,14 +57,14 @@ function Data(to, from, type, encodedId) {
     function accordionClicked() {
         let encodedId = this.id.substring("collapse_".length);
         let type = getTypeForSensor(encodedId);
-        let from = new Date();
+        const { from, to } = getFromAndTo(encodedId);
         if (isFileSensor(type)) {
             return;
         }
         if (isGraphAvailable(type)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, type, Data(from, from, type, encodedId), true);
+            initializeGraph(encodedId, rawHistoryAction, type, Data(to, from, type, encodedId));
         } else {
-            initializeTable(encodedId, historyLatestAction, type, Data(from, from, type, encodedId), true);
+            initializeTable(encodedId, historyAction, type, Data(to, from, type, encodedId));
         }
     }
 
@@ -79,7 +79,7 @@ function Data(to, from, type, encodedId) {
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
         let action = isAllHistorySelected(encodedId) ? rawHistoryAllAction : rawHistoryAction;
-        initializeGraph(encodedId, action, type, body, false);
+        initializeGraph(encodedId, action, type, body);
     }
 
     function requestTable() {
@@ -88,7 +88,7 @@ function Data(to, from, type, encodedId) {
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
         let action = isAllHistorySelected(encodedId) ? historyAllAction : historyAction;
-        initializeTable(encodedId, action, type, body, false);
+        initializeTable(encodedId, action, type, body);
     }
 
     function InitializePeriodRequests() {
@@ -153,14 +153,14 @@ function Data(to, from, type, encodedId) {
 {
     function requestHistory(encodedId, action, rawAction, type, reqData) {
         if (!isGraphAvailable(type)) {
-            initializeTable(encodedId, action, type, reqData, false);
+            initializeTable(encodedId, action, type, reqData);
             return;
         }
 
         if (isTableHistorySelected(encodedId)) {
-            initializeTable(encodedId, action, type, reqData, false);    
+            initializeTable(encodedId, action, type, reqData);    
         } else {
-            initializeGraph(encodedId, rawAction, type, reqData, false);
+            initializeGraph(encodedId, rawAction, type, reqData);
         }
     }
 
@@ -176,7 +176,7 @@ function Data(to, from, type, encodedId) {
         window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
     }
 
-    function initializeTable(encodedId, tableAction, type, body, needSetRadio) {
+    function initializeTable(encodedId, tableAction, type, body) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -197,13 +197,10 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
-            if (needSetRadio) {
-                selectRadioForTable(encodedId);
-            }
         });
     }
 
-    function initializeGraph(encodedId, rawHistoryAction, type, body, needSetRadio) {
+    function initializeGraph(encodedId, rawHistoryAction, type, body) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -222,9 +219,7 @@ function Data(to, from, type, encodedId) {
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
             let graphDivId = "graph_" + encodedId;
-            if (needSetRadio) {
-                selectAppropriateRadio(data, encodedId);    
-            }
+
             displayGraph(data, type, graphDivId, encodedId);
         });
     }
@@ -233,56 +228,8 @@ function Data(to, from, type, encodedId) {
 
 // Sub-methods
 {
-    function selectRadioForTable(encodedId) {
-        let currentDate = new Date(Date.parse(new Date().toUTCString()));
-        let oldestDate = getOldestDateFromTable(encodedId);
-        let difference = currentDate - oldestDate;
-        selectRadioViaDifference(difference, encodedId);
-    }
-
-    function getOldestDateFromTable(encodedId) {
-        let val = $('#oldest_date_' + encodedId).val();
-        return new Date(Date.parse(val));
-    }
-
-    function selectAppropriateRadio(data, encodedId) {
-        let parsedData = JSON.parse(data);
-        let currentDate = new Date(Date.parse(new Date().toUTCString()));
-        let firstDate = new Date(Date.parse(parsedData[0].time));
-        let difference = currentDate - firstDate;
-        selectRadioViaDifference(difference, encodedId);
-    }
-
-    function selectRadioViaDifference(difference, encodedId) {
-        if (difference <= millisecondsInHour) {
-            $('#radio_hour_' + encodedId).prop("checked", true);
-            return;
-        }
-
-        if (difference <= millisecondsInDay) {
-            $('#radio_day_' + encodedId).prop("checked", true);
-            return;
-        }
-
-        if (difference <= 3 * millisecondsInDay) {
-            $('#radio_three_days_' + encodedId).prop("checked", true);
-            return;
-        }
-
-        if (difference <= 7 * millisecondsInDay) {
-            $('#radio_week_' + encodedId).prop("checked", true);
-            return;
-        }
-
-        if (difference <= 30 * millisecondsInDay) {
-            $('#radio_month_' + encodedId).prop("checked", true);
-            return;
-        }
-        $('#radio_all_' + encodedId).prop("checked", true);
-    }
-
     function isFileSensor(type) {
-        return type === "6";
+        return type === "6" || type === "7";
     }
 
     function isGraphAvailable(type) {
@@ -341,4 +288,20 @@ function Data(to, from, type, encodedId) {
     function getTypeForSensor(encodedId) {
         return $('#sensor_type_' + encodedId).val();
     }    
+}
+
+//Pagination
+{
+    function showPage(getPageAction, encodedId) {
+        $.ajax({
+            type: 'GET',
+            url: getPageAction,
+            contentType: 'application/json',
+            dataType: 'html',
+            cache: false,
+            async: true
+        }).done(function (data) {
+            $(`#values_${encodedId}`).html(data);
+        });
+    }
 }

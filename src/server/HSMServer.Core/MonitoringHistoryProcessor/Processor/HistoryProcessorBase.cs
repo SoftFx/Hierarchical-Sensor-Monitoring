@@ -12,12 +12,9 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         public abstract string GetCsvHistory(List<BaseValue> originalData);
 
-        public List<BaseValue> Processing(List<BaseValue> values) =>
-            values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
-
         public List<BaseValue> ProcessingAndCompression(List<BaseValue> values)
         {
-            values = Processing(values);
+            values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
 
             if (values.Count < 2)
                 return values;

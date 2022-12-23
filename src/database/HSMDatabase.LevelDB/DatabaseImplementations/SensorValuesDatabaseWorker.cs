@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.LevelDB.Extensions;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -46,18 +46,16 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutSensorValue(SensorValueEntity entity)
+        public void PutSensorValue(byte[] key, object value)
         {
-            var key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(entity.SensorId, entity.ReceivingTime));
-
             try
             {
-                var value = JsonSerializer.SerializeToUtf8Bytes(entity.Value);
-                _openedDb.Put(key, value);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
+                _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {entity.SensorId}");
+                _logger.Error(e, $"Failed to write data for {key.GetString()}");
             }
         }
 
@@ -75,34 +73,31 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] to, int count)
+        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try
             {
-                return _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
+                return _openedDb.GetValueFromTo(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (to: {to}, count: {count})");
+                _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] - {e.Message}");
 
-                return new();
+                return Enumerable.Empty<byte[]>();
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
+        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to)
         {
             try
             {
-                var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
-                result.Reverse();
-
-                return result.Take(count).ToList();
+                return _openedDb.GetValueToFrom(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (from: {from}, to: {to}, count: {count})");
+                _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
-                return new();
+                return Enumerable.Empty<byte[]>();
             }
         }
     }

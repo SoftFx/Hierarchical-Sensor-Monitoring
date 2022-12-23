@@ -34,12 +34,11 @@
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
+    var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
-
-    var historyLatestAction = "@Html.Raw(Url.Action(ViewConstants.HistoryLatestAction, ViewConstants.HomeController))";
-    var rawHistoryLatestAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryLatestAction, ViewConstants.HomeController))";
 
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
@@ -140,7 +139,6 @@
     
     setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
-    setTimeout(updateHistory, interval);
 
 
     $("#show").click(function () {
@@ -242,23 +240,6 @@
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-    }
-
-    var updateHistoryTimeoutId;
-    function updateHistory() {
-        clearTimeout(updateHistoryTimeoutId);
-
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
-
-        if (selectedNodeId != "" && selectedNode.children.length == 0) {
-            let selectedRadio = $('input[id$=' + selectedNodeId + ']:checked');
-            if (selectedRadio !== undefined) {
-                selectedRadio.click();
-            }
-        }
-
-        updateHistoryTimeoutId = setTimeout(updateHistory, interval);
     }
     
     var clipboard = new ClipboardJS('[id^="copy_"]',{
