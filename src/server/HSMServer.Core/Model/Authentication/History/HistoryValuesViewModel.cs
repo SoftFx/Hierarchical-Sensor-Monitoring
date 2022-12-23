@@ -15,8 +15,6 @@ namespace HSMServer.Core.Model.Authentication.History
 
         public SensorType SensorType { get; }
 
-        public string OldestValueTime { get; }
-
         public bool IsBarSensor => SensorType is SensorType.IntegerBar or SensorType.DoubleBar;
 
         public int LastPageIndex => Pages.Count - 1;
