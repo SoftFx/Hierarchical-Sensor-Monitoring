@@ -16,7 +16,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
     internal static class EnumerableExtensions
     {
-        internal static ValueTask<List<T>> JoinAllPages<T>(this IAsyncEnumerable<List<T>> enumerable) =>
+        internal static ValueTask<List<T>> Flatten<T>(this IAsyncEnumerable<List<T>> enumerable) =>
             enumerable.SelectMany(x => x.ToAsyncEnumerable()).ToListAsync();
     }
 }

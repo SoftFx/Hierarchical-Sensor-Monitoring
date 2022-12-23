@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.History;
+﻿@using HSMServer.Core.Model.Authentication.History;
+@using HSMServer.Model.History;
 @using HSMServer.Constants;
 @using HSMServer.Controllers;
 @using HSMServer.Extensions;
@@ -7,8 +8,13 @@
 
 @model HistoryValuesViewModel
 
+@{
+    var values = Model.Pages[Model.CurrentPageIndex];
+    var historyValues = values.Select(v => HistoryValueViewModel.Create(v, (int)Model.SensorType)).ToList();
+}
 
-@if (Model.Values.Count == 0)
+
+@if (historyValues.Count == 0)
 {
     <div id="noTableValues_@Model.EncodedId"></div>
 }
@@ -35,7 +41,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in Model.Values)
+                @foreach (var value in historyValues)
                 {
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
@@ -68,15 +74,15 @@ else
         <div class="container d-flex justify-content-center">
             <ul class="pagination">
                 <li id="prevPageButton" class="page-item button-link">
-                    <a class="page-link" aria-label="Previous" onclick="prevPage('@(Model.EncodedId)', '@((int)Model.SensorType)')">
+                    <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.EncodedId)')">
                         <span aria-hidden="true">&laquo;</span>
                     </a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link">@Model.CurrentPageIndex</a>
+                    <a class="page-link">@(Model.CurrentPageIndex + 1)</a>
                 </li>
                 <li id="nextPageButton" class="page-item button-link">
-                    <a class="page-link" aria-label="Next" onclick="nextPage('@(Model.EncodedId)', '@((int)Model.SensorType)')">
+                    <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.EncodedId)')">
                         <span aria-hidden="true">&raquo;</span>
                     </a>
                 </li>
@@ -87,11 +93,11 @@ else
 
 
 <script>
-    if ('@Model.NextPageIsEnabled' != "True") {
+    if (@Model.CurrentPageIndex === @Model.LastPageIndex) {
         $('#nextPageButton').addClass('disabled');
     }
 
-    if ('@Model.PrevPageIsEnabled' != "True") {
+    if (@Model.CurrentPageIndex === 0) {
         $('#prevPageButton').addClass('disabled');
     }
 </script>

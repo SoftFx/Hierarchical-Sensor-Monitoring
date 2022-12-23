@@ -553,7 +553,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _databaseCoreManager.DatabaseCore.GetAllSensors().FirstOrDefault(s => s.Id == id.ToString());
 
         private ValueTask<List<byte[]>> GetAllSensorValues(BaseSensorModel sensor) =>
-            _databaseCoreManager.DatabaseCore.GetSensorValuesPage(sensor.Id.ToString(), DateTime.MinValue, DateTime.MaxValue, MaxHistoryCount).JoinAllPages();
+            _databaseCoreManager.DatabaseCore.GetSensorValuesPage(sensor.Id.ToString(), DateTime.MinValue, DateTime.MaxValue, MaxHistoryCount).Flatten();
 
 
         private void TestSensors(List<SensorEntity> expected, List<BaseSensorModel> actual)

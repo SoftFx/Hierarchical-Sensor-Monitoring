@@ -350,7 +350,7 @@ namespace HSMServer.Controllers
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = await _cache.GetSensorValues(requestModel).JoinAll();
+                    var historyValues = await _cache.GetSensorValues(requestModel).Flatten();
                     var response = JsonSerializer.Serialize(historyValues.Convert());
 
                     return Ok(response);
@@ -379,7 +379,7 @@ namespace HSMServer.Controllers
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = await _cache.GetSensorValues(requestModel).JoinAll();
+                    var historyValues = await _cache.GetSensorValues(requestModel).Flatten();
                     var response = historyValues.ConvertToCsv();
 
                     return request.IsZipArchive

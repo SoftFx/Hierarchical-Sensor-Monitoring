@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var expectedValues = type is SensorType.IntegerBar or SensorType.DoubleBar
                     ? sensorValues.Skip(1).Take(historyValuesCount).ToList() // skip last value because GetSensorValuesPage returns values only from db (not from cache)
                     : sensorValues.Take(historyValuesCount).ToList();
-                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, -historyValuesCount).JoinAllPages();
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, -historyValuesCount).Flatten();
 
                 Assert.True(historyValuesCount >= actualValues.Count);
                 Assert.Equal(expectedValues.Count, actualValues.Count);
@@ -80,7 +80,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 sensorValues.Reverse();
 
                 var expectedValues = sensorValues.Where(s => s.ReceivingTime >= from && s.ReceivingTime <= to).ToList();
-                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).JoinAllPages();
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 if (type is SensorType.IntegerBar or SensorType.DoubleBar)
                     expectedValues = expectedValues.Skip(1).ToList(); // skip last value because GetSensorValuesPage returns values only from db (not from cache)
 
-                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).JoinAllPages();
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)

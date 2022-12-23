@@ -346,18 +346,10 @@ function Data(to, from, type, encodedId) {
 
 //Pagination
 {
-    function nextPage(encodedId, type) {
-        showPage(nextPageAction, encodedId, type);
-    }
-
-    function prevPage(encodedId, type) {
-        showPage(prevPageAction, encodedId, type);
-    }
-
-    function showPage(getPageAction, encodedId, type) {
+    function showPage(getPageAction, encodedId) {
         $.ajax({
             type: 'GET',
-            url: getPageAction + "?EncodedId=" + encodedId + "&Type=" + type,
+            url: getPageAction,
             contentType: 'application/json',
             dataType: 'html',
             cache: false,

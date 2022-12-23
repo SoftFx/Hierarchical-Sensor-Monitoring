@@ -3,14 +3,13 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model.Authentication.History;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.History;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
-using HSMServer.Pagination;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -29,21 +28,18 @@ namespace HSMServer.Controllers
         private const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
-        private static readonly EmptyResult _emptyResult = new EmptyResult();
+        private static readonly EmptyResult _emptyResult = new();
 
-        private readonly ISensorValuesHistoryPagination _pagination;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel,
-            IUserManager userManager, ISensorValuesHistoryPagination pagination)
+        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel, IUserManager userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _userManager = userManager;
-            _pagination = pagination;
         }
 
 
@@ -231,33 +227,35 @@ namespace HSMServer.Controllers
             if (model == null)
                 return null;
 
-            await _pagination.InitializeEnumerator(model.EncodedId, model.From, model.To);
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId),
+                model.From.ToUniversalTime(), model.To.ToUniversalTime(), MaxHistoryCount);
 
-            return GetHistoryTable(model.EncodedId, model.Type);
+            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator).Initialize();
+            _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
+
+            return GetHistoryTable(viewModel);
         }
 
         [HttpPost]
-        public async Task<IActionResult> HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        public Task<IActionResult> HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
         {
-            await _pagination.InitializeEnumerator(encodedId, DateTime.MinValue, DateTime.MaxValue);
-
-            return GetHistoryTable(encodedId, type);
+            return History(new GetSensorHistoryModel()
+            {
+                EncodedId = encodedId,
+                Type = type
+            });
         }
 
         [HttpGet]
-        public IActionResult GetPreviousPage([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        public IActionResult GetPreviousPage()
         {
-            _pagination.SwitchToPrevPage();
-
-            return GetHistoryTable(encodedId, type);
+            return GetHistoryTable(_userManager.GetUser((HttpContext.User as User).Id).Pagination?.ToPreviousPage());
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetNextPage([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
+        public async Task<IActionResult> GetNextPage()
         {
-            await _pagination.SwitchToNextPage();
-
-            return GetHistoryTable(encodedId, type);
+            return GetHistoryTable(await (_userManager.GetUser((HttpContext.User as User).Id).Pagination?.ToNextPage()));
         }
 
         [HttpPost]
@@ -306,8 +304,8 @@ namespace HSMServer.Controllers
         }
 
 
-        private PartialViewResult GetHistoryTable(string encodedId, int type) =>
-            PartialView("_SensorValuesTable", new HistoryValuesViewModel(encodedId, type, _pagination));
+        private PartialViewResult GetHistoryTable(HistoryValuesViewModel viewModel) =>
+            PartialView("_SensorValuesTable", viewModel);
 
         private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
         {
@@ -322,7 +320,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(encodedId))
                 return new(new List<BaseValue>());
 
-            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), MaxHistoryCount).JoinAll();
+            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), MaxHistoryCount).Flatten();
         }
 
         private async Task<List<BaseValue>> GetAllSensorValues(string encodedId)

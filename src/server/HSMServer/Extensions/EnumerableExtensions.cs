@@ -6,7 +6,7 @@ namespace HSMServer.Extensions
 {
     internal static class EnumerableExtensions
     {
-        internal static ValueTask<List<T>> JoinAll<T>(this IAsyncEnumerable<List<T>> enumerable) =>
+        internal static ValueTask<List<T>> Flatten<T>(this IAsyncEnumerable<List<T>> enumerable) =>
             enumerable.SelectMany(x => x.ToAsyncEnumerable()).ToListAsync();
     }
 }
