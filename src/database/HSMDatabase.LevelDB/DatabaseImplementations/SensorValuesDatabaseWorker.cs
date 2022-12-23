@@ -3,6 +3,7 @@ using HSMDatabase.LevelDB.Extensions;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -82,7 +83,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] - {e.Message}");
 
-                return null;
+                return Enumerable.Empty<byte[]>();
             }
         }
 
@@ -96,7 +97,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
-                return null;
+                return Enumerable.Empty<byte[]>();
             }
         }
     }
