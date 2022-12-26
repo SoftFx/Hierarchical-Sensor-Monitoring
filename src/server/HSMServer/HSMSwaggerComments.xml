@@ -4,6 +4,27 @@
         <name>HSMServer</name>
     </assembly>
     <members>
+        <member name="M:HSMServer.Core.Authentication.IUserManager.AddUser(System.String,System.String,System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Core.Model.Authentication.ProductRoleEnum}})">
+            <summary>
+            Add new user with the specified parameters
+            </summary>
+            <param name="userName">Login of the new user, must be unique and not empty</param>
+            <param name="certificateThumbprint">Can be empty for website users</param>
+            <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
+            <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
+        </member>
+        <member name="M:HSMServer.Core.Authentication.IUserManager.UpdateUser(HSMServer.Core.Model.Authentication.User)">
+            <summary>
+            New user object
+            </summary>
+            <param name="user">User object (password field must be password hash).</param>
+        </member>
+        <member name="M:HSMServer.Core.Authentication.IUserManager.RemoveUser(System.String)">
+            <summary>
+            Remove user with the specified userName
+            </summary>
+            <param name="userName">Name of the user to remove.</param>
+        </member>
         <member name="T:HSMServer.BackgroundTask.DatabaseMonitoringService">
             <summary>
             Background service, which reports database size every 5 minutes 

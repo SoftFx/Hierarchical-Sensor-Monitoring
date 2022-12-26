@@ -32,9 +32,6 @@ namespace HSMServer.Core.Authentication
         /// <param name="userName">Name of the user to remove.</param>
         void RemoveUser(string userName);
 
-        void RemoveProductFromUsers(Guid productId);
-        void RemoveSensorFromUsers(Guid sensorId);
-
         User Authenticate(string login, string password);
 
         User GetCopyUser(Guid id);

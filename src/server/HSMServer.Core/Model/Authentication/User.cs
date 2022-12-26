@@ -25,7 +25,7 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
-        public UserNotificationSettings Notifications { get; internal set; }
+        public UserNotificationSettings Notifications { get; set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 

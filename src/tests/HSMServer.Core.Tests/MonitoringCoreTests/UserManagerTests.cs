@@ -253,7 +253,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
-            _userManager.RemoveProductFromUsers(TestProductsManager.ProductId);
+            _valuesCache.RemoveProduct(TestProductsManager.ProductId);
 
             var result = _userManager.GetUsers().ToList();
 

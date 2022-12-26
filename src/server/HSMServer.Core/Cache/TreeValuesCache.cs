@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
@@ -28,7 +27,6 @@ namespace HSMServer.Core.Cache
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
-        private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
 
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
@@ -45,10 +43,9 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore databaseCore, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
-            _userManager = userManager;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -128,8 +125,6 @@ namespace HSMServer.Core.Cache
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
-
-                _userManager.RemoveProductFromUsers(product.Id);
 
                 ChangeProductEvent?.Invoke(product, TransactionType.Delete);
             }
@@ -288,7 +283,6 @@ namespace HSMServer.Core.Cache
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
-            _userManager.RemoveSensorFromUsers(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }

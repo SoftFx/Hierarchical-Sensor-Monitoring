@@ -20,20 +20,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     public class TreeValuesCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
-        private readonly TreeValuesCache _valuesCache;
-
         private delegate string GetProductNameById(Guid id);
         private delegate ProductModel GetProduct(Guid id);
         private delegate ProductEntity GetProductFromDb(string id);
 
 
         public TreeValuesCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture)
-        {
-            InitializeDatabase();
-
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
-        }
+            : base(fixture, registerFixture) { }
 
 
         [Fact]
@@ -679,93 +672,5 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 BaseValue = SensorValuesFactory.BuildSensorValue(type)
             };
-
-        private void InitializeDatabase()
-        {
-            var (products, sensors, sensorValues) = GenerateTestData();
-
-            foreach (var product in products)
-                _databaseCoreManager.DatabaseCore.AddProduct(product);
-
-            foreach (var sensor in sensors)
-                _databaseCoreManager.DatabaseCore.AddSensor(sensor);
-
-            foreach (var sensorValue in sensorValues)
-                _databaseCoreManager.DatabaseCore.AddSensorValue(sensorValue);
-        }
-
-        private static (List<ProductEntity>, List<SensorEntity>, List<SensorValueEntity>) GenerateTestData()
-        {
-            var products = new List<ProductEntity>(1 << 3);
-            var sensors = new List<SensorEntity>(1 << 3);
-            var sensorValues = new List<SensorValueEntity>(1 << 3);
-
-            for (int i = 0; i < 2; ++i)
-            {
-                var product = EntitiesFactory.BuildProductEntity($"product{i}", null);
-
-                for (int j = 0; j < 2; j++)
-                {
-                    var subProduct = EntitiesFactory.BuildProductEntity($"subProduct{j}_{product.DisplayName}", product.Id);
-
-                    var sensor = new SensorEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ProductId = product.Id,
-                        DisplayName = $"sensor{j}",
-                        Type = (byte)SensorType.Boolean,
-                    };
-                    var boolValue = new BooleanValue()
-                    {
-                        Time = DateTime.UtcNow,
-                        Status = SensorStatus.Warning,
-                        Comment = "sensorValue",
-                        Value = true,
-                    };
-                    var sensorValue = new SensorValueEntity()
-                    {
-                        SensorId = sensor.Id,
-                        ReceivingTime = boolValue.ReceivingTime.Ticks,
-                        Value = boolValue,
-                    };
-
-                    var subSubProduct = EntitiesFactory.BuildProductEntity($"subSubProduct", subProduct.Id);
-
-                    var sensorForSubSubProduct = new SensorEntity()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ProductId = subSubProduct.Id,
-                        DisplayName = "sensor",
-                        Type = (int)SensorType.Integer,
-                    };
-                    var intValue = new IntegerValue()
-                    {
-                        Time = DateTime.UtcNow,
-                        Status = SensorStatus.Ok,
-                        Comment = "sensorValue1",
-                        Value = 12345,
-                    };
-                    var sensorForSubSubProductValue = new SensorValueEntity()
-                    {
-                        SensorId = sensorForSubSubProduct.Id,
-                        ReceivingTime = intValue.ReceivingTime.Ticks,
-                        Value = intValue,
-                    };
-
-                    products.Add(subProduct);
-                    products.Add(subSubProduct);
-
-                    sensors.Add(sensor);
-                    sensors.Add(sensorForSubSubProduct);
-
-                    sensorValues.Add(sensorValue);
-                    sensorValues.Add(sensorForSubSubProductValue);
-                }
-
-                products.Add(product);
-            }
-
-            return (products, sensors, sensorValues);
-        }
     }
 }

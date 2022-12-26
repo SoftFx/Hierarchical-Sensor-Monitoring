@@ -15,8 +15,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private protected readonly DatabaseCoreManager _databaseCoreManager;
 
-        protected readonly IUserManager _userManager;
+
         protected readonly IUpdatesQueue _updatesQueue;
+        protected readonly TreeValuesCache _valuesCache;
+        protected readonly IUserManager _userManager;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
@@ -26,10 +28,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 _databaseCoreManager.AddTestProduct();
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
-            var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
-            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, userManagerLogger);
+            fixture.InitializeDatabase(_databaseCoreManager.DatabaseCore);
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
+
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _updatesQueue);
+
+            var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
+            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);
         }
     }
 }
