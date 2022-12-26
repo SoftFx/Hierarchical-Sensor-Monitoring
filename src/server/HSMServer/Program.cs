@@ -13,6 +13,7 @@ using System.IO;
 using System.Net;
 using System.Security.Authentication;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Configuration;
 
 namespace HSMServer
 {
@@ -41,14 +42,16 @@ namespace HSMServer
             var certificate = ((configurationRoot.GetSection("Certificate:Name").Value), configurationRoot.GetSection("Certificate:Key").Value);
             int.TryParse(configurationRoot.GetSection("SensorPort").Value, out var sensorPort);
             int.TryParse(configurationRoot.GetSection("SitePort").Value, out var sitePort);
+
+            string folderPath = appMode == "Debug" ? $"{Directory.GetCurrentDirectory()}/Config/" : "";
             
             CertificatesConfig.InitializeConfig();
             try
             {
                 logger.Debug("init main");
-
-                var host = CreateHostBuilder(args).Build();
-
+                
+                var host = CreateHostBuilder(args, certificate, sensorPort, sitePort).Build();
+                
                 host.Run();
             }
             catch (Exception ex)
@@ -70,7 +73,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-
+                        var folderPath = System.Diagnostics.Debugger.IsAttached  ? @$"{Directory.GetCurrentDirectory()}\Config\" : "";
                         options.Listen(IPAddress.Any, sensorPOrt,
                             listenOptions =>
                             {
@@ -80,7 +83,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = new (certificate.Item1, certificate.Item2);
+                                    portOptions.ServerCertificate = new ($"{folderPath}{certificate.Item1}");
                                 });
                             });
 
@@ -93,7 +96,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = new (certificate.Item1, certificate.Item2);
+                                    portOptions.ServerCertificate = new ($"{folderPath}{certificate.Item1}");
                                 });
                             });
 
@@ -104,7 +107,7 @@ namespace HSMServer
                         options.Limits.MinResponseDataRate = null;
                         options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
                     });
-
+                    
                     webBuilder.UseStartup<Startup>();
                 })
                 .ConfigureLogging(logging =>
