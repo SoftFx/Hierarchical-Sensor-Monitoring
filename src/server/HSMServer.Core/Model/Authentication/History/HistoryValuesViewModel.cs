@@ -41,9 +41,9 @@ namespace HSMServer.Core.Model.Authentication.History
 
         public async Task<HistoryValuesViewModel> ToNextPage()
         {
-            if (++CurrentPageIndex == LastPageIndex)
-                if (!await TryReadNextPage())
-                    CurrentPageIndex = Math.Min(CurrentPageIndex, LastPageIndex);
+            await TryReadNextPage();
+            
+            CurrentPageIndex = Math.Min(CurrentPageIndex + 1, LastPageIndex);
 
             return this;
         }
