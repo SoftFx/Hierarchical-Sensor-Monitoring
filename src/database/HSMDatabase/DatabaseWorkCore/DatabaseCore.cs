@@ -37,8 +37,6 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
 
-            _environmentDatabase.RemoveMonitoringDatabases();
-
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 

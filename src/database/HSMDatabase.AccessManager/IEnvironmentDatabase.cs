@@ -74,8 +74,5 @@ namespace HSMDatabase.AccessManager
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
-
-        [Obsolete("Remove this after monitoring dbs removing")]
-        void RemoveMonitoringDatabases();
     }
 }
