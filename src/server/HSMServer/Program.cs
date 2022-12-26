@@ -43,8 +43,6 @@ namespace HSMServer
             int.TryParse(configurationRoot.GetSection("SensorPort").Value, out var sensorPort);
             int.TryParse(configurationRoot.GetSection("SitePort").Value, out var sitePort);
 
-            string folderPath = appMode == "Debug" ? $"{Directory.GetCurrentDirectory()}/Config/" : "";
-            
             CertificatesConfig.InitializeConfig();
             try
             {
@@ -73,7 +71,10 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-                        var folderPath = System.Diagnostics.Debugger.IsAttached  ? @$"{Directory.GetCurrentDirectory()}\Config\" : "";
+                        
+                        var folderPath = System.Diagnostics.Debugger.IsAttached  ? @$"{Directory.GetCurrentDirectory()}\Config\" :
+                            Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\app\Config"));
+                        
                         options.Listen(IPAddress.Any, sensorPOrt,
                             listenOptions =>
                             {
