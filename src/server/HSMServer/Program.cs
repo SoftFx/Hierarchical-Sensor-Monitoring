@@ -70,7 +70,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-                        options.Listen(IPAddress.Any, ServerSettings.SensorPort,
+                        options.Listen(IPAddress.Any, ServerSettings.KestrelConfig.SensorPort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -83,7 +83,7 @@ namespace HSMServer
                                 });
                             });
 
-                        options.Listen(IPAddress.Any, ServerSettings.SitePort,
+                        options.Listen(IPAddress.Any, ServerSettings.KestrelConfig.SitePort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
