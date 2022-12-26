@@ -23,7 +23,7 @@ namespace TestLevelDB.LevelDB
             {
                 try
                 {
-                    _database = new DB(options, dbPath);
+                    _database = new DB(dbPath, options);
                     break;
                 }
                 catch
@@ -50,7 +50,7 @@ namespace TestLevelDB.LevelDB
 
             iterator.SeekToFirst();
 
-            return iterator.IsValid() ? GetValue(iterator.Value()) : string.Empty;
+            return iterator.IsValid ? GetValue(iterator.Value()) : string.Empty;
         }
 
         string IClusterDatabase.GetLastValue()
@@ -68,7 +68,7 @@ namespace TestLevelDB.LevelDB
 
             var values = new List<string>(1 << 10);
 
-            for (iterator.SeekToFirst(); iterator.IsValid(); iterator.Next())
+            for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
                 values.Add(GetValue(iterator.Value()));
 
             return values;
@@ -81,7 +81,7 @@ namespace TestLevelDB.LevelDB
 
             iterator.Seek(keyBytes);
 
-            return iterator.IsValid() ? GetValue(iterator.Value()) : string.Empty;
+            return iterator.IsValid ? GetValue(iterator.Value()) : string.Empty;
         }
 
 
@@ -93,7 +93,7 @@ namespace TestLevelDB.LevelDB
 
             iterator.Seek(keyBytes);
 
-            if (iterator.IsValid())
+            if (iterator.IsValid)
                 iterator.Prev();
             else
                 iterator.SeekToLast();
@@ -110,7 +110,7 @@ namespace TestLevelDB.LevelDB
 
             var values = new List<string>(1 << 10);
 
-            for (iterator.Seek(keyBytes); iterator.IsValid() && IsStartWith(keyBytes, iterator.Key()); iterator.Next())
+            for (iterator.Seek(keyBytes); iterator.IsValid && IsStartWith(keyBytes, iterator.Key()); iterator.Next())
                 values.Add(GetValue(iterator.Value()));
 
             return values;
