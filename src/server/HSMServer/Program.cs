@@ -22,7 +22,7 @@ namespace HSMServer
     internal static class Program
     {
         private const string NLogConfigFileName = "nlog.config";
-
+        private static ServerConfig _serverConfig;
 
         public static void Main(string[] args)
         {
@@ -37,10 +37,10 @@ namespace HSMServer
             
             var development = appMode == "Debug" ? ".Development" : String.Empty;
             var builder = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
+                .SetBasePath(Environment.CurrentDirectory)
                 .AddJsonFile($"appsettings{development}.json", optional: true, reloadOnChange: true);
-            var configurationRoot = builder.Build();
             
+            _serverConfig = new ServerConfig(builder.Build());
             CertificatesConfig.InitializeConfig();
             try
             {
@@ -69,7 +69,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-                        options.Listen(IPAddress.Any, ServerConfig.KestrelConfig.SensorPort,
+                        options.Listen(IPAddress.Any, _serverConfig.Kestrel.SensorPort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -78,11 +78,11 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = CertificateConfig.GetCertificate();
+                                    portOptions.ServerCertificate = _serverConfig.ServerCertificate.Certificate;
                                 });
                             });
 
-                        options.Listen(IPAddress.Any, ServerConfig.KestrelConfig.SitePort,
+                        options.Listen(IPAddress.Any, _serverConfig.Kestrel.SitePort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -91,7 +91,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = CertificateConfig.GetCertificate();
+                                    portOptions.ServerCertificate = _serverConfig.ServerCertificate.Certificate;
                                 });
                             });
 

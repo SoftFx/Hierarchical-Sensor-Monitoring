@@ -49,8 +49,7 @@ namespace HSMServer
             });
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
-
-            services.AddSingleton<ServerConfig>();
+            
             services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
