@@ -12,6 +12,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
+using HSMServer.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Configuration;
 
@@ -39,16 +40,14 @@ namespace HSMServer
                 .AddJsonFile($"appsettings{development}.json", optional: true, reloadOnChange: true);
             var configurationRoot = builder.Build();
             
-            var certificate = ((configurationRoot.GetSection("Certificate:Name").Value), configurationRoot.GetSection("Certificate:Key").Value);
-            int.TryParse(configurationRoot.GetSection("SensorPort").Value, out var sensorPort);
-            int.TryParse(configurationRoot.GetSection("SitePort").Value, out var sitePort);
-
             CertificatesConfig.InitializeConfig();
+            
+            ServerSettings.InitializeSettings(configurationRoot);
             try
             {
                 logger.Debug("init main");
                 
-                var host = CreateHostBuilder(args, certificate, sensorPort, sitePort).Build();
+                var host = CreateHostBuilder(args).Build();
                 
                 host.Run();
             }
@@ -63,7 +62,7 @@ namespace HSMServer
             }
         }
 
-        private static IHostBuilder CreateHostBuilder(string[] args, (string, string) certificate, int sensorPOrt, int sitePort) =>
+        private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
@@ -71,11 +70,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-                        
-                        var folderPath = System.Diagnostics.Debugger.IsAttached  ? @$"{Directory.GetCurrentDirectory()}\Config\" :
-                            Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\app\Config"));
-                        
-                        options.Listen(IPAddress.Any, sensorPOrt,
+                        options.Listen(IPAddress.Any, ServerSettings.SensorPort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -84,11 +79,11 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = new ($"{folderPath}{certificate.Item1}");
+                                    portOptions.ServerCertificate = ServerSettings.Certificate;
                                 });
                             });
 
-                        options.Listen(IPAddress.Any, sitePort,
+                        options.Listen(IPAddress.Any, ServerSettings.SitePort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -97,7 +92,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = new ($"{folderPath}{certificate.Item1}");
+                                    portOptions.ServerCertificate = ServerSettings.Certificate;
                                 });
                             });
 
