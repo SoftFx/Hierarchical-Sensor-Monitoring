@@ -35,11 +35,9 @@ namespace HSMServer.Model
         public static void InitializeSettings(IConfigurationRoot configuration)
         {
             var certificate = ((configuration.GetSection("Certificate:Name").Value), (configuration.GetSection("Certificate:Key").Value));
-            int.TryParse(configuration.GetSection("SensorPort").Value, out var sensorPort);
-            int.TryParse(configuration.GetSection("SitePort").Value, out var sitePort);
-
-            SensorPort = sensorPort;
-            SitePort = sitePort;
+            
+            SensorPort = configuration.GetSection("SensorPort").Get<int>();
+            SitePort = configuration.GetSection("SitePort").Get<int>();
 
             Certificate = GetCertificate(certificate);
         }
