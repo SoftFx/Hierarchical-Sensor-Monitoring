@@ -13,6 +13,7 @@ using System.IO;
 using System.Net;
 using System.Security.Authentication;
 using HSMServer.Model;
+using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Configuration;
 
@@ -41,8 +42,6 @@ namespace HSMServer
             var configurationRoot = builder.Build();
             
             CertificatesConfig.InitializeConfig();
-            
-            ServerSettings.InitializeSettings(configurationRoot);
             try
             {
                 logger.Debug("init main");
@@ -70,7 +69,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-                        options.Listen(IPAddress.Any, ServerSettings.KestrelConfig.SensorPort,
+                        options.Listen(IPAddress.Any, ServerConfig.KestrelConfig.SensorPort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -79,11 +78,11 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = ServerSettings.Certificate;
+                                    portOptions.ServerCertificate = CertificateConfig.GetCertificate();
                                 });
                             });
 
-                        options.Listen(IPAddress.Any, ServerSettings.KestrelConfig.SitePort,
+                        options.Listen(IPAddress.Any, ServerConfig.KestrelConfig.SitePort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -92,7 +91,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = ServerSettings.Certificate;
+                                    portOptions.ServerCertificate = CertificateConfig.GetCertificate();
                                 });
                             });
 

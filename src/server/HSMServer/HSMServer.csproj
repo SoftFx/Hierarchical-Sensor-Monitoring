@@ -22,6 +22,9 @@
 
   <ItemGroup>
     <Content Remove="nlog.config" />
+    <Content Update="appsettings.Development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
