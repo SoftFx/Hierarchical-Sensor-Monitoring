@@ -1,5 +1,4 @@
 using HSMCommon.Constants;
-using HSMServer.Certificates;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
@@ -9,13 +8,10 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
-using System.IO;
 using System.Net;
 using System.Security.Authentication;
 using HSMServer.Model;
-using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Configuration;
 
 namespace HSMServer
 {
@@ -27,21 +23,19 @@ namespace HSMServer
         public static void Main(string[] args)
         {
             string appMode = "Debug";
+            var development = ".Development";
 #if !DEBUG
             appMode = "Release";
+            development = string.Empty;
 #endif
-
             LayoutRenderer.Register("buildConfiguration", logEvent => appMode);
             LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
             var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
-            
-            var development = appMode == "Debug" ? ".Development" : String.Empty;
+       
             var builder = new ConfigurationBuilder()
-                .SetBasePath(Environment.CurrentDirectory)
+                .SetBasePath(ServerConfig.ConfigPath)
                 .AddJsonFile($"appsettings{development}.json", optional: true, reloadOnChange: true);
-            
             _serverConfig = new ServerConfig(builder.Build());
-            CertificatesConfig.InitializeConfig();
             try
             {
                 logger.Debug("init main");

@@ -1,7 +1,6 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
-using HSMServer.Certificates;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
@@ -23,6 +22,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
+using HSMDatabase.DatabaseWorkCore;
 using Microsoft.OpenApi.Any;
 
 namespace HSMServer
@@ -50,7 +50,7 @@ namespace HSMServer
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
             
-            services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
+            services.AddSingleton<IDatabaseCore, DatabaseCore>();
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();

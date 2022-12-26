@@ -18,9 +18,9 @@ namespace HSMServer.Model
         public static string Name { get; }
 
         
-        public ServerCertificateConfig ServerCertificate { get; set; }
+        public ServerCertificateConfig ServerCertificate { get; }
 
-        public KestrelConfig Kestrel { get; set; }
+        public KestrelConfig Kestrel { get;  }
 
 
         static ServerConfig()

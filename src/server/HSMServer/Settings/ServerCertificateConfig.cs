@@ -13,16 +13,15 @@ public class ServerCertificateConfig
     public static string Name { get; set; }
 
     public static string Key { get; set; }
-
+    
     [JsonIgnore] 
     public X509Certificate2 Certificate => _certificate ??= GetCertificate();
 
     
-    private X509Certificate2 GetCertificate()
+    private static X509Certificate2 GetCertificate()
     {
         var certificatePath = Path.Combine(ServerConfig.ConfigPath, Name);
-
-
+        
         if (File.Exists(certificatePath))
         {
             return string.IsNullOrEmpty(Key)
