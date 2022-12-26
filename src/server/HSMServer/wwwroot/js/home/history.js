@@ -293,6 +293,9 @@ function Data(to, from, type, encodedId) {
 //Pagination
 {
     function showPage(getPageAction, encodedId) {
+        $('#nextPageButton').addClass('disabled');
+        $('#prevPageButton').addClass('disabled');
+
         $.ajax({
             type: 'GET',
             url: getPageAction,
