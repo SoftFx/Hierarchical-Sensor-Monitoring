@@ -37,8 +37,6 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
 
-            _environmentDatabase.RemoveMonitoringDatabases();
-
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 
@@ -277,14 +275,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateProduct(ProductEntity entity) =>
             _environmentDatabase.PutProduct(entity);
-
-        [Obsolete("Remove this after product id migration")]
-        public void UpdateProduct(string oldId, ProductEntity entity)
-        {
-            _environmentDatabase.RemoveProductFromList(oldId);
-
-            AddProduct(entity);
-        }
 
         public void RemoveProduct(string id)
         {
