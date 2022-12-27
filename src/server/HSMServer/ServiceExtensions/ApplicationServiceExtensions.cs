@@ -28,61 +28,42 @@ public static class ApplicationServiceExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                    .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+        services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
+        services.AddSingleton<IDatabaseCore, DatabaseCore>();
+        services.AddSingleton<IUserManager, UserManager>();
+        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
+        services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+        services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
+        services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
+        services.AddSingleton<INotificationsCenter, NotificationsCenter>();
+        services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
+        services.AddSingleton<TreeViewModel>();
 
-            services.AddHsts(options =>
+        services.AddHostedService<OutdatedSensorService>();
+        services.AddHostedService<DatabaseMonitoringService>();
+        services.AddHostedService<MonitoringBackgroundService>();
+        
+        services.AddSwaggerGen(o =>
+        {
+            o.UseInlineDefinitionsForEnums();
+            o.OperationFilter<DataRequestHeaderSwaggerFilter>();
+            o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
             {
-                options.Preload = true;
-                options.IncludeSubDomains = true;
-                options.MaxAge = TimeSpan.FromDays(365);
+                Version = ServerConfig.Version,
+                Title = ServerConfig.Name,
             });
-
-            services.AddMvc();
-            services.AddFluentValidation(options =>
+            o.MapType<TimeSpan>(() => new OpenApiSchema
             {
-                options.ImplicitlyValidateChildProperties = true;
-                options.ImplicitlyValidateRootCollectionElements = true;
+                Type = "string",
+                Example = new OpenApiString("00.00:00:00")
             });
+            ;
 
-            services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
-            
-            services.AddSingleton<IDatabaseCore, DatabaseCore>();
-            services.AddSingleton<IUserManager, UserManager>();
-            services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
-            services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-            services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
-            services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
-            services.AddSingleton<INotificationsCenter, NotificationsCenter>();
-            services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
-            services.AddSingleton<TreeViewModel>();
+            var basePath = PlatformServices.Default.Application.ApplicationBasePath;
+            var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
+            o.IncludeXmlComments(xmlPath, true);
+        });
 
-            services.AddHostedService<OutdatedSensorService>();
-            services.AddHostedService<DatabaseMonitoringService>();
-            services.AddHostedService<MonitoringBackgroundService>();
-
-            services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
-
-            services.AddSwaggerGen(o =>
-            {
-                o.UseInlineDefinitionsForEnums();
-                o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-                o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
-                {
-                    Version = ServerConfig.Version,
-                    Title = ServerConfig.Name,
-                });
-                o.MapType<TimeSpan>(() => new OpenApiSchema
-                {
-                    Type = "string",
-                    Example = new OpenApiString("00.00:00:00")
-                });;
-
-                var basePath = PlatformServices.Default.Application.ApplicationBasePath;
-                var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
-                o.IncludeXmlComments(xmlPath, true);
-            });
-
-            return services;
+        return services;
     }
 }

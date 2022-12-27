@@ -4,22 +4,25 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using System;
 using System.Net;
 using System.Security.Authentication;
+using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.ServiceExtensions;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 
-ServerConfig serverConfig;
 const string nLogConfigFileName = "nlog.config";
 var builder = WebApplication.CreateBuilder(args);
 
-serverConfig = new ServerConfig(builder.Configuration);
+var serverConfig = new ServerConfig(builder.Configuration);
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
 
@@ -72,6 +75,25 @@ builder.Host.ConfigureLogging(logging =>
     })
     .UseNLog()
     .UseConsoleLifetime();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+
+builder.Services.AddHsts(options =>
+{
+    options.Preload = true;
+    options.IncludeSubDomains = true;
+    options.MaxAge = TimeSpan.FromDays(365);
+});
+builder.Services.AddMvc();
+
+builder.Services.AddFluentValidation(options =>
+{
+    options.ImplicitlyValidateChildProperties = true;
+    options.ImplicitlyValidateRootCollectionElements = true;
+});
+
+builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
 builder.Services.AddApplicationServices();
 
@@ -138,5 +160,3 @@ finally
 {
     NLog.LogManager.Shutdown();
 }
-
-
