@@ -59,7 +59,7 @@ namespace HSMServer.Core.Model.Authentication.History
         {
             var hasNext = await _pagesEnumerator.MoveNextAsync();
 
-            if (hasNext)
+            if (hasNext && _pagesEnumerator.Current.Count != 0)
                 Pages.Add(_pagesEnumerator.Current);
 
             return hasNext;
