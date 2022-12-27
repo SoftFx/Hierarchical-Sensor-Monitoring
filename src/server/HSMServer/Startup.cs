@@ -1,7 +1,6 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMServer.BackgroundTask;
-using HSMServer.Certificates;
 using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
@@ -23,6 +22,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
+using HSMDatabase.DatabaseWorkCore;
 using Microsoft.OpenApi.Any;
 
 namespace HSMServer
@@ -49,8 +49,8 @@ namespace HSMServer
             });
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
-
-            services.AddSingleton<IDatabaseCore>(x => CertificatesConfig.DatabaseCore);
+            
+            services.AddSingleton<IDatabaseCore, DatabaseCore>();
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
@@ -70,10 +70,10 @@ namespace HSMServer
             {
                 o.UseInlineDefinitionsForEnums();
                 o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-                o.SwaggerDoc(ServerSettings.Version, new OpenApiInfo
+                o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
                 {
-                    Version = ServerSettings.Version,
-                    Title = ServerSettings.Name,
+                    Version = ServerConfig.Version,
+                    Title = ServerConfig.Name,
                 });
                 o.MapType<TimeSpan>(() => new OpenApiSchema
                 {
@@ -106,7 +106,7 @@ namespace HSMServer
             app.UseSwaggerUI(c =>
             {
                 c.RoutePrefix = "api/swagger";
-                c.SwaggerEndpoint($"/swagger/{ServerSettings.Version}/swagger.json", "HSM server api");
+                c.SwaggerEndpoint($"/swagger/{ServerConfig.Version}/swagger.json", "HSM server api");
             });
 
             app.UseStaticFiles(new StaticFileOptions

@@ -1,5 +1,4 @@
 using HSMCommon.Constants;
-using HSMServer.Certificates;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
@@ -11,33 +10,38 @@ using NLog.Web;
 using System;
 using System.Net;
 using System.Security.Authentication;
+using HSMServer.Model;
+using Microsoft.Extensions.Configuration;
 
 namespace HSMServer
 {
     internal static class Program
     {
         private const string NLogConfigFileName = "nlog.config";
-
+        private static ServerConfig _serverConfig;
 
         public static void Main(string[] args)
         {
             string appMode = "Debug";
+            var development = ".Development";
 #if !DEBUG
             appMode = "Release";
+            development = string.Empty;
 #endif
-
             LayoutRenderer.Register("buildConfiguration", logEvent => appMode);
             LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
             var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
-
-            CertificatesConfig.InitializeConfig();
-
+       
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(ServerConfig.ConfigPath)
+                .AddJsonFile($"appsettings{development}.json", optional: true, reloadOnChange: true);
+            _serverConfig = new ServerConfig(builder.Build());
             try
             {
                 logger.Debug("init main");
-
+                
                 var host = CreateHostBuilder(args).Build();
-
+                
                 host.Run();
             }
             catch (Exception ex)
@@ -59,8 +63,7 @@ namespace HSMServer
                     {
                         options.ConfigureHttpsDefaults(
                             httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-
-                        options.Listen(IPAddress.Any, ConfigurationConstants.SensorsPort,
+                        options.Listen(IPAddress.Any, _serverConfig.Kestrel.SensorPort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -69,11 +72,11 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
+                                    portOptions.ServerCertificate = _serverConfig.ServerCertificate.Certificate;
                                 });
                             });
 
-                        options.Listen(IPAddress.Any, ConfigurationConstants.SitePort,
+                        options.Listen(IPAddress.Any, _serverConfig.Kestrel.SitePort,
                             listenOptions =>
                             {
                                 listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -82,7 +85,7 @@ namespace HSMServer
                                     portOptions.CheckCertificateRevocation = false;
                                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
                                     portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                                    portOptions.ServerCertificate = CertificatesConfig.ServerCertificate;
+                                    portOptions.ServerCertificate = _serverConfig.ServerCertificate.Certificate;
                                 });
                             });
 
@@ -93,7 +96,7 @@ namespace HSMServer
                         options.Limits.MinResponseDataRate = null;
                         options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
                     });
-
+                    
                     webBuilder.UseStartup<Startup>();
                 })
                 .ConfigureLogging(logging =>
