@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model.Authentication.History
 
 
         public List<List<BaseValue>> Pages { get; } = new();
+        
+        public List<BaseValue> FirstPage { get; set; }
 
         public string EncodedId { get; }
 
@@ -34,6 +36,12 @@ namespace HSMServer.Core.Model.Authentication.History
         public async Task<HistoryValuesViewModel> Initialize()
         {
             await TryReadNextPage();
+
+            if (CurrentPageIndex == 0 && IsBarSensor)
+            {
+                FirstPage = _pagesEnumerator.Current;
+            }
+            
             await TryReadNextPage();
 
             return this;
@@ -61,7 +69,7 @@ namespace HSMServer.Core.Model.Authentication.History
 
             if (hasNext && _pagesEnumerator.Current.Count != 0)
                 Pages.Add(_pagesEnumerator.Current);
-
+            
             return hasNext;
         }
     }

@@ -231,6 +231,15 @@ namespace HSMServer.Controllers
                 model.From.ToUniversalTime(), model.To.ToUniversalTime(), MaxHistoryCount);
 
             var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator).Initialize();
+
+            if (viewModel.IsBarSensor)
+            {
+                var sensor = _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(model.EncodedId)).LastValue;
+                if (MaxHistoryCount > 0)//no need to check
+                    viewModel.FirstPage.Add(sensor);
+                else viewModel.FirstPage.Insert(0, sensor);
+            }
+            
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
@@ -265,7 +274,7 @@ namespace HSMServer.Controllers
                 return _emptyJsonResult;
 
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
-
+     
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
 
