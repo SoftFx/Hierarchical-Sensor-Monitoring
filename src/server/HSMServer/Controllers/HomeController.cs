@@ -266,7 +266,10 @@ namespace HSMServer.Controllers
                 return _emptyJsonResult;
 
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
-     
+            
+            var localValue = GetLocalLastValue(model.EncodedId);
+            if(localValue is not null) values.Add(localValue);
+            
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
 
@@ -441,12 +444,7 @@ namespace HSMServer.Controllers
         {
             var sensor = _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId));
 
-            if (sensor is IBarSensor barSensor)
-            {
-                return barSensor.LocalLastValue;
-            }
-            
-            return null;
+            return sensor is IBarSensor barSensor ? barSensor.LocalLastValue : null;
         }
     }
 }

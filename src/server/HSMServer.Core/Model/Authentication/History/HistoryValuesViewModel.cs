@@ -8,10 +8,10 @@ namespace HSMServer.Core.Model.Authentication.History
     {
         private readonly IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
+        private readonly BarBaseValue _localLastValue;
+        
 
         public List<List<BaseValue>> Pages { get; } = new();
-        
-        public BarBaseValue LocalLastValue { get; }
         
         public string EncodedId { get; }
 
@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model.Authentication.History
             
             EncodedId = encodedId;
             SensorType = (SensorType)type;
-            LocalLastValue = localLastValue;
+            _localLastValue = localLastValue;
         }
 
 
@@ -38,16 +38,15 @@ namespace HSMServer.Core.Model.Authentication.History
         {
             await TryReadNextPage();
 
-            if (LocalLastValue is not null)
+            if (_localLastValue is not null)
             {
                 if (Pages.Count == 0)
                 {
-                    _pagesEnumerator.Current.Add(LocalLastValue);
-                    Pages.Add(_pagesEnumerator.Current);
+                    Pages.Add(new(){_localLastValue});
                 }
                 else
                 {
-                    _pagesEnumerator.Current.Insert(0, LocalLastValue);
+                    Pages[0].Insert(0, _localLastValue);
                 }
             }
             
