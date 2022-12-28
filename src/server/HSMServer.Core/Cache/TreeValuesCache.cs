@@ -343,9 +343,19 @@ namespace HSMServer.Core.Cache
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _databaseCore.GetSensorValuesPage(sensorId.ToString(), from, to, count);
-
+                var firstPage = true;
                 await foreach (var page in pages)
-                    yield return sensor.ConvertValues(page);
+                {
+                    var test = new List<BaseValue>();
+                    if (firstPage)
+                    {
+                        test.Add(sensor.LastValue);
+                        firstPage = false;
+                    }
+
+                    test.AddRange(sensor.ConvertValues(page));
+                    yield return test;
+                }
             }
         }
 
