@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    internal interface IBarSensor
+    public interface IBarSensor
     {
         BarBaseValue LocalLastValue { get; }
     }
