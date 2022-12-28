@@ -11,8 +11,8 @@ namespace HSMServer.Core.Model.Authentication.History
 
         public List<List<BaseValue>> Pages { get; } = new();
         
-        public List<BaseValue> FirstPage { get; set; }
-
+        public BarBaseValue LocalLastValue { get; }
+        
         public string EncodedId { get; }
 
         public SensorType SensorType { get; }
@@ -24,12 +24,13 @@ namespace HSMServer.Core.Model.Authentication.History
         public int CurrentPageIndex { get; private set; }
 
 
-        public HistoryValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator)
+        public HistoryValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator, BarBaseValue localLastValue = null)    
         {
             _pagesEnumerator = enumerator.GetAsyncEnumerator();
-
+            
             EncodedId = encodedId;
             SensorType = (SensorType)type;
+            LocalLastValue = localLastValue;
         }
 
 
@@ -37,9 +38,17 @@ namespace HSMServer.Core.Model.Authentication.History
         {
             await TryReadNextPage();
 
-            if (CurrentPageIndex == 0 && IsBarSensor)
+            if (LocalLastValue is not null)
             {
-                FirstPage = _pagesEnumerator.Current;
+                if (Pages.Count == 0)
+                {
+                    _pagesEnumerator.Current.Add(LocalLastValue);
+                    Pages.Add(_pagesEnumerator.Current);
+                }
+                else
+                {
+                    _pagesEnumerator.Current.Insert(0, LocalLastValue);
+                }
             }
             
             await TryReadNextPage();
@@ -67,7 +76,7 @@ namespace HSMServer.Core.Model.Authentication.History
         {
             var hasNext = await _pagesEnumerator.MoveNextAsync();
 
-            if (hasNext && _pagesEnumerator.Current.Count != 0)
+            if (hasNext && _pagesEnumerator.Current?.Count != 0)
                 Pages.Add(_pagesEnumerator.Current);
             
             return hasNext;
