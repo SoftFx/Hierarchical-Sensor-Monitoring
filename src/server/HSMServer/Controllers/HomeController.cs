@@ -268,7 +268,8 @@ namespace HSMServer.Controllers
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
             
             var localValue = GetLocalLastValue(model.EncodedId);
-            if(localValue is not null) values.Add(localValue);
+            if (localValue is not null)
+                values.Add(localValue);
             
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
