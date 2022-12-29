@@ -4,6 +4,7 @@ using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
+using FluentValidation.Results;
 
 namespace HSMServer.Model.Validators
 {
@@ -31,5 +32,15 @@ namespace HSMServer.Model.Validators
             return products?.FirstOrDefault(x =>
                 x.DisplayName.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;
         }
+        protected override bool PreValidate(ValidationContext<string> context, ValidationResult result) 
+        {
+            if (context.InstanceToValidate == null) 
+            {
+                result.Errors.Add(new ValidationFailure("ProductName", "Product name must be not null"));
+                return false;
+            }
+            return true;
+        }
+
     }
 }

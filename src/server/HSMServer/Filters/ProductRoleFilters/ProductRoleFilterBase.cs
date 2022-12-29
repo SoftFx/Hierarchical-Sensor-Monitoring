@@ -36,7 +36,7 @@ namespace HSMServer.Filters.ProductRoleFilters
 
             if (TryGetProductId(context, out var productId))
                 foreach (var role in _roles)
-                    if (user.ProductsRoles.Any(r => r.Key == productId && r.Value == role))
+                    if (user.ProductsRoles.Any(r => r.Key == productId.ToString() && r.Value == role))
                         return;
 
             context.Result = _redirectToHomeIndex;
@@ -44,18 +44,18 @@ namespace HSMServer.Filters.ProductRoleFilters
 
         public void OnActionExecuted(ActionExecutedContext context) { }
 
-        protected abstract string GetProductId(object arg, ActionExecutingContext context = null);
+        protected abstract Guid? GetProductId(object arg, ActionExecutingContext context = null);
 
-        private bool TryGetProductId(ActionExecutingContext context, out string productId)
+        private bool TryGetProductId(ActionExecutingContext context, out Guid? productId)
         {
             productId = null;
 
             if (context.ActionArguments.TryGetValue(ArgumentName, out var arg))
                 productId = GetProductId(arg, context);
 
-            if (!string.IsNullOrEmpty(productId) && context.Controller is AccessKeysController keysController)
+            if (productId != null && context.Controller is AccessKeysController keysController)
             {
-                var product = keysController.TreeValuesCache.GetProduct(productId);
+                var product = keysController.TreeValuesCache.GetProduct(productId.Value);
                 while (product?.ParentProduct != null)
                 {
                     productId = product.ParentProduct.Id;
@@ -63,7 +63,7 @@ namespace HSMServer.Filters.ProductRoleFilters
                 }
             }
 
-            return !string.IsNullOrEmpty(productId);
+            return productId != null;
         }
     }
 }

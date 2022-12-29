@@ -1,10 +1,19 @@
-﻿@using HSMServer.Model.History;
+﻿@using HSMServer.Core.Model
+@using HSMServer.Core.Model.Authentication.History;
+@using HSMServer.Model.History;
 @using HSMServer.Extensions;
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HistoryValuesViewModel
 
+@{
+    var values = Model.Pages.Count == 0 ? Enumerable.Empty<BaseValue>() : Model.Pages[Model.CurrentPageIndex];
+    var historyValues = values.Select(v => HistoryValueViewModel.Create(v, (int)Model.SensorType)).ToList();
+}
 
-@if (Model.Values.Count == 0)
+
+@if (historyValues.Count == 0)
 {
     <div id="noTableValues_@Model.EncodedId"></div>
 }
@@ -13,7 +22,7 @@ else
     <div>
         <table class='table table-striped'>
             <thead>
-                <tr>
+                <tr class="text-nowrap">
                     <th>Date</th>
                     @if (Model.IsBarSensor)
                     {
@@ -31,7 +40,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in Model.Values)
+                @foreach (var value in historyValues)
                 {
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
@@ -50,13 +59,42 @@ else
 
                             <td>@simpleValue.Value</td>
                         }
-                        <td><span class="@value.Status.ToIcon()"></span> @value.Status</td>
+                        <td>
+                            <span class="@value.Status.ToIcon()"></span> @value.Status
+                        </td>
                         <td>@value.Comment</td>
                     </tr>
                 }
             </tbody>
         </table>
 
-        <input id='oldest_date_@Model.EncodedId' type='text' style='display: none' value='@Model.OldestValueTime'/>
+        <div class="container d-flex justify-content-center">
+            <ul class="pagination">
+                <li id="prevPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.EncodedId)')">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link">@(Model.CurrentPageIndex + 1)</a>
+                </li>
+                <li id="nextPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.EncodedId)')">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 }
+
+
+<script>
+    if (@Model.CurrentPageIndex === @Model.LastPageIndex) {
+        $('#nextPageButton').addClass('disabled');
+    }
+
+    if (@Model.CurrentPageIndex === 0) {
+        $('#prevPageButton').addClass('disabled');
+    }
+</script>

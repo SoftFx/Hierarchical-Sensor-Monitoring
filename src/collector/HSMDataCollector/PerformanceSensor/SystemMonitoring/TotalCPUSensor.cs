@@ -2,7 +2,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.PerformanceSensor.StandardSensor;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
@@ -27,17 +27,16 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
             }
             catch (Exception e)
             { }
-            
         }
 
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             return InternalBar.GetLastValue();
         }
 
         private static Func<double> GetTotalCPUFunc()
         {
-            Func<double> func = delegate()
+            Func<double> func = delegate ()
             {
                 return 0.0;
             };

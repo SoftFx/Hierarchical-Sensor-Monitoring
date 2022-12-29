@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Constants;
+using HSMSensorDataObjects;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using System.Threading.Tasks;
@@ -27,8 +28,9 @@ namespace HSMServer.Middleware
                 if (context.Connection.LocalPort == ConfigurationConstants.SensorsPort)
                 {
                     var request = context.Request;
+                    request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
 
-                    _logger.Error($"Path {request.Path}, remote id, port: {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort}, content size = {request.ContentLength}");
+                    _logger.Error($"Path {request.Path}, access key = {key}, remote id, port: {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort}, content size = {request.ContentLength}");
                 }
 
                 throw;

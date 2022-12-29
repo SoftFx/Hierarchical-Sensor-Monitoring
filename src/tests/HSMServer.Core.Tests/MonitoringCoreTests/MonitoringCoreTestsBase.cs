@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -10,6 +11,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     [Collection("Database collection")]
     public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
+        protected const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
+
         private protected readonly DatabaseCoreManager _databaseCoreManager;
 
         protected readonly IUserManager _userManager;

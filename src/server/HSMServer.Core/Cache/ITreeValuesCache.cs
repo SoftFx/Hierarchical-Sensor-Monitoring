@@ -33,29 +33,31 @@ namespace HSMServer.Core.Cache
         ProductModel AddProduct(string productName);
         void UpdateProduct(ProductModel product);
         void UpdateProduct(ProductUpdate product);
-        void RemoveProduct(string id);
-        ProductModel GetProduct(string id);
-        string GetProductNameById(string id);
+        void RemoveProduct(Guid id);
+        ProductModel GetProduct(Guid id);
+        ProductModel GetProductByName(string name);
+        string GetProductNameById(Guid id);
         List<ProductModel> GetProducts(User user, bool isAllProducts = false);
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
-        void RemoveAccessKey(Guid id);
+        AccessKeyModel RemoveAccessKey(Guid id);
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
+        AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
+        AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key);
         AccessKeyModel GetAccessKey(Guid id);
 
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
-        void RemoveSensorsData(string product);
+        void RemoveSensorsData(Guid product);
         void RemoveSensorData(Guid sensorId);
         BaseSensorModel GetSensor(Guid sensorId);
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 
-        List<BaseValue> GetSensorValues(Guid sensorId, int count);
-        List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to, int count = 50000);
-        List<BaseValue> GetSensorValues(HistoryRequestModel request);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         void UpdatePolicy(TransactionType type, Policy policy);
     }

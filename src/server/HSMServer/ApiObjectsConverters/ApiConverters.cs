@@ -1,12 +1,10 @@
-﻿using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.FullDataObject;
-using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Requests;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.ApiObjectsConverters
@@ -22,15 +20,6 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
-        public static BooleanValue ConvertToBool(this UnitedSensorValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = bool.TryParse(value.Data, out var result) && result,
-            };
-
         public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
@@ -38,15 +27,6 @@ namespace HSMServer.ApiObjectsConverters
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
-            };
-
-        public static IntegerValue ConvertToInt(this UnitedSensorValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = int.TryParse(value.Data, out var result) ? result : 0
             };
 
         public static DoubleValue Convert(this DoubleSensorValue value) =>
@@ -58,15 +38,6 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
-        public static DoubleValue ConvertToDouble(this UnitedSensorValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = double.TryParse(value.Data, out double result) ? result : 0
-            };
-
         public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
@@ -76,25 +47,16 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
-        public static StringValue ConvertToString(this UnitedSensorValue value) =>
+        public static FileValue Convert(this FileSensorValue value) =>
             new()
             {
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Data
-            };
-
-        public static FileValue Convert(this FileSensorBytesValue value) =>
-            new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Value = value.Value,
-                Name = value.FileName,
+                Value = value.Value.ToArray(),
+                Name = value.Name,
                 Extension = value.Extension,
-                OriginalSize = value.Value.LongLength
+                OriginalSize = value.Value.Count
             };
 
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
@@ -110,28 +72,8 @@ namespace HSMServer.ApiObjectsConverters
                 Max = value.Max,
                 Mean = value.Mean,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = value.Percentiles ?? new(),
             };
-
-        public static IntegerBarValue ConvertToIntBar(this UnitedSensorValue value)
-        {
-            var barData = JsonSerializer.Deserialize<IntBarData>(value.Data);
-
-            return new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Count = barData.Count,
-                OpenTime = barData.StartTime.ToUniversalTime(),
-                CloseTime = barData.EndTime.ToUniversalTime(),
-                Min = barData.Min,
-                Max = barData.Max,
-                Mean = barData.Mean,
-                LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
-            };
-        }
 
         public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
@@ -146,28 +88,8 @@ namespace HSMServer.ApiObjectsConverters
                 Max = value.Max,
                 Mean = value.Mean,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
+                Percentiles = value.Percentiles ?? new(),
             };
-
-        public static DoubleBarValue ConvertToDoubleBar(this UnitedSensorValue value)
-        {
-            var barData = JsonSerializer.Deserialize<DoubleBarData>(value.Data);
-
-            return new()
-            {
-                Comment = value.Comment,
-                Time = value.Time,
-                Status = value.Status.Convert(),
-                Count = barData.Count,
-                OpenTime = barData.StartTime.ToUniversalTime(),
-                CloseTime = barData.EndTime.ToUniversalTime(),
-                Min = barData.Min,
-                Max = barData.Max,
-                Mean = barData.Mean,
-                LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
-            };
-        }
 
         public static BaseValue Convert(this SensorValueBase value) =>
             value switch
@@ -247,8 +169,8 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        public static HistoryRequestModel Convert(this HistoryRequest request) =>
-            new(request.Key, request.Path)
+        public static HistoryRequestModel Convert(this HistoryRequest request, string key) =>
+            new(string.IsNullOrEmpty(key) ? request.Key : key, request.Path)
             {
                 From = request.From,
                 To = request.To,

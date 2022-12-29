@@ -1,7 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using Microsoft.Win32;
 using System;
 
@@ -93,7 +93,6 @@ namespace HSMDataCollector.CustomFuncSensor
             catch (Exception ex)
             {
                 _logger?.Error(ex, $"Failed to get windows InstallDate");
-                CreateErrorDataObject(ex);
             }
 
             return DateTime.MinValue;
@@ -106,10 +105,10 @@ namespace HSMDataCollector.CustomFuncSensor
             $"{_windowsVersion} Last Update Date: {_windowsLastUpdate}\n " +
             $"User Description: {Description}";
 
-        protected override UnitedSensorValue GetInvokeResult() =>
+        protected override SensorValueBase GetInvokeResult() =>
             CreateDataObject(IsVersionNeedUpdate(), GetDescription());
 
-        public override UnitedSensorValue GetLastValue() =>
+        public override SensorValueBase GetLastValue() =>
             CreateDataObject(IsVersionNeedUpdate(), GetDescription());
     }
 }

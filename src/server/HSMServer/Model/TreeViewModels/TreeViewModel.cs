@@ -1,6 +1,8 @@
 ﻿using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -14,7 +16,7 @@ namespace HSMServer.Model.TreeViewModels
         private readonly IUserManager _userManager;
 
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
@@ -34,6 +36,35 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
+        public List<TreeNodeStateViewModel> GetUserTree(User user)
+        {
+            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
+            {
+                var node = new TreeNodeStateViewModel(product);
+
+                foreach (var (_, childNode) in product.Nodes)
+                    node.AddChild(FilterNodes(childNode), user);
+
+                foreach (var (_, sensor) in product.Sensors)
+                    node.AddChild(sensor, user);
+
+                return node;
+            }
+
+
+            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+
+            foreach (var (_, product) in Nodes)
+                if (product.Parent == null && user.IsProductAvailable(product.Id))
+                {
+                    var node = FilterNodes(product);
+                    if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
+                        tree.Add(node);
+                }
+
+            return tree;
+        }
+
         internal void RecalculateNodesCharacteristics()
         {
             foreach (var (_, node) in Nodes)
@@ -41,15 +72,15 @@ namespace HSMServer.Model.TreeViewModels
                     node.RecalculateCharacteristics();
         }
 
-        internal List<Guid> GetNodeAllSensors(string selectedNode)
+        internal List<Guid> GetNodeAllSensors(Guid selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 
-            if (Guid.TryParse(selectedNode, out var sensorId) && Sensors.TryGetValue(sensorId, out var sensor))
+            if (Sensors.TryGetValue(selectedNode, out var sensor))
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
             {
-                void GetNodeSensors(string nodeId)
+                void GetNodeSensors(Guid nodeId)
                 {
                     if (!Nodes.TryGetValue(nodeId, out var node))
                         return;

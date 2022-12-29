@@ -3,7 +3,6 @@ using HSMCommon.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Authentication;
-using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using System;
 using System.Collections.Concurrent;
@@ -14,12 +13,10 @@ namespace HSMServer.Model.TreeViewModels
 {
     public class ProductNodeViewModel : NodeViewModel
     {
-        public string Id { get; }
-
         public override bool HasData =>
             Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
@@ -29,12 +26,13 @@ namespace HSMServer.Model.TreeViewModels
 
         public int AllSensorsCount { get; private set; }
 
+        public bool IsEmpty => AllSensorsCount == 0;
 
-        public ProductNodeViewModel(ProductModel model) : base(SensorPathHelper.Encode(model.Id))
+
+        public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
-            Id = model.Id;
             Product = model.RootProductName;
-            Path = $"{CommonConstants.SensorPathSeparator}{model.Path}";
+            Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
 
             Update(model);
         }
@@ -42,15 +40,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
-
-        public string GetSensorsCountString(NodeStateViewModel nodeState)
-        {
-            var sensorsCount = nodeState.FilteredSensorsCount == AllSensorsCount
-                ? $"{AllSensorsCount}"
-                : $"{nodeState.FilteredSensorsCount}/{AllSensorsCount}";
-
-            return $"({sensorsCount} sensors)";
-        }
 
 
         internal void Update(ProductModel model)
@@ -76,16 +65,7 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
-
-        internal List<AccessKeyViewModel> GetEditProductAccessKeys()
-        {
-            var accessKeys = GetAccessKeys().Select(k => k.Copy()).ToList();
-            accessKeys.ForEach(k => k.HasProductColumn = false);
-
-            return accessKeys;
-        }
-
-
+        
         internal void RecalculateCharacteristics()
         {
             int allSensorsCount = 0;

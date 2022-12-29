@@ -1,10 +1,10 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
-@using HSMServer.HtmlHelpers
+@using HSMServer.Core.Helpers
+@using HSMServer.Core.Model.Authentication
 @model List<UserViewModel>
 
 @{ ViewData["Title"] = "Users"; }
-
 
 <script>
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
@@ -16,13 +16,109 @@
     <div class="row justify-content-center">
         @if (TempData[TextConstants.TempDataErrorText] != null)
         {
-            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+            <span class="font-weight-normal text-danger h1">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
-
-        @ViewHelper.CreateUserList(Context.User, Model, TempData[TextConstants.TempDataProductsText])
+        
+        <div class="m-2">
+            <div class='row justify-content-start'>
+                <div class='col-2'>
+                    <h5 class="mx-4 my-2">Users</h5>
+                </div>
+            </div>
+        </div>
+        
+        <div class='col-xxl'>
+            <table class='table table-striped'>
+                <thead>
+                <tr>
+                <th scope='col'>#</th>
+                <th scope='col'>Username</th>
+                <th scope='col'>Password</th>
+                <th dcope='col'>IsAdmin</th>
+                <th scope='col'>Products</th>
+                <th scope='col'>Action</th>
+                <tbody>
+                @if (Model != null && Model.Count > 0)
+                {
+                    <tr>
+                        <th>0</th>
+                        <th>
+                            <input id='createName' type='text' class='form-control'/>
+                        </th>
+                        <th>
+                            <input id='createPassword' type='password' class='form-control'/>
+                        </th>
+                        <th>
+                            <input id='createIsAdmin' type='checkbox' class='form-check-input ms-0'/>
+                        </th>
+                        <th>---</th>
+                        <th>
+                            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                                <i class='fas fa-plus'></i>
+                            </button>
+                        </th>
+                    </tr>
+                    for (var i = 0; i < Model.Count; i++)
+                    {
+                        var userItem = Model[i];
+                        <tr>
+                            <th scope='row'>@(i + 1)</th>
+                            <td>@userItem.Username</td>
+                            <td>**************</td>
+                            <td>
+                                <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
+                                       disabled value='@userItem.IsAdmin' @(userItem.IsAdmin ? "checked" : "")/>
+                            </td>
+                            <td>
+                                @{
+                                    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<Guid, string>;
+                                    if (userItem.ProductsRoles == null || userItem.ProductsRoles.Count == 0)
+                                    {
+                                        <span>---</span>
+                                    }
+                                    else
+                                    {
+                                        foreach (var right in userItem.ProductsRoles)
+                                        {
+                                            string name = string.Empty;
+                                            products?.TryGetValue(Guid.Parse(right.Key), out name);
+                                            <span>@(name ?? right.Key) (@right.Value)</span>
+                                            <br>
+                                        }
+                                    }
+                                }
+                            </td>
+                            <td class="w-25">
+                                @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+                                {
+                                    <button id='delete_@userItem.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='delete'>
+                                        <i class='fas fa-trash-alt'></i>
+                                    </button>
+                                }
+                                <button id='change_@userItem.Username'
+                                        type='button' class='btn btn-secondary ms-1' title='change'>
+                                    <i class='fas fa-user-edit'></i>
+                                </button>
+                                
+                                <button disabled id='ok_@userItem.Username'
+                                        type='button' class='btn btn-secondary ms-1' title='ok'>
+                                    <i class='fas fa-check'></i>
+                                </button>
+                                
+                                <button disabled id='cancel_@userItem.Username'
+                                        type='button' class='btn btn-secondary ms-1' title='cancel'>
+                                    <i class='fas fa-times'></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
-
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

@@ -1,8 +1,9 @@
 ﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.InstantValue
@@ -19,54 +20,52 @@ namespace HSMDataCollector.InstantValue
         }
 
         public override bool HasLastValue => false;
-        public override UnitedSensorValue GetLastValue()
+        public override SensorValueBase GetLastValue()
         {
             throw new NotImplementedException();
         }
 
         public override void Dispose()
         {
-            
+
         }
 
         public void AddValue(T value)
         {
-            UnitedSensorValue valueObject = new UnitedSensorValue();
-            valueObject.Data = value.ToString();
-            valueObject.Description = _description;
+            var valueObject = SensorValuesFactory.BuildValue(value);
+
+            valueObject.Comment = _description;
             valueObject.Path = Path;
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
-            valueObject.Type = _type;
             valueObject.Status = SensorStatus.Ok;
+
             EnqueueValue(valueObject);
         }
 
         public void AddValue(T value, string comment = "")
         {
-            UnitedSensorValue valueObject = new UnitedSensorValue();
+            var valueObject = SensorValuesFactory.BuildValue(value);
+
             valueObject.Comment = comment;
-            valueObject.Data = value.ToString();
-            valueObject.Description = _description;
             valueObject.Path = Path;
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
-            valueObject.Type = _type;
             valueObject.Status = SensorStatus.Ok;
+
             EnqueueValue(valueObject);
         }
-        
+
         public void AddValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            UnitedSensorValue valueObject = new UnitedSensorValue();
+            var valueObject = SensorValuesFactory.BuildValue(value);
+
             valueObject.Comment = comment;
-            valueObject.Data = value.ToString();
-            valueObject.Description = _description;
             valueObject.Path = Path;
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
-            valueObject.Type = _type;
             valueObject.Status = status;
+
             EnqueueValue(valueObject);
         }
     }

@@ -1,10 +1,11 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 
 namespace HSMServer.Core.Model
 {
     public interface INotificatable
     {
-        public string Id { get; }
+        public Guid Id { get; }
 
         public string Name { get; }
 

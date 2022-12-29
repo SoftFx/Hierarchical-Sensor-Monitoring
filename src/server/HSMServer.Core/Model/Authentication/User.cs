@@ -1,7 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Authentication.History;
 using HSMServer.Core.Model.UserFilters;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -30,10 +30,8 @@ namespace HSMServer.Core.Model.Authentication
         public TreeUserFilter TreeFilter { get; set; }
 
 
-        public ConcurrentDictionary<string, NodeStateViewModel> NodeStates { get; } = new();
+        public HistoryValuesViewModel Pagination { get; set; }
 
-
-        string INotificatable.Id => Id.ToString();
 
         string INotificatable.Name => UserName;
 
@@ -123,18 +121,10 @@ namespace HSMServer.Core.Model.Authentication
             return copy;
         }
 
-        public bool IsProductAvailable(string productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId)) ?? false);
+        public bool IsProductAvailable(Guid productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId.ToString())) ?? false);
 
-        public List<string> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => r.Key).ToList();
-
-        public void InitNodeStates(string nodeId)
-        {
-            if (!NodeStates.ContainsKey(nodeId))
-                NodeStates.TryAdd(nodeId, new NodeStateViewModel());
-
-            NodeStates[nodeId].Reset();
-        }
+        public List<Guid> GetManagerProducts() =>
+            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => Guid.Parse(r.Key)).ToList();
     }
 }

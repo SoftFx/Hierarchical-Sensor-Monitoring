@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -8,6 +7,7 @@ using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         public SensorValuesHistoryTests(SensorValuesHistoryFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: false)
+            : base(fixture, registerFixture)
         {
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
         }
@@ -33,7 +33,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.DoubleBar)]
         [InlineData(SensorType.File)]
         [Trait("Category", "Getting sensor values history")]
-        public void GetValues_Count_Test(SensorType type, int sensorsCount = 5)
+        public async Task GetValues_Count_Test(SensorType type, int sensorsCount = 5)
         {
             const int sensorValuesCount = 1000;
             const int historyValuesCount = 101;
@@ -44,8 +44,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 sensorValues.Reverse();
 
-                var expectedValues = sensorValues.Take(historyValuesCount).ToList();
-                var actualValues = _valuesCache.GetSensorValues(sensor.Id, historyValuesCount);
+                var expectedValues = type is SensorType.IntegerBar or SensorType.DoubleBar
+                    ? sensorValues.Skip(1).Take(historyValuesCount).ToList() // skip last value because GetSensorValuesPage returns values only from db (not from cache)
+                    : sensorValues.Take(historyValuesCount).ToList();
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, -historyValuesCount).Flatten();
 
                 Assert.True(historyValuesCount >= actualValues.Count);
                 Assert.Equal(expectedValues.Count, actualValues.Count);
@@ -64,7 +66,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.DoubleBar)]
         [InlineData(SensorType.File)]
         [Trait("Category", "Getting sensor values history")]
-        public void GetValues_Period_Test(SensorType type, int sensorsCount = 5)
+        public async Task GetValues_Period_Test(SensorType type, int sensorsCount = 5)
         {
             const int sensorValuesCount = 5000;
 
@@ -78,7 +80,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 sensorValues.Reverse();
 
                 var expectedValues = sensorValues.Where(s => s.ReceivingTime >= from && s.ReceivingTime <= to).ToList();
-                var actualValues = _valuesCache.GetSensorValues(sensor.Id, from, to);
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
@@ -95,7 +97,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.DoubleBar)]
         [InlineData(SensorType.File)]
         [Trait("Category", "Getting sensor values history")]
-        public void GetAllValuesTest(SensorType type, int sensorsCount = 2)
+        public async Task GetAllValuesTest(SensorType type, int sensorsCount = 2)
         {
             const int sensorValuesCount = 1000;
 
@@ -104,11 +106,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
 
-            foreach (var (sensor, expectedValues) in sensors)
+            foreach (var (sensor, values) in sensors)
             {
-                expectedValues.Reverse();
+                var expectedValues = values;
 
-                var actualValues = _valuesCache.GetSensorValues(sensor.Id, from, to);
+                expectedValues.Reverse();
+                if (type is SensorType.IntegerBar or SensorType.DoubleBar)
+                    expectedValues = expectedValues.Skip(1).ToList(); // skip last value because GetSensorValuesPage returns values only from db (not from cache)
+
+                var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
@@ -128,7 +134,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var storeInfo = new StoreInfo(CommonConstants.SelfMonitoringProductKey, sensorInfo.Path)
+                var storeInfo = new StoreInfo(TestProductsManager.TestProductKey.Id, sensorInfo.Path)
                 {
                     BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
                 };
@@ -154,10 +160,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensors = new List<SensorModelInfo>(sensorsCount);
             for (int i = 0; i < sensorsCount; ++i)
             {
-                var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: CommonConstants.SelfMonitoringProductKey, type: (byte)type);
+                var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: TestProductsManager.TestProduct.Id, type: (byte)type);
 
                 var sensor = Infrastructure.SensorModelFactory.Build(sensorEntity);
-                sensor.ParentProduct = _valuesCache.GetProduct(sensorEntity.ProductId);
+                sensor.ParentProduct = _valuesCache.GetProduct(Guid.Parse(sensorEntity.ProductId));
                 sensor.BuildProductNameAndPath();
 
                 var info = new SensorModelInfo()

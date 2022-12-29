@@ -1,5 +1,5 @@
 ﻿using HSMDataCollector.Core;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Base
 {
@@ -20,10 +20,10 @@ namespace HSMDataCollector.Base
             Description = description;
         }
         public abstract bool HasLastValue { get; }
-        public abstract UnitedSensorValue GetLastValue();
+        public abstract SensorValueBase GetLastValue();
         public abstract void Dispose();
 
-        protected void EnqueueValue(UnitedSensorValue value)
+        protected void EnqueueValue(SensorValueBase value)
         {
             _queue.EnqueueData(value);
         }

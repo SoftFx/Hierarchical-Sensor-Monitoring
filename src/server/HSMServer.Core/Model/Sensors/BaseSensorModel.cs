@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    internal interface IBarSensor
+    public interface IBarSensor
     {
         BarBaseValue LocalLastValue { get; }
     }
@@ -25,8 +25,6 @@ namespace HSMServer.Core.Model
 
         public abstract SensorType Type { get; }
 
-
-        public Guid Id { get; private set; }
 
         public SensorState State { get; private set; }
 
@@ -69,14 +67,6 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override void BuildProductNameAndPath()
-        {
-            base.BuildProductNameAndPath();
-
-            Path = $"{ParentProduct.Path}{DisplayName}";
-        }
-
-
         internal void Update(SensorUpdate sensor)
         {
             Description = sensor.Description ?? Description;
@@ -108,7 +98,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ProductId = ParentProduct.Id,
+                ProductId = ParentProduct.Id.ToString(),
                 DisplayName = DisplayName,
                 Description = Description,
                 Unit = Unit,
@@ -130,9 +120,5 @@ namespace HSMServer.Core.Model
             Storage.Clear();
             ValidationResult = ValidationResult.Ok;
         }
-
-        internal List<BaseValue> GetValues(int count) => Storage.GetValues(count);
-
-        internal List<BaseValue> GetValues(DateTime from, DateTime to) => Storage.GetValues(from, to);
     }
 }

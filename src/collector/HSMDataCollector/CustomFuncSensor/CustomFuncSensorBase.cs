@@ -1,57 +1,54 @@
 ﻿using HSMDataCollector.Base;
 using HSMDataCollector.Core;
+using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
-using HSMSensorDataObjects.FullDataObject;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
     internal abstract class CustomFuncSensorBase : SensorBase
     {
+        protected readonly SensorType _type;
+
         private Timer _internalTimer;
-        protected readonly SensorType Type;
-        protected TimeSpan TimerSpan;
+        protected TimeSpan _timerSpan;
+
+        public override bool HasLastValue => true;
+
+
         protected CustomFuncSensorBase(string path, string productKey, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type)
             : base(path, productKey, queue, description)
         {
-            Type = type;
+            _type = type;
             RestartTimerInternal(timerSpan);
-            TimerSpan = timerSpan;
-        }
-        private void TimerCallback(object state)
-        {
-            UnitedSensorValue value = GetInvokeResult();
-            EnqueueValue(value);
-        }
-        protected UnitedSensorValue CreateErrorDataObject(Exception ex)
-        {
-            UnitedSensorValue result = new UnitedSensorValue();
-            result.Key = ProductKey;
-            result.Path = Path;
-            result.Status = SensorStatus.Error;
-            result.Time = DateTime.Now;
-            result.Comment = $"Error occurred! {ex.ToString()}";
-            result.Type = Type;
-            result.Data = ex.Message;
-            return result;
+            _timerSpan = timerSpan;
         }
 
-        protected UnitedSensorValue CreateDataObject<T>(T value, string description = "")
-        {
-            var valueObject = new UnitedSensorValue();
 
-            valueObject.Data = value.ToString();
-            valueObject.Description = description;
+        public override void Dispose()
+        {
+            _internalTimer?.Dispose();
+        }
+
+        protected abstract SensorValueBase GetInvokeResult();
+
+        protected SensorValueBase CreateErrorDataObject<T>(T value, Exception ex) =>
+            CreateDataObject(value, $"Error occurred! {ex}", SensorStatus.Error);
+
+        protected SensorValueBase CreateDataObject<T>(T value, string comment = "", SensorStatus status = SensorStatus.Ok)
+        {
+            var valueObject = SensorValuesFactory.BuildValue(value);
+
             valueObject.Path = Path;
             valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
-            valueObject.Type = Type;
-            valueObject.Status = SensorStatus.Ok;
+            valueObject.Status = status;
+            valueObject.Comment = comment;
 
             return valueObject;
         }
-        protected abstract UnitedSensorValue GetInvokeResult();
 
         protected void RestartTimerInternal(TimeSpan timerSpan)
         {
@@ -63,11 +60,11 @@ namespace HSMDataCollector.CustomFuncSensor
 
             _internalTimer = new Timer(TimerCallback, null, timerSpan, timerSpan);
         }
-        public override void Dispose()
-        {
-            _internalTimer?.Dispose();
-        }
 
-        public override bool HasLastValue => true;
+        private void TimerCallback(object state)
+        {
+            var value = GetInvokeResult();
+            EnqueueValue(value);
+        }
     }
 }

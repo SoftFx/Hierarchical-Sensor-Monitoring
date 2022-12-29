@@ -18,20 +18,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestProductModel(ProductEntity expected, ProductModel actual)
         {
             Assert.NotNull(actual);
-            Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.ParentProductId, actual.ParentProduct?.Id);
+            Assert.Equal(expected.Id, actual.Id.ToString());
+            Assert.Equal(expected.ParentProductId, actual.ParentProduct?.Id.ToString());
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.State, (int)actual.State);
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.CreationDate, actual.CreationDate.Ticks);
-
-            var expectedSubProducts = expected.SubProductsIds;
-            var actualSubProducts = actual.SubProducts.Select(p => p.Key).ToList();
-            TestCollections(expectedSubProducts, actualSubProducts);
-
-            var expectedSensors = expected.SensorsIds;
-            var actualSensors = actual.Sensors.Select(p => p.Key.ToString()).ToList();
-            TestCollections(expectedSensors, actualSensors);
         }
 
         internal static void TestProductModel(ProductModel expected, ProductModel actual)
@@ -66,7 +58,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(name, actual.DisplayName);
             Assert.Equal(ProductState.FullAccess, actual.State);
             Assert.NotEqual(DateTime.MinValue, actual.CreationDate);
-            Assert.False(string.IsNullOrEmpty(actual.Id));
+            Assert.NotEqual(Guid.Empty, actual.Id);
             Assert.True(string.IsNullOrEmpty(actual.Description));
             Assert.Equal(parentProduct, actual.ParentProduct);
 
@@ -88,7 +80,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Count, actual.Count);
 
             foreach (var expectedProduct in expected)
-                TestProductModel(expectedProduct, actualDict[expectedProduct.Id]);
+                TestProductModel(expectedProduct, actualDict[Guid.Parse(expectedProduct.Id)]);
         }
 
 
@@ -97,7 +89,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(actual);
             Assert.Equal(expected.Id, actual.Id.ToString());
             Assert.Equal(expected.AuthorId, actual.AuthorId.ToString());
-            Assert.Equal(expected.ProductId, actual.ProductId);
+            Assert.Equal(expected.ProductId, actual.ProductId.ToString());
             Assert.Equal(expected.State, (byte)actual.State);
             Assert.Equal(expected.Permissions, (long)actual.Permissions);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
@@ -130,7 +122,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(DateTime.MaxValue, actual.ExpirationTime);
         }
 
-        internal static void TestAccessKeyModel(Guid authorId, string productId, AccessKeyModel actual)
+        internal static void TestAccessKeyModel(Guid authorId, Guid productId, AccessKeyModel actual)
         {
             Assert.NotNull(actual);
             Assert.Equal(authorId, actual.AuthorId);
@@ -150,7 +142,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModelWithoutUpdatedMetadata(SensorEntity expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.ProductId, actual.ParentProduct?.Id);
+            Assert.Equal(expected.ProductId, actual.ParentProduct?.Id.ToString());
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
         }
@@ -219,7 +211,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));
             Assert.Equal(expected.Path.GetSensorName(), actual.DisplayName);
-            Assert.Equal(expected.Path, actual.Path);
+            Assert.Equal(expected.Path, actual.Path.WithoutFirstSlash());
 
             if (parentProduct == null)
             {
@@ -322,7 +314,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             AssertModels(expected.ValidationResult, actual.ValidationResult);
         }
 
-        private static void TestCollections(List<string> expected, List<string> actual)
+        private static void TestCollections<T>(List<T> expected, List<T> actual)
         {
             expected.Sort();
             actual.Sort();

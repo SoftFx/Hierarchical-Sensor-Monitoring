@@ -1,8 +1,6 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -16,13 +14,11 @@ namespace HSMServer.Core.Model
 
     public sealed class ProductModel : NodeBaseModel, INotificatable
     {
-        public string Id { get; }
-
         public ProductState State { get; }
 
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
 
-        public ConcurrentDictionary<string, ProductModel> SubProducts { get; }
+        public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; }
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
 
@@ -40,14 +36,14 @@ namespace HSMServer.Core.Model
         public ProductModel()
         {
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
-            SubProducts = new ConcurrentDictionary<string, ProductModel>();
+            SubProducts = new ConcurrentDictionary<Guid, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
             Notifications = new();
         }
 
         public ProductModel(ProductEntity entity) : this()
         {
-            Id = entity.Id;
+            Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
@@ -58,16 +54,12 @@ namespace HSMServer.Core.Model
 
         public ProductModel(string name) : this()
         {
-            Id = Guid.NewGuid().ToString();
+            Id = Guid.NewGuid();
             State = ProductState.FullAccess;
             DisplayName = name;
             CreationDate = DateTime.UtcNow;
         }
 
-        public ProductModel(string key, string name) : this(name)
-        {
-            Id = key;
-        }
 
         internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
@@ -88,15 +80,13 @@ namespace HSMServer.Core.Model
         internal ProductEntity ToProductEntity() =>
             new()
             {
-                Id = Id,
+                Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ParentProductId = ParentProduct?.Id,
+                ParentProductId = ParentProduct?.Id.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                SubProductsIds = SubProducts.Select(p => p.Value.Id).ToList(),
-                SensorsIds = Sensors.Select(p => p.Value.Id.ToString()).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 Policies = GetPolicyIds(),
             };
@@ -110,11 +100,7 @@ namespace HSMServer.Core.Model
                 RootProductName = DisplayName;
             }
             else
-            {
                 base.BuildProductNameAndPath();
-
-                Path = $"{ParentProduct.Path}{DisplayName}{CommonConstants.SensorPathSeparator}";
-            }
 
             foreach (var (_, sensor) in Sensors)
                 sensor.BuildProductNameAndPath();

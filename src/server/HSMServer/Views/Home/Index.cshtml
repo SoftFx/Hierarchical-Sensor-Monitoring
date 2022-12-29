@@ -1,6 +1,5 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Core.Model
 @using HSMServer.Core.Model.Authentication
 @using HSMServer.Core.Model.UserFilters
 @using HSMServer.Helpers;
@@ -35,12 +34,11 @@
 
     var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
+    var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
-
-    var historyLatestAction = "@Html.Raw(Url.Action(ViewConstants.HistoryLatestAction, ViewConstants.HomeController))";
-    var rawHistoryLatestAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryLatestAction, ViewConstants.HomeController))";
 
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
@@ -61,6 +59,8 @@
 <script src="~/js/plotly.js/plotly.min.js"></script>
 <script src="~/js/jstree/jstree.min.js"></script>
 <script src="~/moment.js/moment.min.js"></script>
+<script src="~/js/clipboard.js/clipboard.min.js"></script>
+
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -108,7 +108,7 @@
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="scrollableBlock col-auto ms-2">
                         <div class="col-md-auto">
-                            <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
+                            <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
                         </div>
                     </div>
                 </div>
@@ -117,7 +117,7 @@
     </div>
 
     <div class="flex-grow-1 my-1 me-1">
-        <div id="nodeDataSpinner" style="display:none">
+        <div class="d-none" id="nodeDataSpinner">
             <div class="d-flex justify-content-center align-items-center center_relative_spinner">
                 <div class="spinner-border normal_spinner text-secondary" role="status"></div>
             </div>
@@ -131,15 +131,14 @@
 <script>
     initializeTree();
     initializeUserRights('@(user.IsAdmin)',
-                         '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.Encode)))');
+                         '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.EncodeGuid)))');
     initialize();
     
 
     var interval = $("#treeInterval").val() * 1000;
     
-    updateTreeTimer();
+    setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
-    setTimeout(updateHistory, interval);
 
 
     $("#show").click(function () {
@@ -148,6 +147,9 @@
         else
             $("#filter").css("display", "none");
     });
+
+    $("#mainSpinner").css("display", "none");
+    $('#mainContainer').removeClass('hidden_element');
 
     function getSelectedNodeId(selectedNode) {
         let selectedNodeId = "";
@@ -171,7 +173,6 @@
         var id = dataObject.id;
 
         $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
         $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
@@ -184,7 +185,7 @@
 
         $('#validation_' + id).empty();
         if (dataObject.isValidationErrorVisible) {
-            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1' title='${dataObject.validationError}'></li>`);
         }
     }
 
@@ -200,22 +201,11 @@
             cache: false,
             async: true
         }).done(function (treeData) {
-            let jHtml_treeData = jQuery(treeData);  // get treeData jquery
-
-            // remove all nodes with 0 visible sensors - <li>, that have child <span class="nodeSensorsCount-span"> with text: (0/.. sensors)
-            jHtml_treeData.find(".nodeSensorsCount-span").each(function () {
-                if ($(this).text().startsWith("(0/")) {
-                    $(this).parent().remove();
-                }
-            });
-
-            $('#jstree').jstree(true).settings.core.data = jHtml_treeData.html();
+            $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
 
             refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-
-            $("#mainSpinner").css("display", "none");
-            $('#mainContainer').removeClass('hidden_element');
+            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         });
     }
 
@@ -225,7 +215,6 @@
 
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
-
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
@@ -247,28 +236,13 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
-
-                updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
             });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
-
-    var updateHistoryTimeoutId;
-    function updateHistory() {
-        clearTimeout(updateHistoryTimeoutId);
-
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
-
-        if (selectedNodeId != "" && selectedNode.children.length == 0) {
-            let selectedRadio = $('input[id$=' + selectedNodeId + ']:checked');
-            if (selectedRadio !== undefined) {
-                selectedRadio.click();
-            }
-        }
-
-        updateHistoryTimeoutId = setTimeout(updateHistory, interval);
-    }
+    
+    var clipboard = new ClipboardJS('[id^="copy_"]',{
+      container: document.getElementById('accessKeys_modal')
+    });
 </script>

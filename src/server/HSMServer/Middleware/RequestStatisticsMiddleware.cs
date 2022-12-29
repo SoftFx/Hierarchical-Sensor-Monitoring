@@ -27,6 +27,7 @@ namespace HSMServer.Middleware
                 _dataCollector.ReportResponseSize(context.Response.ContentLength ?? 0);
                 return Task.CompletedTask;
             });
+
             await _next(context);
         }
     }

@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
-using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -77,7 +76,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return (from, to);
         }
 
-        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.Reverse().GetEnumerator();
+        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }

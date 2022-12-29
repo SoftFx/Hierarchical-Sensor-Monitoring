@@ -20,59 +20,60 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntSensorValue)">
             <summary>
             Receives value of int sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue)">
             <summary>
             Receives value of double sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.StringSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.StringSensorValue)">
             <summary>
             Receives value of string sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntBarSensorValue)">
             <summary>
             Receives value of integer bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
-            <summary>
-            Receives the value of file sensor
-            </summary>
-            <param name="sensorValue"></param>
-            <returns></returns>
-        </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorBytesValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.FileSensorValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
-            Recommended to use for pdf files in order to keep the pdf file encoding.
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.IEnumerable{HSMSensorDataObjects.CommonSensorValue})">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorValueRequests.SensorValueBase})">
             <summary>
-            Endpoint used by HSMDataCollector services, which sends data in portions
+            Accepts data in SensorValueBase format. Converts data to a typed format and saves it to the database.
+            The key must be unique and stored in the header.
+            </summary>
+            <param name="values"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMServer.ObsoleteUnitedSensorValue.UnitedSensorValue})">
+            <summary>
+            Obsolete method. Will be removed.
+            Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
             </summary>
             <param name="values"></param>
             <returns></returns>
@@ -85,6 +86,11 @@
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.FileHistoryRequest)">
             <summary>
             Get file (csv or txt) history [from, to] or [from - count] for some sensor
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
+            <summary>
+            Swagger filter for adding required string 'Key' in API requests header
             </summary>
         </member>
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">

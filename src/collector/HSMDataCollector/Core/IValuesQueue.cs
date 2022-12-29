@@ -1,9 +1,9 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Core
 {
     public interface IValuesQueue
     {
-        void EnqueueData(UnitedSensorValue value);
+        void EnqueueData(SensorValueBase value);
     }
 }

@@ -2,7 +2,7 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 
-@model List<AccessKeyViewModel>
+@model AccessKeyTableViewModel
 
 @{
     ViewData["Title"] = "Access keys";
@@ -11,40 +11,38 @@
 
 <script>
     var getAvailableAccessKeys = "@Html.Raw(Url.Action(nameof(AccessKeysController.AvailableAccessKeys), ViewConstants.AccessKeysController))";
+    var getSearchKeyResult = "@Html.Raw(Url.Action(nameof(AccessKeysController.SearchKeyResult), ViewConstants.AccessKeysController))";
 </script>
 
+<link rel="stylesheet" href="~/css/bundles/accessKeyBundle.min.css"/>
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
-<div class="container">
-    <div class="row justify-content-center">
-        <h5 style='margin: 20px 0px 10px;'>Access keys</h5>
-
-        <table class="table">
-            <tr>
-                <th id="accessKeys_productColumn">
-                    Product
-                   @* <br />
-                    (
-                    <input class="form-check-input" type="checkbox" value="" onchange="allProductsChanged()" id="allProducts">
-                    <label class="form-check-label" for="allProducts">
-                        node)
-                    </label>*@
-                </th>
-                <th>Display name</th>
-                <th>Key</th>
-                <th>Permissions</th>
-                <th>Expiration</th>
-                <th>Author</th>
-                <th>State</th>
-                <th></th>
-            </tr>
-            <tbody id="accessKeysTable">
-                @await Html.PartialAsync("_AllAccessKeys", Model)
-            </tbody>
-        </table>
+<div class="container w-100">
+    <div class="row">
+        <div class="my-3">
+            <div class="col-2 mt-1 text-nowrap">
+                <h5>Access keys</h5>
+            </div>
+        </div>
+        <div class="row ms-0 ps-0">
+            <div class="col-7 mb-1 mx-0 px-0">
+                <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
+            </div>
+            <div class="col-2 px-0 ms-1">
+                <button onclick="searchKey()" type="button" class="btn btn-secondary">
+                    <i type="button" class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
     </div>
 </div>
+<div class="container">
+    <div class="d-flex align-items-center w-100 justify-content-center" id="accessTable">
+        @await Html.PartialAsync("_AllAccessKeys", Model)
+    </div>
+</div>
+
 
 @await Html.PartialAsync("_AccessKeysModal")
 
@@ -52,24 +50,34 @@
 <script>
     var clipboard = new ClipboardJS('[id^="copy_"]');
 
-    // there is code, that need to call allProductsChanged after closing accessKeys_modal (if there is exist checkbox with id=allProducts)
     $('#accessKeys_modal').on('hidden.bs.modal', function (e) {
         allProductsChanged();
     });
 
     function allProductsChanged() {
-        //let element = document.getElementById('allProducts');
-        //let isAllProducts = element.checked;
-
-        let isAllProducts = false;  // false while checkbox id=allProducts is not visible (AccessKeys/Index.cshtml)
         $.ajax({
             type: 'GET',
-            url: getAvailableAccessKeys + "?AllProducts=" + isAllProducts,
+            url: getAvailableAccessKeys,
             cache: false,
             async: true,
             success: function (viewData) {
                 $('#accessKeysTable').html(viewData);
             }
+        });
+    }
+    
+    function searchKey() {
+        const keyToSearch = document.getElementById("searchKey").value;
+        console.log(keyToSearch)
+        $.ajax({
+               type: 'GET',
+               url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
+               cache: false,
+               async: true,
+               success: function (viewData) {
+                    $('#accessKeysTable').html(viewData)
+                    document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
+               }
         });
     }
 </script>

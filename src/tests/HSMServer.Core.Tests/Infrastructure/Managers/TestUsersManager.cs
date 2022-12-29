@@ -40,7 +40,15 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static User NotAdmin { get; } =
             BuildUser(TestUserNotAdminName, false);
 
-
+        internal static User GetEmptyUser()
+        {
+            return new User() {
+                UserName = string.Empty,
+                CertificateThumbprint = string.Empty,
+                CertificateFileName = string.Empty,
+                Password = string.Empty
+            };
+        }
         internal static User BuildRandomUser() =>
             BuildUser(GenerateRandomProductRole(), RandomGenerator.GetRandomString());
 

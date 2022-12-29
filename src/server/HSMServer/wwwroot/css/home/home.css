@@ -47,7 +47,7 @@
     overflow: auto;
 }
 
-.info-link {
+.button-link {
     cursor: pointer;
 }
 
@@ -76,8 +76,6 @@
     -webkit-appearance: none;
     box-shadow: none !important;
 }
-
-.nodeSensorsCount-span { }
 
 .blockedSensor-span {
     text-decoration: line-through;

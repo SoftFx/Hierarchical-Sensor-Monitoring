@@ -1,37 +1,47 @@
 # HSM Server
 
-## New features:
+## Site
 
-### Site
+* Tree rendering has been improved
+* All Access keys tables have been improved
+* Logic for Block/Unblock for Access keys has been added
+* Buttons 'Previos page', 'Next page' and number of current page have been added for sensor values history table
+* Limit for getting sensor values history from database has been increased to 50000 values (for graph and table)
+* Real time refreshing for graph and table with sensor values history has been removed
 
-* Grid view has been added for nodes and sensors
-* List view has been added for nodes
-* Meta info view has been added for products and nodes
-* Expected update interval has been added for products and nodes (sensor expected update interval is inherited from parent if it doesn't set)
-* Spinners while loading tree and node data have been added
+## Core:
 
-### Sensor statuses
+* Supporting of old sensor history databases (MonitoringData_ folders) has been removed. **(It's a breaking change)**
+* Supporting of sending sensor values by product ID has been removed. **(It's a breaking change)**
+* Supporting of file sensors with string content has been removed. **(It's a breaking change)**
 
-* Unknown status has been replaced by OffTime status (the status indicates that the sensor is off by schedule)
-* OffTime status has minimal priority for tree and telegram notifications
+## Rest API
+
+* Access key has been moved from request Body to Header. **(It's a breaking change)**
+* Old /file request for file sensor with string content has been removed. **(It's a breaking change)**
+* /fileBytes request has been renamed to /file. **(It's a breaking change)**
+* /listNew request has been marked as Obsolete
+* /history and /historyFile requests use async method for getting sensor values history pages (pagination)
+
+## Swagger
+
+* Swagger has been updated to v3
+* Key is required header field for every request
 
 ## Other
 
-* Max request size has been reduced to 50Mb
-* Remorte IP and port logs have been added after Bad request
+* If there is some exception while sending sensor values, log message contains information about request Access Key
 * Bugfixing & optimization
 
 # HSM DataObjects
 
-* Nuget package has been updated to v.2.1.36
-* Unknown status has been replaced by OffTime status
+* Nuget package has been updated to v.3.0.0
+* Obsolete properties and classes have been removed. **(It's a breaking change)**
+* Property 'key' in requests has been marked as Obsolete
+* Property 'value' in FileSensorValue has been redone from byte[] to List<byte>
 
 # HSM Datacollector
 
-* Nuget package has been updated to v.2.1.43
-* Unknown sensor status using has been removed
-* Max sensor's data size for one request has been reduced to 1000 values
-
-# HSM Cpp Wrapper
-
-* Unknown status has been replaced by OffTime status
+* Nuget package has been updated to v.3.0.0
+* Using obsolete classes has been removed
+* New API method for creating FileSensorValue from string has been added

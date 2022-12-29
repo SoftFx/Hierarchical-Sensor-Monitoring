@@ -1,8 +1,6 @@
-﻿using HSMSensorDataObjects.BarData;
-using HSMSensorDataObjects.FullDataObject;
-using System;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using System.Collections.Generic;
-using System.Text.Json;
+using System.Linq;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -16,13 +14,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             _productKey = productKey;
 
 
-        internal SensorValueBase BuildRandomSensorValue() =>
-            BuildSensorValue((SensorType)RandomGenerator.GetRandomByte());
-
-        // max: 6, because United sensor values don't exist for FileSensorValue and FileSensorBytesValue
-        internal UnitedSensorValue BuildRandomUnitedSensorValue() =>
-            BuildUnitedSensorValue((SensorType)RandomGenerator.GetRandomByte(max: 6));
-
         internal SensorValueBase BuildSensorValue(SensorType sensorType) =>
             sensorType switch
             {
@@ -32,8 +23,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.StringSensor => BuildStringSensorValue(),
                 SensorType.IntegerBarSensor => BuildIntBarSensorValue(),
                 SensorType.DoubleBarSensor => BuildDoubleBarSensorValue(),
-                SensorType.FileSensorBytes => BuildFileSensorBytesValue(),
-                SensorType.FileSensor => BuildFileSensorBytesValue(),
+                SensorType.FileSensor => BuildFileSensorValue(),
                 _ => null,
             };
 
@@ -41,7 +31,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var boolSensorValue = new BoolSensorValue()
             {
-                BoolValue = RandomGenerator.GetRandomBool(),
+                Value = RandomGenerator.GetRandomBool(),
             };
 
             return boolSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -51,7 +41,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var intSensorValue = new IntSensorValue()
             {
-                IntValue = RandomGenerator.GetRandomInt(),
+                Value = RandomGenerator.GetRandomInt(),
             };
 
             return intSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -61,7 +51,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var doubleSensorValue = new DoubleSensorValue()
             {
-                DoubleValue = RandomGenerator.GetRandomDouble(),
+                Value = RandomGenerator.GetRandomDouble(),
             };
 
             return doubleSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -71,7 +61,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var stringSensorValue = new StringSensorValue()
             {
-                StringValue = RandomGenerator.GetRandomString(),
+                Value = RandomGenerator.GetRandomString(),
             };
 
             return stringSensorValue.FillCommonSensorValueProperties(_productKey);
@@ -105,85 +95,35 @@ namespace HSMServer.Core.Tests.Infrastructure
             return doubleBarSensorValue.FillCommonBarSensorValueProperties(_productKey);
         }
 
-        internal FileSensorBytesValue BuildFileSensorBytesValue()
+        internal FileSensorValue BuildFileSensorValue()
         {
-            var fileSensorBytesValue = new FileSensorBytesValue()
+            var fileSensorValue = new FileSensorValue()
             {
                 Extension = RandomGenerator.GetRandomString(3),
-                FileContent = RandomGenerator.GetRandomBytes(),
-                FileName = nameof(FileSensorBytesValue),
+                Value = RandomGenerator.GetRandomBytes().ToList(),
+                Name = nameof(FileSensorValue),
             };
 
-            return fileSensorBytesValue.FillCommonSensorValueProperties(_productKey);
-        }
-
-        internal UnitedSensorValue BuildUnitedSensorValue(SensorType sensorType, bool isMinEndTime = false)
-        {
-            var sensorValue = new UnitedSensorValue
-            {
-                Type = sensorType,
-                Data = BuildUnitedValueData(sensorType, isMinEndTime),
-            };
-
-            return sensorValue.FillCommonSensorValueProperties(_productKey, uniqPath: sensorType.ToString());
+            return fileSensorValue.FillCommonSensorValueProperties(_productKey);
         }
 
 
-        private static string BuildUnitedValueData(SensorType sensorType, bool isMinEndTime) =>
-            sensorType switch
-            {
-                SensorType.BooleanSensor => RandomGenerator.GetRandomBool().ToString(),
-                SensorType.IntSensor => RandomGenerator.GetRandomInt().ToString(),
-                SensorType.DoubleSensor => RandomGenerator.GetRandomDouble().ToString(),
-                SensorType.StringSensor => RandomGenerator.GetRandomString(),
-                SensorType.IntegerBarSensor => JsonSerializer.Serialize(BuildIntBarData(isMinEndTime)),
-                SensorType.DoubleBarSensor => JsonSerializer.Serialize(BuildDoubleBarData(isMinEndTime)),
-                _ => null,
-            };
-
-        private static IntBarData BuildIntBarData(bool isMinEndTime) =>
-            new()
-            {
-                LastValue = RandomGenerator.GetRandomInt(),
-                Min = RandomGenerator.GetRandomInt(),
-                Max = RandomGenerator.GetRandomInt(),
-                Mean = RandomGenerator.GetRandomInt(),
-                Count = RandomGenerator.GetRandomInt(positive: true),
-                StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
-                Percentiles = GetPercentileValuesInt(),
-            };
-
-        private static DoubleBarData BuildDoubleBarData(bool isMinEndTime) =>
-            new()
-            {
-                LastValue = RandomGenerator.GetRandomDouble(),
-                Min = RandomGenerator.GetRandomDouble(),
-                Max = RandomGenerator.GetRandomDouble(),
-                Mean = RandomGenerator.GetRandomDouble(),
-                Count = RandomGenerator.GetRandomInt(positive: true),
-                StartTime = DateTime.UtcNow.AddSeconds(-10),
-                EndTime = isMinEndTime ? DateTime.MinValue : DateTime.UtcNow.AddSeconds(10),
-                Percentiles = GetPercentileValuesDouble(),
-            };
-
-
-        private static List<PercentileValueInt> GetPercentileValuesInt(int size = 2)
+        private static Dictionary<double, int> GetPercentileValuesInt(int size = 3)
         {
-            var percentiles = new List<PercentileValueInt>(size);
+            var percentiles = new Dictionary<double, int>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueInt(RandomGenerator.GetRandomInt(), RandomGenerator.GetRandomDouble()));
+                percentiles.Add(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomInt());
 
             return percentiles;
         }
 
-        private static List<PercentileValueDouble> GetPercentileValuesDouble(int size = 2)
+        private static Dictionary<double, double> GetPercentileValuesDouble(int size = 3)
         {
-            var percentiles = new List<PercentileValueDouble>(size);
+            var percentiles = new Dictionary<double, double>(size);
 
             for (int i = 0; i < size; ++i)
-                percentiles.Add(new PercentileValueDouble(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomDouble()));
+                percentiles.Add(RandomGenerator.GetRandomDouble(), RandomGenerator.GetRandomDouble());
 
             return percentiles;
         }

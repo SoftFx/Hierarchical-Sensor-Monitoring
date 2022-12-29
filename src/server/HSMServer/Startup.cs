@@ -10,6 +10,7 @@ using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
+using HSMServer.Model;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -19,6 +20,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.PlatformAbstractions;
+using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
 
@@ -28,9 +30,8 @@ namespace HSMServer
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services
-                .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                    .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
 
             services.AddHsts(options =>
             {
@@ -40,7 +41,11 @@ namespace HSMServer
             });
 
             services.AddMvc();
-            services.AddFluentValidation();
+            services.AddFluentValidation(options =>
+            {
+                options.ImplicitlyValidateChildProperties = true;
+                options.ImplicitlyValidateRootCollectionElements = true;
+            });
 
             services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
 
@@ -48,10 +53,10 @@ namespace HSMServer
             services.AddSingleton<IUserManager, UserManager>();
             services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
             services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-            services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
             services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
             services.AddSingleton<INotificationsCenter, NotificationsCenter>();
+            services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
             services.AddSingleton<TreeViewModel>();
 
             services.AddHostedService<OutdatedSensorService>();
@@ -63,15 +68,16 @@ namespace HSMServer
             services.AddSwaggerGen(o =>
             {
                 o.UseInlineDefinitionsForEnums();
-            });
+                o.OperationFilter<DataRequestHeaderSwaggerFilter>();
+                o.SwaggerDoc(ServerSettings.Version, new OpenApiInfo
+                {
+                    Version = ServerSettings.Version,
+                    Title = ServerSettings.Name,
+                });
 
-            services.ConfigureSwaggerGen(options =>
-            {
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
-                options.IncludeXmlComments(xmlPath, true);
-                options.DocumentFilter<SwaggerIgnoreClassFilter>();
-                options.SchemaFilter<SwaggerExcludePropertiesFilter>();
+                o.IncludeXmlComments(xmlPath, true);
             });
         }
 
@@ -90,12 +96,11 @@ namespace HSMServer
             app.CountRequestStatistics();
             app.UseMiddleware<LoggingExceptionMiddleware>();
 
-            app.UseSwagger(c => c.SerializeAsV2 = true);
-
+            app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
                 c.RoutePrefix = "api/swagger";
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "HSM server api");
+                c.SwaggerEndpoint($"/swagger/{ServerSettings.Version}/swagger.json", "HSM server api");
             });
 
             app.UseStaticFiles(new StaticFileOptions

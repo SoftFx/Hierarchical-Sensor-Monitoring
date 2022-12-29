@@ -2,60 +2,56 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Core.Model.Authentication
+@using HSMServer.Model.AccessKeysViewModels
 
 @model ProductNodeViewModel
 
 
+@{
+    var user = User as User;
+}
+
+<link rel="stylesheet" href="~/css/bundles/accessKeyBundle.min.css"/>
 <script src="~/js/clipboard.js/clipboard.min.js"></script>
 
 
-<input id='accessKey_prodcutId' style='display: none' value="@Model.EncodedId" />
-<input id='accessKey_productName' style='display: none' value="@Model.Name" />
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+<script src="~/js/bundles/accessKey.min.js"></script>
 
-<table class="table">
-    <tr>
-        <th>Key</th>
-        <th></th>
-        <th>Display name</th>
-        <th>Permissions</th>
-        <th>Expiration</th>
-        <th>State</th>
-    </tr>
-    @foreach (var (_, key) in Model.AccessKeys)
-    {
-        <tr>
-            <td nowrap>@key.Id</td>
-            <td>
-                <button id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="btn btn-secondary">
-                    <i class="far fa-copy"></i>
-                </button>
-            </td>
-            <td nowrap>@key.DisplayName</td>
-            <td>@key.Permissions</td>
-            <td>@key.ExpirationDate</td>
-            <td>@key.State</td>
-        </tr>
-    }
-</table>
+<input class="d-none" id='accessKey_prodcutId' value="@Model.EncodedId"/>
+<input class="d-none" id='accessKey_productName' value="@Model.Name"/>
+<div class="container-fluid">
+    <div class="table-responsive overflow-visible">
+        @await Html.PartialAsync("_AllAccessKeys",new AccessKeyTableViewModel() { Keys = Model.GetAccessKeys()})
+    </div>
 
-<div align="right">
-    @if (Model.IsChangingAccessKeysAvailable(User as User))
-    {
-        <button class="btn btn-secondary" onclick="addButtonClick()">Add</button>
-    }
-    <button class="btn btn-secondary" onclick="hideModal()">Close</button>
+
+    <div class="container-fluid d-flex flex-row-reverse align-items-center flex-shrink-0 ">
+        <div class="row flex-nowrap">
+            @if (Model.IsChangingAccessKeysAvailable(User as User))
+            {
+                <button id="addButton" class="btn btn-secondary col-2 w-50 mx-1" type="button" onclick="addButtonClick()">Add</button>
+            }
+            <button id="closeButton" class="btn btn-secondary col-2" type="button" onclick="hideModal()">Close</button>
+        </div>
+    </div>
 </div>
 
 
 <script>
-    var clipboardCopy = new ClipboardJS('[id^="copy_"]', {
-        container: document.getElementById('accessKeys_modal')
-    });
-
     function addButtonClick() {
         let productId = $('#accessKey_prodcutId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
         showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
     }
+    
+    $(document).ready(() => {
+        if (document.getElementById('addButton') !== null){
+            document.getElementById('closeButton').classList.add('w-50')
+        }
+        else{
+            document.getElementById('closeButton').classList.add('w-100')
+        }
+    })       
 </script>

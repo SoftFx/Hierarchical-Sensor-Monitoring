@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Globalization;
@@ -38,9 +38,9 @@ namespace HSMServer.ApiObjectsConverters
         private static readonly List<string> _fileSensorHeader = new()
         {
             nameof(SensorValueBase.Time),
-            nameof(FileSensorBytesValue.Value),
-            nameof(FileValue.Name),
-            nameof(FileSensorBytesValue.Extension),
+            nameof(FileSensorValue.Value),
+            nameof(FileSensorValue.Name),
+            nameof(FileSensorValue.Extension),
             nameof(SensorValueBase.Status),
             nameof(SensorValueBase.Comment),
         };

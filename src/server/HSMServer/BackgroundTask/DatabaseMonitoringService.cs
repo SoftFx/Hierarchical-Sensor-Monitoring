@@ -14,7 +14,7 @@ namespace HSMServer.BackgroundTask
     public class DatabaseMonitoringService : BackgroundService
     {
         private DateTime _lastReported;
-        private readonly TimeSpan _checkInterval = new TimeSpan(0,0, 5, 0);
+        private readonly TimeSpan _checkInterval = new TimeSpan(0, 0, 5, 0);
         private readonly ILogger<DatabaseMonitoringService> _logger;
         private readonly IDatabaseCore _databaseCore;
         private readonly IDataCollectorFacade _dataCollector;
@@ -32,7 +32,7 @@ namespace HSMServer.BackgroundTask
             do
             {
                 _dataCollector.ReportDatabaseSize(_databaseCore.GetDatabaseSize());
-                _dataCollector.ReportMonitoringDataSize(_databaseCore.GetMonitoringDataSize());
+                _dataCollector.ReportSensorsHistoryDataSize(_databaseCore.GetSensorsHistoryDatabaseSize());
                 _dataCollector.ReportEnvironmentDataSize(_databaseCore.GetEnvironmentDatabaseSize());
 
                 await Task.Delay(_checkInterval, stoppingToken);

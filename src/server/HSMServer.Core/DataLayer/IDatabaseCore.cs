@@ -11,7 +11,7 @@ namespace HSMServer.Core.DataLayer
         #region Size
 
         long GetDatabaseSize();
-        long GetMonitoringDataSize();
+        long GetSensorsHistoryDatabaseSize();
         long GetEnvironmentDatabaseSize();
 
         #endregion
@@ -20,6 +20,8 @@ namespace HSMServer.Core.DataLayer
 
         void AddProduct(ProductEntity entity);
         void UpdateProduct(ProductEntity entity);
+        [Obsolete("Remove this after product id migration")]
+        void UpdateProduct(string oldId, ProductEntity entity);
         void RemoveProduct(string id);
         ProductEntity GetProduct(string id);
         List<ProductEntity> GetAllProducts();
@@ -40,14 +42,13 @@ namespace HSMServer.Core.DataLayer
 
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
-        void RemoveSensorWithMetadata(string sensorId, string productName, string path);
+        void RemoveSensorWithMetadata(string sensorId);
 
         void AddSensorValue(SensorValueEntity valueEntity);
-        void ClearSensorValues(string sensorId, string productName, string path);
+        void ClearSensorValues(string sensorId);
 
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
-        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
-        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to, int count = 50000);
+        IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
 

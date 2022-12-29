@@ -10,7 +10,7 @@ using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.FullDataObject;
+using HSMSensorDataObjects.SensorValueRequests;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -33,6 +33,7 @@ namespace HSMDataCollector.Core
     {
         private readonly string _productKey;
         private readonly string _listSendingAddress;
+        private readonly string _fileSendingAddress;
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
@@ -49,16 +50,19 @@ namespace HSMDataCollector.Core
         public DataCollector(string productKey, string address, int port = 44330)
         {
             var connectionAddress = $"{address}:{port}/api/sensors";
-            _listSendingAddress = $"{connectionAddress}/listNew";
+            _listSendingAddress = $"{connectionAddress}/list";
+            _fileSendingAddress = $"{connectionAddress}/file";
             _productKey = productKey;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             HttpClientHandler handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
             _client = new HttpClient(handler);
+            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), productKey);
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
+            _dataQueue.FileReceving += DataQueue_FileReceving; ;
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
         }
@@ -92,10 +96,9 @@ namespace HSMDataCollector.Core
 
             _logger?.Info("DataCollector stopping...");
 
-            List<UnitedSensorValue> allData = new List<UnitedSensorValue>();
+            var allData = new List<SensorValueBase>();
             if (_dataQueue != null)
             {
-                //allData.AddRange(_dataQueue.GetAllCollectedData());
                 allData.AddRange(_dataQueue.GetCollectedData());
                 _dataQueue.Stop();
             }
@@ -117,7 +120,6 @@ namespace HSMDataCollector.Core
 
             if (allData.Any())
             {
-                //SendData(allData);
                 SendMonitoringData(allData);
             }
 
@@ -198,6 +200,16 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<string> CreateStringSensor(string path, string description)
         {
             return CreateInstantValueSensorInternal<string>(path, description, SensorType.StringSensor);
+        }
+        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
+        {
+            var existingSensor = GetExistingSensor(path);
+            if (existingSensor is IInstantValueSensor<string> instantValueSensor)
+                return instantValueSensor;
+
+            var sensor = new InstantFileSensor(path, _productKey, fileName, extension, _dataQueue as IValuesQueue, description);
+            AddNewSensor(sensor, path);
+            return sensor;
         }
 
         private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description,
@@ -534,20 +546,39 @@ namespace HSMDataCollector.Core
 
             return count;
         }
-        private void DataQueue_SendValues(object sender, List<UnitedSensorValue> e)
+        private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
         {
             SendMonitoringData(e);
         }
-        //private void DataQueue_SendData(object sender, List<CommonSensorValue> e)
-        //{
-        //    SendData(e);
-        //}
 
-        private void SendMonitoringData(List<UnitedSensorValue> values)
+        private void DataQueue_FileReceving(object _, FileSensorValue value)
         {
             try
             {
-                string jsonString = JsonConvert.SerializeObject(values);
+                string jsonString = JsonConvert.SerializeObject(value);
+                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
+                var res = _client.PostAsync(_fileSendingAddress, data).Result;
+
+                if (!res.IsSuccessStatusCode)
+                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
+            }
+            catch (Exception e)
+            {
+                if (_dataQueue != null && !_dataQueue.Disposed)
+                    _dataQueue?.ReturnFile(value);
+
+                _logger?.Error($"Failed to send: {e}");
+            }
+        }
+
+        private void SendMonitoringData(List<SensorValueBase> values)
+        {
+            try
+            {
+                if (values.Count == 0)
+                    return;
+
+                string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
                 //_logger?.Info("Try to send data: " + jsonString);
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
                 var res = _client.PostAsync(_listSendingAddress, data).Result;

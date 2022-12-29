@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using System.Linq;
+using HSMServer.Core.Model.Authentication;
 
 namespace HSMServer.Core.Helpers
 {
@@ -32,6 +33,11 @@ namespace HSMServer.Core.Helpers
         public static bool IsConfigurationPageAllowed(User user)
         {
             return user.IsAdmin;
+        }
+
+        public static bool IsManager(User user)
+        {
+            return user.ProductsRoles.Any(x => x.Value == ProductRoleEnum.ProductManager);
         }
     }
 }

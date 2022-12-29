@@ -48,6 +48,7 @@ namespace HSMServer.Controllers
         }
 
         #region Products
+
         public IActionResult Index()
         {
             var user = HttpContext.User as User;
@@ -76,7 +77,7 @@ namespace HSMServer.Controllers
             _treeValuesCache.AddProduct(productName);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] string productId)
+        public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)
         {
             _treeValuesCache.RemoveProduct(productId);
         }
@@ -88,23 +89,23 @@ namespace HSMServer.Controllers
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
-            // TODO: use ViewComponent and remove using TempData for passing notAdminUsers
-            TempData[TextConstants.TempDataNotAdminUsersText] = _userManager.GetUsers(u => !u.IsAdmin).ToList();
+            var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();
 
-            var decodedId = SensorPathHelper.Decode(encodedProductId);
+            var decodedId = SensorPathHelper.DecodeGuid(encodedProductId);
             _treeViewModel.Nodes.TryGetValue(decodedId, out var productNode);
 
             var users = _userManager.GetViewers(decodedId);
 
-            var pairs = new List<KeyValuePair<User, ProductRoleEnum>>();
-            if (users != null || users.Any())
-                foreach (var user in users.OrderBy(x => x.UserName))
-                {
-                    pairs.Add(new KeyValuePair<User, ProductRoleEnum>(user,
-                        user.ProductsRoles.First(x => x.Key.Equals(productNode.Id)).Value));
-                }
+            var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
-            return View(new EditProductViewModel(productNode, pairs));
+            var productNodeId = productNode.Id.ToString();
+            foreach (var user in users.OrderBy(x => x.UserName))
+            {
+                pairs.Add(new(user,
+                    user.ProductsRoles.First(x => x.Key.Equals(productNodeId)).Value));
+            }
+
+            return View(new EditProductViewModel(productNode, pairs, notAdminUsers));
         }
 
         [HttpPost]
@@ -137,7 +138,7 @@ namespace HSMServer.Controllers
             var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(Guid.Parse(model.ProductKey)))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
@@ -162,7 +163,6 @@ namespace HSMServer.Controllers
                 user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
-
         }
 
         [HttpPost]

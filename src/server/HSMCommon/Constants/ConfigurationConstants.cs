@@ -65,7 +65,7 @@ namespace HSMCommon.Constants
         public const string BotNameDescription = $"Installed by BotFather botname. It must be ended with 'bot'. {TelegramWiki}";
         public const string AreBotMessagesEnabledDescription = "Can bot send messages.";
 
-        private const string TelegramWiki = "Installation link <a href='https://core.telegram.org/bots#6-botfather' target='_blank'>Bot Installation</a>.";
+        private const string TelegramWiki = "Installation link <a href='https://core.telegram.org/bots/features#botfather' target='_blank'>Bot Installation</a>.";
 
         #endregion
 

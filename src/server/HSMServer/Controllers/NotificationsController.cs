@@ -52,7 +52,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public string CopyStartCommandForGroup([FromQuery(Name = "ProductId")] string encodedProductId)
         {
-            var productId = SensorPathHelper.Decode(encodedProductId);
+            var productId = SensorPathHelper.DecodeGuid(encodedProductId);
             var product = _cache.GetProduct(productId);
 
             return _telegramBot.GetStartCommandForGroup(product);
@@ -78,7 +78,7 @@ namespace HSMServer.Controllers
 
         private INotificatable GetEntity(string productId) =>
             !string.IsNullOrEmpty(productId)
-                ? _cache.GetProduct(SensorPathHelper.Decode(productId))
+                ? _cache.GetProduct(SensorPathHelper.DecodeGuid(productId))
                 : GetCurrentUser();
 
         private User GetCurrentUser() => _userManager.GetUser((HttpContext.User as User).Id);
