@@ -36,9 +36,6 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
 
-        [Obsolete("Remove this after product id migration")]
-        private readonly ConcurrentDictionary<string, Guid> _productKeys = new();
-
         public bool IsInitialized { get; private set; }
 
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
@@ -467,11 +464,9 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(policyEntities)} deserialized");
 
             var productEntities = RequestProducts();
-            var productsToResave = ApplyProducts(productEntities, policies);
+            ApplyProducts(productEntities, policies);
 
-            var usersToResave = UsersMigration();
-
-            var sensorsToResave = ApplySensors(productEntities, RequestSensors(), policies);
+            ApplySensors(productEntities, RequestSensors(), policies);
 
             BuildNodesProductNameAndPath();
 
@@ -480,10 +475,8 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
-            var keysToResave = ApplyAccessKeys(accessKeysEntities.ToList());
+            ApplyAccessKeys(accessKeysEntities.ToList());
             _logger.Info($"{nameof(accessKeysEntities)} applied");
-
-            ResaveEntities(productsToResave, sensorsToResave, keysToResave, usersToResave);
 
             IsInitialized = true;
 
@@ -528,11 +521,8 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private Dictionary<Guid, string> ApplyProducts(List<ProductEntity> productEntities,
-            Dictionary<Guid, Policy> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<Guid, Policy> policies)
         {
-            var productsToResave = new Dictionary<Guid, string>(1 << 6);
-
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
             {
@@ -540,12 +530,6 @@ namespace HSMServer.Core.Cache
                 product.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);
-
-                if (productEntity.Id != product.Id.ToString())
-                {
-                    _productKeys.TryAdd(productEntity.Id, product.Id);
-                    productsToResave.Add(product.Id, productEntity.Id);
-                }
             }
 
             _logger.Info($"{nameof(productEntities)} applied");
@@ -554,26 +538,18 @@ namespace HSMServer.Core.Cache
             foreach (var productEntity in productEntities)
                 if (!string.IsNullOrEmpty(productEntity.ParentProductId))
                 {
-                    var parentId = _productKeys.TryGetValue(productEntity.ParentProductId, out var mappedParentId)
-                        ? mappedParentId
-                        : Guid.Parse(productEntity.ParentProductId);
-                    var productId = _productKeys.TryGetValue(productEntity.Id, out var mappedProductId)
-                        ? mappedProductId
-                        : Guid.Parse(productEntity.Id);
+                    var parentId = Guid.Parse(productEntity.ParentProductId);
+                    var productId = Guid.Parse(productEntity.Id);
 
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
             _logger.Info("Links between products are built");
-
-            return productsToResave;
         }
 
-        private List<SensorEntity> ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
+        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
             Dictionary<Guid, Policy> policies)
         {
-            var sensorsToResave = new List<SensorEntity>(1 << 4);
-
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
@@ -582,26 +558,17 @@ namespace HSMServer.Core.Cache
             foreach (var sensorEntity in sensorEntities)
                 if (!string.IsNullOrEmpty(sensorEntity.ProductId))
                 {
-                    var parentId = _productKeys.TryGetValue(sensorEntity.ProductId, out var mappedParentId)
-                        ? mappedParentId
-                        : Guid.Parse(sensorEntity.ProductId);
+                    var parentId = Guid.Parse(sensorEntity.ProductId);
                     var sensorId = Guid.Parse(sensorEntity.Id);
 
                     if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
-                    {
                         parent.AddSensor(sensor);
-
-                        if (mappedParentId != Guid.Empty)
-                            sensorsToResave.Add(sensor.ToEntity());
-                    }
                 }
             _logger.Info("Links between products and their sensors are built");
 
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
             FillSensorsData();
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
-
-            return sensorsToResave;
         }
 
         private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
@@ -622,104 +589,16 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private List<AccessKeyEntity> ApplyAccessKeys(List<AccessKeyEntity> entities)
+        private void ApplyAccessKeys(List<AccessKeyEntity> entities)
         {
-            var keysToResave = new List<AccessKeyEntity>(1 << 5);
-
             foreach (var keyEntity in entities)
-            {
-                Guid? parentId = _productKeys.TryGetValue(keyEntity.ProductId, out var mappedId) ? mappedId : null;
-
-                var key = new AccessKeyModel(keyEntity, parentId);
-                if (parentId != null)
-                    keysToResave.Add(key.ToAccessKeyEntity());
-
-                AddKeyToTree(key);
-            }
+                AddKeyToTree(new AccessKeyModel(keyEntity));
 
             foreach (var product in _tree.Values)
             {
                 if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
-
-            return keysToResave;
-        }
-
-        [Obsolete("Remove this after product id migration")]
-        private List<User> UsersMigration()
-        {
-            var users = _userManager.GetUsers();
-            var usersToResave = new List<User>(1 << 4);
-
-            foreach (var user in users)
-            {
-                bool needToResave = false;
-                var rolesToRemove = new List<KeyValuePair<string, ProductRoleEnum>>(1 << 2);
-
-                for (int i = 0; i < user.ProductsRoles.Count; ++i)
-                {
-                    var role = user.ProductsRoles[i];
-
-                    if (_productKeys.TryGetValue(role.Key, out var mappedId))
-                    {
-                        user.ProductsRoles[i] =
-                            new KeyValuePair<string, ProductRoleEnum>(mappedId.ToString(), role.Value);
-                        needToResave = true;
-                    }
-                    else if
-                        (!Guid.TryParse(role.Key,
-                            out _)) // there are users with non exists product keys in product roles
-                    {
-                        rolesToRemove.Add(role);
-                        needToResave = true;
-                    }
-                }
-
-                foreach (var role in rolesToRemove)
-                    user.ProductsRoles.Remove(role);
-
-                if (needToResave)
-                    usersToResave.Add(user);
-            }
-
-            return usersToResave;
-        }
-
-        [Obsolete("Remove this after product id migration")]
-        private void ResaveEntities(Dictionary<Guid, string> products, List<SensorEntity> sensors, List<AccessKeyEntity> keys, List<User> users)
-        {
-            _logger.Info($"{nameof(ResaveEntities)} is started");
-
-            _logger.Info($"{nameof(products)} resaving is in process...");
-            foreach (var (productId, product) in _tree)
-            {
-                var entity = product.ToProductEntity();
-
-                if (products.TryGetValue(productId, out var oldProductId))
-                    _databaseCore.UpdateProduct(oldProductId, entity);
-                else
-                    _databaseCore.UpdateProduct(entity);
-            }
-
-            _logger.Info($"{nameof(products)} resaving is done.");
-
-            _logger.Info($"{nameof(sensors)} resaving is in process...");
-            foreach (var sensor in sensors)
-                _databaseCore.UpdateSensor(sensor);
-            _logger.Info($"{nameof(sensors)} resaving is done.");
-
-            _logger.Info($"{nameof(keys)} resaving is in process...");
-            foreach (var key in keys)
-                _databaseCore.UpdateAccessKey(key);
-            _logger.Info($"{nameof(keys)} resaving is done.");
-
-            _logger.Info($"{nameof(users)} resaving is in process...");
-            foreach (var user in users)
-                _databaseCore.UpdateUser(user);
-            _logger.Info($"{nameof(users)} resaving is done.");
-
-            _logger.Info($"{nameof(ResaveEntities)} is stopped");
         }
 
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)

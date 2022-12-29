@@ -160,6 +160,35 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
+        
+        /// <summary>
+        /// Receives value of timespan sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("timespan")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<TimeSpanSensorValue> Post([FromBody] TimeSpanSensorValue sensorValue)
+        {
+            try
+            {
+                _dataCollector.ReportSensorsCount(1);
+
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                    out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
 
         /// <summary>
         /// Receives value of double bar sensor

@@ -585,21 +585,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        [Obsolete("Remove this after monitoring dbs removing")]
-        public void RemoveMonitoringDatabases()
-        {
-            byte[] keyBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetMonitoringDatabasesListKey());
-
-            try
-            {
-                _database.Delete(keyBytes);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to removing monitoring databases list from environment db");
-            }
-        }
-
         public void Dispose() => _database.Dispose();
 
         private List<string> GetListOfKeys(byte[] key, string error)
