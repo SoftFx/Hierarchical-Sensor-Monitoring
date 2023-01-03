@@ -1,8 +1,8 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
-namespace HSMServer.Core.Authentication
+namespace HSMServer.Authentication
 {
     public interface IUserManager
     {

@@ -1,13 +1,14 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model.Authentication.History;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.UserFilters;
+using HSMServer.Model.Authentication.History;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
 
-namespace HSMServer.Core.Model.Authentication
+namespace HSMServer.Model.Authentication
 {
     public class User : ClaimsPrincipal, INotificatable
     {
@@ -126,5 +127,19 @@ namespace HSMServer.Core.Model.Authentication
 
         public List<Guid> GetManagerProducts() =>
             ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => Guid.Parse(r.Key)).ToList();
+
+        internal UserEntity ToEntity() =>
+            new()
+            {
+                UserName = UserName,
+                Password = Password,
+                CertificateThumbprint = CertificateThumbprint,
+                CertificateFileName = CertificateFileName,
+                Id = Id,
+                IsAdmin = IsAdmin,
+                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
+                NotificationSettings = Notifications.ToEntity(),
+                TreeFilter = TreeFilter,
+            };
     }
 }

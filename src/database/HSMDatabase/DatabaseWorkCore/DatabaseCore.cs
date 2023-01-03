@@ -6,7 +6,6 @@ using HSMDatabase.Settings;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -342,35 +341,18 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : User
 
-        public void AddUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
+        public void AddUser(UserEntity entity) =>
             _environmentDatabase.AddUser(entity);
-        }
 
-        public void RemoveUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
+        public void RemoveUser(UserEntity entity) =>
             _environmentDatabase.RemoveUser(entity);
-        }
 
-        public void UpdateUser(User user) => AddUser(user);
+        public void UpdateUser(UserEntity entity) => AddUser(entity);
 
-        public List<User> GetUsers() => GetUsers(_environmentDatabase.ReadUsers().ToList());
+        public List<UserEntity> GetUsers() => _environmentDatabase.ReadUsers().ToList();
 
-        public List<User> GetUsersPage(int page, int pageSize) =>
-            GetUsers(_environmentDatabase.ReadUsersPage(page, pageSize).ToList());
-
-        private static List<User> GetUsers(List<UserEntity> userEntities)
-        {
-            var userEntitiesCount = userEntities?.Count ?? 0;
-            var users = new List<User>(userEntitiesCount);
-
-            if (userEntitiesCount != 0)
-                users.AddRange(userEntities.Select(e => new User(e)));
-
-            return users;
-        }
+        public List<UserEntity> GetUsersPage(int page, int pageSize) =>
+            _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
 
         #endregion
 

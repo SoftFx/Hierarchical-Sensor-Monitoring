@@ -2,17 +2,17 @@
 using HSMCommon.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Extensions;
+using HSMServer.Helpers;
+using HSMServer.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Authentication
+namespace HSMServer.Authentication
 {
     public partial class UserManager : IUserManager
     {
@@ -156,16 +156,16 @@ namespace HSMServer.Core.Authentication
 
         private async void InitializeUsers()
         {
-            var usersFromDB = _databaseCore.GetUsers();
+            var userEntities = _databaseCore.GetUsers();
 
-            if (usersFromDB.Count == 0)
+            if (userEntities.Count == 0)
             {
                 AddDefaultUser();
                 _logger.LogInformation("Default user has been added.");
             }
 
-            foreach (var user in usersFromDB)
-                await _addUserActionHandler.Apply(user, false);
+            foreach (var entity in userEntities)
+                await _addUserActionHandler.Apply(new(entity), false);
 
             _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
         }
@@ -193,7 +193,7 @@ namespace HSMServer.Core.Authentication
                 }
 
                 foreach (var userToEdt in updatedUsers)
-                    _databaseCore.UpdateUser(userToEdt);
+                    _databaseCore.UpdateUser(userToEdt.ToEntity());
             }
         }
 
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Authentication
                     if (!user.Notifications.RemoveSensor(sensor.Id))
                         continue;
 
-                    _databaseCore.UpdateUser(user);
+                    _databaseCore.UpdateUser(user.ToEntity());
                 }
             }
         }

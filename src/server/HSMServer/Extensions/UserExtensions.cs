@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.UserFilters;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Extensions

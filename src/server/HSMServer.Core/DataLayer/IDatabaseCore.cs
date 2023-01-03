@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
@@ -63,11 +62,11 @@ namespace HSMServer.Core.DataLayer
 
         #region User
 
-        void AddUser(User user);
-        void UpdateUser(User user);
-        void RemoveUser(User user);
-        List<User> GetUsers();
-        List<User> GetUsersPage(int page, int pageSize);
+        void AddUser(UserEntity user);
+        void UpdateUser(UserEntity user);
+        void RemoveUser(UserEntity user);
+        List<UserEntity> GetUsers();
+        List<UserEntity> GetUsersPage(int page, int pageSize);
 
         #endregion
 

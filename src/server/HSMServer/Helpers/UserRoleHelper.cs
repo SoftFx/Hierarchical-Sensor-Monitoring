@@ -1,5 +1,5 @@
-﻿using System.Linq;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
+using System.Linq;
 
 namespace HSMServer.Core.Helpers
 {

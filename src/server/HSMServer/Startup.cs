@@ -79,7 +79,7 @@ namespace HSMServer
                 {
                     Type = "string",
                     Example = new OpenApiString("00.00:00:00")
-                }); ;
+                });
 
                 var basePath = PlatformServices.Default.Application.ApplicationBasePath;
                 var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
