@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Security.Authentication;
-using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.BackgroundTask;
@@ -15,24 +14,21 @@ using HSMServer.Filters;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
-using System.Net;
+using HSMServer.Middleware;
+
 namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddSignalR(hubOptions => hubOptions.EnableDetailedErrors = true);
         services.AddSingleton<IDatabaseCore, DatabaseCore>();
         services.AddSingleton<IUserManager, UserManager>();
         services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
@@ -61,7 +57,6 @@ public static class ApplicationServiceExtensions
                 Type = "string",
                 Example = new OpenApiString("00.00:00:00")
             });
-            ;
 
             var basePath = PlatformServices.Default.Application.ApplicationBasePath;
             var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
@@ -75,41 +70,69 @@ public static class ApplicationServiceExtensions
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            options.ConfigureHttpsDefaults(
-                httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-            options.Listen(IPAddress.Any, serverConfig.Kestrel.SensorPort,
+            options.ListenAnyIP(serverConfig.Kestrel.SensorPort,
                 listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                     listenOptions.UseHttps(portOptions =>
                     {
-                        portOptions.CheckCertificateRevocation = false;
                         portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
                         portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
                     });
                 });
-
-            options.Listen(IPAddress.Any, serverConfig.Kestrel.SitePort,
-                listenOptions =>
+            
+            options.ListenAnyIP(serverConfig.Kestrel.SitePort, listenOptions =>
+            {
+                listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+                listenOptions.UseHttps(portOptions =>
                 {
-                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-                    listenOptions.UseHttps(portOptions =>
-                    {
-                        portOptions.CheckCertificateRevocation = false;
-                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                        portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                        portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
-                    });
+                    portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+                    portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
                 });
+            });
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MaxConcurrentConnections = 100;
             options.Limits.MaxConcurrentUpgradedConnections = 100;
-            options.Limits.MinRequestBodyDataRate = null;
-            options.Limits.MinResponseDataRate = null;
+            options.Limits.MinRequestBodyDataRate = null; //???
+            options.Limits.MinResponseDataRate = null; // ???
             options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
         });
         return webHostBuilder;
+    }
+
+    public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment)
+    {
+        if (isDevelopment)
+        {
+            applicationBuilder.UseHsts();
+            applicationBuilder.UseDeveloperExceptionPage();
+        }
+        else
+        {
+            applicationBuilder.UseExceptionHandler("/Error");
+        }
+
+        applicationBuilder.UseHttpsRedirection();
+        
+        applicationBuilder.UseStaticFiles();
+        
+        applicationBuilder.UseRouting();
+        
+        applicationBuilder.UseAuthentication();
+        applicationBuilder.UseAuthorization();
+        
+        applicationBuilder.CountRequestStatistics();
+        applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
+        applicationBuilder.UseUserProcessor();
+        
+        applicationBuilder.UseSwagger();
+        applicationBuilder.UseSwaggerUI(c =>
+        {
+            c.RoutePrefix = "api/swagger";
+            c.SwaggerEndpoint($"/swagger/{ServerConfig.Version}/swagger.json", "HSM server api");
+        });
+        
+        return applicationBuilder;
     }
 }

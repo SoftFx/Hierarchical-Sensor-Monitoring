@@ -1,12 +1,6 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
 using System;
-using System.Net;
-using System.Security.Authentication;
 using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
-using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -19,43 +13,33 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 
-const string nLogConfigFileName = "nlog.config";
-var builder = WebApplication.CreateBuilder(args);
+const string NLogConfigFileName = "nlog.config";
 
+var builder = WebApplication.CreateBuilder(args);
 var serverConfig = new ServerConfig(builder.Configuration, builder.Environment);
+
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
 
-var logger = NLogBuilder.ConfigureNLog(nLogConfigFileName).GetCurrentClassLogger();
+var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
 
 builder.WebHost.ConfigureWebHost(serverConfig);
 
-builder.Host.ConfigureLogging(logging =>
-    {
-        logging.ClearProviders();
-        logging.SetMinimumLevel(LogLevel.Trace);
-        logging.AddNLog();
-        logging.AddNLogWeb();
-    })
-    .UseNLog()
-    .UseConsoleLifetime();
+builder.Logging.ClearProviders().SetMinimumLevel(LogLevel.Trace).AddNLog().AddNLogWeb();
+builder.Host.UseNLog().UseConsoleLifetime();
+
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
 
 builder.Services.AddHsts(options =>
 {
     options.Preload = true;
     options.IncludeSubDomains = true;
-    options.MaxAge = TimeSpan.FromDays(365);
 });
 builder.Services.AddMvc();
 
-builder.Services.AddFluentValidation(options =>
-{
-    options.ImplicitlyValidateChildProperties = true;
-    options.ImplicitlyValidateRootCollectionElements = true;
-});
+builder.Services.AddFluentValidationAutoValidation().AddFluentValidationClientsideAdapters();
 
 builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
@@ -72,46 +56,22 @@ try
     {
         app.UseExceptionHandler("/Error");
     }
+    
+    
+    app.ConfigureMiddleware(app.Environment.IsDevelopment());
+    
+    app.MapControllers();
+    app.MapControllerRoute(
+        name: "default",
+        pattern: "{controller=Home}/{action}");
+    app.MapControllerRoute(
+        name: "Account",
+        pattern: "{controller=Account}/{action}",
+        defaults: new { controller = "Account" });
+    app.MapControllerRoute(
+        name: "Home",
+        pattern: "{controller=Home}/{action=Index}");
 
-    app.UseAuthentication();
-    app.CountRequestStatistics();
-    app.UseMiddleware<LoggingExceptionMiddleware>();
-
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.RoutePrefix = "api/swagger";
-        c.SwaggerEndpoint($"/swagger/{ServerConfig.Version}/swagger.json", "HSM server api");
-    });
-
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        OnPrepareResponse = context =>
-            context.Context.Response.Headers.Add("Cache-control", "no-cache")
-    });
-    app.UseRouting();
-    app.UseCors();
-    app.UseAuthorization();
-    app.UseUserProcessor();
-    app.UseEndpoints(endpoints =>
-    {
-        endpoints.MapControllers();
-        endpoints.MapControllerRoute(
-            name: "default",
-            pattern: "{controller=Home}/{action}"
-        );
-        endpoints.MapControllerRoute(
-            name: "Account",
-            pattern: "{controller=Account}/{action}",
-            defaults: new { controller = "Account" }
-        );
-        endpoints.MapControllerRoute(
-            name: "Home",
-            pattern: "{controller=Home}/{action=Index}"
-        );
-    });
-
-    app.UseHttpsRedirection();
     app.Run();
 }
 catch (Exception ex)
