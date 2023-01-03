@@ -2,25 +2,40 @@
 using System.IO;
 using System.Reflection;
 using HSMServer.Settings;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace HSMServer.Model
 {
     public class ServerConfig
     {
+        private const string DefaultSettingsValues = """
+        {
+            "Kestrel": {
+                "SensorPort": "44330",
+                "SitePort": "44333"
+            },
+            "ServerCertificate": {
+                "Name": "default.server.pfx",
+                "Key": ""
+            }
+        }
+        """;
+
         private readonly IConfigurationRoot _configuration;
-        
-        
+
+
         public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
-        
+
         public static string Version { get; }
 
         public static string Name { get; }
 
-        
+
         public ServerCertificateConfig ServerCertificate { get; }
 
-        public KestrelConfig Kestrel { get;  }
+        public KestrelConfig Kestrel { get; }
 
 
         static ServerConfig()
@@ -34,9 +49,11 @@ namespace HSMServer.Model
                 Version = $"{version.Major}.{version.Minor}.{version.Build}";
         }
 
-        public ServerConfig(IConfigurationRoot configuration)
+        public ServerConfig(IConfigurationRoot configuration, IWebHostEnvironment webHostEnvironment)
         {
             _configuration = configuration;
+
+            CreateIfNotExistsSettings(webHostEnvironment);
 
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
@@ -46,6 +63,14 @@ namespace HSMServer.Model
         private T Register<T>(string sectionName) where T : class, new()
         {
             return _configuration.GetSection(sectionName).Get<T>();
+        }
+
+        private void CreateIfNotExistsSettings(IWebHostEnvironment webHostEnvironment)
+        {
+            string fileName = "appsettings" + (webHostEnvironment.IsDevelopment() ? ".Development" : "") + ".json";
+
+            if (!File.Exists(Path.Combine(ConfigPath, fileName)))
+                File.WriteAllText(Path.Combine(ConfigPath, fileName), DefaultSettingsValues);
         }
     }
 }

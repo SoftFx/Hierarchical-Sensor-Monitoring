@@ -22,7 +22,7 @@ using NLog.Web;
 const string nLogConfigFileName = "nlog.config";
 var builder = WebApplication.CreateBuilder(args);
 
-var serverConfig = new ServerConfig(builder.Configuration);
+var serverConfig = new ServerConfig(builder.Configuration, builder.Environment);
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
 
