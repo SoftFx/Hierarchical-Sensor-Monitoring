@@ -57,7 +57,6 @@ try
         app.UseExceptionHandler("/Error");
     }
     
-    
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
     
     app.MapControllers();
