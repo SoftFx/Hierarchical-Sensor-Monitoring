@@ -70,8 +70,7 @@ public static class ApplicationServiceExtensions
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            options.ListenAnyIP(serverConfig.Kestrel.SensorPort,
-                listenOptions =>
+            options.ListenAnyIP(serverConfig.Kestrel.SensorPort, listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
                     listenOptions.UseHttps(portOptions =>
