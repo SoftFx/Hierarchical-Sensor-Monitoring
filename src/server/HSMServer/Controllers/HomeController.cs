@@ -230,7 +230,8 @@ namespace HSMServer.Controllers
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId),
                 model.From.ToUniversalTime(), model.To.ToUniversalTime(), MaxHistoryCount);
 
-            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator).Initialize();
+            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId)).Initialize();
+            
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
@@ -265,7 +266,11 @@ namespace HSMServer.Controllers
                 return _emptyJsonResult;
 
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
-
+            
+            var localValue = GetLocalLastValue(model.EncodedId);
+            if (localValue is not null)
+                values.Add(localValue);
+            
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
 
@@ -434,6 +439,13 @@ namespace HSMServer.Controllers
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
             return (sensor?.Product, sensor?.Path);
+        }
+
+        private BarBaseValue GetLocalLastValue(string encodedId)
+        {
+            var sensor = _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId));
+
+            return sensor is IBarSensor barSensor ? barSensor.LocalLastValue : null;
         }
     }
 }

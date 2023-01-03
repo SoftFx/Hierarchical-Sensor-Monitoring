@@ -51,11 +51,11 @@ namespace HSMServer.Core.Model
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
 
 
-        public AccessKeyModel(AccessKeyEntity entity, Guid? produtId = null)
+        public AccessKeyModel(AccessKeyEntity entity)
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            ProductId = produtId ?? Guid.Parse(entity.ProductId);
+            ProductId = Guid.Parse(entity.ProductId);
             State = (KeyState)entity.State;
             Permissions = (KeyPermissions)entity.Permissions;
             DisplayName = entity.DisplayName;
@@ -119,7 +119,7 @@ namespace HSMServer.Core.Model
         {
             var common = expectedPermissions & Permissions;
             message = string.Empty;
-            
+
             if (common != expectedPermissions)
                 message = $"AccessKey doesn't have {expectedPermissions & ~common}.";
 

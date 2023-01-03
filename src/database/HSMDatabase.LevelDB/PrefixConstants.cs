@@ -11,7 +11,6 @@ namespace HSMDatabase.LevelDB
         private const string USER_INFO_PREFIX = "UserInfo";
         private const string CONFIGURATION_OBJECT_PREFIX = "ConfigurationObject";
         private const string REGISTRATION_TICKET_PREFIX = "RegistrationTicket";
-        private const string MONITORING_DATABASE_LIST_PREFIX = "MonitoringDatabases";
 
         internal const string JOB_SENSOR_PREFIX = "JobSensorValue";
         internal const string PRODUCT_INFO_PREFIX = "ProductInfo";
@@ -48,11 +47,6 @@ namespace HSMDatabase.LevelDB
         internal static string GetSensorIdsKey() => SENSORIDS_PREFIX;
 
         internal static string GetPolicyIdsKey() => POLICYIDS_PREFIX;
-
-        internal static string GetMonitoringDatabasesListKey()
-        {
-            return MONITORING_DATABASE_LIST_PREFIX;
-        }
     }
 }
 

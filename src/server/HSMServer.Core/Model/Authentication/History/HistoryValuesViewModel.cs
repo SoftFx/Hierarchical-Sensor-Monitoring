@@ -8,6 +8,8 @@ namespace HSMServer.Core.Model.Authentication.History
     {
         private readonly IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
+        private readonly BarBaseValue _localLastValue;
+
 
         public List<List<BaseValue>> Pages { get; } = new();
 
@@ -22,9 +24,10 @@ namespace HSMServer.Core.Model.Authentication.History
         public int CurrentPageIndex { get; private set; }
 
 
-        public HistoryValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator)
+        public HistoryValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator, BarBaseValue localLastValue = null)
         {
             _pagesEnumerator = enumerator.GetAsyncEnumerator();
+            _localLastValue = localLastValue;
 
             EncodedId = encodedId;
             SensorType = (SensorType)type;
@@ -34,6 +37,14 @@ namespace HSMServer.Core.Model.Authentication.History
         public async Task<HistoryValuesViewModel> Initialize()
         {
             await TryReadNextPage();
+
+            if (_localLastValue is not null)
+            {
+                if (Pages.Count == 0)
+                    Pages.Add(new() { _localLastValue });
+                else Pages[0].Insert(0, _localLastValue);
+            }
+
             await TryReadNextPage();
 
             return this;
@@ -41,9 +52,9 @@ namespace HSMServer.Core.Model.Authentication.History
 
         public async Task<HistoryValuesViewModel> ToNextPage()
         {
-            if (++CurrentPageIndex == LastPageIndex)
-                if (!await TryReadNextPage())
-                    CurrentPageIndex = Math.Min(CurrentPageIndex, LastPageIndex);
+            await TryReadNextPage();
+
+            CurrentPageIndex = Math.Min(CurrentPageIndex + 1, LastPageIndex);
 
             return this;
         }
@@ -59,7 +70,7 @@ namespace HSMServer.Core.Model.Authentication.History
         {
             var hasNext = await _pagesEnumerator.MoveNextAsync();
 
-            if (hasNext)
+            if (hasNext && _pagesEnumerator.Current?.Count != 0)
                 Pages.Add(_pagesEnumerator.Current);
 
             return hasNext;
