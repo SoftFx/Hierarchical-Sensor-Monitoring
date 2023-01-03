@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
-using HSMServer.Helpers;
 using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model.History
