@@ -66,7 +66,7 @@ namespace HSMServer.Model.TreeViewModels
             return tree;
         }
 
-        internal List<ProductModel> GetUserProducts(User user)
+        public List<ProductModel> GetUserProducts(User user)
         {
             var products = _treeValuesCache.GetProducts();
 

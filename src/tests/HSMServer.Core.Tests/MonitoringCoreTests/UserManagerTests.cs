@@ -1,6 +1,7 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +17,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private delegate User GetUserByUserName(string username);
         private delegate User GetUser(Guid id);
-        private delegate List<User> GetAllUsersFromDB();
+        private delegate List<UserEntity> GetAllUsersFromDB();
 
 
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
@@ -30,7 +31,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var usersFromDB = await GetUsersFromDB();
 
             Assert.Single(usersFromDB);
-            TestUser(_defaultUser, usersFromDB[0]);
+            TestUser(_defaultUser, new(usersFromDB[0]));
             TestUserByName(_defaultUser, _userManager.GetUserByUserName);
         }
 
@@ -393,7 +394,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             TestUser(expected, getUserByName(expected.UserName));
 
         private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
-            TestUser(expected, getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName));
+            TestUser(expected, new(getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName)));
 
         private static async Task FullTestUpdatedUserAsync(List<User> expectedUsers, List<User> usersBeforeUpdate,
             GetUser getUser, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
@@ -427,9 +428,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void TestUserFromDB(User expected, User userBeforeUpdate, GetAllUsersFromDB getUsersFromDB)
         {
             var userFromDB = getUsersFromDB().FirstOrDefault(u => u.Id == expected.Id);
+            var actualUser = new User(userFromDB);
 
-            TestChangeableUserSettings(expected, userFromDB);
-            TestNotChangeableUserSettings(userBeforeUpdate, userFromDB);
+            TestChangeableUserSettings(expected, actualUser);
+            TestNotChangeableUserSettings(userBeforeUpdate, actualUser);
         }
 
 
@@ -507,10 +509,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var result = await GetUsersFromDB();
 
-            return result[0];
+            return new(result[0]);
         }
 
-        private async Task<List<User>> GetUsersFromDB()
+        private async Task<List<UserEntity>> GetUsersFromDB()
         {
             await Task.Delay(200);
 

@@ -3,11 +3,12 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,13 +21,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     public class TreeValuesCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
+        private readonly TreeViewModel _treeViewModel;
+
         private delegate string GetProductNameById(Guid id);
         private delegate ProductModel GetProduct(Guid id);
         private delegate ProductEntity GetProductFromDb(string id);
 
 
         public TreeValuesCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture) { }
+            : base(fixture, registerFixture)
+        {
+            _treeViewModel = new(_valuesCache, _userManager);
+        }
 
 
         [Fact]
@@ -193,7 +199,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Products without parent")]
         public async void GetProductsWithoutParentTest()
         {
-            var actualProducts = _valuesCache.GetProducts(null);
+            var actualProducts = _valuesCache.GetProducts();
 
             await TestProductsWithoutParent(actualProducts);
         }
@@ -202,7 +208,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Products without parent")]
         public async void GetProductsWithoutParent_Admin_Test()
         {
-            var actualProducts = _valuesCache.GetProducts(TestUsersManager.Admin);
+            var actualProducts = _treeViewModel.GetUserProducts(TestUsersManager.Admin);
 
             await TestProductsWithoutParent(actualProducts);
         }
@@ -211,7 +217,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Products without parent")]
         public void GetProductsWithoutParent_UserWithoutProductRoles_Test()
         {
-            var actualProducts = _valuesCache.GetProducts(TestUsersManager.NotAdmin);
+            var actualProducts = _treeViewModel.GetUserProducts(TestUsersManager.NotAdmin);
 
             Assert.Empty(actualProducts);
         }
@@ -225,7 +231,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var selfMonitoringProductManager =
                 TestUsersManager.BuildUserWithRole(productRole, TestProductsManager.TestProduct.Id);
 
-            var actualProducts = _valuesCache.GetProducts(selfMonitoringProductManager);
+            var actualProducts = _treeViewModel.GetUserProducts(selfMonitoringProductManager);
 
             Assert.Single(actualProducts);
 

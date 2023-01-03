@@ -1,11 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -261,8 +261,7 @@ namespace HSMServer.Core.Tests
             var product = EntitiesFactory.BuildProductEntity();
 
             _databaseCore.AddUser(user);
-            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
-                ProductRoleEnum.ProductManager));
+            user.ProductsRoles.Add(new KeyValuePair<string, byte>(product.Id, (byte)ProductRoleEnum.ProductManager));
             _databaseCore.UpdateUser(user);
 
             FullUserTest(user, GetUser(user.UserName));
@@ -286,7 +285,7 @@ namespace HSMServer.Core.Tests
                 var product = EntitiesFactory.BuildProductEntity();
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
-                user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
+                user.ProductsRoles.Add(new KeyValuePair<string, byte>(product.Id, (byte)role));
             }
 
             _databaseCore.UpdateUser(user);
@@ -500,7 +499,7 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
         }
 
-        private static void FullUserTest(User expectedUser, User actualUser)
+        private static void FullUserTest(UserEntity expectedUser, UserEntity actualUser)
         {
             Assert.NotNull(actualUser);
             Assert.Equal(expectedUser.Id, actualUser.Id);
@@ -543,7 +542,7 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedConfig.Value, actualConfig.Value);
         }
 
-        private User GetUser(string username) =>
+        private UserEntity GetUser(string username) =>
             _databaseCore.GetUsers().FirstOrDefault(u => u.UserName.Equals(username));
 
         private static int GetCountItemsOnPage(int count, int pageNumber, int pageSize)
