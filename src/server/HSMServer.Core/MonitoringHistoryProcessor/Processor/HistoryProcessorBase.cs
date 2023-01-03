@@ -16,7 +16,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         {
             values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
 
-            if (values.Count < 1)
+            if (values.Count < 2)
                 return values;
 
             var interval = CountInterval(values);
