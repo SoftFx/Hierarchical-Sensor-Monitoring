@@ -28,43 +28,7 @@ LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.Infr
 
 var logger = NLogBuilder.ConfigureNLog(nLogConfigFileName).GetCurrentClassLogger();
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ConfigureHttpsDefaults(
-        httpsOptions => httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate);
-    options.Listen(IPAddress.Any, serverConfig.Kestrel.SensorPort,
-        listenOptions =>
-        {
-            listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-            listenOptions.UseHttps(portOptions =>
-            {
-                portOptions.CheckCertificateRevocation = false;
-                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
-            });
-        });
-
-    options.Listen(IPAddress.Any, serverConfig.Kestrel.SitePort,
-        listenOptions =>
-        {
-            listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-            listenOptions.UseHttps(portOptions =>
-            {
-                portOptions.CheckCertificateRevocation = false;
-                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                portOptions.ClientCertificateMode = ClientCertificateMode.NoCertificate;
-                portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
-            });
-        });
-
-    options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
-    options.Limits.MaxConcurrentConnections = 100;
-    options.Limits.MaxConcurrentUpgradedConnections = 100;
-    options.Limits.MinRequestBodyDataRate = null;
-    options.Limits.MinResponseDataRate = null;
-    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
-});
+builder.WebHost.ConfigureWebHost(serverConfig);
 
 builder.Host.ConfigureLogging(logging =>
     {
@@ -96,7 +60,6 @@ builder.Services.AddFluentValidation(options =>
 builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
 
 builder.Services.AddApplicationServices();
-
 try
 {
     var app = builder.Build();
