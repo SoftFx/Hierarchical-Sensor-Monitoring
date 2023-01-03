@@ -2,6 +2,8 @@ $Version = $args[0]
 $Repository = "hsmonitoring/hierarchical_sensor_monitoring"
 $ExpectedImageTag = "${Repository}:$Version"
 
+docker stop $(docker ps -q)
+
 Write-Host "Find and remove image with the same tag"
 docker rmi $(docker images --filter=reference=$ExpectedImageTag -q) -f
 
