@@ -67,7 +67,7 @@ namespace HSMServer.Model
 
         private void CreateIfNotExistsSettings(IWebHostEnvironment webHostEnvironment)
         {
-            string fileName = "appsettings" + (webHostEnvironment.IsDevelopment() ? ".Development" : "") + ".json";
+            string fileName = "appsettings" + (webHostEnvironment.IsDevelopment() ? ".Development" : string.Empty) + ".json";
 
             if (!File.Exists(Path.Combine(ConfigPath, fileName)))
                 File.WriteAllText(Path.Combine(ConfigPath, fileName), DefaultSettingsValues);
