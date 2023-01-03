@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;

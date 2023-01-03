@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.Model.Authentication;
-using HSMServer.Model.AccessKeysViewModels;
+﻿using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;

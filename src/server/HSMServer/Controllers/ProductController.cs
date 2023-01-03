@@ -1,15 +1,15 @@
 ﻿using HSMCommon.Constants;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Email;
 using HSMServer.Core.Encryption;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Helpers;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
@@ -53,7 +53,7 @@ namespace HSMServer.Controllers
         {
             var user = HttpContext.User as User;
 
-            var products = _treeValuesCache.GetProducts(user);
+            var products = _treeViewModel.GetUserProducts(user);
 
             products = products?.OrderBy(x => x.DisplayName).ToList();
 

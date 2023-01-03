@@ -1,19 +1,21 @@
 ﻿using FluentValidation;
+using FluentValidation.Results;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentValidation.Results;
 
 namespace HSMServer.Model.Validators
 {
     public class NewProductNameValidator : AbstractValidator<string>
     {
-        private readonly ITreeValuesCache _treeValuesCache;
-        public NewProductNameValidator(ITreeValuesCache treeValuesCache)
+        private readonly ITreeValuesCache _cache;
+
+
+        public NewProductNameValidator(ITreeValuesCache cache)
         {
-            _treeValuesCache = treeValuesCache;
+            _cache = cache;
 
             RuleFor(x => x)
                 .NotNull()
@@ -24,23 +26,24 @@ namespace HSMServer.Model.Validators
                 .WithMessage(ErrorConstants.ProductNameSymbols);
         }
 
+
         // TODO: Remove IsUniqName validation after fixing saving products in db (ProductName to Id)
         private bool IsUniqueName(string name)
         {
-            var products = _treeValuesCache.GetProducts(null);
+            var products = _cache.GetProducts();
 
             return products?.FirstOrDefault(x =>
                 x.DisplayName.Equals(name, StringComparison.InvariantCultureIgnoreCase)) == null;
         }
-        protected override bool PreValidate(ValidationContext<string> context, ValidationResult result) 
+
+        protected override bool PreValidate(ValidationContext<string> context, ValidationResult result)
         {
-            if (context.InstanceToValidate == null) 
+            if (context.InstanceToValidate == null)
             {
                 result.Errors.Add(new ValidationFailure("ProductName", "Product name must be not null"));
                 return false;
             }
             return true;
         }
-
     }
 }

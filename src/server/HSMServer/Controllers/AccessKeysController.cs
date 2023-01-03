@@ -1,15 +1,15 @@
 ﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Controllers
 {
@@ -71,7 +71,7 @@ namespace HSMServer.Controllers
         public IActionResult ModifyAccessKey([FromQuery] string selectedKey, [FromQuery] bool closeModal = false)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
-            
+
             return GetPartialNewAccessKey(
                 new EditAccessKeyViewModel(key)
                 {
@@ -101,7 +101,7 @@ namespace HSMServer.Controllers
 
             if (fullTable)
                 return AvailableAccessKeys();
-            
+
             return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
         }
 
@@ -112,10 +112,10 @@ namespace HSMServer.Controllers
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
             if (updatedState == KeyState.Active && key.IsExpired)
                 updatedState = KeyState.Expired;
-            
+
             TreeValuesCache.UpdateAccessKeyState(Guid.Parse(selectedKey), updatedState);
-            
-            if (fullTable) 
+
+            if (fullTable)
                 return AvailableAccessKeys();
 
             return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
@@ -129,11 +129,11 @@ namespace HSMServer.Controllers
         }
 
         private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) => PartialView("_NewAccessKey", key);
-        
+
         private AccessKeyTableViewModel GenerateShortViewModel(Guid productId)
         {
             _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
-            return new ()
+            return new()
             {
                 Keys = productNode.GetAccessKeys()
             };
@@ -141,19 +141,19 @@ namespace HSMServer.Controllers
 
         private AccessKeyTableViewModel GenerateFullViewModel(string searchKey = "")
         {
-            return new ()
+            return new()
             {
                 Keys = GetAvailableAccessKeys().Where(x => x.Id.ToString().Contains(searchKey)).ToList(),
                 FullTable = true
             };
         }
-        
+
         private List<AccessKeyViewModel> GetAvailableAccessKeys()
         {
             var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
-            var availableProducts = TreeValuesCache.GetProducts(user);
+            var availableProducts = _treeViewModel.GetUserProducts(user);
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))

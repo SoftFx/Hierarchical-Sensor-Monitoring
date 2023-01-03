@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
@@ -37,7 +36,7 @@ namespace HSMServer.Core.Cache
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         string GetProductNameById(Guid id);
-        List<ProductModel> GetProducts(User user, bool isAllProducts = false);
+        List<ProductModel> GetProducts();
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);

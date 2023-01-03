@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
 using HSMServer.Model.ViewModel;
 using System;
 
@@ -29,7 +29,7 @@ namespace HSMServer.Model.Validators
                 .NotEmpty();
 
             When(x => !string.IsNullOrEmpty(x.Password)
-                && !string.IsNullOrEmpty(x.SecondPassword), () => 
+                && !string.IsNullOrEmpty(x.SecondPassword), () =>
                 {
                     RuleFor(x => x)
                         .Must(x => x.Password.Equals(x.SecondPassword, StringComparison.InvariantCultureIgnoreCase))

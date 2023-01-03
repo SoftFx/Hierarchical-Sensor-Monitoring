@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.Model.Authentication;
-using HSMServer.Extensions;
+﻿using HSMServer.Extensions;
+using HSMServer.Model.Authentication;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModels

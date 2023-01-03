@@ -1,8 +1,8 @@
 ﻿using FluentValidation.AspNetCore;
 using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Authentication;
 using HSMServer.BackgroundTask;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;

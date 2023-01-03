@@ -1,7 +1,7 @@
 ﻿using HSMServer.Model.Authentication;
 using System.Linq;
 
-namespace HSMServer.Core.Helpers
+namespace HSMServer.Helpers
 {
     public static class UserRoleHelper
     {

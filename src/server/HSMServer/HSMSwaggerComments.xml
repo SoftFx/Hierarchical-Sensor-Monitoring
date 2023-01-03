@@ -4,7 +4,7 @@
         <name>HSMServer</name>
     </assembly>
     <members>
-        <member name="M:HSMServer.Core.Authentication.IUserManager.AddUser(System.String,System.String,System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Core.Model.Authentication.ProductRoleEnum}})">
+        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
             </summary>
@@ -13,13 +13,13 @@
             <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
             <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         </member>
-        <member name="M:HSMServer.Core.Authentication.IUserManager.UpdateUser(HSMServer.Core.Model.Authentication.User)">
+        <member name="M:HSMServer.Authentication.IUserManager.UpdateUser(HSMServer.Model.Authentication.User)">
             <summary>
             New user object
             </summary>
             <param name="user">User object (password field must be password hash).</param>
         </member>
-        <member name="M:HSMServer.Core.Authentication.IUserManager.RemoveUser(System.String)">
+        <member name="M:HSMServer.Authentication.IUserManager.RemoveUser(System.String)">
             <summary>
             Remove user with the specified userName
             </summary>
@@ -125,6 +125,12 @@
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.Authentication.User.Update(HSMServer.Model.Authentication.User)">
+            <summary>
+            Update works as HTTP PUT: all the fields will be updated
+            </summary>
+            <param name="user"></param>
         </member>
     </members>
 </doc>

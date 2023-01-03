@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.Validators
@@ -18,14 +18,13 @@ namespace HSMServer.Model.Validators
             RuleFor(x => x.Password)
                 .NotEmpty();
 
-            When(x => !string.IsNullOrEmpty(x.Username) 
+            When(x => !string.IsNullOrEmpty(x.Username)
                 && !string.IsNullOrEmpty(x.Password), () =>
             {
                 RuleFor(x => x)
                 .Must(x => _userManager.Authenticate(x.Username, x.Password) != null)
                 .WithMessage(ErrorConstants.UsernameOrPassword);
             });
-                      
         }
     }
 }

@@ -1,12 +1,13 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels
 {
@@ -63,6 +64,19 @@ namespace HSMServer.Model.TreeViewModels
                 }
 
             return tree;
+        }
+
+        internal List<ProductModel> GetUserProducts(User user)
+        {
+            var products = _treeValuesCache.GetProducts();
+
+            if (user == null || user.IsAdmin)
+                return products;
+
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                return new List<ProductModel>();
+
+            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
         internal void RecalculateNodesCharacteristics()

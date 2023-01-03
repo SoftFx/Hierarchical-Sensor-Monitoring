@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.Model.Authentication;
-using HSMServer.Helpers;
+﻿using HSMServer.Helpers;
+using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 

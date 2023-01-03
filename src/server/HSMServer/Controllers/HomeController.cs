@@ -1,13 +1,13 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Model.Authentication.History;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.Authentication.History;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
@@ -231,7 +231,7 @@ namespace HSMServer.Controllers
                 model.From.ToUniversalTime(), model.To.ToUniversalTime(), MaxHistoryCount);
 
             var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId)).Initialize();
-            
+
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
@@ -266,11 +266,11 @@ namespace HSMServer.Controllers
                 return _emptyJsonResult;
 
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
-            
+
             var localValue = GetLocalLastValue(model.EncodedId);
             if (localValue is not null)
                 values.Add(localValue);
-            
+
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
         }
 

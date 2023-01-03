@@ -1,11 +1,11 @@
 ﻿using FluentValidation;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
 using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.Validators
 {
-    public class UserValidator : AbstractValidator<UserViewModel> 
+    public class UserValidator : AbstractValidator<UserViewModel>
     {
         private readonly IUserManager _userManager;
         public UserValidator(IUserManager userManager)

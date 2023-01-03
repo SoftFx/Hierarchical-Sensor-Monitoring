@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Authentication;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using NLog;
