@@ -47,6 +47,9 @@ namespace HSMServer.Model
 
             if (version is not null)
                 Version = $"{version.Major}.{version.Minor}.{version.Build}";
+
+            if (!Directory.Exists(ConfigPath)) 
+                Directory.CreateDirectory(ConfigPath);
         }
 
         public ServerConfig(IConfigurationRoot configuration, IWebHostEnvironment webHostEnvironment)
@@ -54,7 +57,7 @@ namespace HSMServer.Model
             _configuration = configuration;
 
             CreateIfNotExistsSettings(webHostEnvironment);
-
+    
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
         }
@@ -71,6 +74,8 @@ namespace HSMServer.Model
 
             if (!File.Exists(Path.Combine(ConfigPath, fileName)))
                 File.WriteAllText(Path.Combine(ConfigPath, fileName), DefaultSettingsValues);
+            
+            _configuration.Reload();
         }
     }
 }

@@ -6,6 +6,7 @@ using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,8 @@ using NLog.Web;
 const string NLogConfigFileName = "nlog.config";
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.SetBasePath(ServerConfig.ConfigPath).AddJsonFile("appsettings.json", true)
+                                                          .AddJsonFile("appsettings.Development.json", true);
 var serverConfig = new ServerConfig(builder.Configuration, builder.Environment);
 
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
