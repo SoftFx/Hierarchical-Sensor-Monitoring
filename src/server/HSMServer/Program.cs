@@ -1,4 +1,3 @@
-using System;
 using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Model;
@@ -13,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
+using System;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -31,7 +31,10 @@ var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName)
 builder.WebHost.ConfigureWebHost(serverConfig);
 
 builder.Logging.ClearProviders()
-               .SetMinimumLevel(LogLevel.Trace).AddNLog().AddNLogWeb();
+               .SetMinimumLevel(LogLevel.Trace)
+               .AddNLog()
+               .AddNLogWeb();
+
 builder.Host.UseNLog()
             .UseConsoleLifetime();
 
@@ -44,6 +47,7 @@ builder.Services.AddHsts(options =>
     options.Preload = true;
     options.IncludeSubDomains = true;
 });
+
 builder.Services.AddMvc();
 
 builder.Services.AddFluentValidationAutoValidation()
@@ -52,12 +56,13 @@ builder.Services.AddFluentValidationAutoValidation()
 builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = serverConfig.Kestrel.SitePort);
 
 builder.Services.AddApplicationServices();
+
 try
 {
     var app = builder.Build();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
-    
+
     app.MapControllers();
     app.MapControllerRoute(
         name: "Account",
