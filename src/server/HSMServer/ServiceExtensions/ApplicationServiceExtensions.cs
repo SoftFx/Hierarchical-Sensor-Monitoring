@@ -22,6 +22,7 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using HSMServer.Middleware;
+using HSMServer.Settings;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -70,26 +71,8 @@ public static class ApplicationServiceExtensions
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            options.ListenAnyIP(serverConfig.Kestrel.SensorPort, listenOptions =>
-                {
-                    listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-                    listenOptions.UseHttps(portOptions =>
-                    {
-                        portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                        portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
-                    });
-                });
+            options.ConfigureKestrelListenOptions(serverConfig);
             
-            options.ListenAnyIP(serverConfig.Kestrel.SitePort, listenOptions =>
-            {
-                listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-                listenOptions.UseHttps(portOptions =>
-                {
-                    portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                    portOptions.ServerCertificate = serverConfig.ServerCertificate.Certificate;
-                });
-            });
-
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MaxConcurrentConnections = 100;
             options.Limits.MaxConcurrentUpgradedConnections = 100;
@@ -104,11 +87,11 @@ public static class ApplicationServiceExtensions
     {
         if (isDevelopment)
         {
-            applicationBuilder.UseHsts();
             applicationBuilder.UseDeveloperExceptionPage();
         }
         else
         {
+            applicationBuilder.UseHsts();
             applicationBuilder.UseExceptionHandler("/Error");
         }
 
@@ -121,10 +104,10 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
         
-        applicationBuilder.CountRequestStatistics();
+        applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
+        applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
-        applicationBuilder.UseUserProcessor();
-        
+
         applicationBuilder.UseSwagger();
         applicationBuilder.UseSwaggerUI(c =>
         {
@@ -134,4 +117,22 @@ public static class ApplicationServiceExtensions
         
         return applicationBuilder;
     }
+
+
+    private static void ConfigureKestrelListenOptions(this KestrelServerOptions options, ServerConfig serverConfig)
+    {
+        options.ListenAnyIP(serverConfig.Kestrel.SensorPort, KestrelListenOptions(serverConfig.ServerCertificate));
+        options.ListenAnyIP(serverConfig.Kestrel.SitePort, KestrelListenOptions(serverConfig.ServerCertificate));
+    }
+    
+    private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig serverCertificateConfig) => 
+        options =>
+        {
+            options.Protocols = HttpProtocols.Http1AndHttp2;
+            options.UseHttps(portOptions =>
+            {
+                portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
+                portOptions.ServerCertificate = serverCertificateConfig.Certificate;
+            });
+        };
 }

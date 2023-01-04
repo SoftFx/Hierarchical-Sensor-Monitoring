@@ -17,19 +17,23 @@ using NLog.Web;
 const string NLogConfigFileName = "nlog.config";
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.SetBasePath(ServerConfig.ConfigPath).AddJsonFile("appsettings.json", true)
-                                                          .AddJsonFile("appsettings.Development.json", true);
-var serverConfig = new ServerConfig(builder.Configuration, builder.Environment);
+builder.Configuration.SetBasePath(ServerConfig.ConfigPath)
+                     .AddJsonFile(ServerConfig.ConfigName, true);
+
+var serverConfig = new ServerConfig(builder.Configuration);
 
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
 
-var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName).GetCurrentClassLogger();
+var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName)
+                        .GetCurrentClassLogger();
 
 builder.WebHost.ConfigureWebHost(serverConfig);
 
-builder.Logging.ClearProviders().SetMinimumLevel(LogLevel.Trace).AddNLog().AddNLogWeb();
-builder.Host.UseNLog().UseConsoleLifetime();
+builder.Logging.ClearProviders()
+               .SetMinimumLevel(LogLevel.Trace).AddNLog().AddNLogWeb();
+builder.Host.UseNLog()
+            .UseConsoleLifetime();
 
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -42,24 +46,16 @@ builder.Services.AddHsts(options =>
 });
 builder.Services.AddMvc();
 
-builder.Services.AddFluentValidationAutoValidation().AddFluentValidationClientsideAdapters();
+builder.Services.AddFluentValidationAutoValidation()
+                .AddFluentValidationClientsideAdapters();
 
-builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = 44330);
+builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = serverConfig.Kestrel.SitePort);
 
 builder.Services.AddApplicationServices();
 try
 {
     var app = builder.Build();
 
-    if (app.Environment.IsDevelopment())
-    {
-        app.UseDeveloperExceptionPage();
-    }
-    else
-    {
-        app.UseExceptionHandler("/Error");
-    }
-    
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
     
     app.MapControllers();
