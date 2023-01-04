@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using HSMCommon;
 using HSMServer.Settings;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -47,6 +48,9 @@ namespace HSMServer.Model
 
             if (version is not null)
                 Version = $"{version.Major}.{version.Minor}.{version.Build}";
+
+            if (!Directory.Exists(ConfigPath)) 
+                FileManager.SafeCreateDirectory(ConfigPath);
         }
 
         public ServerConfig(IConfigurationRoot configuration, IWebHostEnvironment webHostEnvironment)
@@ -54,7 +58,7 @@ namespace HSMServer.Model
             _configuration = configuration;
 
             CreateIfNotExistsSettings(webHostEnvironment);
-
+    
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
         }
@@ -67,10 +71,12 @@ namespace HSMServer.Model
 
         private void CreateIfNotExistsSettings(IWebHostEnvironment webHostEnvironment)
         {
-            string fileName = "appsettings" + (webHostEnvironment.IsDevelopment() ? ".Development" : "") + ".json";
+            string file = Path.Combine(ConfigPath, "appsettings" + (webHostEnvironment.IsDevelopment() ? ".Development" : string.Empty) + ".json");
 
-            if (!File.Exists(Path.Combine(ConfigPath, fileName)))
-                File.WriteAllText(Path.Combine(ConfigPath, fileName), DefaultSettingsValues);
+            if (!File.Exists(file))
+                FileManager.SafeWriteToFile(file, DefaultSettingsValues);
+            
+            _configuration.Reload();
         }
     }
 }
