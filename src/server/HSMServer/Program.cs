@@ -60,9 +60,6 @@ try
     
     app.MapControllers();
     app.MapControllerRoute(
-        name: "default",
-        pattern: "{controller=Home}/{action}");
-    app.MapControllerRoute(
         name: "Account",
         pattern: "{controller=Account}/{action}",
         defaults: new { controller = "Account" });
