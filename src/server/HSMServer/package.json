@@ -1,0 +1,16 @@
+{
+  "name": "hsmserver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --mode=development --watch",
+    "release": "webpack --mode=production"
+  },
+  "author": "HSM team",
+  "license": "MIT",
+  "devDependencies": {
+    "webpack": "5.75.0",
+    "webpack-cli": "5.0.1"
+  }
+}
