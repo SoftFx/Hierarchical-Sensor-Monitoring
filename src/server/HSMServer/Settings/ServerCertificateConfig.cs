@@ -29,6 +29,6 @@ public class ServerCertificateConfig
                 : new X509Certificate2(certificatePath, Key);
         }
 
-        return new();
+        return null;
     }
 }
