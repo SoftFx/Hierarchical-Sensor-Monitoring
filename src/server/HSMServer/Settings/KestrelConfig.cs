@@ -2,7 +2,7 @@ namespace HSMServer.Settings;
 
 public class KestrelConfig
 {
-    public int SensorPort { get; set; }
-    
-    public int SitePort { get; set; }
+    public int SensorPort { get; set; } = 44330;
+
+    public int SitePort { get; set; } = 44333;
 }
