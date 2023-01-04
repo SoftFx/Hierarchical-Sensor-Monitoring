@@ -7,7 +7,6 @@ namespace HSMServer.Settings;
 
 public class ServerCertificateConfig
 {
-    [JsonIgnore]
     private X509Certificate2 _certificate;
 
 

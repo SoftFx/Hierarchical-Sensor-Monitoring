@@ -10,24 +10,19 @@ namespace HSMServer.Model
 {
     public class ServerConfig
     {
-        [JsonIgnore]
         private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
         
-        [JsonIgnore]
         private readonly IConfigurationRoot _configuration;
         
         
-        
 #if RELEASE
-        [JsonIgnore]
         public const string ConfigName = "appsettings.json";
 #else
-        [JsonIgnore]
         public const string ConfigName = "appsettings.Development.json";
 #endif
         
         [JsonIgnore]
-        public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
+        public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
 
         [JsonIgnore]
         public static string Version { get; }
