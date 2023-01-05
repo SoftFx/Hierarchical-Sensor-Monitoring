@@ -3,13 +3,6 @@
   "defaultProvider": "unpkg",
   "libraries": [
     {
-      "library": "clipboard@2.0.8",
-      "destination": "wwwroot/clipboard/",
-      "files": [
-        "dist/clipboard.min.js"
-      ]
-    },
-    {
       "provider": "cdnjs",
       "library": "jstree@3.3.11",
       "destination": "wwwroot/js/jstree/"
