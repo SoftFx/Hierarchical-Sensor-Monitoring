@@ -141,19 +141,6 @@
         }
     }
 
-    $('[data-bs-toggle="popover"]').on("click", function() {
-        var thisDesc = bootstrap.Popover.getInstance(this);
-
-        var popoverTriggerList = [].slice.call(document.querySelectorAll('.show'));
-        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
-
-            var currDesc = bootstrap.Popover.getInstance(popoverTriggerEl);
-
-            if (currDesc != thisDesc)
-                currDesc.hide();
-        });
-    });
-
     $('[id^=cancel_]').on("click", function() {
         document.location.reload();
     });
