@@ -1,9 +1,8 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Model.Authentication;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -49,11 +48,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static User BuildUser() => new()
+        internal static UserEntity BuildUser() => new()
         {
             UserName = RandomGenerator.GetRandomString(),
             Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
-            IsAdmin = false
+            IsAdmin = false,
+            ProductsRoles = new(),
         };
 
 

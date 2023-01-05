@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.UserFilters;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Extensions
@@ -55,6 +55,19 @@ namespace HSMServer.Extensions
 
             return false;
         }
+
+        public static User WithoutPassword(this User user) =>
+            new()
+            {
+                UserName = user.UserName,
+                Password = null,
+                CertificateFileName = user.CertificateFileName,
+                CertificateThumbprint = user.CertificateThumbprint,
+                IsAdmin = user.IsAdmin,
+                ProductsRoles = user.ProductsRoles,
+                Notifications = new(user.Notifications.ToEntity()),
+                TreeFilter = user.TreeFilter
+            };
 
         private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
         {

@@ -1,16 +1,18 @@
 ﻿using HSMCommon;
 using HSMCommon.Constants;
+using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Extensions;
-using HSMServer.Core.Helpers;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model;
+using HSMServer.Extensions;
+using HSMServer.Helpers;
+using HSMServer.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Authentication
+namespace HSMServer.Authentication
 {
     public partial class UserManager : IUserManager
     {
@@ -18,6 +20,7 @@ namespace HSMServer.Core.Authentication
         private readonly ConcurrentDictionary<string, Guid> _userNames;
 
         private readonly IDatabaseCore _databaseCore;
+        private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<UserManager> _logger;
 
         private readonly AddUserActionHandler _addUserActionHandler;
@@ -28,10 +31,14 @@ namespace HSMServer.Core.Authentication
         public event Action<User> RemoveUserEvent;
 
 
-        public UserManager(IDatabaseCore databaseCore, ILogger<UserManager> logger)
+        public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger)
         {
             _databaseCore = databaseCore;
             _logger = logger;
+
+            _treeValuesCache = cache;
+            _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
+            _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
             _users = new ConcurrentDictionary<Guid, User>();
             _userNames = new ConcurrentDictionary<string, Guid>();
@@ -44,7 +51,6 @@ namespace HSMServer.Core.Authentication
 
             _logger.LogInformation("UserManager initialized");
         }
-
 
         public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
             string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
@@ -83,34 +89,6 @@ namespace HSMServer.Core.Authentication
                 await _removeUserActionHandler.Apply(user);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
-        }
-
-        public void RemoveProductFromUsers(Guid productId)
-        {
-            var updatedUsers = new List<User>(1 << 2);
-
-            foreach (var user in _users)
-            {
-                var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == productId.ToString());
-                if (removedRolesCount == 0)
-                    continue;
-
-                updatedUsers.Add(user.Value);
-            }
-
-            foreach (var userToEdt in updatedUsers)
-                _databaseCore.UpdateUser(userToEdt);
-        }
-
-        public void RemoveSensorFromUsers(Guid sensorId)
-        {
-            foreach (var (_, user) in _users)
-            {
-                if (!user.Notifications.RemoveSensor(sensorId))
-                    continue;
-
-                _databaseCore.UpdateUser(user);
-            }
         }
 
         public User Authenticate(string login, string password)
@@ -178,16 +156,16 @@ namespace HSMServer.Core.Authentication
 
         private async void InitializeUsers()
         {
-            var usersFromDB = _databaseCore.GetUsers();
+            var userEntities = _databaseCore.GetUsers();
 
-            if (usersFromDB.Count == 0)
+            if (userEntities.Count == 0)
             {
                 AddDefaultUser();
                 _logger.LogInformation("Default user has been added.");
             }
 
-            foreach (var user in usersFromDB)
-                await _addUserActionHandler.Apply(user, false);
+            foreach (var entity in userEntities)
+                await _addUserActionHandler.Apply(new(entity), false);
 
             _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
         }
@@ -198,5 +176,39 @@ namespace HSMServer.Core.Authentication
                     CommonConstants.DefaultClientCrtCertificateName,
                     HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
                     true);
+
+        private void ChangeProductEventHandler(ProductModel product, TransactionType transaction)
+        {
+            if (transaction == TransactionType.Delete)
+            {
+                var updatedUsers = new List<User>(1 << 2);
+
+                foreach (var user in _users)
+                {
+                    var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == product.Id.ToString());
+                    if (removedRolesCount == 0)
+                        continue;
+
+                    updatedUsers.Add(user.Value);
+                }
+
+                foreach (var userToEdt in updatedUsers)
+                    _databaseCore.UpdateUser(userToEdt.ToEntity());
+            }
+        }
+
+        private void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType transaction)
+        {
+            if (transaction == TransactionType.Delete)
+            {
+                foreach (var (_, user) in _users)
+                {
+                    if (!user.Notifications.RemoveSensor(sensor.Id))
+                        continue;
+
+                    _databaseCore.UpdateUser(user.ToEntity());
+                }
+            }
+        }
     }
 }

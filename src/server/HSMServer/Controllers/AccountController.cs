@@ -1,13 +1,13 @@
 ﻿using HSMCommon;
 using HSMCommon.Constants;
 using HSMServer.Attributes;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Encryption;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;

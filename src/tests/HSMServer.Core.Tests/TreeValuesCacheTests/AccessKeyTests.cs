@@ -17,8 +17,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const int DefaultKeyCount = 1;
         private const int ProductAddTransactionCount = 1;
 
-        private readonly ITreeValuesCache _valuesCache;
-
         private (int add, int update, int delete) _productTransactionCount;
         private (int add, int update, int delete) _keyTransactionCount;
         private ProductModel _product;
@@ -30,8 +28,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
             : base(fixture, dbFixture)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
-
             _productTransactionCount = (0, 0, 0);
             _keyTransactionCount = (0, 0, 0);
 

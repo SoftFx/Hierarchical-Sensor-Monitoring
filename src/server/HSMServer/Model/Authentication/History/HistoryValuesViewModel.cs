@@ -1,8 +1,9 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace HSMServer.Core.Model.Authentication.History
+namespace HSMServer.Model.Authentication.History
 {
     public sealed class HistoryValuesViewModel
     {

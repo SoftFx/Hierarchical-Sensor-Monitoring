@@ -1,5 +1,5 @@
 ﻿using HSMCommon;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Model.Authentication;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -42,7 +42,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static User GetEmptyUser()
         {
-            return new User() {
+            return new User()
+            {
                 UserName = string.Empty,
                 CertificateThumbprint = string.Empty,
                 CertificateFileName = string.Empty,

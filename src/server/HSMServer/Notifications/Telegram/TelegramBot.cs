@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Constants;
-using HSMServer.Core.Authentication;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
@@ -11,7 +11,7 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using User = HSMServer.Core.Model.Authentication.User;
+using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
 {
@@ -156,7 +156,7 @@ namespace HSMServer.Notifications
                 foreach (var (_, chat) in user.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(user, chat);
 
-            foreach (var product in _cache.GetProducts(null))
+            foreach (var product in _cache.GetProducts())
                 foreach (var (_, chat) in product.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(product, chat);
         }

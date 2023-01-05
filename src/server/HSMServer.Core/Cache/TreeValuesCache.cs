@@ -1,11 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
@@ -28,7 +26,6 @@ namespace HSMServer.Core.Cache
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
-        private readonly IUserManager _userManager;
         private readonly IUpdatesQueue _updatesQueue;
 
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
@@ -45,10 +42,9 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUserManager userManager, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore databaseCore, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
-            _userManager = userManager;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -129,8 +125,6 @@ namespace HSMServer.Core.Cache
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
 
-                _userManager.RemoveProductFromUsers(product.Id);
-
                 ChangeProductEvent?.Invoke(product, TransactionType.Delete);
             }
 
@@ -151,22 +145,9 @@ namespace HSMServer.Core.Cache
 
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
-        public List<ProductModel> GetProducts(User user, bool isAllProducts = false)
-        {
-            var products = _tree.Values.ToList();
-            if (!isAllProducts)
-                products = products.Where(p => p.ParentProduct == null).ToList();
-
-            if (user == null || user.IsAdmin)
-                return products;
-
-            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
-                return new List<ProductModel>();
-
-            var availableProducts = products.Where(p => user.IsProductAvailable(p.Id)).ToList();
-
-            return isAllProducts ? GetAllProductsWithTheirSubProducts(availableProducts) : availableProducts;
-        }
+        /// <returns>list of root products (without parent)</returns>
+        public List<ProductModel> GetProducts() =>
+            _tree.Values.Where(p => p.ParentProduct == null).ToList();
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
@@ -288,7 +269,6 @@ namespace HSMServer.Core.Cache
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
-            _userManager.RemoveSensorFromUsers(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
@@ -340,7 +320,7 @@ namespace HSMServer.Core.Cache
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _databaseCore.GetSensorValuesPage(sensorId.ToString(), from, to, count);
-                
+
                 await foreach (var page in pages)
                     yield return sensor.ConvertValues(page);
             }
@@ -742,29 +722,6 @@ namespace HSMServer.Core.Cache
             }
 
             return accessKey.IsHasPermissions(permissions, out message);
-        }
-
-        private static List<ProductModel> GetAllProductsWithTheirSubProducts(List<ProductModel> products)
-        {
-            var productsWithTheirSubProducts = new Dictionary<Guid, ProductModel>(products.Count);
-            foreach (var product in products)
-            {
-                productsWithTheirSubProducts.Add(product.Id, product);
-                GetAllProductSubProducts(product, productsWithTheirSubProducts);
-            }
-
-            return productsWithTheirSubProducts.Values.ToList();
-        }
-
-        private static void GetAllProductSubProducts(ProductModel product, Dictionary<Guid, ProductModel> allSubProducts)
-        {
-            foreach (var (subProductId, subProduct) in product.SubProducts)
-            {
-                if (!allSubProducts.ContainsKey(subProductId))
-                    allSubProducts.Add(subProductId, subProduct);
-
-                GetAllProductSubProducts(subProduct, allSubProducts);
-            }
         }
 
         private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, ValidationResult> sensorsStatuses)

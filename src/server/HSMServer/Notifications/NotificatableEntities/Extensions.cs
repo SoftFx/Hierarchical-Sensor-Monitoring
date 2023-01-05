@@ -1,7 +1,7 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Model.Authentication;
 
 namespace HSMServer.Notifications
 {

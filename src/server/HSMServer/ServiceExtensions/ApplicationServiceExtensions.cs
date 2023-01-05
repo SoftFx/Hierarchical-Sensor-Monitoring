@@ -1,19 +1,18 @@
-using System;
-using System.IO;
-using System.Security.Authentication;
 using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Authentication;
 using HSMServer.BackgroundTask;
-using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
+using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Notifications;
+using HSMServer.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -21,8 +20,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
-using HSMServer.Middleware;
-using HSMServer.Settings;
+using System;
+using System.IO;
+using System.Security.Authentication;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -43,7 +43,7 @@ public static class ApplicationServiceExtensions
         services.AddHostedService<OutdatedSensorService>();
         services.AddHostedService<DatabaseMonitoringService>();
         services.AddHostedService<MonitoringBackgroundService>();
-        
+
         services.AddSwaggerGen(o =>
         {
             o.UseInlineDefinitionsForEnums();
@@ -63,7 +63,7 @@ public static class ApplicationServiceExtensions
             var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
             o.IncludeXmlComments(xmlPath, true);
         });
-        
+
         return services;
     }
 
@@ -72,7 +72,7 @@ public static class ApplicationServiceExtensions
         webHostBuilder.ConfigureKestrel(options =>
         {
             options.ConfigureKestrelListenOptions(serverConfig);
-            
+
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MaxConcurrentConnections = 100;
             options.Limits.MaxConcurrentUpgradedConnections = 100;
@@ -96,14 +96,14 @@ public static class ApplicationServiceExtensions
         }
 
         applicationBuilder.UseHttpsRedirection();
-        
+
         applicationBuilder.UseStaticFiles();
-        
+
         applicationBuilder.UseRouting();
-        
+
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
-        
+
         applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
@@ -114,7 +114,7 @@ public static class ApplicationServiceExtensions
             c.RoutePrefix = "api/swagger";
             c.SwaggerEndpoint($"/swagger/{ServerConfig.Version}/swagger.json", "HSM server api");
         });
-        
+
         return applicationBuilder;
     }
 
@@ -124,8 +124,8 @@ public static class ApplicationServiceExtensions
         options.ListenAnyIP(serverConfig.Kestrel.SensorPort, KestrelListenOptions(serverConfig.ServerCertificate));
         options.ListenAnyIP(serverConfig.Kestrel.SitePort, KestrelListenOptions(serverConfig.ServerCertificate));
     }
-    
-    private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig serverCertificateConfig) => 
+
+    private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig serverCertificateConfig) =>
         options =>
         {
             options.Protocols = HttpProtocols.Http1AndHttp2;

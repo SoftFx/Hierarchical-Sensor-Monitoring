@@ -1,26 +1,29 @@
-﻿using System;
-using System.IO;
-using System.Reflection;
-using System.Text.Json.Serialization;
-using HSMCommon;
+﻿using HSMCommon;
 using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.IO;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model
 {
     public class ServerConfig
     {
+        private static readonly JsonSerializerOptions _options = new() { WriteIndented = true };
+
         private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
-        
+
         private readonly IConfigurationRoot _configuration;
-        
-        
+
+
 #if RELEASE
         public const string ConfigName = "appsettings.json";
 #else
         public const string ConfigName = "appsettings.Development.json";
 #endif
-        
+
         [JsonIgnore]
         public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
 
@@ -31,9 +34,9 @@ namespace HSMServer.Model
         public static string Name { get; }
 
 
-        public ServerCertificateConfig ServerCertificate { get; }
-
         public KestrelConfig Kestrel { get; }
+
+        public ServerCertificateConfig ServerCertificate { get; }
 
 
         static ServerConfig()
@@ -46,17 +49,17 @@ namespace HSMServer.Model
             if (version is not null)
                 Version = $"{version.Major}.{version.Minor}.{version.Build}";
 
-            if (!Directory.Exists(ConfigPath)) 
+            if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);
         }
 
         public ServerConfig(IConfigurationRoot configuration)
         {
             _configuration = configuration;
-            
+
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
-            
+
             ResaveSettings();
         }
 
@@ -65,7 +68,8 @@ namespace HSMServer.Model
         {
             return _configuration.GetSection(sectionName).Get<T>();
         }
-        
-        private void ResaveSettings() => File.WriteAllText(_settingsPath, System.Text.Json.JsonSerializer.Serialize(this));
+
+        private void ResaveSettings() =>
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
     }
 }

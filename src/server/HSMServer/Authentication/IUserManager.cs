@@ -1,8 +1,8 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 
-namespace HSMServer.Core.Authentication
+namespace HSMServer.Authentication
 {
     public interface IUserManager
     {
@@ -31,9 +31,6 @@ namespace HSMServer.Core.Authentication
         /// </summary>
         /// <param name="userName">Name of the user to remove.</param>
         void RemoveUser(string userName);
-
-        void RemoveProductFromUsers(Guid productId);
-        void RemoveSensorFromUsers(Guid sensorId);
 
         User Authenticate(string login, string password);
 
