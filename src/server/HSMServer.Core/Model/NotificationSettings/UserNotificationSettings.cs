@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model
 
         public UserNotificationSettings() : base() { }
 
-        internal UserNotificationSettings(UserNotificationSettingsEntity entity) : base(entity)
+        public UserNotificationSettings(UserNotificationSettingsEntity entity) : base(entity)
         {
             if (entity?.EnabledSensors is not null)
             {
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Model
 
         public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
 
-        internal UserNotificationSettingsEntity ToEntity() =>
+        public UserNotificationSettingsEntity ToEntity() =>
             new()
             {
                 TelegramSettings = Telegram.ToEntity(),

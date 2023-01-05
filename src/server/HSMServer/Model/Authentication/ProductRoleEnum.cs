@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Model.Authentication
+﻿namespace HSMServer.Model.Authentication
 {
     public enum ProductRoleEnum
     {

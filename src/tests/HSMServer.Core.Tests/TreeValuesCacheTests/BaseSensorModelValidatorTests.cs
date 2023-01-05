@@ -1,5 +1,4 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
@@ -31,14 +30,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const int DefaultMaxStringLength = 150;
         private const int TestTicks = 50000;
 
-        private readonly ITreeValuesCache _valuesCache;
-
 
         public BaseSensorModelValidatorTests(ValidationFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: false)
-        {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue);
-        }
+            : base(fixture, registerFixture, addTestProduct: false) { }
 
 
         [Theory]

@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Core.Helpers
-@using HSMServer.Core.Model.Authentication
+@using HSMServer.Helpers
+@using HSMServer.Model.Authentication
 @using HSMServer.Model
 
 <!DOCTYPE html>
@@ -34,7 +34,7 @@
     </div>
 
     <div id="navbar">
-        @if (Context.User is HSMServer.Core.Model.Authentication.User)
+        @if (Context.User is User)
         {
             <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-2" style=" background-color: #edf0f5;">
                 <div class="container-fluid">

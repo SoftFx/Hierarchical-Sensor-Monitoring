@@ -1,7 +1,7 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using System.Threading.Tasks;
 
-namespace HSMServer.Core.Authentication
+namespace HSMServer.Authentication
 {
     public partial class UserManager
     {
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Authentication
                 _userManager._userNames.TryAdd(user.UserName, user.Id);
 
             protected override void DatabaseAction(User user) =>
-                _userManager._databaseCore.AddUser(user);
+                _userManager._databaseCore.AddUser(user.ToEntity());
         }
 
 
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Authentication
             }
 
             protected override void DatabaseAction(User user) =>
-                _userManager._databaseCore.RemoveUser(user);
+                _userManager._databaseCore.RemoveUser(user.ToEntity());
         }
 
 
@@ -107,7 +107,7 @@ namespace HSMServer.Core.Authentication
                 if (!_userManager._users.TryGetValue(user.Id, out var existingUser))
                     return;
 
-                _userManager._databaseCore.UpdateUser(existingUser);
+                _userManager._databaseCore.UpdateUser(existingUser.ToEntity());
             }
         }
     }

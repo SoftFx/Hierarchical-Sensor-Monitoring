@@ -1,9 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMCommon.Extensions;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -65,7 +65,7 @@ namespace HSMServer.Model.TreeViewModels
             AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
-        
+
         internal void RecalculateCharacteristics()
         {
             int allSensorsCount = 0;

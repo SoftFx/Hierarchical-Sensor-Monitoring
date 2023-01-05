@@ -1,9 +1,9 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Helpers
+namespace HSMServer.Helpers
 {
     public static class ProductRoleHelper
     {

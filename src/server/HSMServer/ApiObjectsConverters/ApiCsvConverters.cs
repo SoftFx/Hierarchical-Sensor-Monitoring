@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Globalization;
@@ -65,7 +66,8 @@ namespace HSMServer.ApiObjectsConverters
             var rowValues = new List<string>(header.Count);
             foreach (var value in values)
             {
-                var properties = JsonSerializer.SerializeToElement<object>(value, _serializerOptions);
+                var rowValue = value is FileValue fileValue ? fileValue.DecompressContent() : value; // TODO smth with this crutch
+                var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
 
                 foreach (var column in header)
                     rowValues.Add(properties.GetProperty(column).ToString());
