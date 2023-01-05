@@ -2,7 +2,7 @@
 
 
 module.exports = {
-    entry: "./wwwroot/src/index.js",
+    entry: "./websrc/index.js",
     output: {
         path: path.resolve(__dirname, "wwwroot/dist"),
         filename: "[name].bundle.js",
