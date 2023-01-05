@@ -57,11 +57,6 @@
         <None Include="nlog.config">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Include="wwwroot\lib\jquery-validation-unobtrusive\jquery.validate.unobtrusive.min.js"/>
-        <None Include="wwwroot\lib\jquery-validation\dist\additional-methods.min.js"/>
-        <None Include="wwwroot\lib\jquery-validation\dist\jquery.validate.min.js"/>
-        <None Include="wwwroot\lib\jquery\dist\jquery.min.js"/>
-        <None Include="wwwroot\lib\jquery\dist\jquery.min.map"/>
     </ItemGroup>
 
     <ItemGroup>
