@@ -4,7 +4,7 @@ using System.IO.Compression;
 
 namespace HSMServer.Core.Helpers
 {
-    internal static class FileSensorContentCompressionHelper
+    public static class FileSensorContentCompressionHelper
     {
         internal static FileValue CompressContent(this FileValue sensorValue)
         {
@@ -24,7 +24,7 @@ namespace HSMServer.Core.Helpers
             };
         }
 
-        internal static FileValue DecompressContent(this FileValue value)
+        public static FileValue DecompressContent(this FileValue value)
         {
             if (value.Value.Length == value.OriginalSize)
                 return value;

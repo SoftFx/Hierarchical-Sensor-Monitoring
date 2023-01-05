@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Requests;
@@ -114,8 +115,11 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value.ToString(),
             };
 
-        public static FileSensorHistory Convert(this FileValue value) =>
-            new()
+        public static FileSensorHistory Convert(this FileValue fileValue)
+        {
+            var value = fileValue.DecompressContent(); // TODO smth with this crutch
+
+            return new()
             {
                 Comment = value.Comment,
                 Time = value.Time,
@@ -124,6 +128,7 @@ namespace HSMServer.ApiObjectsConverters
                 FileName = value.Name,
                 Extension = value.Extension
             };
+        }
 
         public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : struct =>
             new()
