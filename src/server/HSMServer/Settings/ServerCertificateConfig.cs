@@ -8,17 +8,17 @@ namespace HSMServer.Settings;
 public class ServerCertificateConfig
 {
     private X509Certificate2 _certificate;
-    
-    
-    public static string Name { get; set; }
 
-    public static string Key { get; set; }
+
+    public string Name { get; set; }
+
+    public string Key { get; set; }
     
     [JsonIgnore] 
     public X509Certificate2 Certificate => _certificate ??= GetCertificate();
 
     
-    private static X509Certificate2 GetCertificate()
+    private X509Certificate2 GetCertificate()
     {
         var certificatePath = Path.Combine(ServerConfig.ConfigPath, Name);
         
@@ -29,6 +29,6 @@ public class ServerCertificateConfig
                 : new X509Certificate2(certificatePath, Key);
         }
 
-        return new();
+        return null;
     }
 }
