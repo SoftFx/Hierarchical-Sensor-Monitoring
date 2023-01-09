@@ -4,16 +4,6 @@
   "libraries": [
     {
       "provider": "cdnjs",
-      "library": "jstree@3.3.11",
-      "destination": "wwwroot/js/jstree/"
-    },
-    {
-      "provider": "cdnjs",
-      "library": "clipboard.js@2.0.8",
-      "destination": "wwwroot/js/clipboard.js/"
-    },
-    {
-      "provider": "cdnjs",
       "library": "moment.js@2.29.1",
       "destination": "wwwroot/moment.js/"
     },
