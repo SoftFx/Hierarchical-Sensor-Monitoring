@@ -12,3 +12,6 @@ window.moment = moment;
 
 import 'jstree/dist/jstree.min.js';
 import 'jstree-bootstrap-theme/dist/themes/proton/style.min.css';
+
+import * as Plotly from 'plotly.js/dist/plotly';
+window.Plotly = Plotly;
