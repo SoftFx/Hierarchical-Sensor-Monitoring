@@ -1,6 +1,8 @@
 ﻿const path = require("path");
 const webpack = require('webpack');
 
+const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
+
 
 module.exports = {
     entry: "./websrc/index.js",
@@ -28,6 +30,7 @@ module.exports = {
         new webpack.ProvidePlugin({
             $: 'jquery',
             jQuery: 'jquery',
-        })
+        }),
+        new MomentLocalesPlugin(),
     ]
 };
