@@ -5,7 +5,7 @@ const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
 
 module.exports = {
-    entry: "./websrc/index.js",
+    entry: "./wwwroot/src/index.js",
     output: {
         path: path.resolve(__dirname, "wwwroot/dist"),
         filename: "[name].bundle.js",

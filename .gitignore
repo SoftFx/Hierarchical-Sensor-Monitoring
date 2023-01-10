@@ -122,4 +122,7 @@ src/server/HSMServer/HSMSwaggerComments.xml
 .vscode/
 
 # wwwroot files
-src/server/HSMServer/wwwroot/*
+src/server/HSMServer/wwwroot/dist/*
+
+# package.lock
+src/server/HSMServer/package-lock.json
