@@ -122,14 +122,14 @@
 #custom_accordion_header .accordion-button.collapsed::before {
     content: "\f151";
     font-weight: 400;
-    font-family: "Font Awesome 5 Free";
+    font-family: "Font Awesome 6 Free";
     padding-right: 1rem;
 }
 
 #custom_accordion_header .accordion-button:not(.collapsed)::before {
     content: "\f150";
     font-weight: 400;
-    font-family: "Font Awesome 5 Free";
+    font-family: "Font Awesome 6 Free";
     padding-right: 1rem;
 }
 

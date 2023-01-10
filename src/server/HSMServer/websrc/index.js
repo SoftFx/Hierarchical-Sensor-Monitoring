@@ -15,3 +15,6 @@ import 'jstree-bootstrap-theme/dist/themes/proton/style.min.css';
 
 import * as Plotly from 'plotly.js/dist/plotly';
 window.Plotly = Plotly;
+
+import '@fortawesome/fontawesome-free/js/all.min.js';
+import '@fortawesome/fontawesome-free/css/all.min.css';
