@@ -179,3 +179,10 @@
 .hidden_element {
     visibility : hidden;
 }
+
+.jstree-anchor > .jstree-themeicon {
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    margin: 3px 2px 3px 0px;
+}

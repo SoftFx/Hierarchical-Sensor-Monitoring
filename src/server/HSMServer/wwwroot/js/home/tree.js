@@ -17,10 +17,6 @@ function initializeTree() {
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
-            "themes": {
-                "name": "proton",
-                'responsive': true
-            }
         },
         "contextmenu": {
             "items": customMenu
