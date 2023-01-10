@@ -30,7 +30,7 @@ public class ServerCertificateConfig
         }
 
 #if RELEASE
-        return new X509Certificate2(Path.Combine(ServerConfig.DefaultPath, Name));
+        return new X509Certificate2(Path.Combine(ServerConfig.DefaultPath, string.IsNullOrEmpty(Name) ? "default.server.pfx" : Name));
 #else
         return null;
 #endif

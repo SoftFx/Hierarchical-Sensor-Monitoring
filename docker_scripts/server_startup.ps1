@@ -46,7 +46,7 @@ if ($ExpectedImageId)
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"
 
-	docker run -d -it -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it -p $SensorDataPort -p $SensorSitePort -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder $ExpectedImageId
 }
 else
 {
