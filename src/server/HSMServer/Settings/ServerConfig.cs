@@ -26,6 +26,9 @@ namespace HSMServer.Model
 
         [JsonIgnore]
         public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
+        
+        [JsonIgnore]
+        public static string DefaultPath => Path.Combine(Environment.CurrentDirectory, "DefaultCertificates");
 
         [JsonIgnore]
         public static string Version { get; }

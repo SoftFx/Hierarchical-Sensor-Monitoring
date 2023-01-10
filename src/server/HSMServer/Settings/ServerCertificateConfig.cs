@@ -29,6 +29,10 @@ public class ServerCertificateConfig
                 : new X509Certificate2(certificatePath, Key);
         }
 
+#if RELEASE
+        return new X509Certificate2(Path.Combine(ServerConfig.DefaultPath, Name));
+#else
         return null;
+#endif
     }
 }
