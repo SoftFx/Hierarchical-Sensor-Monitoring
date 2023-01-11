@@ -30,6 +30,6 @@ public class ServerCertificateConfig
                 : new X509Certificate2(certificatePath, Key);
         }
         
-        return new X509Certificate2(Path.Combine(ServerConfig.RealCurrentDirectory, "default.server.pfx"));
+        return new X509Certificate2(Path.Combine(ServerConfig.ExecutableDirectory, "default.server.pfx"));
     }
 }
