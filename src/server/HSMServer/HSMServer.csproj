@@ -5,7 +5,7 @@
         <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
         <NoWarn>$(NoWarn);1591</NoWarn>
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-        <Version>3.14.0</Version>
+        <Version>3.14.1</Version>
         <Authors>HSM team</Authors>
         <Company>Soft-FX</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -84,5 +84,13 @@
         <Reference Include="LightningDB">
             <HintPath>..\..\lib\LightningDB.dll</HintPath>
         </Reference>
+    </ItemGroup>
+    
+    <ItemGroup>
+        <ContentWithTargetPath Include="Settings\DefaultCertificates\default.server.pfx">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>default.server.pfx</TargetPath>
+        </ContentWithTargetPath>
+        <None Include="Settings\DefaultCertificates\default.server.pfx" />
     </ItemGroup>
 </Project>

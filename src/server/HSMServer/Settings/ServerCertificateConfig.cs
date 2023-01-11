@@ -28,11 +28,7 @@ public class ServerCertificateConfig
                 ? new X509Certificate2(certificatePath)
                 : new X509Certificate2(certificatePath, Key);
         }
-
-#if RELEASE
-        return new X509Certificate2(Path.Combine(ServerConfig.DefaultPath, string.IsNullOrEmpty(Name) ? "default.server.pfx" : Name));
-#else
-        return null;
-#endif
+        
+        return new X509Certificate2(Path.Combine(Environment.CurrentDirectory, "default.server.pfx"));
     }
 }
