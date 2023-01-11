@@ -52,13 +52,10 @@ namespace HSMServer.Authentication
             _logger.LogInformation("UserManager initialized");
         }
 
-        public void AddUser(string userName, string certificateThumbprint, string certificateFileName,
-            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
+        public void AddUser(string userName, string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
         {
             User user = new(userName)
             {
-                CertificateThumbprint = certificateThumbprint,
-                CertificateFileName = certificateFileName,
                 Password = passwordHash,
                 IsAdmin = isAdmin,
             };
@@ -172,8 +169,6 @@ namespace HSMServer.Authentication
 
         private void AddDefaultUser() =>
             AddUser(CommonConstants.DefaultUserUsername,
-                    CommonConstants.DefaultClientCertificateThumbprint,
-                    CommonConstants.DefaultClientCrtCertificateName,
                     HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
                     true);
 

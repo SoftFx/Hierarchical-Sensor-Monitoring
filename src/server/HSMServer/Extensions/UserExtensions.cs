@@ -61,8 +61,6 @@ namespace HSMServer.Extensions
             {
                 UserName = user.UserName,
                 Password = null,
-                CertificateFileName = user.CertificateFileName,
-                CertificateThumbprint = user.CertificateThumbprint,
                 IsAdmin = user.IsAdmin,
                 ProductsRoles = user.ProductsRoles,
                 Notifications = new(user.Notifications.ToEntity()),

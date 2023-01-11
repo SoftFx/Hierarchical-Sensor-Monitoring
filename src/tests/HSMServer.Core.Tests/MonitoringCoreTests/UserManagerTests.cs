@@ -45,8 +45,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(u => _userManager.AddUser(u.UserName, u.CertificateThumbprint, u.CertificateFileName,
-                                                    u.Password, u.IsAdmin, u.ProductsRoles));
+            users.ForEach(u => _userManager.AddUser(u.UserName, u.Password, u.IsAdmin, u.ProductsRoles));
 
             await FullTestUserAsync(users,
                                     _userManager.GetUserByUserName,
@@ -490,8 +489,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void TestNotChangeableUserSettings(User expected, User actual)
         {
             Assert.Equal(expected.UserName, actual.UserName);
-            Assert.Equal(expected.CertificateThumbprint, actual.CertificateThumbprint);
-            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
         }
 
         private static void CompareUserLists(IEnumerable<User> expectedInput, IEnumerable<User> actualInput)
@@ -554,8 +551,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             {
                 Id = source.Id,
                 UserName = GetUpdatedProperty(source.UserName),
-                CertificateFileName = GetUpdatedProperty(source.CertificateFileName),
-                CertificateThumbprint = GetUpdatedProperty(source.CertificateThumbprint),
                 IsAdmin = !source.IsAdmin,
                 Password = GetUpdatedProperty(source.Password),
                 ProductsRoles = productRoles,
