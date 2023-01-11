@@ -19,7 +19,7 @@ namespace HSMCommon.Model
                 result.SubVersion = int.Parse(splitRes[1]);
                 result.ExtraVersion = int.Parse(splitRes[2]);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 result.MainVersion = int.MaxValue;
                 result.SubVersion = int.MaxValue;
@@ -32,7 +32,7 @@ namespace HSMCommon.Model
             {
                 result.Postfix = splitRes[3];
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 result.Postfix = string.Empty;
             }
