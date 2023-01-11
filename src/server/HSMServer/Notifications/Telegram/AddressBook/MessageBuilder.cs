@@ -11,7 +11,7 @@ namespace HSMServer.Notifications
     {
         private const int MaxSensorMessages = 5;
 
-        private readonly ConcurrentDictionary<Guid, Dictionary<string, MessagesQueue>> _messages = new();
+        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, MessagesQueue>> _messages = new();
 
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
@@ -22,12 +22,12 @@ namespace HSMServer.Notifications
             var productId = sensor.RootProductId;
 
             if (!_messages.ContainsKey(productId))
-                _messages[productId] = new Dictionary<string, MessagesQueue>();
+                _messages[productId] = new ConcurrentDictionary<string, MessagesQueue>();
 
             var productMessages = _messages[productId];
 
             if (!productMessages.ContainsKey(sensor.Path))
-                productMessages.Add(sensor.Path, new MessagesQueue());
+                productMessages.TryAdd(sensor.Path, new MessagesQueue());
 
             productMessages[sensor.Path].AddMessage(GenerateMessageInfo(sensor));
         }
