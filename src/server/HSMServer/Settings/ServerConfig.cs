@@ -32,6 +32,9 @@ namespace HSMServer.Model
 
         [JsonIgnore]
         public static string Name { get; }
+        
+        [JsonIgnore]
+        public static string RealCurrentDirectory { get; }
 
 
         public KestrelConfig Kestrel { get; }
@@ -45,6 +48,7 @@ namespace HSMServer.Model
             var version = assembly.Version;
 
             Name = assembly.Name;
+            RealCurrentDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
             if (version is not null)
                 Version = $"{version.Major}.{version.Minor}.{version.Build}";
