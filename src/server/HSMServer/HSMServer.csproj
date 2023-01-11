@@ -85,12 +85,11 @@
             <HintPath>..\..\lib\LightningDB.dll</HintPath>
         </Reference>
     </ItemGroup>
-    
+
     <ItemGroup>
-        <ContentWithTargetPath Include="Settings\DefaultCertificates\default.server.pfx">
+        <EmbeddedResource Include="Settings\DefaultCertificates\default.server.pfx">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
             <TargetPath>default.server.pfx</TargetPath>
-        </ContentWithTargetPath>
-        <None Include="Settings\DefaultCertificates\default.server.pfx" />
+        </EmbeddedResource>
     </ItemGroup>
 </Project>

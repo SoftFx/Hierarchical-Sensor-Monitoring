@@ -20,10 +20,6 @@ namespace HSMServer.Model.Authentication
 
         public string Password { get; set; }
 
-        public string CertificateThumbprint { get; set; }
-
-        public string CertificateFileName { get; set; }
-
         public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
 
         public UserNotificationSettings Notifications { get; set; }
@@ -65,8 +61,6 @@ namespace HSMServer.Model.Authentication
             Id = user.Id;
             UserName = user.UserName;
             Password = user.Password;
-            CertificateThumbprint = user.CertificateThumbprint;
-            CertificateFileName = user.CertificateFileName;
             IsAdmin = user.IsAdmin;
             ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
             Notifications = new(user.Notifications.ToEntity());
@@ -79,8 +73,6 @@ namespace HSMServer.Model.Authentication
 
             Id = entity.Id;
             UserName = entity.UserName;
-            CertificateFileName = entity.CertificateFileName;
-            CertificateThumbprint = entity.CertificateThumbprint;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
@@ -104,8 +96,6 @@ namespace HSMServer.Model.Authentication
         /// <param name="user"></param>
         public void Update(User user)
         {
-            //CertificateFileName = user.CertificateFileName;
-            //CertificateThumbprint = user.CertificateThumbprint;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
             ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
@@ -133,8 +123,6 @@ namespace HSMServer.Model.Authentication
             {
                 UserName = UserName,
                 Password = Password,
-                CertificateThumbprint = CertificateThumbprint,
-                CertificateFileName = CertificateFileName,
                 Id = Id,
                 IsAdmin = IsAdmin,
                 ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),

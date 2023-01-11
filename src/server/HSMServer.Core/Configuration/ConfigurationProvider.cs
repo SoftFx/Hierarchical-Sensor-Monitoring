@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMCommon.Model;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using Microsoft.Extensions.Logging;
@@ -14,9 +13,9 @@ namespace HSMServer.Core.Configuration
         #region Private fields
 
         private readonly IDatabaseCore _databaseCore;
+        
         private readonly ILogger<ConfigurationProvider> _logger;
-        private ClientVersionModel _clientVersion;
-        private string _clientAppFolderPath;
+        
         private readonly List<string> _configurationObjectNamesList = new List<string>
         {
             ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey,
@@ -26,7 +25,10 @@ namespace HSMServer.Core.Configuration
             ConfigurationConstants.ServerCertificatePassword, ConfigurationConstants.BotName,
             ConfigurationConstants.BotToken, ConfigurationConstants.AreBotMessagesEnabled
         };
-
+        
+        
+        private string _clientAppFolderPath;
+        
         #endregion
 
         public ConfigurationProvider(IDatabaseCore databaseCore, ILogger<ConfigurationProvider> logger)
