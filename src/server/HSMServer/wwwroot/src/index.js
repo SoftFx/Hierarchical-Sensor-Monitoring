@@ -28,3 +28,7 @@ import './js/plotting.js';
 import './js/sensorInfo.js';
 import './js/tree.js';
 import './js/site.js';
+
+import './css/site.css';
+import './css/accessKey.css';
+import './css/home.css';
