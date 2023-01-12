@@ -131,6 +131,7 @@ jobs:
     environment: DockerHub
     env:
       DockerimageName: hsmonitoring/hierarchical_sensor_monitoring
+      ServerPath: src/server/HSMServer/HSMServer.csproj
     steps:
       - uses: actions/checkout@v3
 
@@ -140,9 +141,8 @@ jobs:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          push: true
-          tags: "${{ env.DockerimageName }}:${{ needs.build.outputs.VERSION }}"
+      - name: Build and push image to Local Docker
+        run: dotnet publish ${{ env.ServerPath }} --os linux --arch x64 -p:PublishProfile=DefaultContainer -c Release
+
+      - name: Push image to remote Docker
+        run: docker push "${{ env.DockerimageName }}:${{ needs.build.outputs.VERSION }}"
